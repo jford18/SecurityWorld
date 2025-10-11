@@ -7,9 +7,9 @@ import { SessionProvider, useSession } from './components/context/SessionContext
 const AppContent: React.FC = () => {
   const { session, setSession } = useSession();
 
-  const handleLogin = (selectedConsole: string) => {
+  const handleLogin = (selectedConsole: string, selectedRole: 'operador' | 'supervisor') => {
     // In a real app, you'd validate credentials here
-    setSession({ user: 'Admin', console: selectedConsole });
+    setSession({ user: 'Admin', console: selectedConsole, role: selectedRole });
   };
 
   return (

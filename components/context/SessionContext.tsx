@@ -4,6 +4,7 @@ import React, { createContext, useState, useContext, ReactNode } from 'react';
 interface SessionData {
   user: string | null;
   console: string | null;
+  role: 'operador' | 'supervisor' | null;
 }
 
 interface SessionContextType {
@@ -14,7 +15,7 @@ interface SessionContextType {
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
 export const SessionProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [session, setSession] = useState<SessionData>({ user: null, console: null });
+  const [session, setSession] = useState<SessionData>({ user: null, console: null, role: null });
 
   return (
     <SessionContext.Provider value={{ session, setSession }}>

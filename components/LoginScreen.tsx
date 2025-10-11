@@ -2,13 +2,14 @@
 import React, { useState } from 'react';
 
 interface LoginScreenProps {
-  onLogin: (selectedConsole: string) => void;
+  onLogin: (selectedConsole: string, selectedRole: 'operador' | 'supervisor') => void;
 }
 
 const consoleOptions = ["CLARO", "NOVOPAN", "PRONACA", "AVICA"];
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [selectedConsole, setSelectedConsole] = useState('');
+  const [selectedRole, setSelectedRole] = useState<'operador' | 'supervisor' | ''>('');
   const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -17,8 +18,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       setError('Por favor, seleccione una consola.');
       return;
     }
+     if (!selectedRole) {
+      setError('Por favor, seleccione un rol.');
+      return;
+    }
     setError('');
-    onLogin(selectedConsole);
+    onLogin(selectedConsole, selectedRole);
   };
 
   return (
@@ -68,10 +73,27 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                   setSelectedConsole(e.target.value);
                   if (error) setError('');
                 }}
-                className={`appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-300 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300] focus:z-10 sm:text-sm rounded-b-md ${selectedConsole === '' ? 'text-gray-500' : 'text-gray-900'}`}
+                className={`appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-300 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300] focus:z-10 sm:text-sm ${selectedConsole === '' ? 'text-gray-500' : 'text-gray-900'}`}
               >
                 <option value="" disabled>Seleccione Consola *</option>
                 {consoleOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <select 
+                id="role" 
+                name="role" 
+                required
+                value={selectedRole}
+                onChange={(e) => {
+                  setSelectedRole(e.target.value as any);
+                  if (error) setError('');
+                }}
+                className={`appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-300 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300] focus:z-10 sm:text-sm rounded-b-md ${selectedRole === '' ? 'text-gray-500' : 'text-gray-900'}`}
+              >
+                <option value="" disabled>Seleccione Rol *</option>
+                <option value="operador">Operador</option>
+                <option value="supervisor">Supervisor</option>
               </select>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { TechnicalFailure, Intrusion, Device, AlertData } from '../types';
 
-export const technicalFailuresData: TechnicalFailure[] = [
+export const technicalFailuresData: Omit<TechnicalFailure, 'id'>[] = [
   {
     fecha: "2025-10-09",
     equipo_afectado: "Cámara 01",
@@ -148,4 +148,15 @@ export const technicalFailureMocks = {
     { id: 1, nombre: "Cam01-Zona Norte", estado: "online" },
     { id: 2, nombre: "Cam02-Zona Sur", estado: "offline" }
   ]
+};
+
+export const supervisorData = {
+  responsables_verificacion: [
+    "Luis Torres",
+    "Andrea Molina",
+    "Carlos García",
+    "Patricia Ruiz",
+    "Jorge Cabrera"
+  ],
+  dept_responsables: ["Técnico", "Proveedor", "Cliente", "Redes"]
 };

@@ -1,11 +1,19 @@
 
 export interface TechnicalFailure {
+  id: string;
   fecha: string;
   equipo_afectado: string;
   descripcion_fallo: string;
   responsable: string;
   accion_tomada: string;
   estado: "Resuelto" | "Pendiente";
+  // Campos nuevos (solo supervisor)
+  deptResponsable?: string;
+  fechaResolucion?: string;
+  horaResolucion?: string;
+  verificacionApertura?: string;
+  verificacionCierre?: string;
+  novedadDetectada?: string;
 }
 
 export interface Intrusion {
