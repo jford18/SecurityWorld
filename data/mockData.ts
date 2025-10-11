@@ -1,4 +1,3 @@
-
 import { TechnicalFailure, Intrusion, Device, AlertData } from '../types';
 
 export const technicalFailuresData: TechnicalFailure[] = [
@@ -68,5 +67,54 @@ export const alertsData: AlertData = {
   ],
   ignoradas: [
     {id: 3, equipo: "Micrófono 04", tipo: "Audio anómalo", fecha: "2025-10-09T09:30:00"}
+  ]
+};
+
+// New Mock Data for Technical Failures Form
+export const technicalFailureMocks = {
+  nodos: [
+    { id: 1, nombre: "CTO-ZULEMA" },
+    { id: 2, nombre: "CTO-FLORIDA" },
+    { id: 3, nombre: "CTO-ALAMOS" }
+  ],
+  proyectos: [
+    { id: 1, nombre: "CLARO" },
+    { id: 2, nombre: "NOVOPAN" },
+    { id: 3, nombre: "PRONACA" }
+  ],
+  nodo_proyecto: [
+    { nodo: "CTO-ZULEMA", proyecto: "CLARO" },
+    { nodo: "CTO-FLORIDA", proyecto: "NOVOPAN" },
+    { nodo: "CTO-ALAMOS", proyecto: "PRONACA" }
+  ],
+  consolas: [
+    { id: 1, nombre: "ALMETAL" },
+    { id: 2, nombre: "ARQUEOL" },
+    { id: 3, nombre: "AVICA" },
+    { id: 4, nombre: "CLARO" }
+  ],
+  sitios: [
+    { id: 1, nombre: "[AVIC]-SEC B" },
+    { id: 2, nombre: "[NOB]-ALM-R.RCH1-ER4" },
+    { id: 3, nombre: "[PRONACA]-ERP-02" }
+  ],
+  consola_sitio: [
+    { consola: "ALMETAL", sitio: "[AVIC]-SEC B" },
+    { consola: "ARQUEOL", sitio: "[NOB]-ALM-R.RCH1-ER4" },
+    { consola: "AVICA", sitio: "[PRONACA]-ERP-02" }
+  ],
+  tipos_equipo: [
+    "Cámara",
+    "Grabador",
+    "GPS",
+    "Panel de alarmas",
+    "PC monitoreo",
+    "Detector de humo",
+    "Botón de pánico",
+    "Celular base"
+  ],
+  dispositivos: [
+    { id: 1, nombre: "Cam01-Zona Norte", estado: "online" },
+    { id: 2, nombre: "Cam02-Zona Sur", estado: "offline" }
   ]
 };
