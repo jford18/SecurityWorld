@@ -22,7 +22,16 @@ const DashboardHome: React.FC = () => {
   const onlineDevices = deviceInventoryData.filter(d => d.estado === 'online').length;
   const offlineDevices = deviceInventoryData.length - onlineDevices;
   const activeAlerts = alertsData.creadas.length + alertsData.aceptadas.length;
-  const resolvedFailures = technicalFailuresData.filter(f => f.estado === 'Resuelto').length;
+  // Fix: Property 'estado' does not exist on type 'Omit<TechnicalFailure, "id">'. A technical failure is considered "resolved" if all supervisor-specific fields are populated.
+  const resolvedFailures = technicalFailuresData.filter(
+    f =>
+      f.deptResponsable &&
+      f.fechaResolucion &&
+      f.horaResolucion &&
+      f.verificacionApertura &&
+      f.verificacionCierre &&
+      f.novedadDetectada,
+  ).length;
 
   const pieData = [
     { name: 'Online', value: onlineDevices },

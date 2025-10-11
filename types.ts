@@ -5,8 +5,6 @@ export interface TechnicalFailure {
   equipo_afectado: string;
   descripcion_fallo: string;
   responsable: string;
-  accion_tomada: string;
-  estado: "Resuelto" | "Pendiente";
   // Campos nuevos (solo supervisor)
   deptResponsable?: string;
   fechaResolucion?: string;

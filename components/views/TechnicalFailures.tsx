@@ -40,13 +40,6 @@ const EditFailureModal: React.FC<{
         <h4 className="text-[#1C2E4A] text-xl font-semibold mb-6">Editar Reporte de Fallo (Supervisor)</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-                <label className="block text-sm font-medium text-gray-700">Estado del Reporte</label>
-                <select name="estado" value={editData.estado} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm">
-                    <option>Pendiente</option>
-                    <option>Resuelto</option>
-                </select>
-            </div>
-            <div>
                 <label className="block text-sm font-medium text-gray-700">Dpto. Responsable</label>
                 <select name="deptResponsable" value={editData.deptResponsable || ''} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm">
                     <option value="">Seleccione...</option>
@@ -87,6 +80,39 @@ const EditFailureModal: React.FC<{
       </div>
     </div>
   );
+};
+
+const calcularEstado = (reporte: TechnicalFailure): { texto: string; color: string } => {
+  const {
+    fecha,
+    deptResponsable,
+    fechaResolucion,
+    horaResolucion,
+    verificacionApertura,
+    verificacionCierre,
+    novedadDetectada
+  } = reporte;
+
+  const camposCompletos =
+    deptResponsable &&
+    fechaResolucion &&
+    horaResolucion &&
+    verificacionApertura &&
+    verificacionCierre &&
+    novedadDetectada;
+
+  if (camposCompletos) {
+    return { texto: "RESUELTO", color: "#4CAF50" }; // verde
+  }
+
+  const fechaFallo = new Date(fecha);
+  const hoy = new Date();
+  const dias = Math.floor((hoy.getTime() - fechaFallo.getTime()) / (1000 * 60 * 60 * 24));
+
+  return {
+    texto: `${dias <= 0 ? 0 : dias} días pendientes`,
+    color: "#F44336" // rojo
+  };
 };
 
 const TechnicalFailures: React.FC = () => {
@@ -269,17 +295,14 @@ const TechnicalFailures: React.FC = () => {
            descripcion_fallo = 'Fallo masivo reportado.';
        }
 
-       const newFailure: TechnicalFailure = {
-         id: crypto.randomUUID(),
+       const newFailure: Omit<TechnicalFailure, 'id'> = {
          fecha: formData.fechaFallo,
          equipo_afectado: equipo_afectado || "No especificado",
          descripcion_fallo: descripcion_fallo || "Sin descripción",
          responsable: session.user || 'Operador',
-         estado: 'Pendiente',
-         accion_tomada: 'Pendiente de supervisor',
        };
 
-       setFailures(prev => [newFailure, ...prev]);
+       setFailures(prev => [{ ...newFailure, id: crypto.randomUUID() }, ...prev]);
        alert('Registro guardado correctamente.');
        setFormData(initialFormData);
        setErrors({});
@@ -348,11 +371,26 @@ const TechnicalFailures: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.descripcion_fallo}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.responsable}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      fallo.estado === 'Resuelto' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {fallo.estado}
-                    </span>
+                    {(() => {
+                        const estado = calcularEstado(fallo);
+                        return (
+                          <span
+                            style={{
+                              backgroundColor: estado.color,
+                              color: "white",
+                              padding: "4px 8px",
+                              borderRadius: "4px",
+                              fontSize: "0.9em",
+                              fontWeight: "bold",
+                              display: "inline-block",
+                              minWidth: "110px",
+                              textAlign: "center"
+                            }}
+                          >
+                            {estado.texto}
+                          </span>
+                        );
+                      })()}
                   </td>
                   {session.role === 'supervisor' && (
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
