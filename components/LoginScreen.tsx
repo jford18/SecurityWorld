@@ -1,10 +1,26 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 
 interface LoginScreenProps {
-  onLogin: () => void;
+  onLogin: (selectedConsole: string) => void;
 }
 
+const consoleOptions = ["CLARO", "NOVOPAN", "PRONACA", "AVICA"];
+
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
+  const [selectedConsole, setSelectedConsole] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedConsole) {
+      setError('Por favor, seleccione una consola.');
+      return;
+    }
+    setError('');
+    onLogin(selectedConsole);
+  };
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-[#F5F6F8]">
       <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-xl shadow-2xl">
@@ -16,7 +32,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
           />
         </div>
         <h2 className="text-3xl font-bold text-center text-[#1C2E4A]">Portal Administrativo</h2>
-        <form className="mt-8 space-y-6" onSubmit={(e) => { e.preventDefault(); onLogin(); }}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <input 
@@ -37,12 +53,29 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                 type="password" 
                 autoComplete="current-password" 
                 required 
-                className="appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-300 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300] focus:z-10 sm:text-sm rounded-b-md" 
+                className="appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-300 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300] focus:z-10 sm:text-sm" 
                 placeholder="Contraseña"
                 defaultValue="password"
               />
             </div>
+             <div>
+              <select 
+                id="console" 
+                name="console" 
+                required
+                value={selectedConsole}
+                onChange={(e) => {
+                  setSelectedConsole(e.target.value);
+                  if (error) setError('');
+                }}
+                className={`appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-300 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300] focus:z-10 sm:text-sm rounded-b-md ${selectedConsole === '' ? 'text-gray-500' : 'text-gray-900'}`}
+              >
+                <option value="" disabled>Seleccione Consola *</option>
+                {consoleOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
           </div>
+          {error && <p className="text-red-500 text-xs text-center pt-2">{error}</p>}
 
           <div>
             <button 

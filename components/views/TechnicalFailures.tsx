@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { technicalFailuresData, technicalFailureMocks } from '../../data/mockData';
+import { useSession } from '../context/SessionContext';
 
 type AffectationType = 'Nodo' | 'Punto' | 'Equipo' | 'Masivo' | '';
 
@@ -10,16 +12,17 @@ const initialFormData = {
   tipoProblema: '',
   reportadoCliente: false,
   nodo: '',
-  consola: '',
   tipoEquipo: '',
   camara: '',
 };
 
 const TechnicalFailures: React.FC = () => {
+  const { session } = useSession();
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Partial<typeof initialFormData>>({});
   const [proyecto, setProyecto] = useState<string | null>(null);
-  const [sitio, setSitio] = useState<string | null>(null);
+  const [proyectoFromConsole, setProyectoFromConsole] = useState<string | null>(null);
+  const [sitios, setSitios] = useState<string[]>([]);
 
   const validate = (fieldValues = formData) => {
     let tempErrors: Partial<typeof initialFormData> = { ...errors };
@@ -31,8 +34,7 @@ const TechnicalFailures: React.FC = () => {
             const today = new Date();
             const inputDate = new Date(fieldValues.fechaFallo);
             today.setHours(0, 0, 0, 0); 
-            inputDate.setHours(0,0,0,0);
-            inputDate.setDate(inputDate.getDate() + 1);
+            inputDate.setUTCHours(0,0,0,0);
             if (inputDate >= today) {
                 tempErrors.fechaFallo = 'La fecha no puede ser igual o posterior a la actual.';
             } else {
@@ -45,10 +47,6 @@ const TechnicalFailures: React.FC = () => {
         if (!fieldValues.nodo) tempErrors.nodo = "El nodo es obligatorio.";
         else delete tempErrors.nodo;
     }
-    if (fieldValues.affectationType === 'Punto') {
-        if (!fieldValues.consola) tempErrors.consola = "La consola es obligatoria.";
-        else delete tempErrors.consola;
-    }
     if (fieldValues.affectationType === 'Equipo') {
         if (!fieldValues.tipoEquipo) tempErrors.tipoEquipo = "El tipo de equipo es obligatorio.";
         else delete tempErrors.tipoEquipo;
@@ -57,30 +55,27 @@ const TechnicalFailures: React.FC = () => {
         } else {
             delete tempErrors.camara;
         }
-        if(fieldValues.tipoEquipo !== 'Cámara' && !fieldValues.consola) {
-             tempErrors.consola = "La consola es obligatoria.";
-        } else {
-            if(fieldValues.tipoEquipo !== 'Cámara') delete tempErrors.consola;
-        }
     }
 
-
     setErrors({ ...tempErrors });
-
-    // Return true if form is valid
     return Object.values(tempErrors).every(x => x === "" || x === undefined);
   };
   
+  // Fix: The call to 'validate' was passing a partial object with incorrect types for checkboxes,
+  // causing a TypeScript error and breaking validation logic.
+  // This is corrected by creating the complete updated form data object (`newValues`) and passing
+  // it to both `setFormData` and `validate`, ensuring type safety and correct validation.
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
-    
-    setFormData({
+
+    const newValues = {
       ...formData,
       [name]: type === 'checkbox' ? checked : value,
-    });
+    };
 
-    validate({ [name]: value });
+    setFormData(newValues);
+    validate(newValues);
   };
 
   const handleAffectationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -93,7 +88,8 @@ const TechnicalFailures: React.FC = () => {
     });
     setErrors({});
     setProyecto(null);
-    setSitio(null);
+    setProyectoFromConsole(null);
+    setSitios([]);
   };
 
   useEffect(() => {
@@ -106,13 +102,17 @@ const TechnicalFailures: React.FC = () => {
   }, [formData.nodo, formData.affectationType]);
 
   useEffect(() => {
-    if ((formData.affectationType === 'Punto' || (formData.affectationType === 'Equipo' && formData.tipoEquipo !== 'Cámara')) && formData.consola) {
-        const relation = technicalFailureMocks.consola_sitio.find(cs => cs.consola === formData.consola);
-        setSitio(relation ? relation.sitio : 'Sitio no encontrado');
+    if (session.console && (formData.affectationType === 'Punto' || (formData.affectationType === 'Equipo' && formData.tipoEquipo !== 'Cámara'))) {
+        const projectRel = technicalFailureMocks.consola_proyecto.find(cp => cp.consola === session.console);
+        setProyectoFromConsole(projectRel ? projectRel.proyecto : 'No encontrado');
+
+        const sitesRel = technicalFailureMocks.consola_sitios.find(cs => cs.consola === session.console);
+        setSitios(sitesRel ? sitesRel.sitios : []);
     } else {
-      setSitio(null);
+      setProyectoFromConsole(null);
+      setSitios([]);
     }
-  }, [formData.consola, formData.affectationType, formData.tipoEquipo]);
+  }, [session.console, formData.affectationType, formData.tipoEquipo]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,19 +121,27 @@ const TechnicalFailures: React.FC = () => {
          alert('Debe seleccionar un nodo válido vinculado a un proyecto.');
          return;
        }
-       if((formData.affectationType === 'Punto' || (formData.affectationType === 'Equipo' && formData.tipoEquipo !== 'Cámara')) && (!sitio || sitio === 'Sitio no encontrado')) {
-         alert('Debe seleccionar una consola válida vinculada a un sitio.');
-         return;
-       }
        alert('Registro guardado correctamente.');
        setFormData(initialFormData);
        setErrors({});
        setProyecto(null);
-       setSitio(null);
+       setProyectoFromConsole(null);
+       setSitios([]);
     }
   };
   
   const renderConditionalFields = () => {
+    const consoleInfoBox = (
+        <div className="md:col-span-2 p-4 bg-gray-50 rounded-lg border">
+          <h5 className="text-md font-semibold text-[#1C2E4A] mb-2">Información de la Consola</h5>
+          <div className="space-y-2 text-sm">
+            <p><span className="font-medium text-gray-600">Consola Activa:</span> {session.console}</p>
+            <p><span className="font-medium text-gray-600">Proyecto Asociado:</span> {proyectoFromConsole || 'N/A'}</p>
+            <p><span className="font-medium text-gray-600">Sitio(s) Asociado(s):</span> {sitios.length > 0 ? sitios.join(', ') : 'N/A'}</p>
+          </div>
+        </div>
+    );
+
     switch (formData.affectationType) {
       case 'Nodo':
         return (
@@ -206,23 +214,7 @@ const TechnicalFailures: React.FC = () => {
                     </div>
                 </div>
             </div>
-            <div className="md:col-span-2">
-                 <div className="flex items-center gap-4">
-                    <div className="flex-grow">
-                        <label htmlFor="consola" className="block text-sm font-medium text-gray-700">Consola *</label>
-                        <select id="consola" name="consola" value={formData.consola} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm">
-                            <option value="">Seleccione...</option>
-                            {technicalFailureMocks.consolas.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
-                        </select>
-                        {errors.consola && <p className="text-red-500 text-xs mt-1">{errors.consola}</p>}
-                    </div>
-                    {sitio && (
-                         <div className="mt-6 p-2 bg-blue-100 text-blue-800 rounded-md text-sm font-semibold">
-                            → Sitio: {sitio}
-                        </div>
-                    )}
-                 </div>
-            </div>
+            {consoleInfoBox}
           </>
         );
       case 'Equipo':
@@ -258,25 +250,7 @@ const TechnicalFailures: React.FC = () => {
                     {errors.camara && <p className="text-red-500 text-xs mt-1">{errors.camara}</p>}
                 </div>
             )}
-            {formData.tipoEquipo && formData.tipoEquipo !== 'Cámara' && (
-                 <div className="md:col-span-2">
-                    <div className="flex items-center gap-4">
-                        <div className="flex-grow">
-                            <label htmlFor="consola" className="block text-sm font-medium text-gray-700">Consola *</label>
-                            <select id="consola" name="consola" value={formData.consola} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm">
-                                <option value="">Seleccione...</option>
-                                {technicalFailureMocks.consolas.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
-                            </select>
-                            {errors.consola && <p className="text-red-500 text-xs mt-1">{errors.consola}</p>}
-                        </div>
-                        {sitio && (
-                            <div className="mt-6 p-2 bg-blue-100 text-blue-800 rounded-md text-sm font-semibold">
-                                → Sitio: {sitio}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
+            {formData.tipoEquipo && formData.tipoEquipo !== 'Cámara' && consoleInfoBox}
           </>
         );
       case 'Masivo':

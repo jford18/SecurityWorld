@@ -1,19 +1,29 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import LoginScreen from './components/LoginScreen';
 import Dashboard from './components/Dashboard';
+import { SessionProvider, useSession } from './components/context/SessionContext';
 
-const App: React.FC = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+const AppContent: React.FC = () => {
+  const { session, setSession } = useSession();
 
-  const handleLogin = () => {
-    setIsLoggedIn(true);
+  const handleLogin = (selectedConsole: string) => {
+    // In a real app, you'd validate credentials here
+    setSession({ user: 'Admin', console: selectedConsole });
   };
 
   return (
     <div className="min-h-screen bg-[#F5F6F8]">
-      {isLoggedIn ? <Dashboard /> : <LoginScreen onLogin={handleLogin} />}
+      {session.user ? <Dashboard /> : <LoginScreen onLogin={handleLogin} />}
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <SessionProvider>
+      <AppContent />
+    </SessionProvider>
   );
 };
 

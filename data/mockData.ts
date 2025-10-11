@@ -1,3 +1,4 @@
+
 import { TechnicalFailure, Intrusion, Device, AlertData } from '../types';
 
 export const technicalFailuresData: TechnicalFailure[] = [
@@ -91,17 +92,28 @@ export const technicalFailureMocks = {
     { id: 1, nombre: "ALMETAL" },
     { id: 2, nombre: "ARQUEOL" },
     { id: 3, nombre: "AVICA" },
-    { id: 4, nombre: "CLARO" }
+    { id: 4, nombre: "CLARO" },
+    { id: 5, nombre: "NOVOPAN" },
+    { id: 6, nombre: "PRONACA" },
   ],
   sitios: [
     { id: 1, nombre: "[AVIC]-SEC B" },
     { id: 2, nombre: "[NOB]-ALM-R.RCH1-ER4" },
     { id: 3, nombre: "[PRONACA]-ERP-02" }
   ],
-  consola_sitio: [
-    { consola: "ALMETAL", sitio: "[AVIC]-SEC B" },
-    { consola: "ARQUEOL", sitio: "[NOB]-ALM-R.RCH1-ER4" },
-    { consola: "AVICA", sitio: "[PRONACA]-ERP-02" }
+  consola_proyecto: [
+    { consola: "CLARO", proyecto: "PRONACA" },
+    { consola: "NOVOPAN", proyecto: "NOVOPAN" },
+    { consola: "PRONACA", proyecto: "PRONACA" },
+    { consola: "AVICA", proyecto: "AVICA" }
+  ],
+  consola_sitios: [
+    { consola: "CLARO", sitios: ["[CLA]-SEC A", "[CLA]-SEC B"] },
+    { consola: "NOVOPAN", sitios: ["[NOV]-ALM-R.RCH1-ER4"] },
+    { consola: "PRONACA", sitios: ["[PRO]-ERP-02"] },
+    { consola: "AVICA", sitios: ["[AVIC]-SEC B"] },
+    { consola: "ALMETAL", sitios: ["[AVIC]-SEC B"] },
+    { consola: "ARQUEOL", sitios: ["[NOB]-ALM-R.RCH1-ER4" ] },
   ],
   tipos_equipo: [
     "Cámara",

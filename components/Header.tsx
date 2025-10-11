@@ -1,7 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
+import { useSession } from './context/SessionContext';
 
 const Header: React.FC = () => {
   const [time, setTime] = useState(new Date());
+  const { session } = useSession();
 
   useEffect(() => {
     const timerId = setInterval(() => setTime(new Date()), 1000);
@@ -10,7 +13,14 @@ const Header: React.FC = () => {
 
   return (
     <header className="flex items-center justify-between h-20 px-6 bg-white border-b">
-      <h1 className="text-2xl font-semibold text-[#1C2E4A]">Bienvenido, Admin</h1>
+       <div className="flex items-baseline gap-4">
+        <h1 className="text-2xl font-semibold text-[#1C2E4A]">Bienvenido, {session.user}</h1>
+        {session.console && (
+          <span className="text-lg text-gray-500">
+            | Consola: <span className="font-semibold text-[#1C2E4A]">{session.console}</span>
+          </span>
+        )}
+      </div>
       <div className="flex items-center">
         <div className="text-right">
           <p className="text-lg font-semibold text-[#1C2E4A]">{time.toLocaleTimeString()}</p>
