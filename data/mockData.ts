@@ -1,4 +1,3 @@
-
 import { TechnicalFailure, Intrusion, Device, AlertData } from '../types';
 
 export const technicalFailuresData: TechnicalFailure[] = [
@@ -124,6 +123,26 @@ export const technicalFailureMocks = {
     "Detector de humo",
     "Botón de pánico",
     "Celular base"
+  ],
+  tipos_problema_equipo: [
+    "Equipo con daño físico",
+    "Intermitencia",
+    "Equipo mal enlazado al software de monitoreo",
+    "Equipo no funciona",
+    "Equipo no funciona correctamente",
+    "Equipo no graba",
+    "Falsas activaciones",
+    "Mala resolución (cámara)",
+    "Cámara sucia",
+    "Cámara desacuadrada",
+    "Desenganche",
+    "Distorsión de cámara",
+    "Fecha/hora errada",
+    "Equipo con clave genérica",
+    "Pérdida de visual",
+    "Tiempos altos",
+    "Móvil incomunicado",
+    "Caídas recurrentes"
   ],
   dispositivos: [
     { id: 1, nombre: "Cam01-Zona Norte", estado: "online" },

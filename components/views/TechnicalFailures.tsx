@@ -13,6 +13,7 @@ const initialFormData = {
   nodo: '',
   tipoEquipo: '',
   camara: '',
+  tipoProblemaEquipo: '',
 };
 
 const TechnicalFailures: React.FC = () => {
@@ -32,9 +33,6 @@ const TechnicalFailures: React.FC = () => {
         } else {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-
-            // Appending T00:00:00 ensures the date string is parsed in the local timezone,
-            // making the comparison with the local `today` accurate and avoiding timezone issues.
             const inputDate = new Date(`${fieldValues.fechaFallo}T00:00:00`);
             
             if (inputDate > today) {
@@ -49,24 +47,39 @@ const TechnicalFailures: React.FC = () => {
         if (!fieldValues.nodo) tempErrors.nodo = "El nodo es obligatorio.";
         else delete tempErrors.nodo;
     }
+
     if (fieldValues.affectationType === 'Equipo') {
-        if (!fieldValues.tipoEquipo) tempErrors.tipoEquipo = "El tipo de equipo es obligatorio.";
-        else delete tempErrors.tipoEquipo;
-        if(fieldValues.tipoEquipo === 'Cámara' && !fieldValues.camara) {
-            tempErrors.camara = "La cámara es obligatoria.";
+        if (!fieldValues.tipoEquipo) {
+            tempErrors.tipoEquipo = "El tipo de equipo es obligatorio.";
         } else {
-            delete tempErrors.camara;
+            delete tempErrors.tipoEquipo;
         }
+
+        if (fieldValues.tipoEquipo === 'Cámara') {
+            if (!fieldValues.camara) {
+                tempErrors.camara = "La cámara es obligatoria.";
+            } else {
+                delete tempErrors.camara;
+            }
+            delete tempErrors.tipoProblemaEquipo; // Field is not visible, remove error
+        } else if (fieldValues.tipoEquipo && fieldValues.tipoEquipo !== 'Cámara') {
+            if (!fieldValues.tipoProblemaEquipo) {
+                tempErrors.tipoProblemaEquipo = "El tipo de problema es obligatorio.";
+            } else {
+                delete tempErrors.tipoProblemaEquipo;
+            }
+            delete tempErrors.camara; // Field is not visible, remove error
+        }
+    } else {
+        delete tempErrors.tipoEquipo;
+        delete tempErrors.camara;
+        delete tempErrors.tipoProblemaEquipo;
     }
 
     setErrors({ ...tempErrors });
     return Object.values(tempErrors).every(x => x === "" || x === undefined);
   };
   
-  // Fix: The call to 'validate' was passing a partial object with incorrect types for checkboxes,
-  // causing a TypeScript error and breaking validation logic.
-  // This is corrected by creating the complete updated form data object (`newValues`) and passing
-  // it to both `setFormData` and `validate`, ensuring type safety and correct validation.
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
@@ -75,6 +88,11 @@ const TechnicalFailures: React.FC = () => {
       ...formData,
       [name]: type === 'checkbox' ? checked : value,
     };
+
+    if (name === 'tipoEquipo') {
+        newValues.camara = '';
+        newValues.tipoProblemaEquipo = '';
+    }
 
     setFormData(newValues);
     validate(newValues);
@@ -242,6 +260,18 @@ const TechnicalFailures: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {formData.tipoEquipo && formData.tipoEquipo !== 'Cámara' && (
+                <div className="md:col-span-2">
+                    <label htmlFor="tipoProblemaEquipo" className="block text-sm font-medium text-gray-700">Tipo de problema en equipo *</label>
+                    <select id="tipoProblemaEquipo" name="tipoProblemaEquipo" value={formData.tipoProblemaEquipo} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm">
+                        <option value="">Seleccione...</option>
+                        {technicalFailureMocks.tipos_problema_equipo.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                    {errors.tipoProblemaEquipo && <p className="text-red-500 text-xs mt-1">{errors.tipoProblemaEquipo}</p>}
+                </div>
+            )}
+
             {formData.tipoEquipo === 'Cámara' && (
                 <div className="md:col-span-2">
                     <label htmlFor="camara" className="block text-sm font-medium text-gray-700">Cámara *</label>
@@ -252,6 +282,7 @@ const TechnicalFailures: React.FC = () => {
                     {errors.camara && <p className="text-red-500 text-xs mt-1">{errors.camara}</p>}
                 </div>
             )}
+            
             {formData.tipoEquipo && formData.tipoEquipo !== 'Cámara' && consoleInfoBox}
           </>
         );
