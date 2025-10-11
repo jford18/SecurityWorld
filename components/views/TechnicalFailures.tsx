@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { technicalFailuresData, technicalFailureMocks } from '../../data/mockData';
 import { useSession } from '../context/SessionContext';
@@ -32,11 +31,14 @@ const TechnicalFailures: React.FC = () => {
             tempErrors.fechaFallo = 'La fecha es obligatoria.';
         } else {
             const today = new Date();
-            const inputDate = new Date(fieldValues.fechaFallo);
-            today.setHours(0, 0, 0, 0); 
-            inputDate.setUTCHours(0,0,0,0);
-            if (inputDate >= today) {
-                tempErrors.fechaFallo = 'La fecha no puede ser igual o posterior a la actual.';
+            today.setHours(0, 0, 0, 0);
+
+            // Appending T00:00:00 ensures the date string is parsed in the local timezone,
+            // making the comparison with the local `today` accurate and avoiding timezone issues.
+            const inputDate = new Date(`${fieldValues.fechaFallo}T00:00:00`);
+            
+            if (inputDate > today) {
+                tempErrors.fechaFallo = 'La fecha no puede ser posterior a la actual.';
             } else {
                 delete tempErrors.fechaFallo;
             }
