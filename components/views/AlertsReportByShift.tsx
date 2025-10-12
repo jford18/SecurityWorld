@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Card from '../ui/Card';
-import { hikEventsData, hikCamerasData, hikControllingData } from '../../data/mockData';
-import { HikEvent } from '../../types';
+import { getEvents, getControlledEvents, getCameras } from '../../src/services/hikcentralService';
+import { HikEvent, HikCamera } from '../../types';
 
 interface ShiftMetrics {
   total: number;
@@ -28,11 +28,48 @@ const calculateDurationInMinutes = (start: string, end: string): number => {
 const AlertsReportByShift: React.FC = () => {
   const [activeShift, setActiveShift] = useState<number>(1);
 
-  const shiftMetrics = useMemo<ShiftMetrics>(() => {
-    const activeCameras = hikCamerasData.data.filter(cam => cam.status === 1).length;
-    const processedEventIds = new Set(hikControllingData.data.processed);
+  // State for handling async data
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [allEvents, setAllEvents] = useState<HikEvent[]>([]);
+  const [controlledEventIds, setControlledEventIds] = useState<string[]>([]);
+  const [cameras, setCameras] = useState<HikCamera[]>([]);
+  
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const [eventList, controlList, camList] = await Promise.all([
+          getEvents(),
+          getControlledEvents(),
+          getCameras(),
+        ]);
 
-    const shiftEvents = hikEventsData.data.list.filter(event => {
+        setAllEvents(eventList);
+        setControlledEventIds(controlList);
+        setCameras(camList);
+      } catch (e) {
+        console.error(e);
+        if (e instanceof Error) {
+            setError(e.message);
+        } else {
+            setError("Ocurrió un error inesperado al cargar los datos.");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []); // Empty dependency array ensures this runs once on component mount
+
+  const shiftMetrics = useMemo<ShiftMetrics>(() => {
+    const activeCameras = cameras.filter(cam => cam.status === 1).length;
+    const processedEventIds = new Set(controlledEventIds);
+
+    const shiftEvents = allEvents.filter(event => {
       const eventHour = new Date(event.startTime).getUTCHours();
       switch (activeShift) {
         case 1: return eventHour >= 7 && eventHour < 15;
@@ -70,7 +107,7 @@ const AlertsReportByShift: React.FC = () => {
       activeCameras,
       events: shiftEvents,
     };
-  }, [activeShift]);
+  }, [activeShift, allEvents, cameras, controlledEventIds]);
 
   const kpiData = [
     { title: "Alertas Categorizadas", value: shiftMetrics.total, color: "bg-blue-100 text-blue-600", icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg> },
@@ -88,6 +125,66 @@ const AlertsReportByShift: React.FC = () => {
     { id: 3, label: 'Turno 3 (23:00 - 07:00)' },
   ];
   
+  const renderContent = () => {
+    if (loading) {
+      return <p className="mt-8 text-center text-gray-500">Cargando datos del Mock Server...</p>;
+    }
+    if (error) {
+      return <p className="mt-8 text-center text-red-600 font-semibold p-4 bg-red-100 rounded-md">Error: {error}</p>;
+    }
+    return (
+      <>
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-6">
+            {kpiData.map(kpi => <Card key={kpi.title} {...kpi} />)}
+        </div>
+
+        <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
+            <h4 className="text-[#1C2E4A] text-lg font-semibold mb-4">Detalle de Eventos del Turno</h4>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo Evento</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Origen</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inicio</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fin</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duración (min)</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Evidencia</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {shiftMetrics.events.map((event) => (
+                    <tr key={event.eventIndexCode} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{event.eventType}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <div className="flex items-center">
+                          <span>{event.description}</span>
+                          {controlledEventIds.includes(event.eventIndexCode) && (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                              <title>Procesado</title>
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{event.srcIndex}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(event.startTime).toLocaleString()}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(event.stopTime).toLocaleString()}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{calculateDurationInMinutes(event.startTime, event.stopTime).toFixed(2)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500" title={event.eventPicUri}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+      </>
+    );
+  };
+
   return (
     <div>
       <h3 className="text-3xl font-medium text-[#1C2E4A]">Reporte de Alertas por Turno</h3>
@@ -109,55 +206,9 @@ const AlertsReportByShift: React.FC = () => {
           ))}
         </nav>
       </div>
+      
+      {renderContent()}
 
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-6">
-          {kpiData.map(kpi => <Card key={kpi.title} {...kpi} />)}
-      </div>
-
-      <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
-          <h4 className="text-[#1C2E4A] text-lg font-semibold mb-4">Detalle de Eventos del Turno</h4>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo Evento</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Origen</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inicio</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fin</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duración (min)</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Evidencia</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {shiftMetrics.events.map((event) => (
-                  <tr key={event.eventIndexCode} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{event.eventType}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      <div className="flex items-center">
-                        <span>{event.description}</span>
-                        {hikControllingData.data.processed.includes(event.eventIndexCode) && (
-                          // Fix: The 'title' attribute is not a valid prop for SVG elements in React. Use the <title> tag inside the SVG for accessibility and tooltips.
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                            <title>Procesado</title>
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{event.srcIndex}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(event.startTime).toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(event.stopTime).toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{calculateDurationInMinutes(event.startTime, event.stopTime).toFixed(2)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500" title={event.eventPicUri}>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
     </div>
   );
 };
