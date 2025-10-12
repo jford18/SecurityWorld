@@ -166,3 +166,140 @@ export const supervisorData = {
   ],
   dept_responsables: ["Técnico", "Proveedor", "Cliente", "Redes"]
 };
+
+
+// New Mock Data for Alerts Report by Shift
+export const hikEventsData = {
+  code: "0",
+  msg: "success",
+  data: {
+    total: 9,
+    pageNo: 1,
+    pageSize: 15,
+    list: [
+      // Turno 1 (07:00 - 15:00)
+      {
+        eventIndexCode: "E1001",
+        eventType: "131329", // Falsa
+        srcType: "camera",
+        srcIndex: "CAM01",
+        description: "Intrusión detectada en Zona A",
+        startTime: "2025-10-11T07:02:00+00:00",
+        stopTime: "2025-10-11T07:05:30+00:00",
+        eventPicUri: "url:/mock/img/alerta1.jpg",
+        linkCameraIndexCode: "CAM01",
+      },
+      {
+        eventIndexCode: "E1002",
+        eventType: "131330", // Verdadera
+        srcType: "camera",
+        srcIndex: "CAM02",
+        description: "Pérdida de video en cámara principal",
+        startTime: "2025-10-11T08:10:00+00:00",
+        stopTime: "2025-10-11T08:11:00+00:00",
+        eventPicUri: "url:/mock/img/alerta2.jpg",
+        linkCameraIndexCode: "CAM02",
+      },
+      {
+        eventIndexCode: "E1003",
+        eventType: "131331", // No categorizada
+        srcType: "camera",
+        srcIndex: "CAM03",
+        description: "Movimiento detectado en bodega",
+        startTime: "2025-10-11T09:15:00+00:00",
+        stopTime: "2025-10-11T09:16:45+00:00",
+        eventPicUri: "url:/mock/img/alerta3.jpg",
+        linkCameraIndexCode: "CAM03",
+      },
+      // Turno 2 (15:00 - 23:00)
+      {
+        eventIndexCode: "E2001",
+        eventType: "131329", // Falsa
+        srcType: "camera",
+        srcIndex: "CAM04",
+        description: "Cruce de línea en perímetro",
+        startTime: "2025-10-11T15:30:00+00:00",
+        stopTime: "2025-10-11T15:32:15+00:00",
+        eventPicUri: "url:/mock/img/alerta4.jpg",
+        linkCameraIndexCode: "CAM04",
+      },
+      {
+        eventIndexCode: "E2002",
+        eventType: "131330", // Verdadera
+        srcType: "camera",
+        srcIndex: "CAM01",
+        description: "Fallo de grabación",
+        startTime: "2025-10-11T18:45:00+00:00",
+        stopTime: "2025-10-11T18:55:00+00:00",
+        eventPicUri: "url:/mock/img/alerta5.jpg",
+        linkCameraIndexCode: "CAM01",
+      },
+      {
+        eventIndexCode: "E2003",
+        eventType: "131329", // Falsa
+        srcType: "camera",
+        srcIndex: "CAM05",
+        description: "Objeto abandonado",
+        startTime: "2025-10-11T21:05:00+00:00",
+        stopTime: "2025-10-11T21:06:30+00:00",
+        eventPicUri: "url:/mock/img/alerta6.jpg",
+        linkCameraIndexCode: "CAM05",
+      },
+      // Turno 3 (23:00 - 07:00)
+      {
+        eventIndexCode: "E3001",
+        eventType: "131330", // Verdadera
+        srcType: "camera",
+        srcIndex: "CAM02",
+        description: "Intrusión nocturna",
+        startTime: "2025-10-11T23:50:00+00:00",
+        stopTime: "2025-10-11T23:58:10+00:00",
+        eventPicUri: "url:/mock/img/alerta7.jpg",
+        linkCameraIndexCode: "CAM02",
+      },
+      {
+        eventIndexCode: "E3002",
+        eventType: "131332", // No categorizada
+        srcType: "camera",
+        srcIndex: "CAM03",
+        description: "Audio anómalo detectado",
+        startTime: "2025-10-12T02:20:00+00:00",
+        stopTime: "2025-10-12T02:21:00+00:00",
+        eventPicUri: "url:/mock/img/alerta8.jpg",
+        linkCameraIndexCode: "CAM03",
+      },
+      {
+        eventIndexCode: "E3003",
+        eventType: "131329", // Falsa
+        srcType: "camera",
+        srcIndex: "CAM01",
+        description: "Sombra en sensor de movimiento",
+        startTime: "2025-10-12T04:15:00+00:00",
+        stopTime: "2025-10-12T04:15:45+00:00",
+        eventPicUri: "url:/mock/img/alerta9.jpg",
+        linkCameraIndexCode: "CAM01",
+      },
+    ],
+  },
+};
+
+export const hikCamerasData = {
+  code: "0",
+  msg: "Success",
+  data: [
+    { alarmOutputIndexCode: "CAM01", alarmOutputName: "Camara Entrada Principal", regionIndexCode: "REG01", devIndexCode: "1", devResourceType: "0", status: 1 },
+    { alarmOutputIndexCode: "CAM02", alarmOutputName: "Camara Bodega", regionIndexCode: "REG01", devIndexCode: "2", devResourceType: "0", status: 1 },
+    { alarmOutputIndexCode: "CAM03", alarmOutputName: "Camara Perimetro Norte", regionIndexCode: "REG02", devIndexCode: "3", devResourceType: "0", status: 1 },
+    { alarmOutputIndexCode: "CAM04", alarmOutputName: "Camara Estacionamiento", regionIndexCode: "REG02", devIndexCode: "4", devResourceType: "0", status: 0 },
+    { alarmOutputIndexCode: "CAM05", alarmOutputName: "Camara Oficina", regionIndexCode: "REG01", devIndexCode: "5", devResourceType: "0", status: 1 },
+  ]
+};
+
+// Data for processed events
+export const hikControllingData = {
+  code: "0",
+  msg: "success",
+  data: {
+    processed: ["E1001", "E1003", "E2002", "E2003", "E3001"],
+  }
+};

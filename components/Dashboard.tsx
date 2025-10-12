@@ -9,6 +9,7 @@ import Intrusions from './views/Intrusions';
 import DeviceStatus from './views/DeviceStatus';
 import SystemLogs from './views/SystemLogs';
 import TechnicalExplanation from './views/TechnicalExplanation';
+import AlertsReportByShift from './views/AlertsReportByShift';
 
 const Dashboard: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
@@ -25,6 +26,8 @@ const Dashboard: React.FC = () => {
         return <DeviceStatus />;
       case View.Logs:
         return <SystemLogs />;
+      case View.AlertsReport:
+        return <AlertsReportByShift />;
       case View.Architecture:
         return <TechnicalExplanation />;
       default:

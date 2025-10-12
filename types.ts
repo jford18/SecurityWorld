@@ -43,6 +43,28 @@ export interface AlertData {
   ignoradas: Alert[];
 }
 
+export interface HikEvent {
+  eventIndexCode: string;
+  eventType: string;
+  srcType: string;
+  srcIndex: string;
+  description: string;
+  startTime: string;
+  stopTime: string;
+  eventPicUri: string;
+  linkCameraIndexCode: string;
+}
+
+export interface HikCamera {
+  alarmOutputIndexCode: string;
+  alarmOutputName: string;
+  regionIndexCode: string;
+  devIndexCode: string;
+  devResourceType: string;
+  status: number; // 1 for active, 0 for inactive
+}
+
+
 export enum View {
   Dashboard,
   Failures,
@@ -50,4 +72,5 @@ export enum View {
   Devices,
   Logs,
   Architecture,
+  AlertsReport,
 }
