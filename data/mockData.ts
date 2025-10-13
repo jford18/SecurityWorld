@@ -76,6 +76,20 @@ export const alertsData: AlertData = {
   ]
 };
 
+export const sitiosPorConsola = [
+  { "sitio": "[RBP]-ZUL1-TLLR", "cliente": "REYBANPAC", "consola": "OPERADOR 8" },
+  { "sitio": "[RBP]-ZUL1-B.CTRA", "cliente": "REYBANPAC", "consola": "OPERADOR 8" },
+  { "sitio": "[NOB]-ALM-ZAP-EMP4", "cliente": "NOBOA", "consola": "ALAMOS" },
+  { "sitio": "[NOV]-LS.ANG-VIV", "cliente": "NOVOPAN", "consola": "GODCORP" },
+  { "sitio": "[PRO]-L.LND-SIT3A", "cliente": "PRONACA", "consola": "PRONACA" },
+  { "sitio": "[SW]-OFIC-PRINC", "cliente": "SECURITY WORLD", "consola": "OPERADOR 1" },
+  { "sitio": "[SW]-BOD-NORTE", "cliente": "SECURITY WORLD", "consola": "OPERADOR 1" },
+  { "sitio": "[SW]-BOD-SUR", "cliente": "SECURITY WORLD", "consola": "OPERADOR 2" },
+  { "sitio": "[JUL]-PLANTA-SUR", "cliente": "JULIA", "consola": "JULIA" },
+  { "sitio": "[MART]-ACCESO-1", "cliente": "MARTINICA", "consola": "MARTINICA" }
+];
+
+
 // New Mock Data for Technical Failures Form
 export const technicalFailureMocks = {
   nodos: [
@@ -83,15 +97,15 @@ export const technicalFailureMocks = {
     { id: 2, nombre: "CTO-FLORIDA" },
     { id: 3, nombre: "CTO-ALAMOS" }
   ],
-  proyectos: [
+  clientes: [
     { id: 1, nombre: "CLARO" },
     { id: 2, nombre: "NOVOPAN" },
     { id: 3, nombre: "PRONACA" }
   ],
-  nodo_proyecto: [
-    { nodo: "CTO-ZULEMA", proyecto: "CLARO" },
-    { nodo: "CTO-FLORIDA", proyecto: "NOVOPAN" },
-    { nodo: "CTO-ALAMOS", proyecto: "PRONACA" }
+  nodo_cliente: [
+    { nodo: "CTO-ZULEMA", cliente: "CLARO" },
+    { nodo: "CTO-FLORIDA", cliente: "NOVOPAN" },
+    { nodo: "CTO-ALAMOS", cliente: "PRONACA" }
   ],
   consolas: [
     { id: 1, nombre: "ALMETAL" },
@@ -105,20 +119,6 @@ export const technicalFailureMocks = {
     { id: 1, nombre: "[AVIC]-SEC B" },
     { id: 2, nombre: "[NOB]-ALM-R.RCH1-ER4" },
     { id: 3, nombre: "[PRONACA]-ERP-02" }
-  ],
-  consola_proyecto: [
-    { consola: "CLARO", proyecto: "PRONACA" },
-    { consola: "NOVOPAN", proyecto: "NOVOPAN" },
-    { consola: "PRONACA", proyecto: "PRONACA" },
-    { consola: "AVICA", proyecto: "AVICA" }
-  ],
-  consola_sitios: [
-    { consola: "CLARO", sitios: ["[CLA]-SEC A", "[CLA]-SEC B"] },
-    { consola: "NOVOPAN", sitios: ["[NOV]-ALM-R.RCH1-ER4"] },
-    { consola: "PRONACA", sitios: ["[PRO]-ERP-02"] },
-    { consola: "AVICA", sitios: ["[AVIC]-SEC B"] },
-    { consola: "ALMETAL", sitios: ["[AVIC]-SEC B"] },
-    { consola: "ARQUEOL", sitios: ["[NOB]-ALM-R.RCH1-ER4" ] },
   ],
   tipos_equipo: [
     "Cámara",

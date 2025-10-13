@@ -5,7 +5,21 @@ interface LoginScreenProps {
   onLogin: (selectedConsole: string, selectedRole: 'operador' | 'supervisor') => void;
 }
 
-const consoleOptions = ["CLARO", "NOVOPAN", "PRONACA", "AVICA"];
+const consoleOptions = [
+  "Operador_1_new",
+  "Operador_2_new",
+  "Operador_3_new",
+  "Operador_4_new",
+  "Operador_5_new",
+  "Operador_6_new",
+  "Operador_7_new",
+  "Operador_8_new",
+  "Operador_alamos_new",
+  "Operador_julia_new",
+  "Operador_martinica_new",
+  "Operador_godcorp_new",
+  "Operador_pronaca_new"
+];
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [selectedConsole, setSelectedConsole] = useState('');

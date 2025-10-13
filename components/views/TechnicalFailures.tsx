@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { technicalFailuresData, technicalFailureMocks, supervisorData } from '../../data/mockData';
+import { technicalFailuresData, technicalFailureMocks, supervisorData, sitiosPorConsola } from '../../data/mockData';
 import { useSession } from '../context/SessionContext';
 import { TechnicalFailure } from '../../types';
 
@@ -16,6 +15,7 @@ const initialFormData = {
   tipoEquipo: '',
   camara: '',
   tipoProblemaEquipo: '',
+  sitio: '',
 };
 
 const EditFailureModal: React.FC<{
@@ -123,8 +123,8 @@ const TechnicalFailures: React.FC = () => {
 
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Partial<typeof initialFormData>>({});
-  const [proyecto, setProyecto] = useState<string | null>(null);
-  const [proyectoFromConsole, setProyectoFromConsole] = useState<string | null>(null);
+  const [cliente, setCliente] = useState<string | null>(null);
+  const [clienteFromConsole, setClienteFromConsole] = useState<string | null>(null);
   const [sitios, setSitios] = useState<string[]>([]);
 
   useEffect(() => {
@@ -186,6 +186,13 @@ const TechnicalFailures: React.FC = () => {
         else delete tempErrors.nodo;
     }
 
+    if (fieldValues.affectationType === 'Punto' || fieldValues.affectationType === 'Equipo') {
+        if (!fieldValues.sitio) tempErrors.sitio = "El sitio es obligatorio.";
+        else delete tempErrors.sitio;
+    } else {
+        delete tempErrors.sitio;
+    }
+
     if (fieldValues.affectationType === 'Equipo') {
         if (!fieldValues.tipoEquipo) {
             tempErrors.tipoEquipo = "El tipo de equipo es obligatorio.";
@@ -231,6 +238,10 @@ const TechnicalFailures: React.FC = () => {
         newValues.camara = '';
         newValues.tipoProblemaEquipo = '';
     }
+    
+    if (name === 'affectationType') {
+        newValues.sitio = '';
+    }
 
     setFormData(newValues);
     validate(newValues);
@@ -245,45 +256,69 @@ const TechnicalFailures: React.FC = () => {
         affectationType: newType,
     });
     setErrors({});
-    setProyecto(null);
-    setProyectoFromConsole(null);
+    setCliente(null);
+    setClienteFromConsole(null);
     setSitios([]);
   };
 
   useEffect(() => {
     if (formData.affectationType === 'Nodo' && formData.nodo) {
-      const relation = technicalFailureMocks.nodo_proyecto.find(np => np.nodo === formData.nodo);
-      setProyecto(relation ? relation.proyecto : 'Proyecto no encontrado');
+      const relation = technicalFailureMocks.nodo_cliente.find(nc => nc.nodo === formData.nodo);
+      setCliente(relation ? relation.cliente : 'Cliente no encontrado');
     } else {
-      setProyecto(null);
+      setCliente(null);
     }
   }, [formData.nodo, formData.affectationType]);
 
-  useEffect(() => {
-    if (session.console && (formData.affectationType === 'Punto' || (formData.affectationType === 'Equipo' && formData.tipoEquipo !== 'Cámara'))) {
-        const projectRel = technicalFailureMocks.consola_proyecto.find(cp => cp.consola === session.console);
-        setProyectoFromConsole(projectRel ? projectRel.proyecto : 'No encontrado');
+  const normalizeConsoleName = (name: string | null): string => {
+    if (!name) return '';
+    let processed = name.replace('_new', '').toUpperCase();
+    if (processed.startsWith('OPERADOR_')) {
+        let rest = processed.substring('OPERADOR_'.length);
+        if (/^\d+$/.test(rest)) {
+            return 'OPERADOR ' + rest;
+        } else {
+            return rest;
+        }
+    }
+    return processed;
+  };
 
-        const sitesRel = technicalFailureMocks.consola_sitios.find(cs => cs.consola === session.console);
-        setSitios(sitesRel ? sitesRel.sitios : []);
+  useEffect(() => {
+    if (session.console && (formData.affectationType === 'Punto' || formData.affectationType === 'Equipo')) {
+      const normalizedConsole = normalizeConsoleName(session.console);
+      const sitesForConsole = sitiosPorConsola.filter(s => s.consola === normalizedConsole);
+      
+      if(sitesForConsole.length > 0) {
+          setClienteFromConsole(sitesForConsole[0].cliente);
+          setSitios(sitesForConsole.map(s => s.sitio));
+      } else {
+          setClienteFromConsole('No encontrado');
+          setSitios([]);
+      }
     } else {
-      setProyectoFromConsole(null);
+      setClienteFromConsole(null);
       setSitios([]);
     }
-  }, [session.console, formData.affectationType, formData.tipoEquipo]);
+  }, [session.console, formData.affectationType]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (validate()) {
-       if(formData.affectationType === 'Nodo' && (!proyecto || proyecto === 'Proyecto no encontrado')) {
-         alert('Debe seleccionar un nodo válido vinculado a un proyecto.');
+       if(formData.affectationType === 'Nodo' && (!cliente || cliente === 'Cliente no encontrado')) {
+         alert('Debe seleccionar un nodo válido vinculado a un cliente.');
          return;
        }
 
        let equipo_afectado = 'N/A';
-       if (formData.affectationType === 'Nodo') equipo_afectado = formData.nodo;
-       else if (formData.affectationType === 'Equipo') equipo_afectado = formData.camara || formData.tipoEquipo;
-       else if (formData.affectationType === 'Punto' && sitios.length > 0) equipo_afectado = `Punto en ${sitios[0]}`;
+       if (formData.affectationType === 'Nodo') {
+           equipo_afectado = formData.nodo;
+       } else if (formData.affectationType === 'Equipo') {
+           const equipo = formData.camara || formData.tipoEquipo;
+           equipo_afectado = `${equipo} en ${formData.sitio}`;
+       } else if (formData.affectationType === 'Punto') {
+           equipo_afectado = `Punto en ${formData.sitio}`;
+       }
 
 
        let descripcion_fallo = 'N/A';
@@ -306,8 +341,8 @@ const TechnicalFailures: React.FC = () => {
        alert('Registro guardado correctamente.');
        setFormData(initialFormData);
        setErrors({});
-       setProyecto(null);
-       setProyectoFromConsole(null);
+       setCliente(null);
+       setClienteFromConsole(null);
        setSitios([]);
     }
   };
@@ -318,16 +353,27 @@ const TechnicalFailures: React.FC = () => {
           <h5 className="text-md font-semibold text-[#1C2E4A] mb-2">Información de la Consola</h5>
           <div className="space-y-2 text-sm">
             <p><span className="font-medium text-gray-600">Consola Activa:</span> {session.console}</p>
-            <p><span className="font-medium text-gray-600">Proyecto Asociado:</span> {proyectoFromConsole || 'N/A'}</p>
+            <p><span className="font-medium text-gray-600">Cliente Asociado:</span> {clienteFromConsole || 'N/A'}</p>
             <p><span className="font-medium text-gray-600">Sitio(s) Asociado(s):</span> {sitios.length > 0 ? sitios.join(', ') : 'N/A'}</p>
           </div>
         </div>
     );
+    
+    const sitioSelectField = (
+      <div className="md:col-span-2">
+        <label htmlFor="sitio" className="block text-sm font-medium text-gray-700">Sitio *</label>
+        <select id="sitio" name="sitio" value={formData.sitio} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm">
+          <option value="">Seleccione...</option>
+          {sitios.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        {errors.sitio && <p className="text-red-500 text-xs mt-1">{errors.sitio}</p>}
+      </div>
+    );
 
     switch (formData.affectationType) {
-      case 'Nodo': return (<> <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6"> <div> <label htmlFor="tipoProblema" className="block text-sm font-medium text-gray-700">Tipo de Problema *</label> <select id="tipoProblema" name="tipoProblema" value={formData.tipoProblema} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"> <option value="">Seleccione...</option> <option>Intermitencia</option> <option>Pérdida de visual</option> <option>Tiempos altos</option> <option>Caídas recurrentes</option> </select> </div> <div className="flex items-end"> <div className="flex items-start"> <div className="flex items-center h-5"> <input id="reportadoCliente" name="reportadoCliente" type="checkbox" checked={formData.reportadoCliente} onChange={handleInputChange} className="focus:ring-[#F9C300] h-4 w-4 text-[#F9C300] border-gray-300 rounded" /> </div> <div className="ml-3 text-sm"> <label htmlFor="reportadoCliente" className="font-medium text-gray-700">Reportado al cliente</label> </div> </div> </div> </div> <div className="md:col-span-2"> <div className="flex items-center gap-4"> <div className="flex-grow"> <label htmlFor="nodo" className="block text-sm font-medium text-gray-700">Nodo *</label> <select id="nodo" name="nodo" value={formData.nodo} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"> <option value="">Seleccione...</option> {technicalFailureMocks.nodos.map(n => <option key={n.id} value={n.nombre}>{n.nombre}</option>)} </select> {errors.nodo && <p className="text-red-500 text-xs mt-1">{errors.nodo}</p>} </div> {proyecto && ( <div className="mt-6 p-2 bg-blue-100 text-blue-800 rounded-md text-sm font-semibold"> → Proyecto: {proyecto} </div> )} </div> </div> </>);
-      case 'Punto': return (<> <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6"> <div> <label htmlFor="tipoProblema" className="block text-sm font-medium text-gray-700">Tipo de Problema *</label> <select id="tipoProblema" name="tipoProblema" value={formData.tipoProblema} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"> <option value="">Seleccione...</option> <option>Desenganche</option> <option>Falta grabaciones en HikCentral</option> <option>Intermitencia</option> <option>Pérdida de visual</option> <option>Tiempos altos</option> <option>Caídas recurrentes</option> </select> </div> <div className="flex items-end"> <div className="flex items-start"> <div className="flex items-center h-5"> <input id="reportadoCliente" name="reportadoCliente" type="checkbox" checked={formData.reportadoCliente} onChange={handleInputChange} className="focus:ring-[#F9C300] h-4 w-4 text-[#F9C300] border-gray-300 rounded" /> </div> <div className="ml-3 text-sm"> <label htmlFor="reportadoCliente" className="font-medium text-gray-700">Reportado al cliente</label> </div> </div> </div> </div> {consoleInfoBox} </>);
-      case 'Equipo': return (<> <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6"> <div> <label htmlFor="tipoEquipo" className="block text-sm font-medium text-gray-700">Tipo de Equipo Afectado *</label> <select id="tipoEquipo" name="tipoEquipo" value={formData.tipoEquipo} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"> <option value="">Seleccione...</option> {technicalFailureMocks.tipos_equipo.map(t => <option key={t} value={t}>{t}</option>)} </select> {errors.tipoEquipo && <p className="text-red-500 text-xs mt-1">{errors.tipoEquipo}</p>} </div> <div className="flex items-end"> <div className="flex items-start"> <div className="flex items-center h-5"> <input id="reportadoCliente" name="reportadoCliente" type="checkbox" checked={formData.reportadoCliente} onChange={handleInputChange} className="focus:ring-[#F9C300] h-4 w-4 text-[#F9C300] border-gray-300 rounded" /> </div> <div className="ml-3 text-sm"> <label htmlFor="reportadoCliente" className="font-medium text-gray-700">Reportado al cliente</label> </div> </div> </div> </div> {formData.tipoEquipo && formData.tipoEquipo !== 'Cámara' && ( <div className="md:col-span-2"> <label htmlFor="tipoProblemaEquipo" className="block text-sm font-medium text-gray-700">Tipo de problema en equipo *</label> <select id="tipoProblemaEquipo" name="tipoProblemaEquipo" value={formData.tipoProblemaEquipo} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"> <option value="">Seleccione...</option> {technicalFailureMocks.tipos_problema_equipo.map(p => <option key={p} value={p}>{p}</option>)} </select> {errors.tipoProblemaEquipo && <p className="text-red-500 text-xs mt-1">{errors.tipoProblemaEquipo}</p>} </div> )} {formData.tipoEquipo === 'Cámara' && ( <div className="md:col-span-2"> <label htmlFor="camara" className="block text-sm font-medium text-gray-700">Cámara *</label> <select id="camara" name="camara" value={formData.camara} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"> <option value="">Seleccione...</option> {technicalFailureMocks.dispositivos.map(d => <option key={d.id} value={d.nombre}>{d.nombre}</option>)} </select> {errors.camara && <p className="text-red-500 text-xs mt-1">{errors.camara}</p>} </div> )} {formData.tipoEquipo && formData.tipoEquipo !== 'Cámara' && consoleInfoBox} </>);
+      case 'Nodo': return (<> <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6"> <div> <label htmlFor="tipoProblema" className="block text-sm font-medium text-gray-700">Tipo de Problema *</label> <select id="tipoProblema" name="tipoProblema" value={formData.tipoProblema} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"> <option value="">Seleccione...</option> <option>Intermitencia</option> <option>Pérdida de visual</option> <option>Tiempos altos</option> <option>Caídas recurrentes</option> </select> </div> <div className="flex items-end"> <div className="flex items-start"> <div className="flex items-center h-5"> <input id="reportadoCliente" name="reportadoCliente" type="checkbox" checked={formData.reportadoCliente} onChange={handleInputChange} className="focus:ring-[#F9C300] h-4 w-4 text-[#F9C300] border-gray-300 rounded" /> </div> <div className="ml-3 text-sm"> <label htmlFor="reportadoCliente" className="font-medium text-gray-700">Reportado al cliente</label> </div> </div> </div> </div> <div className="md:col-span-2"> <div className="flex items-center gap-4"> <div className="flex-grow"> <label htmlFor="nodo" className="block text-sm font-medium text-gray-700">Nodo *</label> <select id="nodo" name="nodo" value={formData.nodo} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"> <option value="">Seleccione...</option> {technicalFailureMocks.nodos.map(n => <option key={n.id} value={n.nombre}>{n.nombre}</option>)} </select> {errors.nodo && <p className="text-red-500 text-xs mt-1">{errors.nodo}</p>} </div> {cliente && ( <div className="mt-6 p-2 bg-blue-100 text-blue-800 rounded-md text-sm font-semibold"> → Cliente: {cliente} </div> )} </div> </div> </>);
+      case 'Punto': return (<> <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6"> <div> <label htmlFor="tipoProblema" className="block text-sm font-medium text-gray-700">Tipo de Problema *</label> <select id="tipoProblema" name="tipoProblema" value={formData.tipoProblema} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"> <option value="">Seleccione...</option> <option>Desenganche</option> <option>Falta grabaciones en HikCentral</option> <option>Intermitencia</option> <option>Pérdida de visual</option> <option>Tiempos altos</option> <option>Caídas recurrentes</option> </select> </div> <div className="flex items-end"> <div className="flex items-start"> <div className="flex items-center h-5"> <input id="reportadoCliente" name="reportadoCliente" type="checkbox" checked={formData.reportadoCliente} onChange={handleInputChange} className="focus:ring-[#F9C300] h-4 w-4 text-[#F9C300] border-gray-300 rounded" /> </div> <div className="ml-3 text-sm"> <label htmlFor="reportadoCliente" className="font-medium text-gray-700">Reportado al cliente</label> </div> </div> </div> </div> {sitioSelectField} {consoleInfoBox} </>);
+      case 'Equipo': return (<> <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6"> <div> <label htmlFor="tipoEquipo" className="block text-sm font-medium text-gray-700">Tipo de Equipo Afectado *</label> <select id="tipoEquipo" name="tipoEquipo" value={formData.tipoEquipo} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"> <option value="">Seleccione...</option> {technicalFailureMocks.tipos_equipo.map(t => <option key={t} value={t}>{t}</option>)} </select> {errors.tipoEquipo && <p className="text-red-500 text-xs mt-1">{errors.tipoEquipo}</p>} </div> <div className="flex items-end"> <div className="flex items-start"> <div className="flex items-center h-5"> <input id="reportadoCliente" name="reportadoCliente" type="checkbox" checked={formData.reportadoCliente} onChange={handleInputChange} className="focus:ring-[#F9C300] h-4 w-4 text-[#F9C300] border-gray-300 rounded" /> </div> <div className="ml-3 text-sm"> <label htmlFor="reportadoCliente" className="font-medium text-gray-700">Reportado al cliente</label> </div> </div> </div> </div> {sitioSelectField} {formData.tipoEquipo && formData.tipoEquipo !== 'Cámara' && ( <div className="md:col-span-2"> <label htmlFor="tipoProblemaEquipo" className="block text-sm font-medium text-gray-700">Tipo de problema en equipo *</label> <select id="tipoProblemaEquipo" name="tipoProblemaEquipo" value={formData.tipoProblemaEquipo} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"> <option value="">Seleccione...</option> {technicalFailureMocks.tipos_problema_equipo.map(p => <option key={p} value={p}>{p}</option>)} </select> {errors.tipoProblemaEquipo && <p className="text-red-500 text-xs mt-1">{errors.tipoProblemaEquipo}</p>} </div> )} {formData.tipoEquipo === 'Cámara' && ( <div className="md:col-span-2"> <label htmlFor="camara" className="block text-sm font-medium text-gray-700">Cámara *</label> <select id="camara" name="camara" value={formData.camara} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"> <option value="">Seleccione...</option> {technicalFailureMocks.dispositivos.map(d => <option key={d.id} value={d.nombre}>{d.nombre}</option>)} </select> {errors.camara && <p className="text-red-500 text-xs mt-1">{errors.camara}</p>} </div> )} {consoleInfoBox} </>);
       case 'Masivo': return null; default: return null;
     }
   };
