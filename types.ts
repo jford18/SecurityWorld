@@ -69,8 +69,5 @@ export enum View {
   Dashboard,
   Failures,
   Intrusions,
-  Devices,
-  Logs,
-  Architecture,
   AlertsReport,
 }

@@ -6,9 +6,6 @@ import Header from './Header';
 import DashboardHome from './views/DashboardHome';
 import TechnicalFailures from './views/TechnicalFailures';
 import Intrusions from './views/Intrusions';
-import DeviceStatus from './views/DeviceStatus';
-import SystemLogs from './views/SystemLogs';
-import TechnicalExplanation from './views/TechnicalExplanation';
 import AlertsReportByShift from './views/AlertsReportByShift';
 
 const Dashboard: React.FC = () => {
@@ -22,14 +19,8 @@ const Dashboard: React.FC = () => {
         return <TechnicalFailures />;
       case View.Intrusions:
         return <Intrusions />;
-      case View.Devices:
-        return <DeviceStatus />;
-      case View.Logs:
-        return <SystemLogs />;
       case View.AlertsReport:
         return <AlertsReportByShift />;
-      case View.Architecture:
-        return <TechnicalExplanation />;
       default:
         return <DashboardHome />;
     }
