@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { useSession } from './context/SessionContext';
+import { useSession, clearSession } from './context/SessionContext';
 
 const Header: React.FC = () => {
   const [time, setTime] = useState(new Date());
@@ -12,18 +11,34 @@ const Header: React.FC = () => {
   }, []);
 
   const handleLogout = () => {
-    setSession({ user: null, console: null, role: null });
+    localStorage.removeItem('token');
+    localStorage.removeItem('usuario');
+    clearSession(setSession);
   };
 
   return (
     <header className="flex items-center justify-between h-20 px-6 bg-white border-b">
-       <div className="flex items-baseline gap-4">
+      <div className="flex items-baseline gap-4">
         <h1 className="text-2xl font-semibold text-[#1C2E4A]">Bienvenido, {session.user}</h1>
-        {session.console && (
+        {(session.console || session.role || session.roles.length > 0) && (
           <span className="text-lg text-gray-500">
-            | Consola: <span className="font-semibold text-[#1C2E4A]">{session.console}</span>
-            {session.role && ` | Rol: `}
-            {session.role && <span className="font-semibold text-[#1C2E4A] capitalize">{session.role}</span>}
+            {session.console && (
+              <>
+                | Consola: <span className="font-semibold text-[#1C2E4A]">{session.console}</span>{' '}
+              </>
+            )}
+            {session.role && (
+              <>
+                | Rol activo:{' '}
+                <span className="font-semibold text-[#1C2E4A] capitalize">{session.role}</span>{' '}
+              </>
+            )}
+            {session.roles.length > 1 && (
+              <>
+                | Roles asignados:{' '}
+                <span className="font-semibold text-[#1C2E4A]">{session.roles.join(', ')}</span>
+              </>
+            )}
           </span>
         )}
       </div>
@@ -33,11 +48,23 @@ const Header: React.FC = () => {
           <p className="text-sm text-gray-500">{time.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
         <div className="ml-4 w-12 h-12 flex items-center justify-center bg-gray-200 rounded-full">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-6 w-6 text-gray-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
         </div>
-        <button onClick={handleLogout} title="Cerrar Sesión" className="ml-4 text-gray-500 hover:text-[#1C2E4A] transition-colors duration-200">
+        <button
+          onClick={handleLogout}
+          title="Cerrar Sesión"
+          className="ml-4 text-gray-500 hover:text-[#1C2E4A] transition-colors duration-200"
+        >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
         </button>
       </div>

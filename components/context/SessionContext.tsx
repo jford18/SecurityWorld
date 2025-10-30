@@ -1,10 +1,13 @@
-
 import React, { createContext, useState, useContext, ReactNode } from 'react';
+
+type Role = 'operador' | 'supervisor';
 
 interface SessionData {
   user: string | null;
   console: string | null;
-  role: 'operador' | 'supervisor' | null;
+  role: Role | null;
+  roles: string[];
+  token: string | null;
 }
 
 interface SessionContextType {
@@ -14,8 +17,16 @@ interface SessionContextType {
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
+const initialSession: SessionData = {
+  user: null,
+  console: null,
+  role: null,
+  roles: [],
+  token: null,
+};
+
 export const SessionProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [session, setSession] = useState<SessionData>({ user: null, console: null, role: null });
+  const [session, setSession] = useState<SessionData>(initialSession);
 
   return (
     <SessionContext.Provider value={{ session, setSession }}>
@@ -30,4 +41,8 @@ export const useSession = () => {
     throw new Error('useSession must be used within a SessionProvider');
   }
   return context;
+};
+
+export const clearSession = (setSession: React.Dispatch<React.SetStateAction<SessionData>>) => {
+  setSession(initialSession);
 };
