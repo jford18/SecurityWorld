@@ -1,6 +1,6 @@
 import React from 'react';
 import { deviceInventoryData } from '../../data/mockData';
-import { Device } from '../../types';
+// import { Device } from '../../types';
 
 const DeviceStatus: React.FC = () => {
   return (
