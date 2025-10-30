@@ -1,6 +1,6 @@
 import React from 'react';
 import { intrusionsData } from '../../data/mockData';
-import { Intrusion } from '../../types';
+// import { Intrusion } from '../../types';
 
 const Intrusions: React.FC = () => {
   return (
