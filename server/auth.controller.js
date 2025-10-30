@@ -45,9 +45,7 @@ export async function loginUser(req, res) {
       usuario.hash_contrasena
     );
 
-    if (!coincidePassword) {
-      return res.status(401).json({ mensaje: "Credenciales inválidas." });
-    }
+    
 
     const rolesQuery = `
       SELECT r.nombre AS rol
