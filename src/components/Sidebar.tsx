@@ -71,14 +71,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
             icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
             label="Reporte Alertas Turno"
           />
-          {/* NEW: Sección de mantenimiento con acceso a la administración de roles. */}
+          {/* NEW: Sección especializada en seguridad y asignaciones de acceso. */}
           <div className="mt-8">
             <p className="px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">
-              Mantenimiento
+              Seguridad y Asignaciones
             </p>
-            {/* NEW: Acceso directo al catálogo de tipos de problema. */}
+            {/* NEW: Acceso directo a la pantalla de usuarios y roles vinculados. */}
             <NavItem
-              view={View.AdminCatalogoTipoProblema}
+              view={View.AdminAsignacionRoles}
               currentView={currentView}
               setCurrentView={setCurrentView}
               icon={
@@ -93,12 +93,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth="2"
-                    d="M9 5h12M9 12h12M9 19h12M5 5h.01M5 12h.01M5 19h.01"
+                    d="M16 7a4 4 0 10-8 0 4 4 0 008 0zm-4 6a7 7 0 00-7 7h2a5 5 0 0110 0h2a7 7 0 00-7-7zm5 0a3 3 0 110 6 3 3 0 010-6z"
                   />
                 </svg>
               }
-              label="Catálogo Tipo Problema"
+              label="Usuarios ↔ Roles"
             />
+            {/* NEW: Acceso directo al mantenimiento de roles. */}
             <NavItem
               view={View.AdminRoles}
               currentView={currentView}
@@ -143,6 +144,29 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
                 </svg>
               }
               label="Usuarios"
+            />
+            {/* NEW: Acceso directo al catálogo de tipos de problema como referencia complementaria. */}
+            <NavItem
+              view={View.AdminCatalogoTipoProblema}
+              currentView={currentView}
+              setCurrentView={setCurrentView}
+              icon={
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M9 5h12M9 12h12M9 19h12M5 5h.01M5 12h.01M5 19h.01"
+                  />
+                </svg>
+              }
+              label="Catálogo Tipo Problema"
             />
           </div>
         </nav>
