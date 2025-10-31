@@ -6,6 +6,8 @@ import DashboardHome from './views/DashboardHome';
 import TechnicalFailures from './views/TechnicalFailures';
 import Intrusions from './views/Intrusions';
 import AlertsReportByShift from './views/AlertsReportByShift';
+// NEW: Incorporamos la vista de mantenimiento de roles.
+import RolesScreen from '../pages/admin/RolesScreen';
 
 const Dashboard: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
@@ -20,6 +22,9 @@ const Dashboard: React.FC = () => {
         return <Intrusions />;
       case View.AlertsReport:
         return <AlertsReportByShift />;
+      case View.AdminRoles:
+        // NEW: Renderizamos el mantenimiento de roles dentro del dashboard.
+        return <RolesScreen />;
       default:
         return <DashboardHome />;
     }

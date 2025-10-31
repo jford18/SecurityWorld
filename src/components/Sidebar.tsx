@@ -43,9 +43,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
       </div>
       <div className="flex-1 overflow-y-auto">
         <nav className="mt-10">
-          <NavItem 
-            view={View.Dashboard} 
-            currentView={currentView} 
+          <NavItem
+            view={View.Dashboard}
+            currentView={currentView}
             setCurrentView={setCurrentView}
             icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>}
             label="Dashboard"
@@ -64,13 +64,41 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
             icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
             label="Intrusiones"
           />
-          <NavItem 
-            view={View.AlertsReport} 
-            currentView={currentView} 
+          <NavItem
+            view={View.AlertsReport}
+            currentView={currentView}
             setCurrentView={setCurrentView}
             icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
             label="Reporte Alertas Turno"
           />
+          {/* NEW: Sección de mantenimiento con acceso a la administración de roles. */}
+          <div className="mt-8">
+            <p className="px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">
+              Mantenimiento
+            </p>
+            <NavItem
+              view={View.AdminRoles}
+              currentView={currentView}
+              setCurrentView={setCurrentView}
+              icon={
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M9 17a2 2 0 104 0m3-9a5 5 0 00-10 0v4.586l-.707.707A1 1 0 007 14h10a1 1 0 00.707-1.707L17 12.586V8z"
+                  />
+                </svg>
+              }
+              label="Roles"
+            />
+          </div>
         </nav>
       </div>
     </div>

@@ -113,4 +113,6 @@ export enum View {
   Failures,
   Intrusions,
   AlertsReport,
+  // NEW: Vista para el mantenimiento de roles.
+  AdminRoles,
 }
