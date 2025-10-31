@@ -49,10 +49,13 @@ app.use("/api/usuario-roles", usuarioRolesRoutes);
 
 
 app.use((req, res) => {
-  res.setHeader("Content-Type", "application/json"); // FIX: Middleware de 404 con respuesta JSON.
   res.status(404).json({ message: "Ruta no encontrada" });
 });
 
+app.use((err, req, res, next) => {
+  console.error("Error global:", err);
+  res.status(500).json({ message: "Error interno del servidor" });
+});
 
 app.listen(PORT, () => {
   console.log(`Servidor escuchando en el puerto ${PORT}`);

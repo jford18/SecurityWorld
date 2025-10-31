@@ -24,7 +24,7 @@ const secondaryButtonClasses =
 const ConsolasScreen: React.FC = () => {
   const [consolas, setConsolas] = useState<Consola[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [fetchError, setFetchError] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<ModalMode>('create');
@@ -35,15 +35,20 @@ const ConsolasScreen: React.FC = () => {
   const loadConsolas = async () => {
     try {
       setLoading(true);
-      const response = await getConsolas();
-      if (!response || !Array.isArray(response.data)) {
+      const data = await getConsolas();
+      const lista = Array.isArray(data)
+        ? data
+        : (data as { data?: Consola[] } | null | undefined)?.data;
+
+      if (!Array.isArray(lista)) {
         throw new Error('Respuesta inválida del servidor');
       }
-      setConsolas(response.data);
-      setFetchError('');
-    } catch (error) {
-      console.error(error);
-      setFetchError((error as Error).message || 'Error al cargar las consolas');
+
+      setConsolas(lista);
+      setError(null);
+    } catch (err) {
+      console.error('Error cargando consolas:', err);
+      setError((err as Error).message || 'Error al cargar las consolas');
     } finally {
       setLoading(false);
     }
@@ -112,9 +117,9 @@ const ConsolasScreen: React.FC = () => {
       }
       await loadConsolas();
       closeModal();
-    } catch (error) {
-      console.error(error);
-      setFormError((error as Error).message || 'Error al guardar la consola');
+    } catch (err) {
+      console.error(err);
+      setFormError((err as Error).message || 'Error al guardar la consola');
     }
   };
 
@@ -131,9 +136,9 @@ const ConsolasScreen: React.FC = () => {
       await deleteConsola(consola.id);
       alert('Consola eliminada correctamente');
       await loadConsolas();
-    } catch (error) {
-      console.error(error);
-      alert((error as Error).message || 'Error al eliminar la consola');
+    } catch (err) {
+      console.error(err);
+      alert((err as Error).message || 'Error al eliminar la consola');
     }
   };
 
@@ -154,8 +159,8 @@ const ConsolasScreen: React.FC = () => {
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
         {loading ? (
           <p className="text-sm text-gray-500">Cargando consolas...</p>
-        ) : fetchError ? (
-          <p className="text-sm text-red-600">{fetchError}</p>
+        ) : error ? (
+          <p className="text-sm text-red-600">{error}</p>
         ) : consolas.length === 0 ? (
           <p className="text-sm text-gray-500">No se registran consolas actualmente.</p>
         ) : (
