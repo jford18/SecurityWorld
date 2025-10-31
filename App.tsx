@@ -3,12 +3,12 @@ import LoginScreen from './components/LoginScreen';
 import Dashboard from './components/Dashboard';
 import { SessionProvider, useSession } from './components/context/SessionContext';
 
-type Role = 'operador' | 'supervisor';
+type Role = string;
 
 const AppContent: React.FC = () => {
   const { session, setSession } = useSession();
 
-  const handleLogin = (primaryRole: Role, roles: string[]) => {
+  const handleLogin = (primaryRole: Role, roles: string[], consoleName: string) => {
     const storedUser = localStorage.getItem('usuario');
     const token = localStorage.getItem('token');
 
@@ -24,7 +24,7 @@ const AppContent: React.FC = () => {
 
     setSession({
       user: username,
-      console: null,
+      console: consoleName,
       role: primaryRole,
       roles,
       token: token ?? null,
