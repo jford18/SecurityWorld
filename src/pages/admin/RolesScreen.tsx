@@ -21,6 +21,7 @@ const RolesScreen: React.FC = () => {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [fetchError, setFetchError] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<ModalMode>('create');
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
@@ -31,17 +32,25 @@ const RolesScreen: React.FC = () => {
   const fetchRoles = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/roles');
+      const response = await fetch('http://localhost:3000/api/roles');
+      // FIX: Se apunta explícitamente al endpoint /api para evitar recibir el HTML de la SPA.
 
       if (!response.ok) {
         throw new Error('No se pudo obtener la lista de roles');
       }
 
       const data: Role[] = await response.json();
+      if (!Array.isArray(data)) {
+        // FIX: Se valida que la respuesta siga siendo JSON válido y no una página HTML de error.
+        throw new Error('Respuesta inválida del servidor');
+      }
+
       setRoles(data);
+      setErrorMessage('');
+      setFetchError('');
     } catch (error) {
       console.error(error);
-      alert('Error al cargar los roles');
+      setFetchError('Error al cargar roles');
     } finally {
       setLoading(false);
     }
@@ -184,6 +193,12 @@ const RolesScreen: React.FC = () => {
           className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
         />
       </div>
+
+      {fetchError && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {fetchError}
+        </div>
+      )}
 
       {/* NEW: Tabla con la información de roles. */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
