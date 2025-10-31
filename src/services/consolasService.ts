@@ -4,13 +4,20 @@ const jsonContentType = 'application/json';
 
 // FIX: Validamos tipo de contenido antes de intentar parsear la respuesta del backend.
 const handleResponse = async (response: Response) => {
-  const contentType = response.headers.get('content-type');
-  if (!response.ok) {
-    throw new Error(`Error del servidor (${response.status})`);
+  if (response.status === 204 || response.status === 304) {
+    return [];
   }
+
+  const contentType = response.headers.get('content-type');
   if (!contentType || !contentType.includes(jsonContentType)) {
     throw new Error('Respuesta inválida del servidor');
   }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Error del servidor (${response.status}): ${text}`);
+  }
+
   return response.json();
 };
 
@@ -22,6 +29,7 @@ export type ConsolaPayload = {
 export const getConsolas = async () => {
   const response = await fetch(`${API_BASE_URL}/api/consolas`, {
     headers: { Accept: jsonContentType },
+    cache: 'no-store',
   });
   return handleResponse(response);
 };
