@@ -13,6 +13,50 @@ export interface TechnicalFailure {
   novedadDetectada?: string;
 }
 
+export interface CatalogoDepartamento {
+  id: number;
+  nombre: string;
+}
+
+export interface CatalogoTipoProblema {
+  id: number;
+  descripcion: string;
+}
+
+export interface CatalogoResponsable {
+  id: number;
+  nombre: string;
+}
+
+export interface SitioPorConsola {
+  sitio: string;
+  cliente: string;
+  consola: string;
+}
+
+export interface CatalogoNodo {
+  id: number;
+  nombre: string;
+}
+
+export interface CatalogoDispositivo {
+  id: number;
+  nombre: string;
+  estado?: string;
+}
+
+export interface TechnicalFailureCatalogs {
+  departamentos: CatalogoDepartamento[];
+  tiposProblema: CatalogoTipoProblema[];
+  responsablesVerificacion: CatalogoResponsable[];
+  nodos: CatalogoNodo[];
+  nodoCliente: { nodo: string; cliente: string }[];
+  tiposEquipo: string[];
+  tiposProblemaEquipo: string[];
+  dispositivos: CatalogoDispositivo[];
+  sitiosPorConsola: SitioPorConsola[];
+}
+
 export interface Intrusion {
   fecha: string;
   ubicacion: string;

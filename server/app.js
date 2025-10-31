@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import authRoutes from "./auth.routes.js";
+import fallosRoutes from "./fallos.routes.js";
 
 const app = express();
 
@@ -15,5 +16,6 @@ app.use(express.json());
 
 // Rutas principales
 app.use("/api/auth", authRoutes);
+app.use("/api", fallosRoutes);
 
 export default app;
