@@ -1,5 +1,5 @@
 // NEW: Pantalla de mantenimiento para CRUD de consolas con validaciones de frontend.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ConsolaPayload,
   createConsola,
@@ -49,7 +49,14 @@ const ConsolasScreen: React.FC = () => {
     }
   };
 
+  const hasLoaded = useRef(false);
+
   useEffect(() => {
+    if (hasLoaded.current) {
+      return;
+    }
+    hasLoaded.current = true;
+
     loadConsolas();
   }, []);
 
