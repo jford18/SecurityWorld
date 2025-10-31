@@ -1,21 +1,18 @@
 import pool from "../db.js";
 
 export const getConsolas = async (_req, res) => {
-  res.setHeader("Content-Type", "application/json"); // FIX: Forzar respuestas JSON válidas.
   try {
     const result = await pool.query(
-      "SELECT id, nombre, fecha_creacion FROM consolas ORDER BY id ASC"
+      "SELECT * FROM consolas ORDER BY id ASC"
     );
-    res.status(200).json(result.rows); // FIX: Garantizar respuesta JSON explícita.
+    res.status(200).json(result.rows);
   } catch (error) {
     console.error("Error al obtener consolas:", error);
-    // FIX: Respuesta de error consistente en formato JSON.
-    res.status(500).json({ message: "Error interno del servidor" });
+    res.status(500).json({ message: "Error al obtener consolas" });
   }
 };
 
 export const createConsola = async (req, res) => {
-  res.setHeader("Content-Type", "application/json"); // FIX: Forzar respuestas JSON válidas.
   try {
     const { nombre } = req.body;
     if (!nombre || nombre.trim() === "") {
@@ -43,13 +40,11 @@ export const createConsola = async (req, res) => {
       });
   } catch (error) {
     console.error("Error al crear consola:", error);
-    // FIX: Respuesta de error consistente en formato JSON.
     res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
 export const updateConsola = async (req, res) => {
-  res.setHeader("Content-Type", "application/json"); // FIX: Forzar respuestas JSON válidas.
   try {
     const { id } = req.params;
     const { nombre } = req.body;
@@ -71,13 +66,11 @@ export const updateConsola = async (req, res) => {
       .json({ message: "Consola actualizada", data: result.rows[0] }); // FIX: Garantizar respuesta JSON explícita.
   } catch (error) {
     console.error("Error al actualizar consola:", error);
-    // FIX: Respuesta de error consistente en formato JSON.
     res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
 export const deleteConsola = async (req, res) => {
-  res.setHeader("Content-Type", "application/json"); // FIX: Forzar respuestas JSON válidas.
   try {
     const { id } = req.params;
     const result = await pool.query("DELETE FROM consolas WHERE id = $1", [id]);
@@ -89,7 +82,6 @@ export const deleteConsola = async (req, res) => {
       .json({ message: "Consola eliminada correctamente" }); // FIX: Garantizar respuesta JSON explícita.
   } catch (error) {
     console.error("Error al eliminar consola:", error);
-    // FIX: Respuesta de error consistente en formato JSON.
     res.status(500).json({ message: "Error interno del servidor" });
   }
 };
