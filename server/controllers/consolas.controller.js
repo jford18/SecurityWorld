@@ -1,18 +1,21 @@
 import pool from "../db.js";
 
 export const getConsolas = async (_req, res) => {
+  res.setHeader("Content-Type", "application/json"); // FIX: Forzar respuestas JSON válidas.
   try {
     const result = await pool.query(
       "SELECT id, nombre, fecha_creacion FROM consolas ORDER BY id ASC"
     );
-    res.json(result.rows);
+    res.status(200).json(result.rows); // FIX: Garantizar respuesta JSON explícita.
   } catch (error) {
     console.error("Error al obtener consolas:", error);
-    res.status(500).json({ message: "Error al obtener consolas" });
+    // FIX: Respuesta de error consistente en formato JSON.
+    res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
 export const createConsola = async (req, res) => {
+  res.setHeader("Content-Type", "application/json"); // FIX: Forzar respuestas JSON válidas.
   try {
     const { nombre } = req.body;
     if (!nombre || nombre.trim() === "") {
@@ -40,11 +43,13 @@ export const createConsola = async (req, res) => {
       });
   } catch (error) {
     console.error("Error al crear consola:", error);
-    res.status(500).json({ message: "Error al crear consola" });
+    // FIX: Respuesta de error consistente en formato JSON.
+    res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
 export const updateConsola = async (req, res) => {
+  res.setHeader("Content-Type", "application/json"); // FIX: Forzar respuestas JSON válidas.
   try {
     const { id } = req.params;
     const { nombre } = req.body;
@@ -61,23 +66,30 @@ export const updateConsola = async (req, res) => {
       return res.status(404).json({ message: "Consola no encontrada" });
     }
 
-    res.json({ message: "Consola actualizada", data: result.rows[0] });
+    res
+      .status(200)
+      .json({ message: "Consola actualizada", data: result.rows[0] }); // FIX: Garantizar respuesta JSON explícita.
   } catch (error) {
     console.error("Error al actualizar consola:", error);
-    res.status(500).json({ message: "Error al actualizar consola" });
+    // FIX: Respuesta de error consistente en formato JSON.
+    res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
 export const deleteConsola = async (req, res) => {
+  res.setHeader("Content-Type", "application/json"); // FIX: Forzar respuestas JSON válidas.
   try {
     const { id } = req.params;
     const result = await pool.query("DELETE FROM consolas WHERE id = $1", [id]);
     if (result.rowCount === 0) {
       return res.status(404).json({ message: "Consola no encontrada" });
     }
-    res.json({ message: "Consola eliminada correctamente" });
+    res
+      .status(200)
+      .json({ message: "Consola eliminada correctamente" }); // FIX: Garantizar respuesta JSON explícita.
   } catch (error) {
     console.error("Error al eliminar consola:", error);
-    res.status(500).json({ message: "Error al eliminar consola" });
+    // FIX: Respuesta de error consistente en formato JSON.
+    res.status(500).json({ message: "Error interno del servidor" });
   }
 };

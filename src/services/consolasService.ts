@@ -2,26 +2,16 @@ import { API_BASE_URL } from './api';
 
 const jsonContentType = 'application/json';
 
-// FIX: Analizador seguro que verifica el encabezado Content-Type para evitar errores de parseo HTML.
-const parseJsonSafe = async (response: Response) => {
-  const contentType = response.headers.get('content-type');
-  if (contentType && contentType.includes(jsonContentType)) {
-    return response.json();
-  }
-
-  return { message: 'Respuesta inválida del servidor' };
-};
-
+// FIX: Validamos tipo de contenido antes de intentar parsear la respuesta del backend.
 const handleResponse = async (response: Response) => {
-  if (response.ok) {
-    return parseJsonSafe(response);
+  const contentType = response.headers.get('content-type');
+  if (!response.ok) {
+    throw new Error(`Error del servidor (${response.status})`);
   }
-
-  const errorBody = await parseJsonSafe(response);
-  const errorMessage =
-    (errorBody && typeof errorBody === 'object' && 'message' in errorBody && errorBody.message) ||
-    'Error al comunicarse con el servidor';
-  throw new Error(String(errorMessage));
+  if (!contentType || !contentType.includes(jsonContentType)) {
+    throw new Error('Respuesta inválida del servidor');
+  }
+  return response.json();
 };
 
 export type ConsolaPayload = {
