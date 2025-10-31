@@ -119,4 +119,6 @@ export enum View {
   AdminUsuarios,
   // NEW: Vista para el catálogo de tipos de problema.
   AdminCatalogoTipoProblema,
+  // NEW: Vista para la asignación de roles a usuarios.
+  AdminAsignacionRoles,
 }

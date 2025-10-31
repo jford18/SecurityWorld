@@ -12,6 +12,8 @@ import RolesScreen from '../pages/admin/RolesScreen';
 import UsuariosScreen from '../pages/admin/UsuariosScreen';
 // NEW: Vista del catálogo de tipos de problema dentro del dashboard.
 import CatalogoTipoProblemaScreen from '../pages/admin/CatalogoTipoProblemaScreen';
+// NEW: Vista de asignación de roles entre usuarios y roles del sistema.
+import AsignacionRolesScreen from '../pages/admin/AsignacionRolesScreen';
 
 const Dashboard: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
@@ -35,6 +37,9 @@ const Dashboard: React.FC = () => {
       case View.AdminCatalogoTipoProblema:
         // NEW: Renderizamos el catálogo tipo problema siguiendo la misma estética.
         return <CatalogoTipoProblemaScreen />;
+      case View.AdminAsignacionRoles:
+        // NEW: Renderizamos la pantalla de asignación de roles a usuarios.
+        return <AsignacionRolesScreen />;
       default:
         return <DashboardHome />;
     }

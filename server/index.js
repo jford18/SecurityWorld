@@ -7,8 +7,10 @@ import rolesRoutes from "./roles.routes.js";
 import usuariosRoutes from "./routes/usuarios.routes.js";
 // NEW: Registro del catálogo de tipos de problema en el servidor API.
 import catalogoTipoProblemaRoutes from "./routes/catalogoTipoProblema.routes.js";
-// NEW: Registro del módulo de mantenimiento de consolas.
-import consolasRoutes from "./routes/consolas.routes.js";
+
+// NEW: Registro del módulo de asignación de roles a usuarios siguiendo la convención /api/usuario-roles.
+import usuarioRolesRoutes from "./routes/usuarioRoles.routes.js";
+
 
 const envPath = path.resolve(process.cwd(), ".env");
 
@@ -39,8 +41,10 @@ app.use("/api/roles", rolesRoutes);
 app.use("/api/usuarios", usuariosRoutes);
 // NEW: Registro del módulo de catálogo tipo problema en la ruta /api/catalogo-tipo-problema.
 app.use("/api/catalogo-tipo-problema", catalogoTipoProblemaRoutes);
-// NEW: Registro de las rutas de consolas en la ruta /api/consolas.
-app.use("/api/consolas", consolasRoutes);
+
+// NEW: Registro del módulo encargado de asignar roles a los usuarios.
+app.use("/api/usuario-roles", usuarioRolesRoutes);
+
 
 app.listen(PORT, () => {
   console.log(`Servidor escuchando en el puerto ${PORT}`);
