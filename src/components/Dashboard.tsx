@@ -6,6 +6,8 @@ import DashboardHome from './views/DashboardHome';
 import TechnicalFailures from './views/TechnicalFailures';
 import Intrusions from './views/Intrusions';
 import AlertsReportByShift from './views/AlertsReportByShift';
+// FIX: Habilitamos la pantalla de mantenimiento de consolas dentro del dashboard.
+import ConsolasScreen from '../pages/admin/ConsolasScreen';
 // NEW: Incorporamos la vista de mantenimiento de roles.
 import RolesScreen from '../pages/admin/RolesScreen';
 // NEW: Incorporamos la vista de mantenimiento de usuarios.
@@ -28,6 +30,9 @@ const Dashboard: React.FC = () => {
         return <Intrusions />;
       case View.AlertsReport:
         return <AlertsReportByShift />;
+      case View.AdminConsolas:
+        // FIX: Renderizamos el mantenimiento de consolas dentro del dashboard.
+        return <ConsolasScreen />;
       case View.AdminRoles:
         // NEW: Renderizamos el mantenimiento de roles dentro del dashboard.
         return <RolesScreen />;

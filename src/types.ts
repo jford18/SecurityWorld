@@ -113,6 +113,8 @@ export enum View {
   Failures,
   Intrusions,
   AlertsReport,
+  // FIX: Vista para el mantenimiento de consolas.
+  AdminConsolas,
   // NEW: Vista para el mantenimiento de roles.
   AdminRoles,
   // NEW: Vista para el mantenimiento de usuarios.

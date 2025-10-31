@@ -32,143 +32,243 @@ const NavItem: React.FC<{
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
+  // FIX: Separamos las colecciones del menú para controlar los bloques de mantenimiento y seguridad.
+  const mainNavigation = [
+    {
+      view: View.Dashboard,
+      label: 'Dashboard',
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+          />
+        </svg>
+      ),
+    },
+    {
+      view: View.Failures,
+      label: 'Fallos Técnicos',
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+          />
+        </svg>
+      ),
+    },
+    {
+      view: View.Intrusions,
+      label: 'Intrusiones',
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+      ),
+    },
+    {
+      view: View.AlertsReport,
+      label: 'Reporte Alertas Turno',
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+      ),
+    },
+  ];
+
+  const mantenimientoNavigation = [
+    {
+      view: View.AdminConsolas,
+      label: 'Consolas',
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M9.75 17L8 21h8l-1.75-4M4 5h16a1 1 0 011 1v8a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1z"
+          />
+        </svg>
+      ),
+    },
+    {
+      view: View.AdminRoles,
+      label: 'Roles',
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M9 17a2 2 0 104 0m3-9a5 5 0 00-10 0v4.586l-.707.707A1 1 0 007 14h10a1 1 0 00.707-1.707L17 12.586V8z"
+          />
+        </svg>
+      ),
+    },
+    {
+      view: View.AdminUsuarios,
+      label: 'Usuarios',
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M5.121 17.804A5 5 0 0112 15a5 5 0 016.879 2.804M15 9a3 3 0 11-6 0 3 3 0 016 0z"
+          />
+        </svg>
+      ),
+    },
+    {
+      view: View.AdminCatalogoTipoProblema,
+      label: 'Catálogo Tipo Problema',
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M9 5h12M9 12h12M9 19h12M5 5h.01M5 12h.01M5 19h.01"
+          />
+        </svg>
+      ),
+    },
+  ];
+
+  const seguridadNavigation = [
+    {
+      view: View.AdminAsignacionRoles,
+      label: 'Usuarios ↔ Roles',
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M16 7a4 4 0 10-8 0 4 4 0 008 0zm-4 6a7 7 0 00-7 7h2a5 5 0 0110 0h2a7 7 0 00-7-7zm5 0a3 3 0 110 6 3 3 0 010-6z"
+          />
+        </svg>
+      ),
+    },
+  ];
+
   return (
     <div className="flex flex-col w-64 bg-[#1C2E4A] text-white">
       <div className="flex items-center justify-center h-20 bg-white">
-        <img 
-          src="https://www.swsecurityworld.com/wp-content/uploads/2018/08/Security-World-logo-1.png" 
+        <img
+          src="https://www.swsecurityworld.com/wp-content/uploads/2018/08/Security-World-logo-1.png"
           alt="SW Security World Logo"
           className="h-12"
         />
       </div>
       <div className="flex-1 overflow-y-auto">
         <nav className="mt-10">
-          <NavItem
-            view={View.Dashboard}
-            currentView={currentView}
-            setCurrentView={setCurrentView}
-            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>}
-            label="Dashboard"
-          />
-          <NavItem 
-            view={View.Failures} 
-            currentView={currentView} 
-            setCurrentView={setCurrentView}
-            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}
-            label="Fallos Técnicos"
-          />
-          <NavItem 
-            view={View.Intrusions} 
-            currentView={currentView} 
-            setCurrentView={setCurrentView}
-            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-            label="Intrusiones"
-          />
-          <NavItem
-            view={View.AlertsReport}
-            currentView={currentView}
-            setCurrentView={setCurrentView}
-            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-            label="Reporte Alertas Turno"
-          />
-          {/* NEW: Sección especializada en seguridad y asignaciones de acceso. */}
-          <div className="mt-8">
-            <p className="px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">
-              Seguridad y Asignaciones
-            </p>
-            {/* NEW: Acceso directo a la pantalla de usuarios y roles vinculados. */}
+          {mainNavigation.map((item) => (
             <NavItem
-              view={View.AdminAsignacionRoles}
+              key={item.label}
+              view={item.view}
               currentView={currentView}
               setCurrentView={setCurrentView}
-              icon={
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M16 7a4 4 0 10-8 0 4 4 0 008 0zm-4 6a7 7 0 00-7 7h2a5 5 0 0110 0h2a7 7 0 00-7-7zm5 0a3 3 0 110 6 3 3 0 010-6z"
-                  />
-                </svg>
-              }
-              label="Usuarios ↔ Roles"
+              icon={item.icon}
+              label={item.label}
             />
-            {/* NEW: Acceso directo al mantenimiento de roles. */}
+          ))}
+
+          <div className="text-xs font-semibold text-gray-400 uppercase px-6 mt-6 mb-2">Mantenimiento</div>
+          {mantenimientoNavigation.map((item) => (
             <NavItem
-              view={View.AdminRoles}
+              key={item.label}
+              view={item.view}
               currentView={currentView}
               setCurrentView={setCurrentView}
-              icon={
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M9 17a2 2 0 104 0m3-9a5 5 0 00-10 0v4.586l-.707.707A1 1 0 007 14h10a1 1 0 00.707-1.707L17 12.586V8z"
-                  />
-                </svg>
-              }
-              label="Roles"
+              icon={item.icon}
+              label={item.label}
             />
-            {/* NEW: Enlace directo al mantenimiento de usuarios. */}
-            <NavItem
-              view={View.AdminUsuarios}
-              currentView={currentView}
-              setCurrentView={setCurrentView}
-              icon={
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M5.121 17.804A5 5 0 0112 15a5 5 0 016.879 2.804M15 9a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-              }
-              label="Usuarios"
-            />
-            {/* NEW: Acceso directo al catálogo de tipos de problema como referencia complementaria. */}
-            <NavItem
-              view={View.AdminCatalogoTipoProblema}
-              currentView={currentView}
-              setCurrentView={setCurrentView}
-              icon={
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M9 5h12M9 12h12M9 19h12M5 5h.01M5 12h.01M5 19h.01"
-                  />
-                </svg>
-              }
-              label="Catálogo Tipo Problema"
-            />
+          ))}
+
+          <div className="text-xs font-semibold text-gray-400 uppercase px-6 mt-6 mb-2">
+            Seguridad y Asignaciones
           </div>
+          {seguridadNavigation.map((item) => (
+            <NavItem
+              key={item.label}
+              view={item.view}
+              currentView={currentView}
+              setCurrentView={setCurrentView}
+              icon={item.icon}
+              label={item.label}
+            />
+          ))}
         </nav>
       </div>
     </div>
