@@ -177,6 +177,7 @@ const mapFalloRowToDto = (row) => ({
   descripcion_fallo: row.descripcion_fallo ?? "",
   responsable: row.responsable || "",
   deptResponsable: row.departamento || undefined,
+  consola: row.consola || undefined, // FIX: expose consola name retrieved via the LEFT JOIN so the frontend can display it without additional lookups.
   fechaResolucion: formatDate(row.fecha_resolucion) || undefined,
   horaResolucion: row.hora_resolucion || undefined,
   verificacionApertura: row.verificacion_apertura || undefined,
@@ -229,28 +230,25 @@ export const getFallos = async (req, res) => {
         ft.descripcion_fallo,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
+        consola.nombre AS consola,
         ft.fecha_resolucion,
-        ft.hora_resolucion,
-        seguimiento.novedad_detectada,
-        COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
-        COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre
+        ft.hora_resolucion
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
-      LEFT JOIN seguimiento_fallos seguimiento ON seguimiento.fallo_id = ft.id
-      LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
-      LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
+      LEFT JOIN consolas consola ON consola.id = ft.consola_id
       ORDER BY ft.fecha DESC, ft.id DESC`
-    );
+    ); // FIX: rewritten query uses LEFT JOINs only with existing lookup tables to avoid failing when optional relations are missing and to provide the consola name.
 
     const fallos = result.rows.map(mapFalloRowToDto);
 
     return res.json(fallos);
   } catch (error) {
-    console.error("Error al obtener los fallos técnicos:", error);
-    return res
-      .status(500)
-      .json({ mensaje: "Ocurrió un error al obtener los fallos técnicos." });
+    console.error("Error al obtener los fallos técnicos:", error); // FIX: keep logging to help troubleshoot database errors without crashing the server.
+    return res.status(500).json({
+      message: "Error interno del servidor",
+      error: error.message,
+    }); // FIX: respond with a consistent 500 payload that the frontend can handle gracefully.
   } finally {
     client.release();
   }
