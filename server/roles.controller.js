@@ -13,9 +13,11 @@ export const getRoles = async (req, res) => {
     );
 
     res.json(rows);
+    // FIX: Se garantiza que siempre se devuelva JSON para evitar respuestas HTML inesperadas en el frontend.
   } catch (error) {
     console.error("Error al obtener los roles", error);
     res.status(500).json({ message: "Error al obtener los roles" });
+    // FIX: Se responde el error en formato JSON para que el cliente no reciba una página HTML.
   }
 };
 
