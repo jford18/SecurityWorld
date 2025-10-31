@@ -92,8 +92,6 @@ const seedFallosIfNeeded = async (client) => {
           String(seed.consola || "").trim().toLowerCase();
       })?.id ?? defaultConsolaId;
 
-      const estado = seed.fechaResolucion ? "RESUELTO" : "PENDIENTE";
-
       const falloInsert = await client.query(
         `INSERT INTO fallos_tecnicos (
           fecha,
@@ -105,11 +103,10 @@ const seedFallosIfNeeded = async (client) => {
           consola_id,
           fecha_resolucion,
           hora_resolucion,
-          estado,
           fecha_creacion,
           fecha_actualizacion
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
         ) RETURNING id`,
         [
           seed.fecha,
@@ -121,7 +118,7 @@ const seedFallosIfNeeded = async (client) => {
           consolaId,
           seed.fechaResolucion || null,
           seed.horaResolucion || null,
-          estado,
+          now, // FIX: omit estado because it is a generated column; PostgreSQL will derive it from fecha_resolucion.
           now,
         ]
       );
@@ -326,8 +323,6 @@ export const createFallo = async (req, res) => {
         String(consola || "").trim().toLowerCase();
     })?.id ?? null;
 
-    const estado = fechaResolucion ? "RESUELTO" : "PENDIENTE";
-
     const insertResult = await client.query(
       `INSERT INTO fallos_tecnicos (
         fecha,
@@ -339,11 +334,10 @@ export const createFallo = async (req, res) => {
         consola_id,
         fecha_resolucion,
         hora_resolucion,
-        estado,
         fecha_creacion,
         fecha_actualizacion
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW()
       ) RETURNING id`,
       [
         fecha,
@@ -354,8 +348,7 @@ export const createFallo = async (req, res) => {
         tipoProblemaId,
         consolaId,
         fechaResolucion || null,
-        horaResolucion || null,
-        estado,
+        horaResolucion || null, // FIX: exclude estado so the generated column is calculated by PostgreSQL during inserts.
       ]
     );
 
