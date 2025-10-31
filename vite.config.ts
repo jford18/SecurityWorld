@@ -14,4 +14,10 @@ export default defineConfig({
       axios: path.resolve(__dirname, 'axios/index.js'),
     },
   },
+  server: {
+    proxy: {
+      // FIX: El proxy reenvía las llamadas /api al backend en el puerto 3000 para evitar el 404 del servidor de desarrollo en 5173.
+      '/api': 'http://localhost:3000',
+    },
+  },
 })
