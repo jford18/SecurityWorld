@@ -45,7 +45,7 @@ export async function loginUser(req, res) {
       usuario.hash_contrasena
     );
 
-    
+
 
     const rolesQuery = `
       SELECT r.nombre AS rol
@@ -92,6 +92,34 @@ export async function loginUser(req, res) {
     return res
       .status(500)
       .json({ mensaje: "Ocurrió un error al procesar la solicitud." });
+  }
+}
+
+export async function getUserConsoles(req, res) {
+  const { usuario_id } = req.params;
+
+  if (!usuario_id) {
+    return res.status(400).json({ mensaje: "El usuario es requerido." });
+  }
+
+  try {
+    const consolesQuery = `
+      SELECT c.nombre
+      FROM usuario_consolas uc
+      INNER JOIN consolas c ON c.id = uc.consola_id
+      WHERE uc.usuario_id = $1
+      ORDER BY c.nombre
+    `;
+
+    const { rows } = await pool.query(consolesQuery, [usuario_id]);
+    const consolas = rows.map((row) => row.nombre);
+
+    return res.status(200).json({ consolas });
+  } catch (error) {
+    console.error("Error al obtener las consolas del usuario:", error);
+    return res
+      .status(500)
+      .json({ mensaje: "Ocurrió un error al obtener las consolas del usuario." });
   }
 }
 

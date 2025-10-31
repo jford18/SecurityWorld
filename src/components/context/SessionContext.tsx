@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 
-type Role = 'operador' | 'supervisor';
+type Role = string;
 
 interface SessionData {
   user: string | null;
