@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react'; // FIX: Se agregan hooks necesarios para manejar efectos y callbacks
 
 type Role = string;
 
@@ -21,6 +21,26 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [consoleOptions, setConsoleOptions] = useState<string[]>([]);
   const [selectedConsole, setSelectedConsole] = useState('');
   const [selectedRole, setSelectedRole] = useState<Role>('');
+
+  const handleSelectConsole = useCallback(() => { // FIX: Nueva función dedicada a validar y seleccionar consola
+    if (!usuarioAutenticado) {
+      setError('Debe iniciar sesión nuevamente.');
+      return;
+    }
+
+    if (!selectedConsole) {
+      setError('Seleccione una consola para continuar.');
+      window.alert('Debe seleccionar una consola antes de continuar.'); // FIX: Alerta visual cuando no se elige consola
+      return;
+    }
+
+    if (!selectedRole) {
+      setError('No se encontró un rol asignado.');
+      return;
+    }
+
+    onLogin(selectedRole, usuarioAutenticado.roles, selectedConsole);
+  }, [onLogin, selectedConsole, selectedRole, usuarioAutenticado]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,7 +100,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
           const fetchedConsoles = consolesData.consolas ?? [];
 
           setConsoleOptions(fetchedConsoles);
-          setSelectedConsole(fetchedConsoles[0] ?? '');
+          if (fetchedConsoles.length === 1) {
+            const [singleConsole] = fetchedConsoles;
+            setSelectedConsole(singleConsole); // FIX: Seleccionar automáticamente la única consola disponible
+          } else {
+            setSelectedConsole(''); // FIX: Reiniciar selección cuando existan múltiples consolas
+          }
         } catch (consolesError) {
           console.error('Error al cargar las consolas del usuario:', consolesError);
           setError('No se pudieron cargar las consolas del usuario.');
@@ -98,18 +123,18 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       return;
     }
 
-    if (!selectedConsole) {
-      setError('Seleccione una consola para continuar.');
-      return;
-    }
-
-    if (!selectedRole) {
-      setError('No se encontró un rol asignado.');
-      return;
-    }
-
-    onLogin(selectedRole, usuarioAutenticado.roles, selectedConsole);
+    handleSelectConsole(); // FIX: Delegar validaciones y actualización de sesión a la nueva función
   };
+
+  useEffect(() => {
+    if (
+      usuarioAutenticado &&
+      consoleOptions.length === 1 &&
+      selectedConsole === consoleOptions[0]
+    ) {
+      handleSelectConsole(); // FIX: Avanzar automáticamente cuando el usuario tiene una sola consola
+    }
+  }, [consoleOptions, handleSelectConsole, selectedConsole, usuarioAutenticado]);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-[#F5F6F8]">
@@ -178,7 +203,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                   id="role"
                   name="role"
                   value={selectedRole}
-                  disabled
+                  disabled // FIX: Se asegura que el rol sea solo lectura
                   className="block w-full px-3 py-3 border border-gray-300 bg-gray-100 text-gray-600 rounded-md cursor-not-allowed"
                 >
                   {selectedRole ? (
