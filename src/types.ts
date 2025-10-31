@@ -115,4 +115,6 @@ export enum View {
   AlertsReport,
   // NEW: Vista para el mantenimiento de roles.
   AdminRoles,
+  // NEW: Vista para el mantenimiento de usuarios.
+  AdminUsuarios,
 }
