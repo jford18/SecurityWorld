@@ -70,4 +70,6 @@ export enum View {
   Failures,
   Intrusions,
   AlertsReport,
+  // NEW: Vista para el mantenimiento de consolas en el panel administrativo.
+  Consolas,
 }
