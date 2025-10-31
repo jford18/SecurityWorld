@@ -31,7 +31,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     }
 
     if (!usuarioAutenticado) {
-      setIsLoading(true);
+      setIsLoading(true); // FIX: Activar indicador de carga durante la fase de autenticación.
 
       try {
         const response = await fetch('http://localhost:3000/api/auth/login', {
@@ -46,21 +46,20 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         });
 
         if (!response.ok) {
-          // FIX: Mostrar mensaje uniforme de error de autenticación para cualquier estado no exitoso.
-          setError('Error de autenticación');
+          setError('Error de autenticación'); // FIX: Mantener mensaje uniforme cuando falla la autenticación.
           return;
         }
 
         const data = await response.json();
 
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('usuario', JSON.stringify(data.usuario));
+        localStorage.setItem('token', data.token); // FIX: Guardar credenciales tras autenticación exitosa.
+        localStorage.setItem('usuario', JSON.stringify(data.usuario)); // FIX: Persistir información del usuario autenticado.
 
         const usuario = data.usuario as UsuarioAutenticado;
-        setUsuarioAutenticado(usuario);
+        setUsuarioAutenticado(usuario); // FIX: Conservar al usuario autenticado para la segunda fase.
 
         const primaryRole = usuario.roles[0] ?? '';
-        setSelectedRole(primaryRole);
+        setSelectedRole(primaryRole); // FIX: Mostrar el rol principal en la segunda pantalla.
 
         try {
           const consolesResponse = await fetch(
@@ -74,38 +73,28 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
           const consolesData: { consolas?: string[] } = await consolesResponse.json();
           const fetchedConsoles = consolesData.consolas ?? [];
 
-          setConsoleOptions(fetchedConsoles);
+          setConsoleOptions(fetchedConsoles); // FIX: Poblar opciones de consolas para la segunda fase.
           const defaultConsole = fetchedConsoles[0] ?? '';
-          setSelectedConsole(defaultConsole);
-
-          if (defaultConsole && primaryRole) {
-            // FIX: Invocar onLogin dentro del mismo submit cuando el backend responde OK.
-            onLogin(primaryRole, usuario.roles, defaultConsole);
-          } else {
-            // FIX: Informar al usuario si faltan datos para completar el flujo.
-            setError('Error de autenticación');
-          }
+          setSelectedConsole(defaultConsole); // FIX: Preseleccionar la primera consola disponible tras el login.
         } catch (consolesError) {
           console.error('Error al cargar las consolas del usuario:', consolesError);
-          setError('Error de autenticación');
+          setError('Error de autenticación'); // FIX: Notificar problema al cargar consolas antes de avanzar a la segunda fase.
           setConsoleOptions([]);
           setSelectedConsole('');
-          setUsuarioAutenticado(null);
+          setUsuarioAutenticado(null); // FIX: Revertir autenticación si falla la carga de consolas.
         }
       } catch (error) {
         console.error('Error al iniciar sesión:', error);
-        // FIX: Unificar el mensaje cuando ocurre un error de red o servidor.
-        setError('Error de autenticación');
+        setError('Error de autenticación'); // FIX: Unificar mensaje de error en fallos de red o servidor durante autenticación.
       } finally {
-        // FIX: Asegurar que el estado de carga siempre se desactiva.
-        setIsLoading(false);
+        setIsLoading(false); // FIX: Finalizar indicador de carga al concluir la fase de autenticación.
       }
 
       return;
     }
 
     if (!selectedConsole) {
-      setError('Seleccione una consola para continuar.');
+      setError('Seleccione una consola para continuar.'); // FIX: Validar que el usuario elija una consola antes de continuar.
       return;
     }
 
@@ -114,7 +103,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       return;
     }
 
-    onLogin(selectedRole, usuarioAutenticado.roles, selectedConsole);
+    setIsLoading(true); // FIX: Mostrar carga durante el envío de la selección de consola.
+    try {
+      onLogin(selectedRole, usuarioAutenticado.roles, selectedConsole); // FIX: Completar la fase de selección de consola y navegar.
+    } finally {
+      setIsLoading(false); // FIX: Asegurar que el estado de carga se desactive tras finalizar la fase de consola.
+    }
   };
 
   return (
