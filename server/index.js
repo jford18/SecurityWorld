@@ -3,6 +3,7 @@ import path from "path";
 import app from "./app.js";
 // NEW: Incorporamos las rutas de roles al servidor principal.
 import rolesRoutes from "./roles.routes.js";
+import consolasRoutes from "./routes/consolas.routes.js";
 // NEW: Registro del mantenimiento de usuarios en el servidor API.
 import usuariosRoutes from "./routes/usuarios.routes.js";
 // NEW: Registro del catálogo de tipos de problema en el servidor API.
@@ -37,6 +38,7 @@ const PORT = Number(process.env.PORT) || 3000;
 
 // NEW: Registro del módulo de mantenimiento de roles.
 app.use("/api/roles", rolesRoutes);
+app.use("/api/consolas", consolasRoutes);
 // NEW: Registro del módulo de usuarios siguiendo la convención /api/usuarios.
 app.use("/api/usuarios", usuariosRoutes);
 // NEW: Registro del módulo de catálogo tipo problema en la ruta /api/catalogo-tipo-problema.
