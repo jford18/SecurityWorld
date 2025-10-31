@@ -16,6 +16,8 @@ import UsuariosScreen from '../pages/admin/UsuariosScreen';
 import CatalogoTipoProblemaScreen from '../pages/admin/CatalogoTipoProblemaScreen';
 // NEW: Vista de asignación de roles entre usuarios y roles del sistema.
 import AsignacionRolesScreen from '../pages/admin/AsignacionRolesScreen';
+// NEW: Vista de asignación de consolas entre usuarios y consolas disponibles.
+import AsignacionConsolasScreen from '../pages/admin/AsignacionConsolasScreen';
 
 const Dashboard: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
@@ -45,6 +47,9 @@ const Dashboard: React.FC = () => {
       case View.AdminAsignacionRoles:
         // NEW: Renderizamos la pantalla de asignación de roles a usuarios.
         return <AsignacionRolesScreen />;
+      case View.AdminAsignacionConsolas:
+        // NEW: Renderizamos la pantalla de asignación de consolas a usuarios.
+        return <AsignacionConsolasScreen />;
       default:
         return <DashboardHome />;
     }
