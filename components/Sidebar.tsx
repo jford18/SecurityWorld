@@ -65,12 +65,33 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
             icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
             label="Intrusiones"
           />
-          <NavItem 
-            view={View.AlertsReport} 
-            currentView={currentView} 
+          <NavItem
+            view={View.AlertsReport}
+            currentView={currentView}
             setCurrentView={setCurrentView}
             icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
             label="Reporte Alertas Turno"
+          />
+          <div className="mt-6 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">Mantenimiento</div>
+          <NavItem
+            view={View.Consolas}
+            currentView={currentView}
+            setCurrentView={setCurrentView}
+            // NEW: Ícono de monitor para el mantenimiento de consolas siguiendo la guía proporcionada.
+            icon={
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <rect x="3" y="4" width="18" height="12" rx="2" ry="2" />
+                <path d="M7 20h10M9 16v4m6-4v4" />
+              </svg>
+            }
+            label="Consolas"
           />
         </nav>
       </div>

@@ -7,6 +7,8 @@ import DashboardHome from './views/DashboardHome';
 import TechnicalFailures from './views/TechnicalFailures';
 import Intrusions from './views/Intrusions';
 import AlertsReportByShift from './views/AlertsReportByShift';
+// NEW: Se incorpora la pantalla de mantenimiento de consolas al dashboard principal.
+import ConsolasScreen from '../src/pages/admin/ConsolasScreen';
 
 const Dashboard: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
@@ -21,6 +23,8 @@ const Dashboard: React.FC = () => {
         return <Intrusions />;
       case View.AlertsReport:
         return <AlertsReportByShift />;
+      case View.Consolas:
+        return <ConsolasScreen />;
       default:
         return <DashboardHome />;
     }
