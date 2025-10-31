@@ -11,6 +11,8 @@ import catalogoTipoProblemaRoutes from "./routes/catalogoTipoProblema.routes.js"
 
 // NEW: Registro del módulo de asignación de roles a usuarios siguiendo la convención /api/usuario-roles.
 import usuarioRolesRoutes from "./routes/usuarioRoles.routes.js";
+// NEW: Registro del módulo de asignación de consolas a usuarios.
+import usuarioConsolasRoutes from "./routes/usuarioConsolas.routes.js";
 
 
 const envPath = path.resolve(process.cwd(), ".env");
@@ -46,6 +48,8 @@ app.use("/api/catalogo-tipo-problema", catalogoTipoProblemaRoutes);
 
 // NEW: Registro del módulo encargado de asignar roles a los usuarios.
 app.use("/api/usuario-roles", usuarioRolesRoutes);
+// NEW: Registro del módulo encargado de asignar consolas a los usuarios.
+app.use("/api/usuario_consolas", usuarioConsolasRoutes);
 
 
 app.use((req, res) => {
