@@ -10,6 +10,8 @@ import AlertsReportByShift from './views/AlertsReportByShift';
 import RolesScreen from '../pages/admin/RolesScreen';
 // NEW: Incorporamos la vista de mantenimiento de usuarios.
 import UsuariosScreen from '../pages/admin/UsuariosScreen';
+// NEW: Vista del catálogo de tipos de problema dentro del dashboard.
+import CatalogoTipoProblemaScreen from '../pages/admin/CatalogoTipoProblemaScreen';
 
 const Dashboard: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
@@ -30,6 +32,9 @@ const Dashboard: React.FC = () => {
       case View.AdminUsuarios:
         // NEW: Renderizamos el mantenimiento de usuarios dentro del dashboard.
         return <UsuariosScreen />;
+      case View.AdminCatalogoTipoProblema:
+        // NEW: Renderizamos el catálogo tipo problema siguiendo la misma estética.
+        return <CatalogoTipoProblemaScreen />;
       default:
         return <DashboardHome />;
     }

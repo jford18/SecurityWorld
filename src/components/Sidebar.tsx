@@ -76,6 +76,29 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
             <p className="px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">
               Mantenimiento
             </p>
+            {/* NEW: Acceso directo al catálogo de tipos de problema. */}
+            <NavItem
+              view={View.AdminCatalogoTipoProblema}
+              currentView={currentView}
+              setCurrentView={setCurrentView}
+              icon={
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M9 5h12M9 12h12M9 19h12M5 5h.01M5 12h.01M5 19h.01"
+                  />
+                </svg>
+              }
+              label="Catálogo Tipo Problema"
+            />
             <NavItem
               view={View.AdminRoles}
               currentView={currentView}

@@ -117,4 +117,6 @@ export enum View {
   AdminRoles,
   // NEW: Vista para el mantenimiento de usuarios.
   AdminUsuarios,
+  // NEW: Vista para el catálogo de tipos de problema.
+  AdminCatalogoTipoProblema,
 }
