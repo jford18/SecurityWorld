@@ -46,13 +46,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         });
 
         if (!response.ok) {
-          if (response.status === 401) {
-            setError('Credenciales incorrectas');
-          } else if (response.status === 500) {
-            setError('Error del servidor. Inténtelo más tarde.');
-          } else {
-            setError('No se pudo iniciar sesión.');
-          }
+          // FIX: Mostrar mensaje uniforme de error de autenticación para cualquier estado no exitoso.
+          setError('Error de autenticación');
           return;
         }
 
@@ -80,18 +75,29 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
           const fetchedConsoles = consolesData.consolas ?? [];
 
           setConsoleOptions(fetchedConsoles);
-          setSelectedConsole(fetchedConsoles[0] ?? '');
+          const defaultConsole = fetchedConsoles[0] ?? '';
+          setSelectedConsole(defaultConsole);
+
+          if (defaultConsole && primaryRole) {
+            // FIX: Invocar onLogin dentro del mismo submit cuando el backend responde OK.
+            onLogin(primaryRole, usuario.roles, defaultConsole);
+          } else {
+            // FIX: Informar al usuario si faltan datos para completar el flujo.
+            setError('Error de autenticación');
+          }
         } catch (consolesError) {
           console.error('Error al cargar las consolas del usuario:', consolesError);
-          setError('No se pudieron cargar las consolas del usuario.');
+          setError('Error de autenticación');
           setConsoleOptions([]);
           setSelectedConsole('');
           setUsuarioAutenticado(null);
         }
       } catch (error) {
         console.error('Error al iniciar sesión:', error);
-        setError('Error de conexión con el servidor');
+        // FIX: Unificar el mensaje cuando ocurre un error de red o servidor.
+        setError('Error de autenticación');
       } finally {
+        // FIX: Asegurar que el estado de carga siempre se desactiva.
         setIsLoading(false);
       }
 
