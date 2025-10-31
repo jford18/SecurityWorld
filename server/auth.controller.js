@@ -1,16 +1,6 @@
-import { Pool } from "pg";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-
-const pool = new Pool({
-  host: process.env.DB_HOST || "localhost",
-  port: Number(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME || "securityworld",
-  user: process.env.DB_USER || "postgres",
-  password: process.env.DB_PASS || "123456",
-  max: Number(process.env.DB_POOL_MAX) || 10,
-  idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT) || 30000,
-});
+import { pool } from "./db.js";
 
 export async function loginUser(req, res) {
   const { nombre_usuario, contrasena_plana } = req.body || {};
@@ -123,4 +113,3 @@ export async function getUserConsoles(req, res) {
   }
 }
 
-export { pool };
