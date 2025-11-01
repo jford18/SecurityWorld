@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSession } from '../context/SessionContext';
+// NEW: Selector visual personalizado para la fecha y hora del fallo.
+import FechaHoraFalloPicker from '../ui/FechaHoraFalloPicker';
 import {
   TechnicalFailure,
   TechnicalFailureCatalogs,
@@ -30,10 +32,10 @@ type FailureFormData = {
 };
 
 const getLocalDateTimeValue = () => {
-  // NEW: Calcula el valor datetime-local considerando la zona horaria del operador.
+  // FIX: Genera un valor ISO completo preservando la zona horaria original del operador.
   const now = new Date();
-  const localTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-  return localTime.toISOString().slice(0, 16);
+  now.setSeconds(0, 0);
+  return now.toISOString();
 };
 
 const buildInitialFormData = (): FailureFormData => ({
@@ -348,6 +350,16 @@ const TechnicalFailures: React.FC = () => {
     validate(newValues);
   };
 
+  const handleFechaHoraFalloChange = (isoValue: string) => {
+    // NEW: Controla el valor ISO emitido por el selector visual de fecha y hora.
+    const newValues: FailureFormData = {
+      ...formData,
+      fechaHoraFallo: isoValue,
+    };
+    setFormData(newValues);
+    validate(newValues);
+  };
+
   const handleAffectationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newType = e.target.value as AffectationType;
     const resetForm = buildInitialFormData();
@@ -452,7 +464,11 @@ const TechnicalFailures: React.FC = () => {
       const [fechaParte, horaParte] = formData.fechaHoraFallo.split('T');
       fechaFalloPayload = fechaParte || '';
       if (horaParte) {
-        horaFalloPayload = horaParte.length === 5 ? `${horaParte}:00` : horaParte;
+        // FIX: Se normaliza la hora para mantener el formato HH:mm:ss sin sufijos de zona.
+        const sanitized = horaParte.replace('Z', '').split('.')[0];
+        if (sanitized) {
+          horaFalloPayload = sanitized.length === 5 ? `${sanitized}:00` : sanitized;
+        }
       }
       const parsedDateTime = new Date(formData.fechaHoraFallo);
       if (!Number.isNaN(parsedDateTime.getTime())) {
@@ -821,24 +837,15 @@ const TechnicalFailures: React.FC = () => {
         <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
           <h4 className="text-[#1C2E4A] text-lg font-semibold mb-4">Registrar Nuevo Fallo</h4>
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="md:col-span-2">
-              {/* FIX: Un solo campo datetime-local reemplaza los inputs separados de fecha y hora. */}
-              <label htmlFor="fechaHoraFallo" className="block text-sm font-medium text-[#1C2E4A]">
-                Fecha y Hora del Fallo *
-              </label>
-              <input
-                id="fechaHoraFallo"
-                name="fechaHoraFallo"
-                type="datetime-local"
-                value={formData.fechaHoraFallo}
-                onChange={handleInputChange}
-                required
-                className="block w-full mt-1 border border-gray-300 rounded-md p-2 focus:ring-[#F9C300] focus:border-[#F9C300]"
-              />
-              {errors.fechaHoraFallo && (
-                <p className="text-red-500 text-xs mt-1">{errors.fechaHoraFallo}</p>
-              )}
-            </div>
+            {/* NEW: Selector estilizado que ofrece calendario y control de hora integrado. */}
+            <FechaHoraFalloPicker
+              id="fechaHoraFallo"
+              name="fechaHoraFallo"
+              value={formData.fechaHoraFallo}
+              onChange={handleFechaHoraFalloChange}
+              required
+              error={errors.fechaHoraFallo}
+            />
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700">Tipo de Afectación *</label>
               <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
