@@ -31,6 +31,8 @@ export interface TechnicalFailurePayload {
   reportadoCliente?: boolean;
   affectationType?: string;
   horaFallo?: string;
+  // NEW: Campo combinado en formato ISO para fecha y hora del fallo.
+  fechaHoraFallo?: string;
   camara?: string;
   cliente?: string | null;
 }

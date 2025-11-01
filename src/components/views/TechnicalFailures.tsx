@@ -17,8 +17,8 @@ import {
 type AffectationType = 'Nodo' | 'Punto' | 'Equipo' | 'Masivo' | '';
 
 type FailureFormData = {
-  fechaFallo: string;
-  horaFallo: string;
+  // FIX: Se unifican fecha y hora del fallo en un único campo controlado.
+  fechaHoraFallo: string;
   affectationType: AffectationType;
   tipoProblema: string;
   reportadoCliente: boolean;
@@ -29,9 +29,16 @@ type FailureFormData = {
   sitio: string;
 };
 
-const initialFormData: FailureFormData = {
-  fechaFallo: '',
-  horaFallo: '',
+const getLocalDateTimeValue = () => {
+  // NEW: Calcula el valor datetime-local considerando la zona horaria del operador.
+  const now = new Date();
+  const localTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return localTime.toISOString().slice(0, 16);
+};
+
+const buildInitialFormData = (): FailureFormData => ({
+  // NEW: Valor inicial local para la fecha y hora combinadas del fallo.
+  fechaHoraFallo: getLocalDateTimeValue(),
   affectationType: '',
   tipoProblema: '',
   reportadoCliente: false,
@@ -40,7 +47,7 @@ const initialFormData: FailureFormData = {
   camara: '',
   tipoProblemaEquipo: '',
   sitio: '',
-};
+});
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
   departamentos: [],
@@ -226,7 +233,8 @@ const TechnicalFailures: React.FC = () => {
   const [catalogos, setCatalogos] = useState<TechnicalFailureCatalogs>(emptyCatalogos);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentFailure, setCurrentFailure] = useState<TechnicalFailure | null>(null);
-  const [formData, setFormData] = useState<FailureFormData>(initialFormData);
+  // FIX: El estado del formulario utiliza el nuevo constructor con fecha y hora unificadas.
+  const [formData, setFormData] = useState<FailureFormData>(buildInitialFormData());
   const [errors, setErrors] = useState<Partial<FailureFormData>>({});
   const [cliente, setCliente] = useState<string | null>(null);
   const [clienteFromConsole, setClienteFromConsole] = useState<string | null>(null);
@@ -257,18 +265,19 @@ const TechnicalFailures: React.FC = () => {
   const validate = (fieldValues: FailureFormData = formData) => {
     let tempErrors: Partial<FailureFormData> = { ...errors };
 
-    if ('fechaFallo' in fieldValues) {
-      if (!fieldValues.fechaFallo) {
-        tempErrors.fechaFallo = 'La fecha es obligatoria.';
+    if ('fechaHoraFallo' in fieldValues) {
+      if (!fieldValues.fechaHoraFallo) {
+        tempErrors.fechaHoraFallo = 'La fecha y hora son obligatorias.';
       } else {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const inputDate = new Date(`${fieldValues.fechaFallo}T00:00:00`);
+        const selectedDateTime = new Date(fieldValues.fechaHoraFallo);
+        const now = new Date();
 
-        if (inputDate > today) {
-          tempErrors.fechaFallo = 'La fecha no puede ser posterior a la actual.';
+        if (Number.isNaN(selectedDateTime.getTime())) {
+          tempErrors.fechaHoraFallo = 'Seleccione una fecha y hora válidas.';
+        } else if (selectedDateTime > now) {
+          tempErrors.fechaHoraFallo = 'La fecha y hora no pueden ser posteriores a la actual.';
         } else {
-          delete tempErrors.fechaFallo;
+          delete tempErrors.fechaHoraFallo;
         }
       }
     }
@@ -341,10 +350,11 @@ const TechnicalFailures: React.FC = () => {
 
   const handleAffectationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newType = e.target.value as AffectationType;
+    const resetForm = buildInitialFormData();
     setFormData({
-      ...initialFormData,
-      fechaFallo: formData.fechaFallo,
-      horaFallo: formData.horaFallo,
+      ...resetForm,
+      // FIX: Se conserva la selección combinada de fecha y hora al cambiar la afectación.
+      fechaHoraFallo: formData.fechaHoraFallo,
       affectationType: newType,
     });
     setErrors({});
@@ -434,9 +444,28 @@ const TechnicalFailures: React.FC = () => {
       descripcion_fallo = 'Fallo masivo reportado.';
     }
 
+    let fechaFalloPayload = '';
+    let horaFalloPayload: string | undefined;
+    let fechaHoraFalloISO: string | undefined;
+
+    if (formData.fechaHoraFallo) {
+      const [fechaParte, horaParte] = formData.fechaHoraFallo.split('T');
+      fechaFalloPayload = fechaParte || '';
+      if (horaParte) {
+        horaFalloPayload = horaParte.length === 5 ? `${horaParte}:00` : horaParte;
+      }
+      const parsedDateTime = new Date(formData.fechaHoraFallo);
+      if (!Number.isNaN(parsedDateTime.getTime())) {
+        fechaHoraFalloISO = parsedDateTime.toISOString();
+      }
+    }
+
     const payload: TechnicalFailurePayload = {
-      fecha: formData.fechaFallo,
-      horaFallo: formData.horaFallo,
+      // FIX: Se envía la nueva fecha completa derivando compatibilidad hacia campos históricos.
+      fecha: fechaFalloPayload,
+      horaFallo: horaFalloPayload,
+      // NEW: Nuevo campo combinado listo para futuros usos en el backend.
+      fechaHoraFallo: fechaHoraFalloISO,
       affectationType: formData.affectationType,
       equipo_afectado: equipo_afectado || 'No especificado',
       descripcion_fallo: descripcion_fallo || 'Sin descripción',
@@ -456,7 +485,8 @@ const TechnicalFailures: React.FC = () => {
       const created = await createFallo(payload);
       setFailures((prev) => [created, ...prev]);
       alert('Registro guardado correctamente.');
-      setFormData(initialFormData);
+      // FIX: Se restablece el formulario generando una nueva marca de fecha y hora combinada.
+      setFormData(buildInitialFormData());
       setErrors({});
       setCliente(null);
       setClienteFromConsole(null);
@@ -791,32 +821,23 @@ const TechnicalFailures: React.FC = () => {
         <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
           <h4 className="text-[#1C2E4A] text-lg font-semibold mb-4">Registrar Nuevo Fallo</h4>
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label htmlFor="fechaFallo" className="block text-sm font-medium text-gray-700">
-                Fecha de Fallo *
+            <div className="md:col-span-2">
+              {/* FIX: Un solo campo datetime-local reemplaza los inputs separados de fecha y hora. */}
+              <label htmlFor="fechaHoraFallo" className="block text-sm font-medium text-[#1C2E4A]">
+                Fecha y Hora del Fallo *
               </label>
               <input
-                type="date"
-                name="fechaFallo"
-                id="fechaFallo"
-                value={formData.fechaFallo}
+                id="fechaHoraFallo"
+                name="fechaHoraFallo"
+                type="datetime-local"
+                value={formData.fechaHoraFallo}
                 onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
+                required
+                className="block w-full mt-1 border border-gray-300 rounded-md p-2 focus:ring-[#F9C300] focus:border-[#F9C300]"
               />
-              {errors.fechaFallo && <p className="text-red-500 text-xs mt-1">{errors.fechaFallo}</p>}
-            </div>
-            <div>
-              <label htmlFor="horaFallo" className="block text-sm font-medium text-gray-700">
-                Hora de Fallo
-              </label>
-              <input
-                type="time"
-                name="horaFallo"
-                id="horaFallo"
-                value={formData.horaFallo}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-              />
+              {errors.fechaHoraFallo && (
+                <p className="text-red-500 text-xs mt-1">{errors.fechaHoraFallo}</p>
+              )}
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700">Tipo de Afectación *</label>
