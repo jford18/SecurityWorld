@@ -10,7 +10,8 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
-      "axios": ["./axios"]
+      "axios": ["./axios"],
+      "@/*": ["./src/*"]
     },
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,

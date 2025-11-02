@@ -1,13 +1,7 @@
-import { pool } from "./db.js";
-import technicalFailuresSeed from "./data/technicalFailuresSeed.js";
-import {
-  nodos,
-  nodoCliente,
-  tiposEquipo,
-  tiposProblemaEquipo,
-  dispositivos,
-  sitiosPorConsola,
-} from "./data/technicalFailureCatalogs.js";
+import db from "../config/db.js";
+import technicalFailuresSeed from "../data/technicalFailuresSeed.js";
+
+const pool = db;
 
 const formatDate = (value) => {
   if (!value) return null;
@@ -175,6 +169,7 @@ const mapFalloRowToDto = (row) => ({
   responsable: row.responsable || "",
   deptResponsable: row.departamento || undefined,
   consola: row.consola || undefined, // FIX: expose consola name retrieved via the LEFT JOIN so the frontend can display it without additional lookups.
+  estado: row.estado || undefined,
   fechaResolucion: formatDate(row.fecha_resolucion) || undefined,
   horaResolucion: row.hora_resolucion || undefined,
   verificacionApertura: row.verificacion_apertura || undefined,
@@ -191,6 +186,8 @@ const fetchFalloById = async (client, id) => {
         ft.descripcion_fallo,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
+        ft.estado,
+        consola.nombre AS consola,
         ft.fecha_resolucion,
         ft.hora_resolucion,
         seguimiento.novedad_detectada,
@@ -199,6 +196,7 @@ const fetchFalloById = async (client, id) => {
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
+      LEFT JOIN consolas consola ON consola.id = ft.consola_id
       LEFT JOIN seguimiento_fallos seguimiento ON seguimiento.fallo_id = ft.id
       LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
       LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
@@ -227,6 +225,7 @@ export const getFallos = async (req, res) => {
         ft.descripcion_fallo,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
+        ft.estado,
         consola.nombre AS consola,
         ft.fecha_resolucion,
         ft.hora_resolucion
@@ -521,38 +520,62 @@ export const updateFallo = async (req, res) => {
   }
 };
 
-export const getCatalogos = async (req, res) => {
+export const getFallo = async (req, res) => {
+  const { id } = req.params;
+
+  if (!id) {
+    return res.status(400).json({ mensaje: "El identificador del fallo es obligatorio." });
+  }
+
   const client = await pool.connect();
 
   try {
-    const [departamentosResult, tiposProblemaResult, responsablesResult] = await Promise.all([
-      client.query("SELECT id, nombre FROM departamentos_responsables ORDER BY nombre"),
-      client.query("SELECT id, descripcion FROM catalogo_tipo_problema ORDER BY descripcion"),
-      client.query(`
-        SELECT u.id, COALESCE(u.nombre_completo, u.nombre_usuario) AS nombre
-        FROM usuarios u
-        WHERE u.activo = true
-        ORDER BY nombre
-      `),
-    ]);
+    const fallo = await fetchFalloById(client, id);
 
-    return res.json({
-      departamentos: departamentosResult.rows,
-      tiposProblema: tiposProblemaResult.rows,
-      responsablesVerificacion: responsablesResult.rows,
-      nodos,
-      nodoCliente,
-      tiposEquipo,
-      tiposProblemaEquipo,
-      dispositivos,
-      sitiosPorConsola,
-    });
+    if (!fallo) {
+      return res.status(404).json({ mensaje: "El fallo técnico no existe." });
+    }
+
+    return res.json(fallo);
   } catch (error) {
-    console.error("Error al obtener los catálogos de fallos técnicos:", error);
-    return res
-      .status(500)
-      .json({ mensaje: "Ocurrió un error al obtener los catálogos." });
+    console.error("Error al obtener el fallo técnico:", error);
+    return res.status(500).json({ mensaje: "Ocurrió un error al obtener el fallo técnico." });
   } finally {
     client.release();
   }
 };
+
+export const deleteFallo = async (req, res) => {
+  const { id } = req.params;
+
+  if (!id) {
+    return res.status(400).json({ mensaje: "El identificador del fallo es obligatorio." });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    await client.query("DELETE FROM seguimiento_fallos WHERE fallo_id = $1", [id]);
+    const deleteResult = await client.query(
+      "DELETE FROM fallos_tecnicos WHERE id = $1 RETURNING id",
+      [id]
+    );
+
+    if (!deleteResult.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ mensaje: "El fallo técnico no existe." });
+    }
+
+    await client.query("COMMIT");
+    return res.json({ mensaje: "Fallo técnico eliminado correctamente." });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error al eliminar el fallo técnico:", error);
+    return res.status(500).json({ mensaje: "Ocurrió un error al eliminar el fallo técnico." });
+  } finally {
+    client.release();
+  }
+};
+

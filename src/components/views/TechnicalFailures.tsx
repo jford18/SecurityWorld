@@ -7,14 +7,14 @@ import {
   TechnicalFailureCatalogs,
   CatalogoDepartamento,
   CatalogoResponsable,
-} from '../../types';
+} from '@/types';
 import {
-  fetchFallos,
+  getFallos,
   createFallo,
   updateFallo,
-  fetchCatalogos,
+  getCatalogos,
   TechnicalFailurePayload,
-} from '../../services/fallosService';
+} from '@/services/fallosService';
 
 type AffectationType = 'Nodo' | 'Punto' | 'Equipo' | 'Masivo' | '';
 
@@ -252,8 +252,8 @@ const TechnicalFailures: React.FC = () => {
     const loadData = async () => {
       try {
         const [catalogData, fallosData] = await Promise.all([
-          fetchCatalogos(),
-          fetchFallos(),
+          getCatalogos(),
+          getFallos(),
         ]);
         setCatalogos(catalogData);
         setFailures(fallosData);
