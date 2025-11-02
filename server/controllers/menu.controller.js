@@ -1,5 +1,5 @@
 import pool from "../db.js";
-import { getMenusByRoleId } from "../services/menu.service.js";
+import { getMenusByRole as getMenusByRoleService } from "../services/menu.service.js";
 
 const normalizeBoolean = (value, defaultValue = true) => {
   if (typeof value === "boolean") {
@@ -28,11 +28,13 @@ export const getMenusByRole = async (req, res) => {
   }
 
   try {
-    const menus = await getMenusByRoleId(roleId);
+    const menus = await getMenusByRoleService(roleId);
     return res.status(200).json(menus);
   } catch (error) {
     console.error("Error al obtener el menú por rol:", error);
-    return res.status(500).json({ message: "Error interno del servidor" });
+    return res
+      .status(500)
+      .json({ message: "Error al obtener menús", error: error.message });
   }
 };
 
