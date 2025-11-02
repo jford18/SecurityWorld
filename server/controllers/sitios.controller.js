@@ -1,12 +1,8 @@
-import db from "../config/db.js";
-
-const pool = db;
+import pool from "../config/db.js";
 
 export const getSitios = async (_req, res) => {
-  const client = await pool.connect();
-
   try {
-    const result = await client.query(`
+    const result = await pool.query(`
       SELECT
         s.id,
         s.nombre,
@@ -22,12 +18,13 @@ export const getSitios = async (_req, res) => {
 
     return res.json(result.rows ?? []);
   } catch (error) {
-    console.error("Error al obtener los sitios:", error);
+    console.error(
+      `[${new Date().toISOString()}] Error en /api/sitios (getSitios):`,
+      error.message
+    );
     return res
       .status(500)
-      .json({ mensaje: "Ocurrió un error al obtener los sitios." });
-  } finally {
-    client.release();
+      .json({ message: "Error al obtener los sitios." });
   }
 };
 

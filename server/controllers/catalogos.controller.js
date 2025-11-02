@@ -1,6 +1,4 @@
-import db from "../config/db.js";
-
-const pool = db;
+import pool from "../config/db.js";
 
 const mapUsuarios = (rows = []) =>
   rows
@@ -12,66 +10,61 @@ const mapUsuarios = (rows = []) =>
     .filter((row) => Boolean(row.nombre));
 
 export const getTiposProblema = async (_req, res) => {
-  const client = await pool.connect();
-
   try {
-    const result = await client.query(
+    const result = await pool.query(
       "SELECT id, descripcion FROM catalogo_tipo_problema ORDER BY descripcion"
     );
     return res.json(result.rows ?? []);
   } catch (error) {
-    console.error("Error al obtener los tipos de problema:", error);
+    console.error(
+      `[${new Date().toISOString()}] Error en /api/catalogos/tipos-problema (getTiposProblema):`,
+      error.message
+    );
     return res
       .status(500)
-      .json({ mensaje: "Ocurrió un error al obtener los tipos de problema." });
-  } finally {
-    client.release();
+      .json({ message: "Error al obtener los tipos de problema." });
   }
 };
 
 export const getDepartamentos = async (_req, res) => {
-  const client = await pool.connect();
-
   try {
-    const result = await client.query(
+    const result = await pool.query(
       "SELECT id, nombre FROM departamentos_responsables ORDER BY nombre"
     );
     return res.json(result.rows ?? []);
   } catch (error) {
-    console.error("Error al obtener los departamentos responsables:", error);
+    console.error(
+      `[${new Date().toISOString()}] Error en /api/catalogos/departamentos (getDepartamentos):`,
+      error.message
+    );
     return res
       .status(500)
       .json({
-        mensaje: "Ocurrió un error al obtener los departamentos responsables.",
+        message: "Error al obtener los departamentos responsables.",
       });
-  } finally {
-    client.release();
   }
 };
 
 export const getTiposEquipo = async (_req, res) => {
-  const client = await pool.connect();
-
   try {
-    const result = await client.query(
+    const result = await pool.query(
       "SELECT id, nombre FROM tipos_equipo ORDER BY nombre"
     );
     return res.json(result.rows ?? []);
   } catch (error) {
-    console.error("Error al obtener los tipos de equipo:", error);
+    console.error(
+      `[${new Date().toISOString()}] Error en /api/catalogos/tipos-equipo (getTiposEquipo):`,
+      error.message
+    );
     return res
       .status(500)
-      .json({ mensaje: "Ocurrió un error al obtener los tipos de equipo." });
-  } finally {
-    client.release();
+      .json({ message: "Error al obtener los tipos de equipo." });
   }
 };
 
 export const getResponsables = async (_req, res) => {
-  const client = await pool.connect();
-
   try {
-    const result = await client.query(`
+    const result = await pool.query(`
       SELECT u.id, COALESCE(u.nombre_completo, u.nombre_usuario) AS nombre
       FROM usuarios u
       WHERE u.activo = true
@@ -79,18 +72,17 @@ export const getResponsables = async (_req, res) => {
     `);
     return res.json(mapUsuarios(result.rows));
   } catch (error) {
-    console.error("Error al obtener los responsables:", error);
+    console.error(
+      `[${new Date().toISOString()}] Error en /api/catalogos/responsables (getResponsables):`,
+      error.message
+    );
     return res
       .status(500)
-      .json({ mensaje: "Ocurrió un error al obtener los responsables." });
-  } finally {
-    client.release();
+      .json({ message: "Error al obtener los responsables." });
   }
 };
 
 export const getCatalogos = async (_req, res) => {
-  const client = await pool.connect();
-
   try {
     const [
       departamentosResult,
@@ -98,19 +90,19 @@ export const getCatalogos = async (_req, res) => {
       responsablesResult,
       tiposEquipoResult,
     ] = await Promise.all([
-      client.query(
+      pool.query(
         "SELECT id, nombre FROM departamentos_responsables ORDER BY nombre"
       ),
-      client.query(
+      pool.query(
         "SELECT id, descripcion FROM catalogo_tipo_problema ORDER BY descripcion"
       ),
-      client.query(`
+      pool.query(`
         SELECT u.id, COALESCE(u.nombre_completo, u.nombre_usuario) AS nombre
         FROM usuarios u
         WHERE u.activo = true
         ORDER BY nombre
       `),
-      client.query("SELECT id, nombre FROM tipos_equipo ORDER BY nombre"),
+      pool.query("SELECT id, nombre FROM tipos_equipo ORDER BY nombre"),
     ]);
 
     return res.json({
@@ -120,11 +112,12 @@ export const getCatalogos = async (_req, res) => {
       tiposEquipo: tiposEquipoResult.rows ?? [],
     });
   } catch (error) {
-    console.error("Error al obtener los catálogos de fallos técnicos:", error);
+    console.error(
+      `[${new Date().toISOString()}] Error en /api/catalogos (getCatalogos):`,
+      error.message
+    );
     return res
       .status(500)
-      .json({ mensaje: "Ocurrió un error al obtener los catálogos." });
-  } finally {
-    client.release();
+      .json({ message: "Error al obtener los catálogos." });
   }
 };
