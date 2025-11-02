@@ -30,15 +30,6 @@ export async function loginUser(req, res) {
       return res.status(401).json({ mensaje: "El usuario está inactivo." });
     }
 
-    const coincidePassword = await bcrypt.compare(
-      contrasena_plana,
-      usuario.hash_contrasena
-    );
-
-    if (!coincidePassword) {
-      return res.status(401).json({ mensaje: "Credenciales inválidas." });
-    }
-
     const rolesQuery = `
       SELECT r.id, r.nombre
       FROM usuario_roles ur
