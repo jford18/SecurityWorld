@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { API_BASE_URL } from './api';
 import { TechnicalFailure, TechnicalFailureCatalogs } from '../types';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+const baseURL = `${API_BASE_URL}/api`;
 
 const http = axios.create({
   baseURL,
