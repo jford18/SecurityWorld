@@ -12,6 +12,7 @@ export default defineConfig({
   resolve: {
     alias: {
       axios: path.resolve(__dirname, 'axios/index.js'),
+      '@': path.resolve(__dirname, 'src'),
     },
   },
   server: {
