@@ -1,6 +1,4 @@
-import db from "../config/db.js";
-
-const pool = db;
+import pool from "../config/db.js";
 
 const falloSelectBase = `
   SELECT
@@ -118,21 +116,20 @@ const normalizeNumero = (value) => {
 };
 
 export const getFallos = async (_req, res) => {
-  const client = await pool.connect();
-
   try {
-    const result = await client.query(
+    const result = await pool.query(
       `${falloSelectBase} ORDER BY COALESCE(f.fecha_fallo, f.fecha) DESC, f.id DESC`
     );
 
     return res.json(result.rows.map(mapFalloRow));
   } catch (error) {
-    console.error("Error al obtener fallos:", error);
+    console.error(
+      `[${new Date().toISOString()}] Error en /api/fallos (getFallos):`,
+      error.message
+    );
     return res
       .status(500)
       .json({ message: "Error interno del servidor" });
-  } finally {
-    client.release();
   }
 };
 
@@ -235,7 +232,10 @@ export const createFallo = async (req, res) => {
     return res.status(201).json(fallo);
   } catch (error) {
     await client.query("ROLLBACK");
-    console.error("Error al crear el fallo técnico:", error);
+    console.error(
+      `[${new Date().toISOString()}] Error en /api/fallos (createFallo):`,
+      error.message
+    );
     return res
       .status(500)
       .json({ message: "Error interno del servidor" });
@@ -339,7 +339,10 @@ export const updateFallo = async (req, res) => {
     return res.json(fallo);
   } catch (error) {
     await client.query("ROLLBACK");
-    console.error("Error al actualizar el fallo técnico:", error);
+    console.error(
+      `[${new Date().toISOString()}] Error en /api/fallos (updateFallo):`,
+      error.message
+    );
     return res
       .status(500)
       .json({ message: "Error interno del servidor" });
@@ -368,7 +371,10 @@ export const getFallo = async (req, res) => {
 
     return res.json(fallo);
   } catch (error) {
-    console.error("Error al obtener el fallo técnico:", error);
+    console.error(
+      `[${new Date().toISOString()}] Error en /api/fallos (getFallo):`,
+      error.message
+    );
     return res
       .status(500)
       .json({ message: "Error interno del servidor" });
@@ -410,7 +416,10 @@ export const deleteFallo = async (req, res) => {
     return res.json({ message: "Fallo técnico eliminado correctamente." });
   } catch (error) {
     await client.query("ROLLBACK");
-    console.error("Error al eliminar el fallo técnico:", error);
+    console.error(
+      `[${new Date().toISOString()}] Error en /api/fallos (deleteFallo):`,
+      error.message
+    );
     return res
       .status(500)
       .json({ message: "Error interno del servidor" });

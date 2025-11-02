@@ -1,12 +1,8 @@
-import db from "../config/db.js";
-
-const pool = db;
+import pool from "../config/db.js";
 
 export const getDispositivos = async (_req, res) => {
-  const client = await pool.connect();
-
   try {
-    const result = await client.query(`
+    const result = await pool.query(`
       SELECT
         d.id,
         d.nombre,
@@ -19,12 +15,13 @@ export const getDispositivos = async (_req, res) => {
 
     return res.json(result.rows ?? []);
   } catch (error) {
-    console.error("Error al obtener los dispositivos:", error);
+    console.error(
+      `[${new Date().toISOString()}] Error en /api/dispositivos (getDispositivos):`,
+      error.message
+    );
     return res
       .status(500)
-      .json({ mensaje: "Ocurrió un error al obtener los dispositivos." });
-  } finally {
-    client.release();
+      .json({ message: "Error al obtener los dispositivos." });
   }
 };
 
