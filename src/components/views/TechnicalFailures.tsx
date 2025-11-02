@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSession } from '../context/SessionContext';
 // NEW: Selector visual personalizado para la fecha y hora del fallo.
 import FechaHoraFalloPicker from '../ui/FechaHoraFalloPicker';
@@ -30,6 +30,9 @@ type FailureFormData = {
   tipoProblemaEquipo: string;
   sitio: string;
 };
+
+const FUTURE_DATE_ERROR_MESSAGE =
+  'La fecha y hora del fallo no pueden ser posteriores al momento actual.';
 
 const getLocalDateTimeValue = () => {
   // FIX: Genera un valor ISO completo preservando la zona horaria original del operador.
@@ -243,6 +246,7 @@ const TechnicalFailures: React.FC = () => {
   const [sitios, setSitios] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFechaHoraInvalid, setIsFechaHoraInvalid] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -277,7 +281,7 @@ const TechnicalFailures: React.FC = () => {
         if (Number.isNaN(selectedDateTime.getTime())) {
           tempErrors.fechaHoraFallo = 'Seleccione una fecha y hora válidas.';
         } else if (selectedDateTime > now) {
-          tempErrors.fechaHoraFallo = 'La fecha y hora no pueden ser posteriores a la actual.';
+          tempErrors.fechaHoraFallo = FUTURE_DATE_ERROR_MESSAGE;
         } else {
           delete tempErrors.fechaHoraFallo;
         }
@@ -360,6 +364,31 @@ const TechnicalFailures: React.FC = () => {
     validate(newValues);
   };
 
+  const handleFechaHoraInvalid = useCallback(
+    (isInvalid: boolean) => {
+      setIsFechaHoraInvalid(isInvalid);
+      setErrors((prevErrors) => {
+        if (isInvalid) {
+          if (prevErrors.fechaHoraFallo === FUTURE_DATE_ERROR_MESSAGE) {
+            return prevErrors;
+          }
+          return {
+            ...prevErrors,
+            fechaHoraFallo: FUTURE_DATE_ERROR_MESSAGE,
+          };
+        }
+
+        if (prevErrors.fechaHoraFallo !== FUTURE_DATE_ERROR_MESSAGE) {
+          return prevErrors;
+        }
+
+        const { fechaHoraFallo, ...rest } = prevErrors;
+        return rest;
+      });
+    },
+    []
+  );
+
   const handleAffectationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newType = e.target.value as AffectationType;
     const resetForm = buildInitialFormData();
@@ -425,6 +454,16 @@ const TechnicalFailures: React.FC = () => {
 
     if (!session.user) {
       alert('La sesión no es válida. Vuelva a iniciar sesión.');
+      return;
+    }
+
+    if (isFechaHoraInvalid) {
+      setErrors((prev) => {
+        if (prev.fechaHoraFallo === FUTURE_DATE_ERROR_MESSAGE) {
+          return prev;
+        }
+        return { ...prev, fechaHoraFallo: FUTURE_DATE_ERROR_MESSAGE };
+      });
       return;
     }
 
@@ -837,15 +876,23 @@ const TechnicalFailures: React.FC = () => {
         <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
           <h4 className="text-[#1C2E4A] text-lg font-semibold mb-4">Registrar Nuevo Fallo</h4>
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* NEW: Selector estilizado que ofrece calendario y control de hora integrado. */}
-            <FechaHoraFalloPicker
-              id="fechaHoraFallo"
-              name="fechaHoraFallo"
-              value={formData.fechaHoraFallo}
-              onChange={handleFechaHoraFalloChange}
-              required
-              error={errors.fechaHoraFallo}
-            />
+            <div className="md:col-span-2">
+              <label
+                htmlFor="fechaHoraFallo"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Fecha y Hora del Fallo *
+              </label>
+              <FechaHoraFalloPicker
+                id="fechaHoraFallo"
+                name="fechaHoraFallo"
+                value={formData.fechaHoraFallo}
+                onChange={handleFechaHoraFalloChange}
+                onInvalidDate={handleFechaHoraInvalid}
+                required
+                error={errors.fechaHoraFallo}
+              />
+            </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700">Tipo de Afectación *</label>
               <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
@@ -871,8 +918,8 @@ const TechnicalFailures: React.FC = () => {
             <div className="md:col-span-2 flex justify-end">
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className="px-6 py-2 bg-[#F9C300] text-[#1C2E4A] font-semibold rounded-md hover:bg-yellow-400 transition-colors duration-300 disabled:opacity-60"
+                disabled={isSubmitting || isFechaHoraInvalid}
+                className="px-6 py-2 bg-[#F9C300] text-[#1C2E4A] font-semibold rounded-md hover:bg-yellow-400 transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? 'Guardando...' : 'Guardar Reporte'}
               </button>
