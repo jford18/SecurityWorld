@@ -45,6 +45,16 @@ export interface CatalogoDispositivo {
   estado?: string;
 }
 
+export interface Menu {
+  id: number;
+  nombre: string;
+  icono: string | null;
+  ruta: string;
+  seccion: string | null;
+  orden: number | null;
+  activo: boolean;
+}
+
 export interface TechnicalFailureCatalogs {
   departamentos: CatalogoDepartamento[];
   tiposProblema: CatalogoTipoProblema[];
@@ -125,4 +135,6 @@ export enum View {
   AdminAsignacionRoles,
   // NEW: Vista para la asignación de consolas a usuarios.
   AdminAsignacionConsolas,
+  // NEW: Vista para el mantenimiento del catálogo de menús.
+  AdminMenus,
 }
