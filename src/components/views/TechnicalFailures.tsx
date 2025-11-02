@@ -268,6 +268,23 @@ const TechnicalFailures: React.FC = () => {
     loadData();
   }, []);
 
+  const displayedFailures = useMemo(() => {
+    if (!failures.length) {
+      return [];
+    }
+
+    const role = session.role?.toLowerCase();
+
+    if (role === 'operador') {
+      return failures.filter((failure) => {
+        const estado = failure.estado ?? calcularEstado(failure).texto;
+        return estado.toUpperCase() !== 'RESUELTO';
+      });
+    }
+
+    return failures;
+  }, [failures, session.role]);
+
   const validate = (fieldValues: FailureFormData = formData) => {
     let tempErrors: Partial<FailureFormData> = { ...errors };
 
@@ -960,14 +977,14 @@ const TechnicalFailures: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {failures.length === 0 ? (
+              {displayedFailures.length === 0 ? (
                 <tr>
                   <td colSpan={session.role === 'supervisor' ? 6 : 5} className="px-6 py-4 text-center text-sm text-gray-500">
                     {isLoading ? 'Cargando fallos técnicos...' : 'No hay registros disponibles.'}
                   </td>
                 </tr>
               ) : (
-                failures.map((fallo) => (
+                displayedFailures.map((fallo) => (
                   <tr key={fallo.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.fecha}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
