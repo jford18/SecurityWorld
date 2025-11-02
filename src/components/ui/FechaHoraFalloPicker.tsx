@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { es } from 'date-fns/locale';
-import { isAfter, isSameDay } from 'date-fns';
+import { isAfter, isSameDay, startOfDay } from 'date-fns';
 import 'react-datepicker/dist/react-datepicker.css';
 
 interface FechaHoraFalloPickerProps {
@@ -76,7 +76,15 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
   };
 
   const now = new Date();
-  const maxTime = selectedDate && isSameDay(selectedDate, now)
+  const startOfToday = startOfDay(now);
+
+  const isSelectedToday = selectedDate ? isSameDay(selectedDate, now) : true;
+
+  const minTime = isSelectedToday
+    ? startOfToday
+    : startOfDay(selectedDate ?? now);
+
+  const maxTime = isSelectedToday
     ? now
     : clampToEndOfDay(selectedDate ?? now);
 
@@ -97,6 +105,7 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
           dateFormat="dd/MM/yyyy, HH:mm"
           locale="es"
           maxDate={now}
+          minTime={minTime}
           maxTime={maxTime}
           placeholderText={placeholder}
           className="w-full rounded-md border border-yellow-400 px-3 py-2 text-sm text-[#1C2E4A] placeholder:text-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
