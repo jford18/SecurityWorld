@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { login as loginService } from '../services/authService';
+import { login as loginService, LoginResponse } from '../services/authService';
 
 type Role = string;
 
@@ -35,10 +35,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       setIsLoading(true); // FIX: Activar indicador de carga durante la fase de autenticación.
 
       try {
-        const data = await loginService(username, password);
+        const data: LoginResponse = await loginService(username, password);
 
         localStorage.setItem('token', data.token); // FIX: Guardar credenciales tras autenticación exitosa.
         localStorage.setItem('usuario', JSON.stringify(data.usuario)); // FIX: Persistir información del usuario autenticado.
+        localStorage.setItem('consolas', JSON.stringify(data.consolas ?? []));
 
         const usuario = data.usuario as UsuarioAutenticado;
         setUsuarioAutenticado(usuario); // FIX: Conservar al usuario autenticado para la segunda fase.

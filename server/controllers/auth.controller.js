@@ -13,12 +13,10 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "8h";
 
 export async function login(req, res) {
   try {
+    console.log("body recibido:", req.body);
     const { value, error } = loginSchema.validate(req.body || {});
     if (error) {
-      return res.status(422).json({
-        message: "Datos inválidos",
-        details: error.details.map((detail) => detail.message),
-      });
+      return res.status(422).json({ message: "Datos inválidos" });
     }
     const { nombre_usuario, contrasena_plana } = value;
 
@@ -86,7 +84,7 @@ export async function login(req, res) {
       consolas,
     });
   } catch (err) {
-    console.error("Auth.login error:", err?.stack || err);
+    console.error("Error login:", err?.stack || err);
     return res.status(500).json({ message: "Error interno del servidor" });
   }
 }
