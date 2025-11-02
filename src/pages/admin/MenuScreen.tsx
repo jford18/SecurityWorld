@@ -310,21 +310,23 @@ const MenuScreen: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700 space-x-2">
-                      <button
-                        type="button"
-                        className={secondaryButtonClasses}
-                        onClick={() => openEditModal(menu)}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        className={primaryButtonClasses}
-                        onClick={() => handleDelete(menu)}
-                      >
-                        Eliminar
-                      </button>
+                    <td className="px-4 py-3 text-sm text-gray-700 text-center">
+                      <div className="flex flex-col items-center justify-center gap-2 sm:flex-row">
+                        <button
+                          type="button"
+                          className="w-full sm:w-auto bg-yellow-400 border border-yellow-600 px-3 py-1 text-white rounded-lg font-medium shadow-sm transition-colors hover:bg-yellow-500"
+                          onClick={() => openEditModal(menu)}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          className="w-full sm:w-auto bg-red-400 border border-red-500 px-3 py-1 text-white rounded-lg font-medium shadow-sm transition-colors hover:bg-red-500"
+                          onClick={() => handleDelete(menu)}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
