@@ -1,8 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { es } from 'date-fns/locale';
-import { isAfter, isSameDay, startOfDay } from 'date-fns';
+import { format, isAfter, isSameDay, startOfDay } from 'date-fns';
 import 'react-datepicker/dist/react-datepicker.css';
+
+type CustomHeaderProps = {
+  date: Date;
+  decreaseMonth: () => void;
+  increaseMonth: () => void;
+  prevMonthButtonDisabled: boolean;
+  nextMonthButtonDisabled: boolean;
+};
 
 interface FechaHoraFalloPickerProps {
   id: string;
@@ -88,12 +96,23 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
     ? now
     : clampToEndOfDay(selectedDate ?? now);
 
+  const popperModifiers = useMemo(
+    () => [
+      { name: 'offset', options: { offset: [0, 8] } },
+      { name: 'preventOverflow', options: { altAxis: true, tether: false } },
+    ],
+    [],
+  );
+
   return (
-    <div className="md:col-span-2">
-      <label htmlFor={id} className="block text-sm font-medium text-[#1C2E4A]">
+    <div className="md:col-span-2 w-full max-w-[280px]">
+      <label
+        htmlFor={id}
+        className="mb-1 block text-sm font-semibold text-[#374151]"
+      >
         {label}
       </label>
-      <div className="mt-1 relative">
+      <div className="relative">
         <DatePicker
           id={id}
           name={name}
@@ -108,21 +127,82 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
           minTime={minTime}
           maxTime={maxTime}
           placeholderText={placeholder}
-          className="w-full rounded-md border border-yellow-400 px-3 py-2 text-sm text-[#1C2E4A] placeholder:text-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
-          calendarClassName="!text-xs !p-2 !shadow-lg !border !border-gray-200 !rounded-lg !w-64"
-          popperClassName="z-50 !min-w-0"
+          className="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-2 text-base text-gray-800 placeholder:text-[#9CA3AF] shadow-sm focus:border-[#FACC15] focus:outline-none focus:ring-2 focus:ring-[#FACC15]"
+          calendarClassName="!bg-white !border !border-[#E5E7EB] !rounded-xl !shadow-lg !p-4 !text-sm !w-full !max-w-[280px]"
+          popperClassName="z-50 !w-full !max-w-[280px]"
           popperPlacement="bottom-start"
-          dayClassName={() =>
-            'text-xs !w-8 !h-8 flex items-center justify-center rounded-full hover:bg-yellow-100 focus:bg-yellow-100'
-          }
-          timeClassName={() => 'text-xs py-1'}
+          popperModifiers={popperModifiers}
+          dayClassName={(date: Date) => {
+            const baseClasses =
+              '!w-9 !h-9 flex items-center justify-center rounded-full text-sm text-gray-700 hover:bg-gray-100';
+            const isToday = isSameDay(date, now);
+            const isSelected = selectedDate ? isSameDay(date, selectedDate) : false;
+
+            if (isSelected) {
+              return `${baseClasses} !bg-[#3B82F6] !text-white`;
+            }
+
+            if (isToday) {
+              return `${baseClasses} !bg-[#FACC15] !text-gray-900`;
+            }
+
+            return baseClasses;
+          }}
+          timeClassName={(time: Date) => {
+            const baseClasses = 'px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg';
+
+            if (
+              selectedDate &&
+              time.getHours() === selectedDate.getHours() &&
+              time.getMinutes() === selectedDate.getMinutes()
+            ) {
+              return `${baseClasses} !bg-yellow-100 !text-gray-900`;
+            }
+
+            return baseClasses;
+          }}
+          timeCaption="Hora"
+          timeContainerClassName="!border-t !border-[#E5E7EB] !bg-white !max-h-[150px] !overflow-y-auto !p-2"
           wrapperClassName="w-full"
           shouldCloseOnSelect={false}
           required={required}
           autoComplete="off"
+          renderCustomHeader={(headerProps: CustomHeaderProps) => {
+            const {
+              date,
+              decreaseMonth,
+              increaseMonth,
+              prevMonthButtonDisabled,
+              nextMonthButtonDisabled,
+            } = headerProps;
+
+            return (
+              <div className="mb-3 flex items-center justify-between text-sm text-gray-600">
+                <button
+                  type="button"
+                  onClick={decreaseMonth}
+                  disabled={prevMonthButtonDisabled}
+                  className="rounded-lg px-2 py-1 text-gray-600 transition hover:bg-gray-100 focus:outline-none disabled:cursor-not-allowed disabled:text-gray-300"
+                >
+                  ←
+                </button>
+                <span className="font-medium capitalize text-gray-700">
+                  {format(date, 'MMMM yyyy', { locale: es })}
+                </span>
+                <button
+                  type="button"
+                  onClick={increaseMonth}
+                  disabled={nextMonthButtonDisabled}
+                  className="rounded-lg px-2 py-1 text-gray-600 transition hover:bg-gray-100 focus:outline-none disabled:cursor-not-allowed disabled:text-gray-300"
+                >
+                  →
+                </button>
+              </div>
+            );
+          }}
         />
         <svg
-          className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1C2E4A]"
+          className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500"
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 24 24"
           fill="none"
@@ -138,7 +218,7 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
           <line x1="3" y1="10" x2="21" y2="10" />
         </svg>
       </div>
-      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   );
 };
