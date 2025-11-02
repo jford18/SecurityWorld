@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import DatePicker, { registerLocale } from 'react-datepicker';
-import { es } from 'date-fns/locale';
+import esLocale from 'date-fns/locale/es';
 import { format, isAfter, isSameDay, startOfDay } from 'date-fns';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -39,7 +39,7 @@ const toast = {
   },
 };
 
-registerLocale('es', es);
+registerLocale('es', esLocale);
 
 const clampToEndOfDay = (date: Date) => {
   const result = new Date(date);
@@ -253,7 +253,7 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
                   ←
                 </button>
                 <span className="font-medium capitalize text-gray-700">
-                  {format(date, 'MMMM yyyy', { locale: es })}
+                  {format(date, 'MMMM yyyy', { locale: esLocale })}
                 </span>
                 <button
                   type="button"
