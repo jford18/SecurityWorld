@@ -2,12 +2,19 @@ import React, { createContext, useState, useContext, ReactNode } from 'react';
 
 type Role = string;
 
+export interface RoleInfo {
+  id: number;
+  nombre: string;
+}
+
 interface SessionData {
   user: string | null;
   console: string | null;
   role: Role | null;
   roles: string[];
   token: string | null;
+  roleId: number | null;
+  rolesInfo: RoleInfo[];
 }
 
 interface SessionContextType {
@@ -23,6 +30,8 @@ const initialSession: SessionData = {
   role: null,
   roles: [],
   token: null,
+  roleId: null,
+  rolesInfo: [],
 };
 
 export const SessionProvider: React.FC<{ children: ReactNode }> = ({ children }) => {

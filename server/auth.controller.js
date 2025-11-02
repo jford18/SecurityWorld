@@ -35,10 +35,12 @@ export async function loginUser(req, res) {
       usuario.hash_contrasena
     );
 
-
+    if (!coincidePassword) {
+      return res.status(401).json({ mensaje: "Credenciales inválidas." });
+    }
 
     const rolesQuery = `
-      SELECT r.nombre AS rol
+      SELECT r.id, r.nombre AS rol
       FROM usuario_roles ur
       INNER JOIN roles r ON r.id = ur.rol_id
       WHERE ur.usuario_id = $1
@@ -46,7 +48,11 @@ export async function loginUser(req, res) {
     `;
 
     const rolesResult = await pool.query(rolesQuery, [usuario.id]);
-    const roles = rolesResult.rows.map((row) => row.rol);
+    const rolesDetalle = rolesResult.rows.map((row) => ({
+      id: row.id,
+      nombre: row.rol,
+    }));
+    const roles = rolesDetalle.map((rol) => rol.nombre);
 
     if (!process.env.JWT_SECRET) {
       console.warn(
@@ -75,6 +81,7 @@ export async function loginUser(req, res) {
         nombre_usuario: usuario.nombre_usuario,
         activo: usuario.activo,
         roles,
+        roles_detalle: rolesDetalle,
       },
     });
   } catch (error) {
@@ -110,6 +117,37 @@ export async function getUserConsoles(req, res) {
     return res
       .status(500)
       .json({ mensaje: "Ocurrió un error al obtener las consolas del usuario." });
+  }
+}
+
+export async function getMenusByRol(req, res) {
+  const { rol_id: rolIdParam } = req.params;
+  const rolId = Number(rolIdParam);
+
+  if (!Number.isInteger(rolId) || rolId <= 0) {
+    return res.status(400).json({
+      mensaje: "El identificador de rol proporcionado no es válido.",
+    });
+  }
+
+  try {
+    const query = `
+      SELECT m.id, m.nombre, m.icono, m.ruta, m.seccion, m.orden
+      FROM menus m
+      INNER JOIN rol_menu rm ON rm.menu_id = m.id
+      WHERE rm.rol_id = $1
+        AND rm.activo = TRUE
+        AND m.estado = TRUE
+      ORDER BY m.orden
+    `;
+
+    const { rows } = await pool.query(query, [rolId]);
+    return res.status(200).json(rows);
+  } catch (error) {
+    console.error("Error al obtener los menús del rol:", error);
+    return res.status(500).json({
+      mensaje: "Ocurrió un error al obtener los menús permitidos para el rol.",
+    });
   }
 }
 

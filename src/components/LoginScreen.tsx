@@ -2,14 +2,28 @@ import React, { useState } from 'react';
 
 type Role = string;
 
+export interface RolDetalle {
+  id: number;
+  nombre: string;
+}
+
+export interface LoginResult {
+  primaryRole: Role;
+  roles: string[];
+  consoleName: string;
+  roleId: number | null;
+  rolesDetalle: RolDetalle[];
+}
+
 interface LoginScreenProps {
-  onLogin: (primaryRole: Role, roles: string[], consoleName: string) => void;
+  onLogin: (result: LoginResult) => void;
 }
 
 interface UsuarioAutenticado {
   id: number;
   nombre_usuario: string;
   roles: string[];
+  roles_detalle?: RolDetalle[];
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
@@ -21,6 +35,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [consoleOptions, setConsoleOptions] = useState<string[]>([]);
   const [selectedConsole, setSelectedConsole] = useState('');
   const [selectedRole, setSelectedRole] = useState<Role>('');
+  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,8 +73,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         const usuario = data.usuario as UsuarioAutenticado;
         setUsuarioAutenticado(usuario); // FIX: Conservar al usuario autenticado para la segunda fase.
 
-        const primaryRole = usuario.roles[0] ?? '';
+        const rolesDetalle = usuario.roles_detalle ?? [];
+        const primaryRoleDetalle = rolesDetalle[0] ?? null;
+        const primaryRole = primaryRoleDetalle?.nombre ?? usuario.roles[0] ?? '';
         setSelectedRole(primaryRole); // FIX: Mostrar el rol principal en la segunda pantalla.
+        setSelectedRoleId(primaryRoleDetalle?.id ?? null);
 
         try {
           const consolesResponse = await fetch(
@@ -105,7 +123,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
     setIsLoading(true); // FIX: Mostrar carga durante el envío de la selección de consola.
     try {
-      onLogin(selectedRole, usuarioAutenticado.roles, selectedConsole); // FIX: Completar la fase de selección de consola y navegar.
+      onLogin({
+        primaryRole: selectedRole,
+        roles: usuarioAutenticado.roles,
+        consoleName: selectedConsole,
+        roleId: selectedRoleId ?? usuarioAutenticado.roles_detalle?.[0]?.id ?? null,
+        rolesDetalle: usuarioAutenticado.roles_detalle ?? [],
+      }); // FIX: Completar la fase de selección de consola y navegar.
     } finally {
       setIsLoading(false); // FIX: Asegurar que el estado de carga se desactive tras finalizar la fase de consola.
     }

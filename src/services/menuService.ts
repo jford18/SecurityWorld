@@ -2,13 +2,14 @@ import { API_BASE_URL } from './api';
 
 const jsonContentType = 'application/json';
 const API_URL = `${API_BASE_URL}/api/menus`;
+const AUTH_API_URL = `${API_BASE_URL}/api/auth`;
 
-const ensureJsonResponse = async (response: Response) => {
+const ensureJsonResponse = async <T = unknown>(response: Response): Promise<T> => {
   const contentType = response.headers.get('content-type');
   if (!contentType || !contentType.includes(jsonContentType)) {
     throw new Error('Respuesta inválida del servidor');
   }
-  return response.json();
+  return response.json() as Promise<T>;
 };
 
 const handleError = async (response: Response) => {
@@ -34,6 +35,27 @@ export type MenuPayload = {
   seccion?: string | null;
   orden?: number | null;
   activo?: boolean;
+};
+
+export interface MenuPermitido {
+  id: number;
+  nombre: string;
+  icono: string | null;
+  ruta: string;
+  seccion: string | null;
+  orden: number | null;
+}
+
+export const getMenusByRol = async (rolId: number) => {
+  const response = await fetch(`${AUTH_API_URL}/menus/${rolId}`, {
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    await handleError(response);
+  }
+
+  return ensureJsonResponse<MenuPermitido[]>(response);
 };
 
 export const getMenus = async () => {

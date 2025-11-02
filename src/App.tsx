@@ -1,14 +1,12 @@
 import React from 'react';
-import LoginScreen from './components/LoginScreen';
+import LoginScreen, { LoginResult } from './components/LoginScreen';
 import Dashboard from './components/Dashboard';
 import { SessionProvider, useSession } from './components/context/SessionContext';
-
-type Role = string;
 
 const AppContent: React.FC = () => {
   const { session, setSession } = useSession();
 
-  const handleLogin = (primaryRole: Role, roles: string[], consoleName: string) => {
+  const handleLogin = ({ primaryRole, roles, consoleName, roleId, rolesDetalle }: LoginResult) => {
     const storedUser = localStorage.getItem('usuario');
     const token = localStorage.getItem('token');
 
@@ -28,6 +26,8 @@ const AppContent: React.FC = () => {
       role: primaryRole,
       roles,
       token: token ?? null,
+      roleId: roleId ?? null,
+      rolesInfo: rolesDetalle,
     });
   };
 
