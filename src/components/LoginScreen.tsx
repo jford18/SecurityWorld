@@ -1,15 +1,22 @@
 import React, { useState } from 'react';
-
-type Role = string;
+import { RoleOption, RoleToken } from './context/SessionContext';
 
 interface LoginScreenProps {
-  onLogin: (primaryRole: Role, roles: string[], consoleName: string) => void;
+  onLogin: (payload: {
+    user: UsuarioAutenticado;
+    selectedRole: RoleOption;
+    consoleName: string;
+    token: string;
+    roles: RoleOption[];
+    roleTokens: RoleToken[];
+  }) => void;
 }
 
 interface UsuarioAutenticado {
   id: number;
   nombre_usuario: string;
-  roles: string[];
+  roles: RoleOption[];
+  rol_activo: RoleOption | null;
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
@@ -18,9 +25,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [usuarioAutenticado, setUsuarioAutenticado] = useState<UsuarioAutenticado | null>(null);
+  const [availableRoles, setAvailableRoles] = useState<RoleOption[]>([]);
+  const [roleTokens, setRoleTokens] = useState<RoleToken[]>([]);
   const [consoleOptions, setConsoleOptions] = useState<string[]>([]);
   const [selectedConsole, setSelectedConsole] = useState('');
-  const [selectedRole, setSelectedRole] = useState<Role>('');
+  const [selectedRoleId, setSelectedRoleId] = useState<number | ''>('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,14 +61,34 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
         const data = await response.json();
 
-        localStorage.setItem('token', data.token); // FIX: Guardar credenciales tras autenticación exitosa.
-        localStorage.setItem('usuario', JSON.stringify(data.usuario)); // FIX: Persistir información del usuario autenticado.
-
         const usuario = data.usuario as UsuarioAutenticado;
         setUsuarioAutenticado(usuario); // FIX: Conservar al usuario autenticado para la segunda fase.
 
-        const primaryRole = usuario.roles[0] ?? '';
-        setSelectedRole(primaryRole); // FIX: Mostrar el rol principal en la segunda pantalla.
+        const rolesFromResponse = Array.isArray(usuario.roles) ? usuario.roles : [];
+        setAvailableRoles(rolesFromResponse);
+
+        const parsedTokens: RoleToken[] = Array.isArray(data.tokensPorRol)
+          ? data.tokensPorRol
+              .filter(
+                (item: { rol_id?: unknown; token?: unknown }) =>
+                  typeof item?.rol_id === 'number' && typeof item?.token === 'string'
+              )
+              .map((item: { rol_id: number; token: string }) => ({
+                roleId: item.rol_id,
+                token: item.token,
+              }))
+          : [];
+
+        const primaryRoleId = usuario.rol_activo?.id ?? rolesFromResponse[0]?.id ?? null;
+        const tokensToUse =
+          parsedTokens.length > 0
+            ? parsedTokens
+            : primaryRoleId && typeof data.token === 'string'
+            ? [{ roleId: primaryRoleId, token: data.token }]
+            : [];
+
+        setRoleTokens(tokensToUse);
+        setSelectedRoleId(primaryRoleId ?? ''); // FIX: Mostrar el rol principal en la segunda pantalla.
 
         try {
           const consolesResponse = await fetch(
@@ -82,6 +111,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
           setConsoleOptions([]);
           setSelectedConsole('');
           setUsuarioAutenticado(null); // FIX: Revertir autenticación si falla la carga de consolas.
+          setAvailableRoles([]);
+          setRoleTokens([]);
+          setSelectedRoleId('');
         }
       } catch (error) {
         console.error('Error al iniciar sesión:', error);
@@ -98,14 +130,33 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       return;
     }
 
+    if (selectedRoleId === '' || typeof selectedRoleId !== 'number') {
+      setError('Seleccione un rol válido.');
+      return;
+    }
+
+    const selectedRole = availableRoles.find((role) => role.id === selectedRoleId);
     if (!selectedRole) {
       setError('No se encontró un rol asignado.');
       return;
     }
 
+    const roleToken = roleTokens.find((entry) => entry.roleId === selectedRole.id);
+    if (!roleToken) {
+      setError('No se encontró un token para el rol seleccionado.');
+      return;
+    }
+
     setIsLoading(true); // FIX: Mostrar carga durante el envío de la selección de consola.
     try {
-      onLogin(selectedRole, usuarioAutenticado.roles, selectedConsole); // FIX: Completar la fase de selección de consola y navegar.
+      onLogin({
+        user: usuarioAutenticado,
+        selectedRole,
+        consoleName: selectedConsole,
+        token: roleToken.token,
+        roles: availableRoles,
+        roleTokens,
+      }); // FIX: Completar la fase de selección de consola y navegar.
     } finally {
       setIsLoading(false); // FIX: Asegurar que el estado de carga se desactive tras finalizar la fase de consola.
     }
@@ -177,14 +228,24 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                 <select
                   id="role"
                   name="role"
-                  value={selectedRole}
-                  disabled
-                  className="block w-full px-3 py-3 border border-gray-300 bg-gray-100 text-gray-600 rounded-md cursor-not-allowed"
+                  value={selectedRoleId === '' ? '' : selectedRoleId}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setSelectedRoleId(value ? Number(value) : '');
+                    if (error) {
+                      setError('');
+                    }
+                  }}
+                  className="block w-full px-3 py-3 border border-gray-300 bg-white text-gray-900 rounded-md focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300]"
                 >
-                  {selectedRole ? (
-                    <option value={selectedRole}>{selectedRole}</option>
-                  ) : (
+                  {availableRoles.length === 0 ? (
                     <option value="">Sin rol asignado</option>
+                  ) : (
+                    availableRoles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.nombre}
+                      </option>
+                    ))
                   )}
                 </select>
               </div>

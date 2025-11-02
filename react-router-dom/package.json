@@ -1,0 +1,7 @@
+{
+  "name": "react-router-dom",
+  "type": "module",
+  "main": "index.js",
+  "module": "index.js",
+  "exports": "./index.js"
+}

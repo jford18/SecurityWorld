@@ -1,7 +1,18 @@
 import { API_BASE_URL } from './api';
 
 const jsonContentType = 'application/json';
-const API_URL = `${API_BASE_URL}/api/menus`;
+const API_URL = `${API_BASE_URL}/api/menus/management`;
+
+const buildAuthHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+};
 
 const ensureJsonResponse = async (response: Response) => {
   const contentType = response.headers.get('content-type');
@@ -37,7 +48,14 @@ export type MenuPayload = {
 };
 
 export const getMenus = async () => {
-  const response = await fetch(API_URL, { cache: 'no-store' });
+  const authHeaders = buildAuthHeaders();
+  const response = await fetch(API_URL, {
+    cache: 'no-store',
+    headers: {
+      ...authHeaders,
+      Accept: jsonContentType,
+    },
+  });
   if (!response.ok) {
     await handleError(response);
   }
@@ -45,11 +63,13 @@ export const getMenus = async () => {
 };
 
 export const createMenu = async (payload: MenuPayload) => {
+  const authHeaders = buildAuthHeaders();
   const response = await fetch(API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': jsonContentType,
       Accept: jsonContentType,
+      ...authHeaders,
     },
     body: JSON.stringify(payload),
   });
@@ -62,11 +82,13 @@ export const createMenu = async (payload: MenuPayload) => {
 };
 
 export const updateMenu = async (id: number, payload: MenuPayload) => {
+  const authHeaders = buildAuthHeaders();
   const response = await fetch(`${API_URL}/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': jsonContentType,
       Accept: jsonContentType,
+      ...authHeaders,
     },
     body: JSON.stringify(payload),
   });
@@ -79,9 +101,10 @@ export const updateMenu = async (id: number, payload: MenuPayload) => {
 };
 
 export const deleteMenu = async (id: number) => {
+  const authHeaders = buildAuthHeaders();
   const response = await fetch(`${API_URL}/${id}`, {
     method: 'DELETE',
-    headers: { Accept: jsonContentType },
+    headers: { Accept: jsonContentType, ...authHeaders },
   });
 
   if (!response.ok) {

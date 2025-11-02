@@ -63,13 +63,3 @@ export interface HikCamera {
   devResourceType: string;
   status: number; // 1 for active, 0 for inactive
 }
-
-
-export enum View {
-  Dashboard,
-  Failures,
-  Intrusions,
-  AlertsReport,
-  // NEW: Vista para el mantenimiento de consolas en el panel administrativo.
-  Consolas,
-}

@@ -828,12 +828,13 @@ const TechnicalFailures: React.FC = () => {
     () => catalogos.responsablesVerificacion,
     [catalogos.responsablesVerificacion]
   );
+  const activeRole = session.roleName?.toLowerCase();
 
   return (
     <div>
       <h3 className="text-3xl font-medium text-[#1C2E4A]">Gestión de Fallos Técnicos</h3>
 
-      {session.role === 'operador' && (
+      {activeRole === 'operador' && (
         <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
           <h4 className="text-[#1C2E4A] text-lg font-semibold mb-4">Registrar Nuevo Fallo</h4>
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -905,7 +906,7 @@ const TechnicalFailures: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Estado
                 </th>
-                {session.role === 'supervisor' && (
+                {activeRole === 'supervisor' && (
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Acciones
                   </th>
@@ -915,7 +916,7 @@ const TechnicalFailures: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {failures.length === 0 ? (
                 <tr>
-                  <td colSpan={session.role === 'supervisor' ? 6 : 5} className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan={activeRole === 'supervisor' ? 6 : 5} className="px-6 py-4 text-center text-sm text-gray-500">
                     {isLoading ? 'Cargando fallos técnicos...' : 'No hay registros disponibles.'}
                   </td>
                 </tr>
@@ -954,7 +955,7 @@ const TechnicalFailures: React.FC = () => {
                         );
                       })()}
                     </td>
-                    {session.role === 'supervisor' && (
+                    {activeRole === 'supervisor' && (
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button
                           onClick={() => handleEdit(fallo)}

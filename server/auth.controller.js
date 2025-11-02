@@ -35,10 +35,12 @@ export async function loginUser(req, res) {
       usuario.hash_contrasena
     );
 
-
+    if (!coincidePassword) {
+      return res.status(401).json({ mensaje: "Credenciales inválidas." });
+    }
 
     const rolesQuery = `
-      SELECT r.nombre AS rol
+      SELECT r.id, r.nombre
       FROM usuario_roles ur
       INNER JOIN roles r ON r.id = ur.rol_id
       WHERE ur.usuario_id = $1
@@ -46,7 +48,16 @@ export async function loginUser(req, res) {
     `;
 
     const rolesResult = await pool.query(rolesQuery, [usuario.id]);
-    const roles = rolesResult.rows.map((row) => row.rol);
+    const roles = rolesResult.rows.map((row) => ({
+      id: row.id,
+      nombre: row.nombre,
+    }));
+
+    if (roles.length === 0) {
+      return res
+        .status(403)
+        .json({ mensaje: "El usuario no tiene roles asignados." });
+    }
 
     if (!process.env.JWT_SECRET) {
       console.warn(
@@ -54,27 +65,34 @@ export async function loginUser(req, res) {
       );
     }
 
-    const tokenPayload = {
-      id: usuario.id,
-      nombre_usuario: usuario.nombre_usuario,
-      roles,
-    };
+    const secret = process.env.JWT_SECRET || "default_secret";
+    const expiresIn = process.env.JWT_EXPIRES_IN || "1h";
 
-    const token = jwt.sign(
-      tokenPayload,
-      process.env.JWT_SECRET || "default_secret",
-      {
-        expiresIn: process.env.JWT_EXPIRES_IN || "1h",
-      }
-    );
+    const tokensPorRol = roles.map((role) => ({
+      rol_id: role.id,
+      token: jwt.sign(
+        {
+          id: usuario.id,
+          nombre_usuario: usuario.nombre_usuario,
+          rol_id: role.id,
+        },
+        secret,
+        { expiresIn }
+      ),
+    }));
+
+    const rolActivo = roles[0] ?? null;
+    const tokenPrincipal = tokensPorRol[0]?.token ?? null;
 
     return res.status(200).json({
-      token,
+      token: tokenPrincipal,
+      tokensPorRol,
       usuario: {
         id: usuario.id,
         nombre_usuario: usuario.nombre_usuario,
         activo: usuario.activo,
         roles,
+        rol_activo: rolActivo,
       },
     });
   } catch (error) {
