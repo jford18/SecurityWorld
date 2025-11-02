@@ -260,6 +260,26 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
         </svg>
       ),
     },
+    {
+      view: View.AdminRolMenu,
+      label: 'Roles ↔ Menús',
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M8 7h8M8 11h8M8 15h5m4 6h-5a3 3 0 01-3-3V6a3 3 0 013-3h5a3 3 0 013 3v12a3 3 0 01-3 3zM6 7H5a2 2 0 00-2 2v9a2 2 0 002 2h1"
+          />
+        </svg>
+      ),
+    },
   ];
 
   return (

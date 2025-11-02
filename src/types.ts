@@ -135,6 +135,8 @@ export enum View {
   AdminAsignacionRoles,
   // NEW: Vista para la asignación de consolas a usuarios.
   AdminAsignacionConsolas,
+  // NEW: Vista para administrar la relación entre roles y menús.
+  AdminRolMenu,
   // NEW: Vista para el mantenimiento del catálogo de menús.
   AdminMenus,
 }
