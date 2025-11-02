@@ -18,6 +18,8 @@ import CatalogoTipoProblemaScreen from '../pages/admin/CatalogoTipoProblemaScree
 import AsignacionRolesScreen from '../pages/admin/AsignacionRolesScreen';
 // NEW: Vista de asignación de consolas entre usuarios y consolas disponibles.
 import AsignacionConsolasScreen from '../pages/admin/AsignacionConsolasScreen';
+// NEW: Vista de mantenimiento del catálogo de menús.
+import MenuScreen from '../pages/admin/MenuScreen';
 
 const Dashboard: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
@@ -50,6 +52,9 @@ const Dashboard: React.FC = () => {
       case View.AdminAsignacionConsolas:
         // NEW: Renderizamos la pantalla de asignación de consolas a usuarios.
         return <AsignacionConsolasScreen />;
+      case View.AdminMenus:
+        // NEW: Renderizamos la pantalla de mantenimiento de menús.
+        return <MenuScreen />;
       default:
         return <DashboardHome />;
     }
