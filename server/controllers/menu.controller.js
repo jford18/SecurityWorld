@@ -1,4 +1,5 @@
 import pool from "../db.js";
+import { getMenusByRoleId } from "../services/menu.service.js";
 
 const normalizeBoolean = (value, defaultValue = true) => {
   if (typeof value === "boolean") {
@@ -17,6 +18,22 @@ const normalizeBoolean = (value, defaultValue = true) => {
     return defaultValue;
   }
   return Boolean(value);
+};
+
+export const getMenusByRole = async (req, res) => {
+  const roleId = req.user?.rol_id;
+
+  if (!roleId) {
+    return res.status(400).json({ message: "El token no contiene un rol válido" });
+  }
+
+  try {
+    const menus = await getMenusByRoleId(roleId);
+    return res.status(200).json(menus);
+  } catch (error) {
+    console.error("Error al obtener el menú por rol:", error);
+    return res.status(500).json({ message: "Error interno del servidor" });
+  }
 };
 
 export const getMenus = async (_req, res) => {

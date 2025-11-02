@@ -1,12 +1,23 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 
-type Role = string;
+export interface RoleOption {
+  id: number;
+  nombre: string;
+}
+
+export interface RoleToken {
+  roleId: number;
+  token: string;
+}
 
 interface SessionData {
+  userId: number | null;
   user: string | null;
   console: string | null;
-  role: Role | null;
-  roles: string[];
+  roleId: number | null;
+  roleName: string | null;
+  roles: RoleOption[];
+  roleTokens: RoleToken[];
   token: string | null;
 }
 
@@ -18,10 +29,13 @@ interface SessionContextType {
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
 const initialSession: SessionData = {
+  userId: null,
   user: null,
   console: null,
-  role: null,
+  roleId: null,
+  roleName: null,
   roles: [],
+  roleTokens: [],
   token: null,
 };
 

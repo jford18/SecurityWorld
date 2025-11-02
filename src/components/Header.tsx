@@ -13,36 +13,100 @@ const Header: React.FC = () => {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
+    localStorage.removeItem('roleTokens');
+    localStorage.removeItem('activeRoleId');
+    localStorage.removeItem('selectedConsole');
     clearSession(setSession);
+  };
+
+  const handleRoleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value;
+    if (!value) {
+      return;
+    }
+
+    const roleId = Number(value);
+    if (Number.isNaN(roleId)) {
+      return;
+    }
+
+    const selectedRole = session.roles.find((role) => role.id === roleId);
+    const roleToken = session.roleTokens.find((entry) => entry.roleId === roleId);
+
+    if (!selectedRole || !roleToken) {
+      return;
+    }
+
+    setSession((prev) => ({
+      ...prev,
+      roleId,
+      roleName: selectedRole.nombre,
+      token: roleToken.token,
+    }));
+
+    localStorage.setItem('token', roleToken.token);
+    localStorage.setItem('activeRoleId', String(roleId));
+
+    try {
+      const storedUser = localStorage.getItem('usuario');
+      if (storedUser) {
+        const parsed = JSON.parse(storedUser) as Record<string, unknown>;
+        parsed.rol_activo = selectedRole;
+        localStorage.setItem('usuario', JSON.stringify(parsed));
+      }
+    } catch (error) {
+      console.error('No se pudo actualizar el usuario almacenado con el rol activo:', error);
+    }
   };
 
   return (
     <header className="flex items-center justify-between h-20 px-6 bg-white border-b">
       <div className="flex items-baseline gap-4">
         <h1 className="text-2xl font-semibold text-[#1C2E4A]">Bienvenido, {session.user}</h1>
-        {(session.console || session.role || session.roles.length > 0) && (
+        {(session.console || session.roleName || session.roles.length > 0) && (
           <span className="text-lg text-gray-500">
             {session.console && (
               <>
                 | Consola: <span className="font-semibold text-[#1C2E4A]">{session.console}</span>{' '}
               </>
             )}
-            {session.role && (
+            {session.roleName && (
               <>
                 | Rol activo:{' '}
-                <span className="font-semibold text-[#1C2E4A] capitalize">{session.role}</span>{' '}
+                <span className="font-semibold text-[#1C2E4A] capitalize">{session.roleName}</span>{' '}
               </>
             )}
             {session.roles.length > 1 && (
               <>
                 | Roles asignados:{' '}
-                <span className="font-semibold text-[#1C2E4A]">{session.roles.join(', ')}</span>
+                <span className="font-semibold text-[#1C2E4A]">
+                  {session.roles.map((role) => role.nombre).join(', ')}
+                </span>
               </>
             )}
           </span>
         )}
       </div>
-      <div className="flex items-center">
+      <div className="flex items-center gap-4">
+        {session.roles.length > 0 && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="header-role-select" className="text-sm text-gray-600">
+              Rol activo
+            </label>
+            <select
+              id="header-role-select"
+              className="border border-gray-300 rounded-md px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300]"
+              value={session.roleId ?? ''}
+              onChange={handleRoleChange}
+            >
+              {session.roles.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="text-right">
           <p className="text-lg font-semibold text-[#1C2E4A]">{time.toLocaleTimeString()}</p>
           <p className="text-sm text-gray-500">{time.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
