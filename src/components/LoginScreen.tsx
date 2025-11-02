@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { login as loginService } from '../services/authService';
 
 type Role = string;
 
@@ -34,23 +35,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       setIsLoading(true); // FIX: Activar indicador de carga durante la fase de autenticación.
 
       try {
-        const response = await fetch('http://localhost:3000/api/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            nombre_usuario: username,
-            contrasena_plana: password,
-          }),
-        });
-
-        if (!response.ok) {
-          setError('Error de autenticación'); // FIX: Mantener mensaje uniforme cuando falla la autenticación.
-          return;
-        }
-
-        const data = await response.json();
+        const data = await loginService(username, password);
 
         localStorage.setItem('token', data.token); // FIX: Guardar credenciales tras autenticación exitosa.
         localStorage.setItem('usuario', JSON.stringify(data.usuario)); // FIX: Persistir información del usuario autenticado.
@@ -61,31 +46,17 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         const primaryRole = usuario.roles[0] ?? '';
         setSelectedRole(primaryRole); // FIX: Mostrar el rol principal en la segunda pantalla.
 
-        try {
-          const consolesResponse = await fetch(
-            `http://localhost:3000/api/auth/consolas/${usuario.id}`
-          );
-
-          if (!consolesResponse.ok) {
-            throw new Error('No se pudieron cargar las consolas del usuario.');
-          }
-
-          const consolesData: { consolas?: string[] } = await consolesResponse.json();
-          const fetchedConsoles = consolesData.consolas ?? [];
-
-          setConsoleOptions(fetchedConsoles); // FIX: Poblar opciones de consolas para la segunda fase.
-          const defaultConsole = fetchedConsoles[0] ?? '';
-          setSelectedConsole(defaultConsole); // FIX: Preseleccionar la primera consola disponible tras el login.
-        } catch (consolesError) {
-          console.error('Error al cargar las consolas del usuario:', consolesError);
-          setError('Error de autenticación'); // FIX: Notificar problema al cargar consolas antes de avanzar a la segunda fase.
-          setConsoleOptions([]);
-          setSelectedConsole('');
-          setUsuarioAutenticado(null); // FIX: Revertir autenticación si falla la carga de consolas.
-        }
+        const fetchedConsoles = (data.consolas ?? []).map((consola) => consola.nombre);
+        setConsoleOptions(fetchedConsoles); // FIX: Poblar opciones de consolas para la segunda fase.
+        const defaultConsole = fetchedConsoles[0] ?? '';
+        setSelectedConsole(defaultConsole); // FIX: Preseleccionar la primera consola disponible tras el login.
       } catch (error) {
         console.error('Error al iniciar sesión:', error);
-        setError('Error de autenticación'); // FIX: Unificar mensaje de error en fallos de red o servidor durante autenticación.
+        const message = error instanceof Error ? error.message : 'Error de autenticación';
+        setError(message); // FIX: Mostrar el mensaje del backend cuando sea posible.
+        setConsoleOptions([]);
+        setSelectedConsole('');
+        setUsuarioAutenticado(null);
       } finally {
         setIsLoading(false); // FIX: Finalizar indicador de carga al concluir la fase de autenticación.
       }
