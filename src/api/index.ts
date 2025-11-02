@@ -69,9 +69,9 @@ const api = {
   get: <T>(path: string, options?: RequestOptions) =>
     request<T>(path, { ...options, method: "GET" }),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
-    request<T>(path, { ...options, method: "POST", body }),
+    request<T>(path, { ...options, method: "POST", body: body as any }),
   put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
-    request<T>(path, { ...options, method: "PUT", body }),
+    request<T>(path, { ...options, method: "PUT", body: body as any }),
   delete: <T>(path: string, options?: RequestOptions) =>
     request<T>(path, { ...options, method: "DELETE" }),
 };

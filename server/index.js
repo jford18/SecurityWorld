@@ -5,6 +5,10 @@ import app from "./app.js";
 import rolesRoutes from "./roles.routes.js";
 import fallosRoutes from "./routes/fallos.routes.js";
 import catalogosRoutes from "./routes/catalogos.routes.js";
+import nodosRoutes from "./routes/nodos.routes.js";
+import clientesRoutes from "./routes/clientes.routes.js";
+import sitiosRoutes from "./routes/sitios.routes.js";
+import dispositivosRoutes from "./routes/dispositivos.routes.js";
 import consolasRoutes from "./routes/consolas.routes.js";
 // NEW: Registro del mantenimiento de usuarios en el servidor API.
 import usuariosRoutes from "./routes/usuarios.routes.js";
@@ -45,6 +49,10 @@ app.use("/api/roles", rolesRoutes);
 app.use("/api/consolas", consolasRoutes);
 app.use("/api/fallos", fallosRoutes);
 app.use("/api/catalogos", catalogosRoutes);
+app.use("/api/nodos", nodosRoutes);
+app.use("/api/clientes", clientesRoutes);
+app.use("/api/sitios", sitiosRoutes);
+app.use("/api/dispositivos", dispositivosRoutes);
 // NEW: Registro del módulo de usuarios siguiendo la convención /api/usuarios.
 app.use("/api/usuarios", usuariosRoutes);
 // NEW: Registro del módulo de catálogo tipo problema en la ruta /api/catalogo-tipo-problema.
