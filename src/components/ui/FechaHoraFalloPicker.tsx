@@ -12,6 +12,11 @@ type CustomHeaderProps = {
   nextMonthButtonDisabled: boolean;
 };
 
+type CalendarContainerProps = {
+  className?: string;
+  children?: React.ReactNode;
+};
+
 interface FechaHoraFalloPickerProps {
   id: string;
   name: string;
@@ -104,6 +109,64 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
     [],
   );
 
+  const CustomCalendarContainer: React.FC<CalendarContainerProps> = ({
+    className,
+    children,
+  }) => {
+    const enhancedChildren = React.Children.map(children, (child) => {
+      if (!React.isValidElement(child)) {
+        return child;
+      }
+
+      const childElement = child as React.ReactElement<{
+        className?: string;
+        children?: React.ReactNode;
+      }>;
+
+      if (
+        typeof childElement.props?.className === 'string' &&
+        childElement.props.className.includes('react-datepicker')
+      ) {
+        const innerChildren = React.Children.map(childElement.props.children, (grandChild) => {
+          if (!React.isValidElement(grandChild)) {
+            return grandChild;
+          }
+
+          const grandChildElement = grandChild as React.ReactElement<{
+            className?: string;
+          }>;
+
+          const grandChildClassName = grandChildElement.props?.className ?? '';
+
+          if (grandChildClassName.includes('react-datepicker__month-container')) {
+            return React.cloneElement(grandChildElement, {
+              className: `${grandChildClassName} flex-[0.7] min-w-0`,
+            });
+          }
+
+          if (grandChildClassName.includes('react-datepicker__time-container')) {
+            return React.cloneElement(grandChildElement, {
+              className: `${grandChildClassName} flex-[0.3] min-w-0 !border !border-[#E5E7EB] !rounded-xl !bg-white`,
+            });
+          }
+
+          return grandChildElement;
+        });
+
+        return React.cloneElement(childElement, {
+          className: `${childElement.props.className ?? ''} !flex !flex-row !w-full !items-start !gap-4 !bg-transparent !border-none !shadow-none`,
+          children: innerChildren,
+        });
+      }
+
+      return childElement;
+    });
+
+    return (
+      <div className={`${className ?? ''} rounded-xl bg-white p-4 shadow-md`}>{enhancedChildren}</div>
+    );
+  };
+
   return (
     <div className="md:col-span-2 w-full max-w-[280px]">
       <label
@@ -127,19 +190,21 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
           minTime={minTime}
           maxTime={maxTime}
           placeholderText={placeholder}
-          className="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-2 text-base text-gray-800 placeholder:text-[#9CA3AF] shadow-sm focus:border-[#FACC15] focus:outline-none focus:ring-2 focus:ring-[#FACC15]"
-          calendarClassName="!bg-white !border !border-[#E5E7EB] !rounded-xl !shadow-lg !p-4 !text-sm !w-full !max-w-[280px]"
-          popperClassName="z-50 !w-full !max-w-[280px]"
+          className="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-2 text-sm text-gray-800 placeholder:text-[#9CA3AF] shadow-sm focus:border-[#FACC15] focus:outline-none focus:ring-2 focus:ring-[#FACC15]"
+          calendarClassName="!w-full !text-sm"
+          calendarContainer={CustomCalendarContainer}
+          popperClassName="z-50"
           popperPlacement="bottom-start"
           popperModifiers={popperModifiers}
+          showPopperArrow={false}
           dayClassName={(date: Date) => {
             const baseClasses =
-              '!w-9 !h-9 flex items-center justify-center rounded-full text-sm text-gray-700 hover:bg-gray-100';
+              '!w-9 !h-9 flex items-center justify-center rounded-full text-sm text-gray-700 transition-colors hover:bg-[#FACC15]/60 hover:text-gray-900';
             const isToday = isSameDay(date, now);
             const isSelected = selectedDate ? isSameDay(date, selectedDate) : false;
 
             if (isSelected) {
-              return `${baseClasses} !bg-[#3B82F6] !text-white`;
+              return `${baseClasses} !bg-[#3B82F6] !text-white hover:!bg-[#2563EB]`;
             }
 
             if (isToday) {
@@ -149,7 +214,8 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
             return baseClasses;
           }}
           timeClassName={(time: Date) => {
-            const baseClasses = 'px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg';
+            const baseClasses =
+              'px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-[#FACC15]/60 hover:text-gray-900 rounded-lg';
 
             if (
               selectedDate &&
@@ -162,7 +228,7 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
             return baseClasses;
           }}
           timeCaption="Hora"
-          timeContainerClassName="!border-t !border-[#E5E7EB] !bg-white !max-h-[150px] !overflow-y-auto !p-2"
+          timeContainerClassName="!border !border-[#E5E7EB] !bg-white !max-h-[220px] !overflow-y-auto !p-3 !flex !flex-col !rounded-xl"
           wrapperClassName="w-full"
           shouldCloseOnSelect={false}
           required={required}
@@ -182,7 +248,7 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
                   type="button"
                   onClick={decreaseMonth}
                   disabled={prevMonthButtonDisabled}
-                  className="rounded-lg px-2 py-1 text-gray-600 transition hover:bg-gray-100 focus:outline-none disabled:cursor-not-allowed disabled:text-gray-300"
+                  className="rounded-lg px-2 py-1 text-gray-600 transition hover:bg-[#FACC15]/60 focus:outline-none disabled:cursor-not-allowed disabled:text-gray-300"
                 >
                   ←
                 </button>
@@ -193,7 +259,7 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
                   type="button"
                   onClick={increaseMonth}
                   disabled={nextMonthButtonDisabled}
-                  className="rounded-lg px-2 py-1 text-gray-600 transition hover:bg-gray-100 focus:outline-none disabled:cursor-not-allowed disabled:text-gray-300"
+                  className="rounded-lg px-2 py-1 text-gray-600 transition hover:bg-[#FACC15]/60 focus:outline-none disabled:cursor-not-allowed disabled:text-gray-300"
                 >
                   →
                 </button>
