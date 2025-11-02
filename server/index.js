@@ -14,6 +14,7 @@ import usuarioRolesRoutes from "./routes/usuarioRoles.routes.js";
 // NEW: Registro del módulo de asignación de consolas a usuarios.
 import usuarioConsolasRoutes from "./routes/usuarioConsolas.routes.js";
 import menuRoutes from "./routes/menu.routes.js";
+import rolMenuRoutes from "./routes/rolMenu.routes.js";
 
 
 const envPath = path.resolve(process.cwd(), ".env");
@@ -52,6 +53,7 @@ app.use("/api/usuario-roles", usuarioRolesRoutes);
 // NEW: Registro del módulo encargado de asignar consolas a los usuarios.
 app.use("/api/usuario_consolas", usuarioConsolasRoutes);
 app.use("/api/menus", menuRoutes);
+app.use("/api/rol-menu", rolMenuRoutes);
 
 
 app.use((req, res) => {
