@@ -13,6 +13,13 @@ export interface TechnicalFailure {
   verificacionApertura?: string;
   verificacionCierre?: string;
   novedadDetectada?: string;
+  nodo_id?: number;
+  cliente_id?: number;
+  sitio_id?: number;
+  tipo_problema_id?: number;
+  tipo_equipo_id?: number;
+  dispositivo_id?: number;
+  usuario_id?: number;
 }
 
 export interface CatalogoDepartamento {
@@ -41,10 +48,30 @@ export interface CatalogoNodo {
   nombre: string;
 }
 
+export interface CatalogoCliente {
+  id: number;
+  nombre: string;
+  nodo_id: number;
+}
+
+export interface CatalogoSitio {
+  id: number;
+  nombre: string;
+  cliente_id?: number;
+  consola_id?: number;
+  cliente_nombre?: string;
+  consola_nombre?: string;
+}
+
 export interface CatalogoDispositivo {
   id: number;
   nombre: string;
   estado?: string;
+}
+
+export interface CatalogoTipoEquipo {
+  id: number;
+  nombre: string;
 }
 
 export interface TechnicalFailureCatalogs {
@@ -52,8 +79,11 @@ export interface TechnicalFailureCatalogs {
   tiposProblema: CatalogoTipoProblema[];
   responsablesVerificacion: CatalogoResponsable[];
   nodos: CatalogoNodo[];
+  clientes: CatalogoCliente[];
+  sitios: CatalogoSitio[];
   nodoCliente: { nodo: string; cliente: string }[];
   tiposEquipo: string[];
+  tiposEquipoCatalog?: CatalogoTipoEquipo[];
   tiposProblemaEquipo: string[];
   dispositivos: CatalogoDispositivo[];
   sitiosPorConsola: SitioPorConsola[];

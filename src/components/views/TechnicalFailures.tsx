@@ -7,14 +7,15 @@ import {
   TechnicalFailureCatalogs,
   CatalogoDepartamento,
   CatalogoResponsable,
+  CatalogoSitio,
+  CatalogoCliente,
+  CatalogoTipoProblema,
+  CatalogoNodo,
+  CatalogoTipoEquipo,
+  SitioPorConsola,
 } from '@/types';
-import {
-  getFallos,
-  createFallo,
-  updateFallo,
-  getCatalogos,
-  TechnicalFailurePayload,
-} from '@/services/fallosService';
+import { getFallos, createFallo, updateFallo } from '@/services/fallosService';
+import { getCatalogos as fetchCatalogos } from '@/services/catalogosService';
 
 type AffectationType = 'Nodo' | 'Punto' | 'Equipo' | 'Masivo' | '';
 
@@ -30,6 +31,8 @@ type FailureFormData = {
   tipoProblemaEquipo: string;
   sitio: string;
 };
+
+type TechnicalFailurePayload = Record<string, unknown>;
 
 const FUTURE_DATE_ERROR_MESSAGE =
   'La fecha y hora del fallo no pueden ser posteriores al momento actual.';
@@ -59,12 +62,200 @@ const emptyCatalogos: TechnicalFailureCatalogs = {
   tiposProblema: [],
   responsablesVerificacion: [],
   nodos: [],
+  clientes: [],
+  sitios: [],
   nodoCliente: [],
   tiposEquipo: [],
+  tiposEquipoCatalog: [],
   tiposProblemaEquipo: [],
   dispositivos: [],
   sitiosPorConsola: [],
 };
+
+const toNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const toStringValue = (value: unknown): string =>
+  value === null || value === undefined ? "" : String(value);
+
+const transformCatalogos = (data: any): TechnicalFailureCatalogs => {
+  const nodos = Array.isArray(data?.nodos)
+    ? data.nodos
+        .map((item: any) => ({
+          id: toNumber(item?.id),
+          nombre: toStringValue(item?.nombre).trim(),
+        }))
+        .filter((item: any) => Boolean(item.nombre))
+    : [];
+
+  const clientes: CatalogoCliente[] = Array.isArray(data?.clientes)
+    ? data.clientes
+        .map((item: any): CatalogoCliente => ({
+          id: toNumber(item?.id),
+          nombre: toStringValue(item?.nombre).trim(),
+          nodo_id: toNumber(item?.nodo_id),
+        }))
+        .filter((item: CatalogoCliente) => Boolean(item.nombre) && item.nodo_id)
+    : [];
+
+  const nodoCliente = clientes.reduce<{ nodo: string; cliente: string }[]>(
+    (acc, clienteItem) => {
+      const nodo = nodos.find(
+        (nodoItem: CatalogoNodo) => nodoItem.id === clienteItem.nodo_id
+      );
+      if (nodo) {
+        acc.push({ nodo: nodo.nombre, cliente: clienteItem.nombre });
+      }
+      return acc;
+    },
+    []
+  );
+
+  const departamentos = Array.isArray(data?.departamentos)
+    ? data.departamentos
+        .map((item: any) => ({
+          id: toNumber(item?.id),
+          nombre: toStringValue(item?.nombre).trim(),
+        }))
+        .filter((item: any) => Boolean(item.nombre))
+    : [];
+
+  const tiposProblema: CatalogoTipoProblema[] = Array.isArray(data?.tiposProblema)
+    ? data.tiposProblema
+        .map((item: any): CatalogoTipoProblema => ({
+          id: toNumber(item?.id),
+          descripcion: toStringValue(item?.descripcion ?? item?.nombre).trim(),
+        }))
+        .filter((item: CatalogoTipoProblema) => Boolean(item.descripcion))
+    : [];
+
+  const responsablesVerificacion = Array.isArray(data?.responsables)
+    ? data.responsables
+        .map((item: any) => ({
+          id: toNumber(item?.id),
+          nombre: toStringValue(
+            item?.nombre ?? item?.nombre_usuario ?? item?.nombre_completo
+          ).trim(),
+        }))
+        .filter((item: any) => Boolean(item.nombre))
+    : [];
+
+  const tiposEquipoCatalog: CatalogoTipoEquipo[] = Array.isArray(
+    data?.tiposEquipo
+  )
+    ? data.tiposEquipo
+        .map((item: any): CatalogoTipoEquipo => ({
+          id: toNumber(item?.id),
+          nombre: toStringValue(item?.nombre ?? item).trim(),
+        }))
+        .filter(
+          (item: CatalogoTipoEquipo) => Boolean(item.id) && Boolean(item.nombre)
+        )
+    : [];
+
+  const tiposEquipo = tiposEquipoCatalog.map(
+    (item: CatalogoTipoEquipo) => item.nombre
+  );
+
+  const dispositivos = Array.isArray(data?.dispositivos)
+    ? data.dispositivos
+        .map((item: any) => ({
+          id: toNumber(item?.id),
+          nombre: toStringValue(item?.nombre).trim(),
+          estado: toStringValue(item?.estado).trim() || undefined,
+        }))
+        .filter((item: any) => Boolean(item.nombre))
+    : [];
+
+  const sitios = Array.isArray(data?.sitios)
+    ? data.sitios
+        .map((item: any): CatalogoSitio => ({
+          id: toNumber(item?.id),
+          nombre: toStringValue(item?.nombre).trim(),
+          cliente_id: toNumber(item?.cliente_id),
+          consola_id: toNumber(item?.consola_id),
+          cliente_nombre:
+            toStringValue(item?.cliente_nombre).trim() || undefined,
+          consola_nombre:
+            toStringValue(item?.consola_nombre).trim() || undefined,
+        }))
+        .filter((item: CatalogoSitio) => Boolean(item.nombre))
+    : [];
+
+  const sitiosPorConsola = sitios
+    .map((item: CatalogoSitio) => {
+      const sitio = item.nombre;
+      const cliente =
+        item.cliente_nombre ??
+        clientes.find(
+          (clienteItem: CatalogoCliente) => clienteItem.id === item.cliente_id
+        )?.nombre ??
+          "";
+      const consola = item.consola_nombre ?? "";
+
+      if (!sitio || !consola) {
+        return null;
+      }
+
+      return { sitio, cliente, consola };
+    })
+    .filter(
+      (item: SitioPorConsola | null): item is SitioPorConsola => Boolean(item)
+    );
+
+  const tiposProblemaEquipo = tiposProblema.map(
+    (item: CatalogoTipoProblema) => item.descripcion
+  );
+
+  return {
+    departamentos,
+    tiposProblema,
+    responsablesVerificacion,
+    nodos,
+    clientes,
+    sitios,
+    nodoCliente,
+    tiposEquipo,
+    tiposEquipoCatalog,
+    tiposProblemaEquipo,
+    dispositivos,
+    sitiosPorConsola,
+  };
+};
+
+const transformFallo = (raw: any): TechnicalFailure => ({
+  id: toStringValue(raw?.id),
+  fecha: toStringValue(raw?.fecha ?? raw?.fecha_fallo),
+  equipo_afectado: toStringValue(
+    raw?.equipo_afectado ?? raw?.dispositivo ?? raw?.nodo
+  ),
+  descripcion_fallo: toStringValue(
+    raw?.descripcion_fallo ?? raw?.descripcion
+  ),
+  responsable: toStringValue(raw?.responsable ?? raw?.usuario),
+  estado: toStringValue(raw?.estado) || undefined,
+  deptResponsable: toStringValue(raw?.departamento) || undefined,
+  fechaResolucion: toStringValue(raw?.fecha_resolucion) || undefined,
+  horaResolucion: toStringValue(raw?.hora_resolucion) || undefined,
+  verificacionApertura:
+    toStringValue(raw?.verificacion_apertura) || undefined,
+  verificacionCierre:
+    toStringValue(raw?.verificacion_cierre) || undefined,
+  novedadDetectada: toStringValue(raw?.novedad_detectada) || undefined,
+  nodo_id: raw?.nodo_id ? Number(raw.nodo_id) : undefined,
+  cliente_id: raw?.cliente_id ? Number(raw.cliente_id) : undefined,
+  sitio_id: raw?.sitio_id ? Number(raw.sitio_id) : undefined,
+  tipo_problema_id: raw?.tipo_problema_id
+    ? Number(raw.tipo_problema_id)
+    : undefined,
+  tipo_equipo_id: raw?.tipo_equipo_id ? Number(raw.tipo_equipo_id) : undefined,
+  dispositivo_id: raw?.dispositivo_id
+    ? Number(raw.dispositivo_id)
+    : undefined,
+  usuario_id: raw?.usuario_id ? Number(raw.usuario_id) : undefined,
+});
 
 const EditFailureModal: React.FC<{
   failure: TechnicalFailure;
@@ -243,7 +434,7 @@ const TechnicalFailures: React.FC = () => {
   const [errors, setErrors] = useState<Partial<FailureFormData>>({});
   const [cliente, setCliente] = useState<string | null>(null);
   const [clienteFromConsole, setClienteFromConsole] = useState<string | null>(null);
-  const [sitios, setSitios] = useState<string[]>([]);
+  const [sitiosDisponibles, setSitiosDisponibles] = useState<CatalogoSitio[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFechaHoraInvalid, setIsFechaHoraInvalid] = useState(false);
@@ -252,11 +443,14 @@ const TechnicalFailures: React.FC = () => {
     const loadData = async () => {
       try {
         const [catalogData, fallosData] = await Promise.all([
-          getCatalogos(),
+          fetchCatalogos(),
           getFallos(),
         ]);
-        setCatalogos(catalogData);
-        setFailures(fallosData);
+        setCatalogos(transformCatalogos(catalogData));
+        const parsedFallos = Array.isArray(fallosData)
+          ? fallosData.map(transformFallo)
+          : [];
+        setFailures(parsedFallos);
       } catch (error) {
         console.error('Error al cargar los datos de fallos técnicos:', error);
         alert('No se pudo cargar la información inicial de fallos técnicos.');
@@ -418,17 +612,22 @@ const TechnicalFailures: React.FC = () => {
     setErrors({});
     setCliente(null);
     setClienteFromConsole(null);
-    setSitios([]);
+    setSitiosDisponibles([]);
   };
 
   useEffect(() => {
     if (formData.affectationType === 'Nodo' && formData.nodo) {
-      const relation = catalogos.nodoCliente.find((nc) => nc.nodo === formData.nodo);
-      setCliente(relation ? relation.cliente : 'Cliente no encontrado');
+      const nodeId = Number(formData.nodo);
+      const clienteAsociado = catalogos.clientes.find(
+        (clienteItem) => clienteItem.nodo_id === nodeId
+      );
+      setCliente(
+        clienteAsociado ? clienteAsociado.nombre : 'Cliente no encontrado'
+      );
     } else {
       setCliente(null);
     }
-  }, [formData.nodo, formData.affectationType, catalogos.nodoCliente]);
+  }, [formData.nodo, formData.affectationType, catalogos.clientes]);
 
   const normalizeConsoleName = (name: string | null): string => {
     if (!name) return '';
@@ -448,23 +647,36 @@ const TechnicalFailures: React.FC = () => {
       session.console &&
       (formData.affectationType === 'Punto' || formData.affectationType === 'Equipo')
     ) {
-      const normalizedConsole = normalizeConsoleName(session.console);
-      const sitesForConsole = catalogos.sitiosPorConsola.filter(
-        (s) => s.consola.toUpperCase() === normalizedConsole
-      );
+      const normalizedConsole = normalizeConsoleName(session.console).toUpperCase();
+      const sitiosFiltrados = catalogos.sitios.filter((sitio) => {
+        const consolaNombre = normalizeConsoleName(
+          sitio.consola_nombre ?? ''
+        ).toUpperCase();
+        return consolaNombre === normalizedConsole;
+      });
 
-      if (sitesForConsole.length > 0) {
-        setClienteFromConsole(sitesForConsole[0].cliente);
-        setSitios(sitesForConsole.map((s) => s.sitio));
+      if (sitiosFiltrados.length > 0) {
+        const clienteNombre =
+          sitiosFiltrados[0].cliente_nombre ??
+          catalogos.clientes.find(
+            (clienteItem) => clienteItem.id === sitiosFiltrados[0].cliente_id
+          )?.nombre ?? 'Cliente no encontrado';
+        setClienteFromConsole(clienteNombre);
+        setSitiosDisponibles(sitiosFiltrados);
       } else {
         setClienteFromConsole('No encontrado');
-        setSitios([]);
+        setSitiosDisponibles([]);
       }
     } else {
       setClienteFromConsole(null);
-      setSitios([]);
+      setSitiosDisponibles([]);
     }
-  }, [session.console, formData.affectationType, catalogos.sitiosPorConsola]);
+  }, [
+    session.console,
+    formData.affectationType,
+    catalogos.sitios,
+    catalogos.clientes,
+  ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -494,13 +706,21 @@ const TechnicalFailures: React.FC = () => {
     }
 
     let equipo_afectado = 'N/A';
+    const sitioNombre = formData.sitio
+      ? catalogos.sitios.find((sitio) => sitio.id === Number(formData.sitio))
+          ?.nombre ?? formData.sitio
+      : formData.sitio;
+
     if (formData.affectationType === 'Nodo') {
-      equipo_afectado = formData.nodo;
+      const nodoSeleccionado = catalogos.nodos.find(
+        (nodoItem) => nodoItem.id === Number(formData.nodo)
+      );
+      equipo_afectado = nodoSeleccionado?.nombre ?? formData.nodo;
     } else if (formData.affectationType === 'Equipo') {
       const equipo = formData.camara || formData.tipoEquipo;
-      equipo_afectado = `${equipo} en ${formData.sitio}`;
+      equipo_afectado = `${equipo} en ${sitioNombre}`;
     } else if (formData.affectationType === 'Punto') {
-      equipo_afectado = `Punto en ${formData.sitio}`;
+      equipo_afectado = `Punto en ${sitioNombre}`;
     }
 
     let descripcion_fallo = 'N/A';
@@ -532,37 +752,85 @@ const TechnicalFailures: React.FC = () => {
       }
     }
 
+    const nodoIdFromForm = formData.nodo ? Number(formData.nodo) : null;
+    const sitioSeleccionado = formData.sitio
+      ? catalogos.sitios.find((sitio) => sitio.id === Number(formData.sitio))
+      : undefined;
+
+    let clienteId: number | null = null;
+    if (sitioSeleccionado?.cliente_id) {
+      clienteId = sitioSeleccionado.cliente_id;
+    } else if (nodoIdFromForm) {
+      clienteId =
+        catalogos.clientes.find(
+          (clienteItem) => clienteItem.nodo_id === nodoIdFromForm
+        )?.id ?? null;
+    }
+
+    let nodoId = nodoIdFromForm;
+    if (!nodoId && clienteId) {
+      nodoId =
+        catalogos.clientes.find((clienteItem) => clienteItem.id === clienteId)
+          ?.nodo_id ?? null;
+    }
+
+    if (!clienteId || !nodoId) {
+      alert('Debe seleccionar un nodo y cliente válidos.');
+      return;
+    }
+
+    const tipoProblemaSeleccionado =
+      formData.tipoProblemaEquipo || formData.tipoProblema;
+    const tipoProblemaId = catalogos.tiposProblema.find(
+      (tipo) => tipo.descripcion === tipoProblemaSeleccionado
+    )?.id;
+
+    const tipoEquipoId = catalogos.tiposEquipoCatalog?.find(
+      (tipo) => tipo.nombre === formData.tipoEquipo
+    )?.id;
+
+    const dispositivoSeleccionado = catalogos.dispositivos.find(
+      (dispositivo) => dispositivo.nombre === formData.camara
+    );
+
     const payload: TechnicalFailurePayload = {
-      // FIX: Se envía la nueva fecha completa derivando compatibilidad hacia campos históricos.
+      descripcion: descripcion_fallo || 'Sin descripción',
+      descripcion_fallo: descripcion_fallo || 'Sin descripción',
+      equipo_afectado: equipo_afectado || 'No especificado',
       fecha: fechaFalloPayload,
+      fecha_fallo: fechaFalloPayload,
       horaFallo: horaFalloPayload,
-      // NEW: Nuevo campo combinado listo para futuros usos en el backend.
       fechaHoraFallo: fechaHoraFalloISO,
       affectationType: formData.affectationType,
-      equipo_afectado: equipo_afectado || 'No especificado',
-      descripcion_fallo: descripcion_fallo || 'Sin descripción',
+      nodo_id: nodoId,
+      cliente_id: clienteId,
+      sitio_id: sitioSeleccionado?.id ?? null,
+      tipo_problema_id: tipoProblemaId ?? null,
+      tipo_equipo_id: tipoEquipoId ?? null,
+      dispositivo_id: dispositivoSeleccionado?.id ?? null,
       responsable: session.user,
-      tipoProblema: formData.tipoProblema || formData.tipoProblemaEquipo,
-      tipoEquipo: formData.tipoEquipo,
-      nodo: formData.nodo,
-      sitio: formData.sitio,
+      usuario: session.user,
       consola: session.console,
       reportadoCliente: formData.reportadoCliente,
       camara: formData.camara,
       cliente: clienteFromConsole || cliente,
+      tipoProblema: tipoProblemaSeleccionado,
+      tipoEquipo: formData.tipoEquipo,
+      nodo: nodoId,
+      sitio: sitioSeleccionado?.nombre ?? formData.sitio,
     };
 
     try {
       setIsSubmitting(true);
       const created = await createFallo(payload);
-      setFailures((prev) => [created, ...prev]);
+      setFailures((prev) => [transformFallo(created), ...prev]);
       alert('Registro guardado correctamente.');
       // FIX: Se restablece el formulario generando una nueva marca de fecha y hora combinada.
       setFormData(buildInitialFormData());
       setErrors({});
       setCliente(null);
       setClienteFromConsole(null);
-      setSitios([]);
+      setSitiosDisponibles([]);
     } catch (error) {
       console.error('Error al registrar el fallo técnico:', error);
       alert('No se pudo registrar el fallo técnico. Intente nuevamente.');
@@ -596,12 +864,22 @@ const TechnicalFailures: React.FC = () => {
       verificacionApertura: updatedFailure.verificacionApertura,
       verificacionCierre: updatedFailure.verificacionCierre,
       novedadDetectada: updatedFailure.novedadDetectada,
+      nodo_id: updatedFailure.nodo_id ?? null,
+      cliente_id: updatedFailure.cliente_id ?? null,
+      sitio_id: updatedFailure.sitio_id ?? null,
+      tipo_problema_id: updatedFailure.tipo_problema_id ?? null,
+      tipo_equipo_id: updatedFailure.tipo_equipo_id ?? null,
+      dispositivo_id: updatedFailure.dispositivo_id ?? null,
+      usuario_id: updatedFailure.usuario_id ?? null,
     };
 
     try {
       setIsSubmitting(true);
       const saved = await updateFallo(updatedFailure.id, payload);
-      setFailures((prev) => prev.map((f) => (f.id === saved.id ? saved : f)));
+      const transformed = transformFallo(saved);
+      setFailures((prev) =>
+        prev.map((f) => (f.id === transformed.id ? transformed : f))
+      );
       setIsModalOpen(false);
       setCurrentFailure(null);
       alert('Reporte actualizado correctamente.');
@@ -627,7 +905,9 @@ const TechnicalFailures: React.FC = () => {
           </p>
           <p>
             <span className="font-medium text-gray-600">Sitio(s) Asociado(s):</span>{' '}
-            {sitios.length > 0 ? sitios.join(', ') : 'N/A'}
+            {sitiosDisponibles.length > 0
+              ? sitiosDisponibles.map((sitio) => sitio.nombre).join(', ')
+              : 'N/A'}
           </p>
         </div>
       </div>
@@ -646,9 +926,9 @@ const TechnicalFailures: React.FC = () => {
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
         >
           <option value="">Seleccione...</option>
-          {sitios.map((s) => (
-            <option key={s} value={s}>
-              {s}
+          {sitiosDisponibles.map((sitio) => (
+            <option key={sitio.id} value={sitio.id}>
+              {sitio.nombre}
             </option>
           ))}
         </select>
@@ -715,7 +995,7 @@ const TechnicalFailures: React.FC = () => {
                   >
                     <option value="">Seleccione...</option>
                     {catalogos.nodos.map((n) => (
-                      <option key={n.id} value={n.nombre}>
+                      <option key={n.id} value={n.id}>
                         {n.nombre}
                       </option>
                     ))}

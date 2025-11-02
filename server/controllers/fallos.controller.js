@@ -1,206 +1,77 @@
 import db from "../config/db.js";
-import technicalFailuresSeed from "../data/technicalFailuresSeed.js";
 
 const pool = db;
 
-const formatDate = (value) => {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-  return date.toISOString().split("T")[0];
-};
+const falloSelectBase = `
+  SELECT
+    f.id,
+    COALESCE(f.descripcion, f.descripcion_fallo) AS descripcion,
+    COALESCE(f.estado, 'PENDIENTE') AS estado,
+    COALESCE(f.fecha_fallo, f.fecha) AS fecha_fallo,
+    f.nodo_id,
+    f.cliente_id,
+    f.tipo_problema_id,
+    f.usuario_id,
+    f.tipo_equipo_id,
+    f.dispositivo_id,
+    f.sitio_id,
+    n.nombre AS nodo,
+    c.nombre AS cliente,
+    COALESCE(tp.nombre, tp.descripcion) AS tipo_problema,
+    COALESCE(u.nombre_usuario, u.nombre_completo) AS usuario,
+    dept.nombre AS departamento,
+    f.fecha_resolucion,
+    f.hora_resolucion,
+    seguimiento.novedad_detectada,
+    COALESCE(apertura.nombre_usuario, apertura.nombre_completo) AS verificacion_apertura,
+    COALESCE(cierre.nombre_usuario, cierre.nombre_completo) AS verificacion_cierre,
+    disp.nombre AS dispositivo,
+    te.nombre AS tipo_equipo,
+    s.nombre AS sitio
+  FROM fallos_tecnicos f
+  LEFT JOIN nodos n ON n.id = f.nodo_id
+  LEFT JOIN clientes c ON c.id = f.cliente_id
+  LEFT JOIN catalogo_tipo_problema tp ON tp.id = f.tipo_problema_id
+  LEFT JOIN usuarios u ON u.id = f.usuario_id
+  LEFT JOIN departamentos_responsables dept ON dept.id = f.departamento_id
+  LEFT JOIN seguimiento_fallos seguimiento ON seguimiento.fallo_id = f.id
+  LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
+  LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
+  LEFT JOIN dispositivos disp ON disp.id = f.dispositivo_id
+  LEFT JOIN tipos_equipo te ON te.id = f.tipo_equipo_id
+  LEFT JOIN sitios s ON s.id = f.sitio_id
+`;
 
-const findUserId = (users, nameOrUsername) => {
-  if (!nameOrUsername) return null;
-  const normalized = String(nameOrUsername).trim().toLowerCase();
-  const user = users.find((u) =>
-    [u.nombre_usuario, u.nombre_completo]
-      .filter(Boolean)
-      .some((value) => String(value).trim().toLowerCase() === normalized)
-  );
-  return user ? user.id : null;
-};
-
-const seedFallosIfNeeded = async (client) => {
-  const countResult = await client.query(
-    "SELECT COUNT(*)::int AS total FROM fallos_tecnicos"
-  );
-  const total = countResult.rows[0]?.total ?? 0;
-
-  if (total > 0) {
-    return;
-  }
-
-  await client.query("BEGIN");
-
-  try {
-    const usersResult = await client.query(
-      "SELECT id, nombre_usuario, nombre_completo FROM usuarios"
-    );
-    const usuarios = usersResult.rows;
-
-    const departamentosResult = await client.query(
-      "SELECT id, nombre FROM departamentos_responsables"
-    );
-    const departamentos = departamentosResult.rows;
-
-    const tiposProblemaResult = await client.query(
-      "SELECT id, descripcion FROM catalogo_tipo_problema"
-    );
-    const tiposProblema = tiposProblemaResult.rows;
-
-    const consolasResult = await client.query(
-      "SELECT id, nombre FROM consolas"
-    );
-    const consolas = consolasResult.rows;
-
-    const defaultUserId = usuarios[0]?.id ?? null;
-    const defaultDepartmentId = departamentos[0]?.id ?? null;
-    const defaultTipoProblemaId = tiposProblema[0]?.id ?? null;
-    const defaultConsolaId = consolas[0]?.id ?? null;
-
-    const now = new Date();
-
-    for (const seed of technicalFailuresSeed) {
-      const responsableId =
-        findUserId(usuarios, seed.responsableUsername) ||
-        findUserId(usuarios, seed.responsable) ||
-        defaultUserId;
-
-      const departamentoId = departamentos.find((d) => {
-        return String(d.nombre).trim().toLowerCase() ===
-          String(seed.deptResponsable || "").trim().toLowerCase();
-      })?.id ?? defaultDepartmentId;
-
-      const tipoProblemaId = tiposProblema.find((tipo) => {
-        return String(tipo.descripcion).trim().toLowerCase() ===
-          String(seed.tipoProblema || seed.descripcion_fallo || "")
-            .trim()
-            .toLowerCase();
-      })?.id ?? defaultTipoProblemaId;
-
-      const consolaId = consolas.find((c) => {
-        return String(c.nombre).trim().toLowerCase() ===
-          String(seed.consola || "").trim().toLowerCase();
-      })?.id ?? defaultConsolaId;
-
-      const falloInsert = await client.query(
-        `INSERT INTO fallos_tecnicos (
-          fecha,
-          equipo_afectado,
-          descripcion_fallo,
-          responsable_id,
-          departamento_id,
-          tipo_problema_id,
-          consola_id,
-          fecha_resolucion,
-          hora_resolucion,
-          fecha_creacion,
-          fecha_actualizacion
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-        ) RETURNING id`,
-        [
-          seed.fecha,
-          seed.equipo_afectado,
-          seed.descripcion_fallo,
-          responsableId,
-          departamentoId,
-          tipoProblemaId,
-          consolaId,
-          seed.fechaResolucion || null,
-          seed.horaResolucion || null,
-          now, // FIX: omit estado because it is a generated column; PostgreSQL will derive it from fecha_resolucion.
-          now,
-        ]
-      );
-
-      const falloId = falloInsert.rows[0]?.id;
-
-      if (!falloId) {
-        continue;
-      }
-
-      const verificacionAperturaId =
-        findUserId(usuarios, seed.verificacionAperturaUsername) ||
-        findUserId(usuarios, seed.verificacionApertura);
-      const verificacionCierreId =
-        findUserId(usuarios, seed.verificacionCierreUsername) ||
-        findUserId(usuarios, seed.verificacionCierre);
-
-      if (
-        verificacionAperturaId ||
-        verificacionCierreId ||
-        seed.novedadDetectada
-      ) {
-        await client.query(
-          `INSERT INTO seguimiento_fallos (
-            fallo_id,
-            verificacion_apertura_id,
-            verificacion_cierre_id,
-            novedad_detectada,
-            fecha_creacion
-          ) VALUES ($1, $2, $3, $4, $5)`,
-          [
-            falloId,
-            verificacionAperturaId ?? null,
-            verificacionCierreId ?? null,
-            seed.novedadDetectada || null,
-            now,
-          ]
-        );
-      }
-    }
-
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  }
-};
-
-const mapFalloRowToDto = (row) => ({
-  id: String(row.id),
-  fecha: formatDate(row.fecha) || "",
-  equipo_afectado: row.equipo_afectado ?? "",
-  descripcion_fallo: row.descripcion_fallo ?? "",
-  responsable: row.responsable || "",
-  deptResponsable: row.departamento || undefined,
-  consola: row.consola || undefined, // FIX: expose consola name retrieved via the LEFT JOIN so the frontend can display it without additional lookups.
-  estado: row.estado || undefined,
-  fechaResolucion: formatDate(row.fecha_resolucion) || undefined,
-  horaResolucion: row.hora_resolucion || undefined,
-  verificacionApertura: row.verificacion_apertura || undefined,
-  verificacionCierre: row.verificacion_cierre || undefined,
-  novedadDetectada: row.novedad_detectada || undefined,
+const mapFalloRow = (row = {}) => ({
+  id: row.id,
+  descripcion: row.descripcion,
+  estado: row.estado,
+  fecha_fallo: row.fecha_fallo,
+  nodo: row.nodo,
+  nodo_id: row.nodo_id,
+  cliente: row.cliente,
+  cliente_id: row.cliente_id,
+  tipo_problema: row.tipo_problema,
+  tipo_problema_id: row.tipo_problema_id,
+  usuario: row.usuario,
+  usuario_id: row.usuario_id,
+  departamento: row.departamento,
+  fecha_resolucion: row.fecha_resolucion,
+  hora_resolucion: row.hora_resolucion,
+  verificacion_apertura: row.verificacion_apertura,
+  verificacion_cierre: row.verificacion_cierre,
+  novedad_detectada: row.novedad_detectada,
+  dispositivo: row.dispositivo,
+  dispositivo_id: row.dispositivo_id,
+  tipo_equipo: row.tipo_equipo,
+  tipo_equipo_id: row.tipo_equipo_id,
+  sitio: row.sitio,
+  sitio_id: row.sitio_id,
 });
 
 const fetchFalloById = async (client, id) => {
   const result = await client.query(
-    `SELECT
-        ft.id,
-        ft.fecha,
-        ft.equipo_afectado,
-        ft.descripcion_fallo,
-        COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
-        dept.nombre AS departamento,
-        ft.estado,
-        consola.nombre AS consola,
-        ft.fecha_resolucion,
-        ft.hora_resolucion,
-        seguimiento.novedad_detectada,
-        COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
-        COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre
-      FROM fallos_tecnicos ft
-      LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
-      LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
-      LEFT JOIN consolas consola ON consola.id = ft.consola_id
-      LEFT JOIN seguimiento_fallos seguimiento ON seguimiento.fallo_id = ft.id
-      LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
-      LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
-      WHERE ft.id = $1`,
+    `${falloSelectBase} WHERE f.id = $1`,
     [id]
   );
 
@@ -208,43 +79,58 @@ const fetchFalloById = async (client, id) => {
     return null;
   }
 
-  return mapFalloRowToDto(result.rows[0]);
+  return mapFalloRow(result.rows[0]);
 };
 
-export const getFallos = async (req, res) => {
+const isFutureDate = (value) => {
+  if (!value) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+  const now = new Date();
+  return date.getTime() > now.getTime();
+};
+
+const resolveUsuarioId = async (client, { usuarioId, usuarioNombre }) => {
+  if (usuarioId) {
+    return usuarioId;
+  }
+
+  if (!usuarioNombre) {
+    return null;
+  }
+
+  const result = await client.query(
+    `SELECT id FROM usuarios WHERE LOWER(nombre_usuario) = LOWER($1) LIMIT 1`,
+    [usuarioNombre]
+  );
+
+  return result.rows[0]?.id ?? null;
+};
+
+const normalizeNumero = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+export const getFallos = async (_req, res) => {
   const client = await pool.connect();
 
   try {
-    await seedFallosIfNeeded(client);
-
     const result = await client.query(
-      `SELECT
-        ft.id,
-        ft.fecha,
-        ft.equipo_afectado,
-        ft.descripcion_fallo,
-        COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
-        dept.nombre AS departamento,
-        ft.estado,
-        consola.nombre AS consola,
-        ft.fecha_resolucion,
-        ft.hora_resolucion
-      FROM fallos_tecnicos ft
-      LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
-      LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
-      LEFT JOIN consolas consola ON consola.id = ft.consola_id
-      ORDER BY ft.fecha DESC, ft.id DESC`
-    ); // FIX: rewritten query uses LEFT JOINs only with existing lookup tables to avoid failing when optional relations are missing and to provide the consola name.
+      `${falloSelectBase} ORDER BY COALESCE(f.fecha_fallo, f.fecha) DESC, f.id DESC`
+    );
 
-    const fallos = result.rows.map(mapFalloRowToDto);
-
-    return res.json(fallos);
+    return res.json(result.rows.map(mapFalloRow));
   } catch (error) {
-    console.error("Error al obtener los fallos técnicos:", error); // FIX: keep logging to help troubleshoot database errors without crashing the server.
-    return res.status(500).json({
-      message: "Error interno del servidor",
-      error: error.message,
-    }); // FIX: respond with a consistent 500 payload that the frontend can handle gracefully.
+    console.error("Error al obtener fallos:", error);
+    return res
+      .status(500)
+      .json({ message: "Error interno del servidor" });
   } finally {
     client.release();
   }
@@ -252,25 +138,39 @@ export const getFallos = async (req, res) => {
 
 export const createFallo = async (req, res) => {
   const {
-    fecha,
-    equipo_afectado,
+    descripcion,
     descripcion_fallo,
-    responsable,
-    deptResponsable,
-    tipoProblema,
-    consola,
-    fechaResolucion,
-    horaResolucion,
-    verificacionApertura,
-    verificacionCierre,
-    novedadDetectada,
-  } = req.body || {};
+    estado,
+    fecha_fallo,
+    nodo_id,
+    cliente_id,
+    tipo_problema_id,
+    usuario_id,
+    usuario,
+    tipo_equipo_id,
+    dispositivo_id,
+    sitio_id,
+  } = req.body ?? {};
 
-  if (!fecha || !equipo_afectado || !descripcion_fallo || !responsable) {
-    return res.status(400).json({
-      mensaje:
-        "Los campos fecha, equipo_afectado, descripcion_fallo y responsable son obligatorios.",
-    });
+  const nodoId = normalizeNumero(nodo_id);
+  const clienteId = normalizeNumero(cliente_id);
+
+  if (!nodoId || !clienteId) {
+    return res
+      .status(422)
+      .json({ message: "Debe seleccionar un nodo válido." });
+  }
+
+  if (!fecha_fallo) {
+    return res
+      .status(422)
+      .json({ message: "La fecha del fallo es obligatoria." });
+  }
+
+  if (isFutureDate(fecha_fallo)) {
+    return res
+      .status(422)
+      .json({ message: "La fecha del fallo no puede ser futura." });
   }
 
   const client = await pool.connect();
@@ -278,120 +178,67 @@ export const createFallo = async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    const usuariosResult = await client.query(
-      "SELECT id, nombre_usuario, nombre_completo FROM usuarios WHERE activo = true"
-    );
-    const usuarios = usuariosResult.rows;
-
-    const responsableId =
-      findUserId(usuarios, responsable) ||
-      findUserId(usuarios, req.body?.responsableUsername);
-
-    if (!responsableId) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({
-        mensaje: "No se encontró el usuario responsable proporcionado.",
-      });
-    }
-
-    const deptResult = await client.query(
-      "SELECT id, nombre FROM departamentos_responsables"
-    );
-    const dept = deptResult.rows;
-
-    const departamentoId = dept.find((d) => {
-      return String(d.nombre).trim().toLowerCase() ===
-        String(deptResponsable || "").trim().toLowerCase();
-    })?.id ?? null;
-
-    const tiposProblemaResult = await client.query(
-      "SELECT id, descripcion FROM catalogo_tipo_problema"
-    );
-    const tipos = tiposProblemaResult.rows;
-    const tipoProblemaId = tipos.find((t) => {
-      return String(t.descripcion).trim().toLowerCase() ===
-        String(tipoProblema || descripcion_fallo || "").trim().toLowerCase();
-    })?.id ?? null;
-
-    const consolasResult = await client.query(
-      "SELECT id, nombre FROM consolas"
-    );
-    const consolasRows = consolasResult.rows;
-    const consolaId = consolasRows.find((c) => {
-      return String(c.nombre).trim().toLowerCase() ===
-        String(consola || "").trim().toLowerCase();
-    })?.id ?? null;
+    const resolvedUsuarioId = await resolveUsuarioId(client, {
+      usuarioId: normalizeNumero(usuario_id),
+      usuarioNombre: usuario,
+    });
 
     const insertResult = await client.query(
       `INSERT INTO fallos_tecnicos (
-        fecha,
-        equipo_afectado,
-        descripcion_fallo,
-        responsable_id,
-        departamento_id,
-        tipo_problema_id,
-        consola_id,
-        fecha_resolucion,
-        hora_resolucion,
-        fecha_creacion,
-        fecha_actualizacion
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW()
-      ) RETURNING id`,
+          descripcion,
+          estado,
+          fecha_fallo,
+          nodo_id,
+          cliente_id,
+          tipo_problema_id,
+          usuario_id,
+          tipo_equipo_id,
+          dispositivo_id,
+          sitio_id,
+          fecha_creacion,
+          fecha_actualizacion
+        ) VALUES (
+          $1,
+          COALESCE($2, 'PENDIENTE'),
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9,
+          $10,
+          NOW(),
+          NOW()
+        )
+        RETURNING id`,
       [
-        fecha,
-        equipo_afectado,
-        descripcion_fallo,
-        responsableId,
-        departamentoId,
-        tipoProblemaId,
-        consolaId,
-        fechaResolucion || null,
-        horaResolucion || null, // FIX: exclude estado so the generated column is calculated by PostgreSQL during inserts.
+        descripcion ?? descripcion_fallo ?? "",
+        estado,
+        fecha_fallo,
+        nodoId,
+        clienteId,
+        normalizeNumero(tipo_problema_id),
+        resolvedUsuarioId,
+        normalizeNumero(tipo_equipo_id),
+        normalizeNumero(dispositivo_id),
+        normalizeNumero(sitio_id),
       ]
     );
 
     const falloId = insertResult.rows[0]?.id;
 
-    if (!falloId) {
-      throw new Error("No se pudo crear el fallo técnico.");
-    }
-
-    const verificacionAperturaId = findUserId(usuarios, verificacionApertura);
-    const verificacionCierreId = findUserId(usuarios, verificacionCierre);
-
-    if (
-      verificacionAperturaId ||
-      verificacionCierreId ||
-      novedadDetectada
-    ) {
-      await client.query(
-        `INSERT INTO seguimiento_fallos (
-          fallo_id,
-          verificacion_apertura_id,
-          verificacion_cierre_id,
-          novedad_detectada,
-          fecha_creacion
-        ) VALUES ($1, $2, $3, $4, NOW())`,
-        [
-          falloId,
-          verificacionAperturaId ?? null,
-          verificacionCierreId ?? null,
-          novedadDetectada || null,
-        ]
-      );
-    }
+    const fallo = await fetchFalloById(client, falloId);
 
     await client.query("COMMIT");
 
-    const fallo = await fetchFalloById(client, falloId);
     return res.status(201).json(fallo);
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("Error al crear el fallo técnico:", error);
     return res
       .status(500)
-      .json({ mensaje: "Ocurrió un error al crear el fallo técnico." });
+      .json({ message: "Error interno del servidor" });
   } finally {
     client.release();
   }
@@ -399,17 +246,41 @@ export const createFallo = async (req, res) => {
 
 export const updateFallo = async (req, res) => {
   const { id } = req.params;
-  const {
-    deptResponsable,
-    fechaResolucion,
-    horaResolucion,
-    verificacionApertura,
-    verificacionCierre,
-    novedadDetectada,
-  } = req.body || {};
 
   if (!id) {
-    return res.status(400).json({ mensaje: "El identificador del fallo es obligatorio." });
+    return res
+      .status(400)
+      .json({ message: "El identificador del fallo es obligatorio." });
+  }
+
+  const {
+    descripcion,
+    descripcion_fallo,
+    estado,
+    fecha_fallo,
+    nodo_id,
+    cliente_id,
+    tipo_problema_id,
+    usuario_id,
+    usuario,
+    tipo_equipo_id,
+    dispositivo_id,
+    sitio_id,
+  } = req.body ?? {};
+
+  const nodoId = normalizeNumero(nodo_id);
+  const clienteId = normalizeNumero(cliente_id);
+
+  if (!nodoId || !clienteId) {
+    return res
+      .status(422)
+      .json({ message: "Debe seleccionar un nodo válido." });
+  }
+
+  if (fecha_fallo && isFutureDate(fecha_fallo)) {
+    return res
+      .status(422)
+      .json({ message: "La fecha del fallo no puede ser futura." });
   }
 
   const client = await pool.connect();
@@ -417,104 +288,61 @@ export const updateFallo = async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    const existingResult = await client.query(
+    const existing = await client.query(
       "SELECT id FROM fallos_tecnicos WHERE id = $1",
       [id]
     );
 
-    if (!existingResult.rowCount) {
+    if (!existing.rowCount) {
       await client.query("ROLLBACK");
-      return res.status(404).json({ mensaje: "El fallo técnico no existe." });
+      return res.status(404).json({ message: "El fallo técnico no existe." });
     }
 
-    const deptResult = await client.query(
-      "SELECT id, nombre FROM departamentos_responsables"
-    );
-    const dept = deptResult.rows;
-
-    const departamentoId = dept.find((d) => {
-      return String(d.nombre).trim().toLowerCase() ===
-        String(deptResponsable || "").trim().toLowerCase();
-    })?.id ?? null;
-
-    const estado = fechaResolucion ? "RESUELTO" : "PENDIENTE";
+    const resolvedUsuarioId = await resolveUsuarioId(client, {
+      usuarioId: normalizeNumero(usuario_id),
+      usuarioNombre: usuario,
+    });
 
     await client.query(
       `UPDATE fallos_tecnicos
-         SET departamento_id = $1,
-             fecha_resolucion = $2,
-             hora_resolucion = $3,
-             estado = $4,
-             fecha_actualizacion = NOW()
-       WHERE id = $5`,
+          SET descripcion = $1,
+              estado = COALESCE($2, estado),
+              fecha_fallo = COALESCE($3, fecha_fallo),
+              nodo_id = $4,
+              cliente_id = $5,
+              tipo_problema_id = $6,
+              usuario_id = COALESCE($7, usuario_id),
+              tipo_equipo_id = $8,
+              dispositivo_id = $9,
+              sitio_id = $10,
+              fecha_actualizacion = NOW()
+        WHERE id = $11`,
       [
-        departamentoId,
-        fechaResolucion || null,
-        horaResolucion || null,
+        descripcion ?? descripcion_fallo ?? "",
         estado,
+        fecha_fallo,
+        nodoId,
+        clienteId,
+        normalizeNumero(tipo_problema_id),
+        resolvedUsuarioId,
+        normalizeNumero(tipo_equipo_id),
+        normalizeNumero(dispositivo_id),
+        normalizeNumero(sitio_id),
         id,
       ]
     );
 
-    const usuariosResult = await client.query(
-      "SELECT id, nombre_usuario, nombre_completo FROM usuarios WHERE activo = true"
-    );
-    const usuarios = usuariosResult.rows;
-
-    const verificacionAperturaId = findUserId(usuarios, verificacionApertura);
-    const verificacionCierreId = findUserId(usuarios, verificacionCierre);
-
-    const seguimientoResult = await client.query(
-      "SELECT id FROM seguimiento_fallos WHERE fallo_id = $1",
-      [id]
-    );
-
-    if (seguimientoResult.rowCount) {
-      await client.query(
-        `UPDATE seguimiento_fallos
-           SET verificacion_apertura_id = $1,
-               verificacion_cierre_id = $2,
-               novedad_detectada = $3
-         WHERE fallo_id = $4`,
-        [
-          verificacionAperturaId || null,
-          verificacionCierreId || null,
-          novedadDetectada || null,
-          id,
-        ]
-      );
-    } else if (
-      verificacionAperturaId ||
-      verificacionCierreId ||
-      novedadDetectada
-    ) {
-      await client.query(
-        `INSERT INTO seguimiento_fallos (
-          fallo_id,
-          verificacion_apertura_id,
-          verificacion_cierre_id,
-          novedad_detectada,
-          fecha_creacion
-        ) VALUES ($1, $2, $3, $4, NOW())`,
-        [
-          id,
-          verificacionAperturaId || null,
-          verificacionCierreId || null,
-          novedadDetectada || null,
-        ]
-      );
-    }
+    const fallo = await fetchFalloById(client, id);
 
     await client.query("COMMIT");
 
-    const fallo = await fetchFalloById(client, id);
     return res.json(fallo);
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("Error al actualizar el fallo técnico:", error);
     return res
       .status(500)
-      .json({ mensaje: "Ocurrió un error al actualizar el fallo técnico." });
+      .json({ message: "Error interno del servidor" });
   } finally {
     client.release();
   }
@@ -524,7 +352,9 @@ export const getFallo = async (req, res) => {
   const { id } = req.params;
 
   if (!id) {
-    return res.status(400).json({ mensaje: "El identificador del fallo es obligatorio." });
+    return res
+      .status(400)
+      .json({ message: "El identificador del fallo es obligatorio." });
   }
 
   const client = await pool.connect();
@@ -533,13 +363,15 @@ export const getFallo = async (req, res) => {
     const fallo = await fetchFalloById(client, id);
 
     if (!fallo) {
-      return res.status(404).json({ mensaje: "El fallo técnico no existe." });
+      return res.status(404).json({ message: "El fallo técnico no existe." });
     }
 
     return res.json(fallo);
   } catch (error) {
     console.error("Error al obtener el fallo técnico:", error);
-    return res.status(500).json({ mensaje: "Ocurrió un error al obtener el fallo técnico." });
+    return res
+      .status(500)
+      .json({ message: "Error interno del servidor" });
   } finally {
     client.release();
   }
@@ -549,7 +381,9 @@ export const deleteFallo = async (req, res) => {
   const { id } = req.params;
 
   if (!id) {
-    return res.status(400).json({ mensaje: "El identificador del fallo es obligatorio." });
+    return res
+      .status(400)
+      .json({ message: "El identificador del fallo es obligatorio." });
   }
 
   const client = await pool.connect();
@@ -557,25 +391,30 @@ export const deleteFallo = async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    await client.query("DELETE FROM seguimiento_fallos WHERE fallo_id = $1", [id]);
-    const deleteResult = await client.query(
+    await client.query("DELETE FROM seguimiento_fallos WHERE fallo_id = $1", [
+      id,
+    ]);
+
+    const result = await client.query(
       "DELETE FROM fallos_tecnicos WHERE id = $1 RETURNING id",
       [id]
     );
 
-    if (!deleteResult.rowCount) {
+    if (!result.rowCount) {
       await client.query("ROLLBACK");
-      return res.status(404).json({ mensaje: "El fallo técnico no existe." });
+      return res.status(404).json({ message: "El fallo técnico no existe." });
     }
 
     await client.query("COMMIT");
-    return res.json({ mensaje: "Fallo técnico eliminado correctamente." });
+
+    return res.json({ message: "Fallo técnico eliminado correctamente." });
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("Error al eliminar el fallo técnico:", error);
-    return res.status(500).json({ mensaje: "Ocurrió un error al eliminar el fallo técnico." });
+    return res
+      .status(500)
+      .json({ message: "Error interno del servidor" });
   } finally {
     client.release();
   }
 };
-
