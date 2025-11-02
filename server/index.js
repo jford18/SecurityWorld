@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import app from "./app.js";
+import authRoutes from "./routes/auth.routes.js";
 // NEW: Incorporamos las rutas de roles al servidor principal.
 import rolesRoutes from "./roles.routes.js";
 import fallosRoutes from "./routes/fallos.routes.js";
@@ -44,6 +45,8 @@ if (fs.existsSync(envPath)) {
 
 const PORT = Number(process.env.PORT) || 3000;
 
+app.use("/api/auth", authRoutes);
+
 // NEW: Registro del módulo de mantenimiento de roles.
 app.use("/api/roles", rolesRoutes);
 app.use("/api/consolas", consolasRoutes);
@@ -65,11 +68,11 @@ app.use("/api/usuario_consolas", usuarioConsolasRoutes);
 
 
 app.use((req, res) => {
-  res.status(404).json({ message: "Ruta no encontrada" });
+  res.status(404).json({ message: "No encontrado" });
 });
 
 app.use((err, req, res, next) => {
-  console.error("Error global:", err);
+  console.error("Unhandled:", err?.stack || err);
   res.status(500).json({ message: "Error interno del servidor" });
 });
 
