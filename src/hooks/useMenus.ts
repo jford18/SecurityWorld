@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import axios from 'axios';
-import { API_BASE_URL } from '../services/api';
+import api, { API_BASE_URL } from '../services/api';
 
 export interface MenuNode {
   id: number;
@@ -45,10 +44,11 @@ export const useMenus = (token: string | null, roleId: number | null) => {
 
     setLoading(true);
     try {
-      const response = await axios.get<MenuNode[]>(`${API_BASE_URL}/api/menus`, {
+      const response = await api.get<MenuNode[]>(`/api/menus`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        baseURL: API_BASE_URL,
       });
 
       const parsedMenus = ensureArray(response.data);

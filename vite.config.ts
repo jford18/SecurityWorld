@@ -17,7 +17,11 @@ export default defineConfig({
   server: {
     proxy: {
       // FIX: El proxy reenvía las llamadas /api al backend en el puerto 3000 para evitar el 404 del servidor de desarrollo en 5173.
-      '/api': 'http://localhost:3000',
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
 })
