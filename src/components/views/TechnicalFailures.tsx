@@ -1,6 +1,6 @@
 import TechnicalFailuresOperador from './TechnicalFailuresOperador';
 import TechnicalFailuresSupervisor from './TechnicalFailuresSupervisor';
-import { useSession } from '@/components/context/SessionContext';
+import { useSession } from '../context/SessionContext';
 
 export default function TechnicalFailures() {
   const { activeRole } = useSession();
