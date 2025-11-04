@@ -10,11 +10,14 @@
     "server": "node server/index.js"
   },
   "dependencies": {
+    "@types/lodash": "^4.17.20",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "date-fns": "^4.1.0",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
+    "lodash": "^4.17.21",
+    "lucide-react": "^0.552.0",
     "pg": "^8.11.5",
     "react": "^18.2.0",
     "react-datepicker": "^8.8.0",

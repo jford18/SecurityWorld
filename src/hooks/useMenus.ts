@@ -6,6 +6,8 @@ export interface MenuNode {
   nombre: string;
   icono: string | null;
   ruta: string | null;
+  seccion: string;
+  orden: number;
   hijos: MenuNode[];
 }
 
@@ -26,6 +28,8 @@ const ensureArray = (value: unknown): MenuNode[] => {
       nombre: item.nombre,
       icono: 'icono' in item ? (item.icono as string | null) : null,
       ruta: 'ruta' in item ? (item.ruta as string | null) : null,
+      seccion: 'seccion' in item ? (item.seccion as string) : 'SIN SECCIÓN',
+      orden: 'orden' in item ? (item.orden as number) : 0,
       hijos: ensureArray((item as { hijos?: unknown }).hijos ?? []),
     }));
 };
