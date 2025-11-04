@@ -157,9 +157,7 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ menus }) => {
     <div>
       {groupedAndSortedMenus.map(({ seccion, items }) => (
         <div key={seccion} className="mb-4">
-          <h3 className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-            {seccion}
-          </h3>
+          <h4 className="text-gray-400 text-sm mt-3">{seccion}</h4>
           <ul className="space-y-1">
             {items.map((menu) => (
               <SidebarMenuItem
