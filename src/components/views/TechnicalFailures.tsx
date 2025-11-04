@@ -1,10 +1,9 @@
 import TechnicalFailuresOperador from './TechnicalFailuresOperador';
 import TechnicalFailuresSupervisor from './TechnicalFailuresSupervisor';
-import { useSession } from '@/components/context/SessionContext';
+import { useSession } from '../context/SessionContext';
 
 export default function TechnicalFailures() {
-  const { session } = useSession();
-  const activeRole = session.roleName?.toLowerCase();
+  const { activeRole } = useSession();
 
   if (activeRole === 'operador') return <TechnicalFailuresOperador />;
   if (activeRole === 'supervisor') return <TechnicalFailuresSupervisor />;

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useSession } from '@/components/context/SessionContext';
+import { useSession } from '../context/SessionContext';
 import FechaHoraFalloPicker from '../ui/FechaHoraFalloPicker';
 import {
   TechnicalFailure,
@@ -10,10 +10,10 @@ import {
 import {
   fetchFallos,
   createFallo,
+  updateFallo,
   fetchCatalogos,
   TechnicalFailurePayload,
 } from '../../services/fallosService';
-import TechnicalFailuresHistory from './TechnicalFailuresHistory';
 
 type AffectationType = 'Nodo' | 'Punto' | 'Equipo' | 'Masivo' | '';
 
@@ -651,12 +651,6 @@ const TechnicalFailuresOperador: React.FC = () => {
           </div>
         </form>
       </div>
-      <TechnicalFailuresHistory
-        failures={failures}
-        isLoading={isLoading}
-        activeRole={session.roleName?.toLowerCase()}
-        handleEdit={() => {}} // No-op for operator
-      />
     </div>
   );
 };
