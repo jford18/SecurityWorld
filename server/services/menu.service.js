@@ -6,15 +6,12 @@ import pool from "../db.js";
  */
 export const getMenusByRole = async (roleId) => {
   const query = `
-    SELECT m.id, m.nombre, m.icono, m.ruta
+    SELECT m.id, m.nombre, m.icono, m.ruta, m.seccion, m.orden
     FROM public.menus m
     INNER JOIN public.rol_menu rm ON rm.menu_id = m.id
     WHERE rm.rol_id = $1 AND rm.activo = true
-    ORDER BY m.id;
+    ORDER BY m.seccion, m.orden;
   `;
-
-  // Nota: Si en el futuro se agrega un campo id_padre a public.menus,
-  // se podría construir aquí la jerarquía padre → hijos antes de devolver los datos.
 
   const { rows } = await pool.query(query, [roleId]);
   return rows;
