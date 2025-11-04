@@ -55,9 +55,14 @@ const RequireAuth: React.FC<{ children: React.ReactElement }> = ({ children }) =
   return children;
 };
 
+import TechnicalFailuresOperador from './components/views/TechnicalFailuresOperador';
+import TechnicalFailuresSupervisor from './components/views/TechnicalFailuresSupervisor';
+
 const routeConfig: Array<{ path: string; element: React.ReactElement }> = [
   { path: '/dashboard', element: <DashboardHome /> },
   { path: '/fallos', element: <TechnicalFailures /> },
+  { path: '/fallos/operador', element: <TechnicalFailuresOperador /> },
+  { path: '/fallos/supervisor', element: <TechnicalFailuresSupervisor /> },
   { path: '/intrusiones', element: <Intrusions /> },
   { path: '/reportes/alertas-turno', element: <AlertsReportByShift /> },
   { path: '/administracion/consolas', element: <ConsolasScreen /> },
