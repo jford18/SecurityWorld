@@ -33,6 +33,18 @@ export type UsuarioConsolaAsignacion = {
   fecha_asignacion: string;
 };
 
+export type ConsolaAsignada = {
+  id: number;
+  nombre: string;
+};
+
+export type UsuarioConsolaAgrupado = {
+  usuario_id: number;
+  nombre_usuario: string;
+  consolas: ConsolaAsignada[];
+  fecha_asignacion: string;
+};
+
 const dropdownClasses =
   'w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-2 focus:ring-[#1C2E4A]/40';
 const buttonBaseClasses =
@@ -42,6 +54,9 @@ const AsignacionConsolasScreen: React.FC = () => {
   const [usuarios, setUsuarios] = useState<UsuarioOption[]>([]);
   const [consolas, setConsolas] = useState<ConsolaOption[]>([]);
   const [asignaciones, setAsignaciones] = useState<UsuarioConsolaAsignacion[]>([]);
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UsuarioConsolaAgrupado | null>(null);
 
   const [selectedUsuarioId, setSelectedUsuarioId] = useState<number | ''>('');
   const [selectedConsolas, setSelectedConsolas] = useState<SelectOption[]>([]);
@@ -145,13 +160,28 @@ const AsignacionConsolasScreen: React.FC = () => {
     loadData();
   }, [loadData]);
 
-  const asignacionesOrdenadas = useMemo(
-    () =>
-      [...asignaciones].sort((a, b) =>
+  const asignacionesAgrupadas = useMemo(() => {
+    const agrupado = asignaciones.reduce<Record<number, UsuarioConsolaAgrupado>>((acc, item) => {
+      if (!acc[item.usuario_id]) {
+        acc[item.usuario_id] = {
+          usuario_id: item.usuario_id,
+          nombre_usuario: item.nombre_usuario,
+          consolas: [],
+          fecha_asignacion: item.fecha_asignacion,
+        };
+      }
+      acc[item.usuario_id].consolas.push({
+        id: item.consola_id,
+        nombre: item.consola_nombre,
+      });
+      return acc;
+    }, {});
+
+    return Object.values(agrupado).sort(
+      (a, b) =>
         new Date(b.fecha_asignacion).getTime() - new Date(a.fecha_asignacion).getTime()
-      ),
-    [asignaciones]
-  );
+    );
+  }, [asignaciones]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -186,22 +216,37 @@ const AsignacionConsolasScreen: React.FC = () => {
     }
   };
 
-  const handleDelete = async (usuarioId: number, consolaId: number) => {
-    const confirmed = window.confirm('¿Eliminar asignación seleccionada?');
-    if (!confirmed) {
-      return;
+  const handleEdit = (usuario: UsuarioConsolaAgrupado) => {
+    setEditingUser(usuario);
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateConsolas = async (
+    user: UsuarioConsolaAgrupado,
+    consolasIds: (number | string)[]
+  ) => {
+    const consolasAEliminar =
+      user.consolas.filter((c) => !consolasIds.includes(c.id)).map((c) => c.id) ?? [];
+
+    if (consolasIds.length === 0) {
+      const confirmed = window.confirm('¿Desea quitar todas las consolas del usuario?');
+      if (!confirmed) return;
     }
 
     setFeedbackMessage('');
     setErrorMessage('');
 
     try {
-      await deleteAsignacion(usuarioId, consolaId);
-      setFeedbackMessage('Asignación eliminada correctamente.');
+      await Promise.all(
+        consolasAEliminar.map((consolaId) => deleteAsignacion(user.usuario_id, consolaId))
+      );
+      setFeedbackMessage('Asignaciones actualizadas correctamente.');
       await loadAsignaciones();
+      setIsEditModalOpen(false);
+      setEditingUser(null);
     } catch (error) {
-      console.error('Error al eliminar asignación usuario-consola:', error);
-      setErrorMessage((error as Error).message || 'No se pudo eliminar la asignación');
+      console.error('Error al actualizar asignaciones:', error);
+      setErrorMessage((error as Error).message || 'No se pudo actualizar las asignaciones');
     }
   };
 
@@ -226,6 +271,7 @@ const AsignacionConsolasScreen: React.FC = () => {
   );
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-bold text-gray-800">Asignación de Usuarios ↔ Consolas</h1>
@@ -325,20 +371,29 @@ const AsignacionConsolasScreen: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
-              {asignacionesOrdenadas.length === 0 ? (
+              {asignacionesAgrupadas.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-4 py-6 text-center text-gray-500">
                     No hay asignaciones registradas actualmente.
                   </td>
                 </tr>
               ) : (
-                asignacionesOrdenadas.map((item) => (
-                  <tr key={`${item.usuario_id}-${item.consola_id}`}>
+                asignacionesAgrupadas.map((item) => (
+                  <tr key={item.usuario_id}>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900">{item.nombre_usuario}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-gray-700">{item.consola_nombre}</div>
+                      <div className="flex flex-wrap gap-1">
+                        {item.consolas.map((c) => (
+                          <span
+                            key={c.id}
+                            className="inline-block rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700"
+                          >
+                            {c.nombre}
+                          </span>
+                        ))}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <time className="text-gray-500">
@@ -351,10 +406,10 @@ const AsignacionConsolasScreen: React.FC = () => {
                     <td className="px-4 py-3 text-right">
                       <button
                         type="button"
-                        className={`${buttonBaseClasses} border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 focus:ring-red-200`}
-                        onClick={() => handleDelete(item.usuario_id, item.consola_id)}
+                        className={`${buttonBaseClasses} border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 focus:ring-blue-200`}
+                        onClick={() => handleEdit(item)}
                       >
-                        Eliminar
+                        Editar
                       </button>
                     </td>
                   </tr>
@@ -365,7 +420,107 @@ const AsignacionConsolasScreen: React.FC = () => {
         </div>
       </div>
     </div>
+
+{isEditModalOpen && editingUser && (
+  <EditUserConsolesModal
+    isOpen={isEditModalOpen}
+    user={editingUser}
+    onClose={() => {
+      setIsEditModalOpen(false);
+      setEditingUser(null);
+    }}
+    onSave={handleUpdateConsolas}
+  />
+)}
+</>
+);
+};
+
+type EditUserConsolesModalProps = {
+  isOpen: boolean;
+  user: UsuarioConsolaAgrupado;
+  onClose: () => void;
+  onSave: (user: UsuarioConsolaAgrupado, consolaIds: (number | string)[]) => void;
+};
+
+const EditUserConsolesModal: React.FC<EditUserConsolesModalProps> = ({
+  isOpen,
+  user,
+  onClose,
+  onSave,
+}) => {
+  const [selectedConsolas, setSelectedConsolas] = useState<(number | string)[]>(
+    user.consolas.map((c) => c.id)
   );
+
+  const handleToggleConsola = (consolaId: number) => {
+    setSelectedConsolas((prev) =>
+      prev.includes(consolaId) ? prev.filter((id) => id !== consolaId) : [...prev, consolaId]
+    );
+  };
+
+  const handleSave = () => {
+    onSave(user, selectedConsolas);
+  };
+
+if (!isOpen) return null;
+
+return (
+  <div
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+    aria-labelledby="modal-title"
+    role="dialog"
+    aria-modal="true"
+  >
+    <div className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+      <h2 id="modal-title" className="text-lg font-semibold text-gray-800">
+        Editar consolas para: <br /> <span className="font-bold">{user.nombre_usuario}</span>
+      </h2>
+
+      <div className="mt-4 space-y-2">
+        <p className="text-sm text-gray-600">
+          Seleccione las consolas que desea mantener asignadas:
+        </p>
+        <div className="max-h-60 overflow-y-auto rounded-md border border-gray-200 p-2">
+          {user.consolas.map((consola) => (
+            <div key={consola.id} className="flex items-center justify-between p-2">
+              <label
+                htmlFor={`consola-${consola.id}`}
+                className="flex cursor-pointer items-center justify-between p-2"
+              >
+                <span className="text-sm text-gray-700">{consola.nombre}</span>
+                <input
+                  type="checkbox"
+                  id={`consola-${consola.id}`}
+                  checked={selectedConsolas.includes(consola.id)}
+                  onChange={() => handleToggleConsola(consola.id)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-6 flex justify-end space-x-2">
+        <button
+          type="button"
+          className={`${buttonBaseClasses} bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-200`}
+          onClick={onClose}
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          className={`${buttonBaseClasses} bg-blue-500 text-white hover:bg-blue-600 focus:ring-blue-300`}
+          onClick={handleSave}
+        >
+          Guardar cambios
+        </button>
+      </div>
+    </div>
+  </div>
+);
 };
 
 export default AsignacionConsolasScreen;
