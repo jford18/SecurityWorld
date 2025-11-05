@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Select from 'react-select';
 import { getUsuarios } from '../../services/usuariosService';
 import { getConsolas } from '../../services/consolasService';
 import {
@@ -16,6 +17,12 @@ export type UsuarioOption = {
 export type ConsolaOption = {
   id: number;
   nombre: string;
+};
+
+// Type for react-select options
+type SelectOption = {
+  value: number | string;
+  label: string;
 };
 
 export type UsuarioConsolaAsignacion = {
@@ -37,7 +44,7 @@ const AsignacionConsolasScreen: React.FC = () => {
   const [asignaciones, setAsignaciones] = useState<UsuarioConsolaAsignacion[]>([]);
 
   const [selectedUsuarioId, setSelectedUsuarioId] = useState<number | ''>('');
-  const [selectedConsolaId, setSelectedConsolaId] = useState<number | ''>('');
+  const [selectedConsolas, setSelectedConsolas] = useState<SelectOption[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -123,12 +130,9 @@ const AsignacionConsolasScreen: React.FC = () => {
         return usuariosNormalizados.length > 0 ? usuariosNormalizados[0].id : '';
       });
 
-      setSelectedConsolaId((prev) => {
-        if (prev !== '' && consolasNormalizadas.some((consola) => consola.id === prev)) {
-          return prev;
-        }
-        return consolasNormalizadas.length > 0 ? consolasNormalizadas[0].id : '';
-      });
+      // Reset selected consolas on data reload
+      setSelectedConsolas([]);
+
     } catch (error) {
       console.error('Error al cargar asignaciones usuario-consola:', error);
       setErrorMessage((error as Error).message || 'No se pudo cargar la información');
@@ -152,8 +156,8 @@ const AsignacionConsolasScreen: React.FC = () => {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (selectedUsuarioId === '' || selectedConsolaId === '') {
-      setErrorMessage('Seleccione un usuario y una consola.');
+    if (selectedUsuarioId === '' || selectedConsolas.length === 0) {
+      setErrorMessage('Seleccione un usuario y al menos una consola.');
       return;
     }
 
@@ -162,9 +166,18 @@ const AsignacionConsolasScreen: React.FC = () => {
     setErrorMessage('');
 
     try {
-      await createAsignacion({ usuario_id: selectedUsuarioId, consola_id: selectedConsolaId });
-      setFeedbackMessage('Asignación creada correctamente.');
+      const asignacionesPromises = selectedConsolas.map(consola =>
+        createAsignacion({
+          usuario_id: selectedUsuarioId,
+          consola_id: consola.value as number,
+        })
+      );
+
+      await Promise.all(asignacionesPromises);
+
+      setFeedbackMessage('Asignación(es) creada(s) correctamente.');
       await loadAsignaciones();
+      setSelectedConsolas([]); // Clear selection after successful submission
     } catch (error) {
       console.error('Error al crear asignación usuario-consola:', error);
       setErrorMessage((error as Error).message || 'No se pudo crear la asignación');
@@ -191,6 +204,26 @@ const AsignacionConsolasScreen: React.FC = () => {
       setErrorMessage((error as Error).message || 'No se pudo eliminar la asignación');
     }
   };
+
+  const consolaOptions: SelectOption[] = useMemo(
+    () => consolas.map((c) => ({ value: c.id, label: c.nombre })),
+    [consolas]
+  );
+
+  const handleSelectConsolas = (selected: readonly SelectOption[] | null) => {
+    const selectedOptions = selected ? [...selected] : [];
+    if (selectedOptions.some(option => option.value === '__ALL__')) {
+      // If "Select All" is selected, select all individual consoles
+      setSelectedConsolas(consolaOptions);
+    } else {
+      setSelectedConsolas(selectedOptions);
+    }
+  };
+
+  const allConsolaOptions: SelectOption[] = useMemo(
+    () => [{ value: '__ALL__', label: 'Seleccionar todas las consolas' }, ...consolaOptions],
+    [consolaOptions]
+  );
 
   return (
     <div className="space-y-6">
@@ -233,23 +266,18 @@ const AsignacionConsolasScreen: React.FC = () => {
           <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="consolaId">
             Consola
           </label>
-          <select
+          <Select
             id="consolaId"
-            className={dropdownClasses}
-            value={selectedConsolaId === '' ? '' : selectedConsolaId}
-            onChange={(event) => {
-              const value = event.target.value;
-              setSelectedConsolaId(value ? Number(value) : '');
-            }}
-            disabled={loading || consolas.length === 0}
-          >
-            {consolas.length === 0 && <option value="">Sin consolas disponibles</option>}
-            {consolas.map((consola) => (
-              <option key={consola.id} value={consola.id}>
-                {consola.nombre}
-              </option>
-            ))}
-          </select>
+            isMulti
+            options={allConsolaOptions}
+            value={selectedConsolas}
+            onChange={handleSelectConsolas}
+            isDisabled={loading || consolas.length === 0}
+            placeholder="Seleccione una o más consolas"
+            noOptionsMessage={() => 'No hay consolas disponibles'}
+            className="react-select-container"
+            classNamePrefix="react-select"
+          />
         </div>
 
         <button
