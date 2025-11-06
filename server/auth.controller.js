@@ -50,10 +50,6 @@ export async function loginUser(req, res) {
         .json({ mensaje: "El usuario no tiene roles asignados." });
     }
 
-    const consolesQuery = "SELECT id, nombre FROM consolas ORDER BY nombre";
-    const consolesResult = await pool.query(consolesQuery);
-    const consolas = consolesResult.rows;
-
     if (!process.env.JWT_SECRET) {
       console.warn(
         "JWT_SECRET no está definido. El token no será firmado de manera segura."
@@ -89,7 +85,6 @@ export async function loginUser(req, res) {
         roles,
         rol_activo: rolActivo,
       },
-      consolas,
     });
   } catch (error) {
     console.error("Error durante el inicio de sesión:", error);
