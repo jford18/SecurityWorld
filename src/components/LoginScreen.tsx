@@ -88,33 +88,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
             : [];
 
         setRoleTokens(tokensToUse);
-        setSelectedRoleId(primaryRoleId ?? ''); // FIX: Mostrar el rol principal en la segunda pantalla.
+        setSelectedRoleId(primaryRoleId ?? '');
 
-        try {
-          const consolesResponse = await fetch(
-            `http://localhost:3000/api/auth/consolas/${usuario.id}`
-          );
-
-          if (!consolesResponse.ok) {
-            throw new Error('No se pudieron cargar las consolas del usuario.');
-          }
-
-          const consolesData: { consolas?: string[] } = await consolesResponse.json();
-          const fetchedConsoles = consolesData.consolas ?? [];
-
-          setConsoleOptions(fetchedConsoles); // FIX: Poblar opciones de consolas para la segunda fase.
-          const defaultConsole = fetchedConsoles[0] ?? '';
-          setSelectedConsole(defaultConsole); // FIX: Preseleccionar la primera consola disponible tras el login.
-        } catch (consolesError) {
-          console.error('Error al cargar las consolas del usuario:', consolesError);
-          setError('Error de autenticación'); // FIX: Notificar problema al cargar consolas antes de avanzar a la segunda fase.
-          setConsoleOptions([]);
-          setSelectedConsole('');
-          setUsuarioAutenticado(null); // FIX: Revertir autenticación si falla la carga de consolas.
-          setAvailableRoles([]);
-          setRoleTokens([]);
-          setSelectedRoleId('');
-        }
+        const fetchedConsoles = Array.isArray(data.consolas)
+          ? data.consolas.map((c) => c.nombre)
+          : [];
+        setConsoleOptions(fetchedConsoles);
+        const defaultConsole = fetchedConsoles[0] ?? '';
+        setSelectedConsole(defaultConsole);
       } catch (error) {
         console.error('Error al iniciar sesión:', error);
         setError('Error de autenticación'); // FIX: Unificar mensaje de error en fallos de red o servidor durante autenticación.

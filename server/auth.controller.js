@@ -50,6 +50,10 @@ export async function loginUser(req, res) {
         .json({ mensaje: "El usuario no tiene roles asignados." });
     }
 
+    const consolesQuery = "SELECT id, nombre FROM consolas ORDER BY nombre";
+    const consolesResult = await pool.query(consolesQuery);
+    const consolas = consolesResult.rows;
+
     if (!process.env.JWT_SECRET) {
       console.warn(
         "JWT_SECRET no está definido. El token no será firmado de manera segura."
@@ -85,6 +89,7 @@ export async function loginUser(req, res) {
         roles,
         rol_activo: rolActivo,
       },
+      consolas,
     });
   } catch (error) {
     console.error("Error durante el inicio de sesión:", error);
@@ -94,31 +99,4 @@ export async function loginUser(req, res) {
   }
 }
 
-export async function getUserConsoles(req, res) {
-  const { usuario_id } = req.params;
-
-  if (!usuario_id) {
-    return res.status(400).json({ mensaje: "El usuario es requerido." });
-  }
-
-  try {
-    const consolesQuery = `
-      SELECT c.nombre
-      FROM usuario_consolas uc
-      INNER JOIN consolas c ON c.id = uc.consola_id
-      WHERE uc.usuario_id = $1
-      ORDER BY c.nombre
-    `;
-
-    const { rows } = await pool.query(consolesQuery, [usuario_id]);
-    const consolas = rows.map((row) => row.nombre);
-
-    return res.status(200).json({ consolas });
-  } catch (error) {
-    console.error("Error al obtener las consolas del usuario:", error);
-    return res
-      .status(500)
-      .json({ mensaje: "Ocurrió un error al obtener las consolas del usuario." });
-  }
-}
 
