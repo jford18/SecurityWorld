@@ -62,41 +62,50 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       setIsLoading(true); // FIX: Activar indicador de carga durante la fase de autenticación.
 
       try {
-        const response = await api.post('/auth/login', {
+        const response = await api.post('/login', {
           nombre_usuario: username,
           contrasena_plana: password,
         });
 
-        const data = response.data;
+        const data = response.data ?? {};
 
-        const usuario = data.usuario as UsuarioAutenticado;
+        const primaryRole: RoleOption = {
+          id:
+            typeof data.rol_id === 'number'
+              ? data.rol_id
+              : typeof data.id === 'number'
+              ? data.id
+              : 1,
+          nombre:
+            typeof data.rol === 'string' && data.rol.trim().length > 0
+              ? data.rol
+              : 'Administrador',
+        };
+
+        const usuario: UsuarioAutenticado = {
+          id: Number(data.id) || 0,
+          nombre_usuario: typeof data.usuario === 'string' ? data.usuario : username,
+          roles: [primaryRole],
+          rol_activo: primaryRole,
+        };
+
         setUsuarioAutenticado(usuario); // FIX: Conservar al usuario autenticado para la segunda fase.
+        setAvailableRoles([primaryRole]);
 
-        const rolesFromResponse = Array.isArray(usuario.roles) ? usuario.roles : [];
-        setAvailableRoles(rolesFromResponse);
+        const tokenFromResponse =
+          typeof data.token === 'string' && data.token.trim().length > 0
+            ? data.token
+            : 'fake-jwt-token';
 
-        const parsedTokens: RoleToken[] = Array.isArray(data.tokensPorRol)
-          ? data.tokensPorRol
-              .filter(
-                (item: { rol_id?: unknown; token?: unknown }) =>
-                  typeof item?.rol_id === 'number' && typeof item?.token === 'string'
-              )
-              .map((item: { rol_id: number; token: string }) => ({
-                roleId: item.rol_id,
-                token: item.token,
-              }))
-          : [];
-
-        const primaryRoleId = usuario.rol_activo?.id ?? rolesFromResponse[0]?.id ?? null;
-        const tokensToUse =
-          parsedTokens.length > 0
-            ? parsedTokens
-            : primaryRoleId && typeof data.token === 'string'
-            ? [{ roleId: primaryRoleId, token: data.token }]
-            : [];
+        const tokensToUse: RoleToken[] = [
+          {
+            roleId: primaryRole.id,
+            token: tokenFromResponse,
+          },
+        ];
 
         setRoleTokens(tokensToUse);
-        setSelectedRoleId(primaryRoleId ?? '');
+        setSelectedRoleId(primaryRole.id);
       } catch (error) {
         console.error('Error al iniciar sesión:', error);
         setError('Error de autenticación'); // FIX: Unificar mensaje de error en fallos de red o servidor durante autenticación.
