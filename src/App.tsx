@@ -19,7 +19,6 @@ import RolesScreen from './pages/admin/RolesScreen';
 import UsuariosScreen from './pages/admin/UsuariosScreen';
 import CatalogoTipoProblemaScreen from './pages/admin/CatalogoTipoProblemaScreen';
 import AsignacionRolesScreen from './pages/admin/AsignacionRolesScreen';
-import AsignacionConsolasScreen from './pages/admin/AsignacionConsolasScreen';
 import MenuScreen from './pages/admin/MenuScreen';
 import RolMenuScreen from './pages/admin/RolMenuScreen';
 import Unauthorized from './pages/Unauthorized';
@@ -70,7 +69,6 @@ const routeConfig: Array<{ path: string; element: React.ReactElement }> = [
   { path: '/administracion/usuarios', element: <UsuariosScreen /> },
   { path: '/administracion/catalogo-tipo-problema', element: <CatalogoTipoProblemaScreen /> },
   { path: '/administracion/asignacion-roles', element: <AsignacionRolesScreen /> },
-  { path: '/administracion/asignacion-consolas', element: <AsignacionConsolasScreen /> },
   { path: '/administracion/menus', element: <MenuScreen /> },
   { path: '/administracion/roles-menus', element: <RolMenuScreen /> },
 ];
