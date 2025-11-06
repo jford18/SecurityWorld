@@ -4,12 +4,21 @@ import authRoutes from "./auth.routes.js";
 import consolasRoutes from "./consolas.routes.js";
 
 const app = express();
-app.use(cors());
 app.use(express.json());
+
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
 // Rutas principales
 app.use("/", authRoutes);
 app.use("/", consolasRoutes);
 
 // Puerto
-app.listen(4000, () => console.log("✅ Servidor corriendo en puerto 4000"));
+const PORT = 3000;
+app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
