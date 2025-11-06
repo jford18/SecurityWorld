@@ -3,7 +3,7 @@ import pool from "../db.js";
 export const getConsolas = async (_req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM consolas ORDER BY id ASC"
+      "SELECT id, nombre FROM consolas WHERE activo = true ORDER BY nombre"
     );
     res.status(200).json(result.rows);
   } catch (error) {

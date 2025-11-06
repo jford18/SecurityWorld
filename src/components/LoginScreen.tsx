@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RoleOption, RoleToken } from './context/SessionContext';
+import { getConsolas } from '../services/consolasService';
+import api from '../services/api';
 
 interface LoginScreenProps {
   onLogin: (payload: {
@@ -31,6 +33,23 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [selectedConsole, setSelectedConsole] = useState('');
   const [selectedRoleId, setSelectedRoleId] = useState<number | ''>('');
 
+  useEffect(() => {
+    const fetchConsolas = async () => {
+      try {
+        const data = await getConsolas();
+        const consoleNames = data.map((c: { nombre: string }) => c.nombre);
+        setConsoleOptions(consoleNames);
+        if (consoleNames.length > 0) {
+          setSelectedConsole(consoleNames[0]);
+        }
+      } catch (error) {
+        console.error("Error fetching consoles:", error);
+        setError("Error al cargar la lista de consolas.");
+      }
+    };
+    fetchConsolas();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -43,23 +62,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       setIsLoading(true); // FIX: Activar indicador de carga durante la fase de autenticación.
 
       try {
-        const response = await fetch('http://localhost:3000/api/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            nombre_usuario: username,
-            contrasena_plana: password,
-          }),
+        const response = await api.post('/auth/login', {
+          nombre_usuario: username,
+          contrasena_plana: password,
         });
 
-        if (!response.ok) {
-          setError('Error de autenticación'); // FIX: Mantener mensaje uniforme cuando falla la autenticación.
-          return;
-        }
-
-        const data = await response.json();
+        const data = response.data;
 
         const usuario = data.usuario as UsuarioAutenticado;
         setUsuarioAutenticado(usuario); // FIX: Conservar al usuario autenticado para la segunda fase.
@@ -89,13 +97,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
         setRoleTokens(tokensToUse);
         setSelectedRoleId(primaryRoleId ?? '');
-
-        const fetchedConsoles = Array.isArray(data.consolas)
-          ? data.consolas.map((c) => c.nombre)
-          : [];
-        setConsoleOptions(fetchedConsoles);
-        const defaultConsole = fetchedConsoles[0] ?? '';
-        setSelectedConsole(defaultConsole);
       } catch (error) {
         console.error('Error al iniciar sesión:', error);
         setError('Error de autenticación'); // FIX: Unificar mensaje de error en fallos de red o servidor durante autenticación.
