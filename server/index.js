@@ -13,6 +13,7 @@ import catalogoTipoProblemaRoutes from "./routes/catalogoTipoProblema.routes.js"
 import usuarioRolesRoutes from "./routes/usuarioRoles.routes.js";
 import menuRoutes from "./routes/menu.routes.js";
 import rolMenuRoutes from "./routes/rolMenu.routes.js";
+import authRoutes from "./auth.routes.js";
 
 
 const envPath = path.resolve(process.cwd(), ".env");
@@ -50,6 +51,7 @@ app.use("/api/catalogo-tipo-problema", catalogoTipoProblemaRoutes);
 app.use("/api/usuario-roles", usuarioRolesRoutes);
 app.use("/api/menus", menuRoutes);
 app.use("/api/rol-menu", rolMenuRoutes);
+app.use("/", authRoutes);
 
 
 app.use((req, res) => {
