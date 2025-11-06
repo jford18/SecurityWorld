@@ -223,18 +223,13 @@ const TechnicalFailuresOperador: React.FC = () => {
   };
 
   useEffect(() => {
-    if (
-      session.console &&
-      (formData.affectationType === 'Punto' || formData.affectationType === 'Equipo')
-    ) {
-      const normalizedConsole = normalizeConsoleName(session.console);
-      const sitesForConsole = catalogos.sitiosPorConsola.filter(
-        (s) => s.consola.toUpperCase() === normalizedConsole
-      );
-
-      if (sitesForConsole.length > 0) {
-        setClienteFromConsole(sitesForConsole[0].cliente);
-        setSitios(sitesForConsole.map((s) => s.sitio));
+    if (formData.affectationType === 'Punto' || formData.affectationType === 'Equipo') {
+      const allSites = catalogos.sitiosPorConsola;
+      if (allSites.length > 0) {
+        const uniqueSites = [...new Set(allSites.map((s) => s.sitio))];
+        setSitios(uniqueSites);
+        // If you need to set a default client, you can pick the first one
+        setClienteFromConsole(allSites[0].cliente);
       } else {
         setClienteFromConsole('No encontrado');
         setSitios([]);
@@ -243,7 +238,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       setClienteFromConsole(null);
       setSitios([]);
     }
-  }, [session.console, formData.affectationType, catalogos.sitiosPorConsola]);
+  }, [formData.affectationType, catalogos.sitiosPorConsola]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

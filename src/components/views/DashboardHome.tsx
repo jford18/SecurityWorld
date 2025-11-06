@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Card from '../ui/Card';
 import { deviceInventoryData, alertsData, technicalFailuresData } from '../../data/mockData';
 
+// NOTE: This component uses mock data and is not affected by the session context changes.
 // Recharts is loaded from a CDN, so we need to handle its asynchronous loading.
 
 const DashboardHome: React.FC = () => {

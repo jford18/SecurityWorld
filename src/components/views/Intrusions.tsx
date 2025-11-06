@@ -2,6 +2,7 @@ import React from 'react';
 import { intrusionsData } from '../../data/mockData';
 // import { Intrusion } from '../../types';
 
+// NOTE: This component uses mock data and is not affected by the session context changes.
 const Intrusions: React.FC = () => {
   return (
     <div>
