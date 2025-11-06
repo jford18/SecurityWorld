@@ -1,3 +1,4 @@
+import api from './api';
 import { API_BASE_URL } from './api';
 
 const jsonContentType = 'application/json';
@@ -22,11 +23,8 @@ export type ConsolaPayload = {
 };
 
 export const getConsolas = async () => {
-  const response = await fetch(API_URL, { cache: 'no-store' });
-  if (!response.ok) {
-    throw new Error(`Error HTTP ${response.status}`);
-  }
-  return handleResponse(response);
+  const response = await api.get('/consolas');
+  return response.data;
 };
 
 // NEW: Servicio para crear una consola garantizando cuerpo JSON y validaciones del backend.
