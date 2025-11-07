@@ -1,5 +1,6 @@
+import { apiFetch } from '../lib/http';
+
 const jsonContentType = 'application/json';
-const API_URL = 'http://localhost:3000/menus';
 
 const buildAuthHeaders = (): Record<string, string> => {
   const token = localStorage.getItem('token');
@@ -47,7 +48,7 @@ export type MenuPayload = {
 
 export const getMenus = async () => {
   const authHeaders = buildAuthHeaders();
-  const response = await fetch(API_URL, {
+  const response = await apiFetch('/menus', {
     cache: 'no-store',
     headers: {
       ...authHeaders,
@@ -62,7 +63,7 @@ export const getMenus = async () => {
 
 export const createMenu = async (payload: MenuPayload) => {
   const authHeaders = buildAuthHeaders();
-  const response = await fetch(API_URL, {
+  const response = await apiFetch('/menus', {
     method: 'POST',
     headers: {
       'Content-Type': jsonContentType,
@@ -81,7 +82,7 @@ export const createMenu = async (payload: MenuPayload) => {
 
 export const updateMenu = async (id: number, payload: MenuPayload) => {
   const authHeaders = buildAuthHeaders();
-  const response = await fetch(`${API_URL}/${id}`, {
+  const response = await apiFetch(`/menus/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': jsonContentType,
@@ -100,7 +101,7 @@ export const updateMenu = async (id: number, payload: MenuPayload) => {
 
 export const deleteMenu = async (id: number) => {
   const authHeaders = buildAuthHeaders();
-  const response = await fetch(`${API_URL}/${id}`, {
+  const response = await apiFetch(`/menus/${id}`, {
     method: 'DELETE',
     headers: { Accept: jsonContentType, ...authHeaders },
   });

@@ -8,6 +8,6 @@ export const getMenus = async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error("Error en getMenus:", error);
-    res.status(500).json({ message: "Error interno al obtener menús" });
+    res.status(500).json({ message: "Error interno del servidor" });
   }
 };
