@@ -19,6 +19,19 @@ app.use(
 app.use("/", authRoutes);
 app.use("/", consolasRoutes);
 
+console.log("Rutas registradas:");
+const registeredRoutes = app._router?.stack ?? [];
+if (registeredRoutes.length === 0) {
+  console.log("(sin rutas registradas)");
+} else {
+  registeredRoutes
+    .filter((layer) => layer.route)
+    .forEach((layer) => {
+      const method = Object.keys(layer.route.methods)[0] || "";
+      console.log(method.toUpperCase(), layer.route.path);
+    });
+}
+
 // Puerto
 const PORT = 3000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
