@@ -20,7 +20,22 @@ export const verifyToken = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "default_secret");
-    req.user = decoded;
+    const usuarioId =
+      decoded?.usuario_id ??
+      decoded?.usuarioId ??
+      decoded?.user_id ??
+      decoded?.userId ??
+      decoded?.id;
+
+    req.user = {
+      ...decoded,
+      usuario_id: usuarioId,
+    };
+
+    if (!req.user.usuario_id) {
+      console.warn("[AUTH] Token válido pero sin usuario_id en el payload", decoded);
+    }
+
     return next();
   } catch (error) {
     console.error("Error al verificar el token JWT", error);
