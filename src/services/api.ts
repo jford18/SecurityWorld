@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // NEW: Punto único para obtener la URL base del backend y reutilizarla en los servicios.
-const resolvedBaseURL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const resolvedBaseURL = import.meta.env.VITE_API_URL || '';
 export const API_BASE_URL = resolvedBaseURL.replace(/\/+$/, '');
 
 const api = axios.create({
