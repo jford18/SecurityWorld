@@ -38,9 +38,28 @@ export interface TechnicalFailurePayload {
   cliente?: string | null;
 }
 
+const normalizeFallosResponse = (
+  payload: unknown
+): TechnicalFailure[] => {
+  if (Array.isArray(payload)) {
+    return payload as TechnicalFailure[];
+  }
+
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    Array.isArray((payload as { data?: unknown }).data)
+  ) {
+    return (payload as { data: TechnicalFailure[] }).data;
+  }
+
+  console.error('Respuesta inesperada al obtener fallos técnicos:', payload);
+  return [];
+};
+
 export const fetchFallos = async (): Promise<TechnicalFailure[]> => {
-  const response = await http.get<TechnicalFailure[]>('/fallos');
-  return response.data;
+  const response = await http.get('/fallos');
+  return normalizeFallosResponse(response.data);
 };
 
 export const createFallo = async (
