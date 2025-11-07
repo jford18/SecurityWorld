@@ -1,7 +1,7 @@
 import { API_BASE_URL } from './api';
 
 const jsonContentType = 'application/json';
-const API_URL = `${API_BASE_URL}/api/menus/management`;
+const API_URL = `${API_BASE_URL}/menus`;
 
 const buildAuthHeaders = (): Record<string, string> => {
   const token = localStorage.getItem('token');
