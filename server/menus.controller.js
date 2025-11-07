@@ -2,7 +2,7 @@ import db from "./db.js";
 
 export const getMenus = async (req, res) => {
   try {
-    const { usuario_id } = req.user || req.query;
+    const usuario_id = req.user?.usuario_id || req.query.usuario_id;
 
     if (!usuario_id) {
       console.warn("[MENUS] Solicitud sin usuario_id válido", {
