@@ -6,6 +6,7 @@ import {
   getMenus,
   updateMenu,
 } from '../../services/menuService';
+import { useSession } from '../../components/context/SessionContext';
 
 export type MenuItem = {
   id: number;
@@ -53,6 +54,7 @@ const resolveErrorMessage = (error: unknown) => {
 };
 
 const MenuScreen: React.FC = () => {
+  const { session } = useSession();
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [fetchError, setFetchError] = useState<string>('');
@@ -64,9 +66,16 @@ const MenuScreen: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   const loadMenus = async () => {
+    const userId = session.userId;
+    if (!userId) {
+      console.warn('No se encontró usuario_id para cargar menús');
+      setMenus([]);
+      setFetchError('');
+      return;
+    }
     try {
       setLoading(true);
-      const data = await getMenus();
+      const data = await getMenus({ userId });
       if (!Array.isArray(data)) {
         throw new Error('Respuesta inválida del servidor');
       }
@@ -84,7 +93,7 @@ const MenuScreen: React.FC = () => {
 
   useEffect(() => {
     void loadMenus();
-  }, []);
+  }, [session.userId]);
 
   const filteredMenus = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();

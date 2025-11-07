@@ -34,13 +34,13 @@ const ensureArray = (value: unknown): MenuNode[] => {
     }));
 };
 
-export const useMenus = (token: string | null, roleId: number | null) => {
+export const useMenus = (token: string | null, roleId: number | null, userId: number | null) => {
   const [menus, setMenus] = useState<MenuNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchMenus = useCallback(async () => {
-    if (!token || !roleId) {
+    if (!token || !roleId || !userId) {
       setMenus([]);
       setError(null);
       return;
@@ -48,7 +48,7 @@ export const useMenus = (token: string | null, roleId: number | null) => {
 
     setLoading(true);
     try {
-      const data = await fetchMenusByRole(roleId);
+      const data = await fetchMenusByRole({ roleId, userId });
       const parsedMenus = ensureArray(data);
 
       if (parsedMenus.length === 0) {
@@ -64,7 +64,7 @@ export const useMenus = (token: string | null, roleId: number | null) => {
     } finally {
       setLoading(false);
     }
-  }, [token, roleId]);
+  }, [token, roleId, userId]);
 
   useEffect(() => {
     void fetchMenus();

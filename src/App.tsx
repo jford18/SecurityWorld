@@ -93,7 +93,8 @@ const AppContent: React.FC = () => {
   const { session, setSession } = useSession();
   const { menus, loading: menuLoading, error: menuError } = useMenus(
     session.token,
-    session.roleId
+    session.roleId,
+    session.userId
   );
 
   const allowedPaths = useMemo(() => new Set(flattenMenuRoutes(menus)), [menus]);
