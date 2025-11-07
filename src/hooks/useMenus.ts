@@ -34,6 +34,18 @@ const ensureArray = (value: unknown): MenuNode[] => {
     }));
 };
 
+const ROUTE_SYNONYM_GROUPS: string[][] = [['/fallos/supervisor', '/fallos-supervisor']];
+
+const addRouteWithSynonyms = (route: string, bucket: Set<string>) => {
+  bucket.add(route);
+  for (const group of ROUTE_SYNONYM_GROUPS) {
+    if (group.includes(route)) {
+      group.forEach((synonym) => bucket.add(synonym));
+      break;
+    }
+  }
+};
+
 export const useMenus = (token: string | null, roleId: number | null, userId: number | null) => {
   const [menus, setMenus] = useState<MenuNode[]>([]);
   const [loading, setLoading] = useState(false);
@@ -82,7 +94,7 @@ export const flattenMenuRoutes = (nodes: MenuNode[]): string[] => {
         const trimmed = item.ruta.trim();
         const normalized = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
         const withoutTrailing = normalized.replace(/\/+$/, '') || '/';
-        routes.add(withoutTrailing);
+        addRouteWithSynonyms(withoutTrailing, routes);
       }
       if (item.hijos?.length) {
         visit(item.hijos);
