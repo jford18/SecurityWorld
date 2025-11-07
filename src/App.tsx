@@ -57,11 +57,21 @@ const RequireAuth: React.FC<{ children: React.ReactElement }> = ({ children }) =
 import TechnicalFailuresOperador from './components/views/TechnicalFailuresOperador';
 import TechnicalFailuresSupervisor from './components/views/TechnicalFailuresSupervisor';
 
-const routeConfig: Array<{ path: string; element: React.ReactElement }> = [
+interface RouteDefinition {
+  path: string;
+  element: React.ReactElement;
+  aliases?: string[];
+}
+
+const routeConfig: RouteDefinition[] = [
   { path: '/dashboard', element: <DashboardHome /> },
   { path: '/fallos', element: <TechnicalFailures /> },
   { path: '/fallos/operador', element: <TechnicalFailuresOperador /> },
-  { path: '/fallos/supervisor', element: <TechnicalFailuresSupervisor /> },
+  {
+    path: '/fallos/supervisor',
+    element: <TechnicalFailuresSupervisor />,
+    aliases: ['/fallos-supervisor'],
+  },
   { path: '/intrusiones', element: <Intrusions /> },
   { path: '/reportes/alertas-turno', element: <AlertsReportByShift /> },
   { path: '/administracion/consolas', element: <ConsolasScreen /> },
@@ -226,20 +236,23 @@ const AppContent: React.FC = () => {
         }
       >
         <Route index element={<Navigate to={defaultAuthorizedPath} replace />} />
-        {routeConfig.map((route) => (
-          <Route
-            key={route.path}
-            path={route.path.replace(/^\//, '')}
-            element={
-              <GuardedRoute
-                path={route.path}
-                element={route.element}
-                allowedPaths={allowedPaths}
-                fallbackPath={defaultAuthorizedPath}
-              />
-            }
-          />
-        ))}
+        {routeConfig.flatMap((route) => {
+          const paths = [route.path, ...(route.aliases ?? [])];
+          return paths.map((path) => (
+            <Route
+              key={path}
+              path={path.replace(/^\//, '')}
+              element={
+                <GuardedRoute
+                  path={path}
+                  element={route.element}
+                  allowedPaths={allowedPaths}
+                  fallbackPath={defaultAuthorizedPath}
+                />
+              }
+            />
+          ));
+        })}
         <Route path="sin-permiso" element={<Unauthorized />} />
       </Route>
       <Route path="*" element={<NotFound />} />
