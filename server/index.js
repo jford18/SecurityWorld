@@ -19,6 +19,14 @@ app.use(
   })
 );
 
+app.use((req, _res, next) => {
+  console.log(`[API] ${req.method} ${req.originalUrl}`);
+  if (req.originalUrl.includes("/api/")) {
+    console.warn("[API][ALERTA] Endpoint incorrecto detectado:", req.originalUrl);
+  }
+  next();
+});
+
 // Rutas principales
 app.use("/", authRoutes);
 app.use("/", consolasRoutes);
