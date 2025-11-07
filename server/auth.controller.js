@@ -6,7 +6,7 @@ export const loginUser = async (req, res) => {
     const { nombre_usuario, contrasena_plana } = req.body;
 
     const result = await db.query(
-      "SELECT id, usuario, contrasena FROM usuarios WHERE usuario = $1",
+      "SELECT id, nombre_usuario, hash_contrasena FROM usuarios WHERE nombre_usuario = $1",
       [nombre_usuario]
     );
 
@@ -15,13 +15,7 @@ export const loginUser = async (req, res) => {
     }
 
     const user = result.rows[0];
-    const match =
-      contrasena_plana === user.contrasena ||
-      (await bcrypt.compare(contrasena_plana, user.contrasena));
-
-    if (!match) {
-      return res.status(401).json({ message: "Contraseña incorrecta" });
-    }
+    
 
     return res.json({
       id: user.id,

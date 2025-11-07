@@ -3,7 +3,7 @@ import db from "./db.js"; // ajusta a tu conexión real
 export const getAllConsolas = async (req, res) => {
   try {
     const result = await db.query(
-      "SELECT id, nombre FROM consolas WHERE activo = true ORDER BY nombre"
+      "SELECT id, nombre FROM consolas  ORDER BY nombre"
     );
     res.json(result.rows);
   } catch (error) {
