@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import api, { API_BASE_URL } from '../services/api';
+import { getMenus as fetchMenusByRole } from '../services/menuService';
 
 export interface MenuNode {
   id: number;
@@ -48,14 +48,13 @@ export const useMenus = (token: string | null, roleId: number | null) => {
 
     setLoading(true);
     try {
-      const response = await api.get<MenuNode[]>(`/api/menus`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        baseURL: API_BASE_URL,
-      });
+      const data = await fetchMenusByRole(roleId);
+      const parsedMenus = ensureArray(data);
 
-      const parsedMenus = ensureArray(response.data);
+      if (parsedMenus.length === 0) {
+        console.warn('[Menús] Respuesta vacía del backend:', data);
+      }
+
       setMenus(parsedMenus);
       setError(null);
     } catch (err) {

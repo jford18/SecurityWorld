@@ -46,9 +46,16 @@ export type MenuPayload = {
   activo?: boolean;
 };
 
-export const getMenus = async () => {
+export const getMenus = async (roleId?: number | null) => {
   const authHeaders = buildAuthHeaders();
-  const response = await apiFetch('/menus', {
+  const searchParams = new URLSearchParams();
+  if (roleId !== undefined && roleId !== null && Number.isFinite(Number(roleId))) {
+    searchParams.set('rol_id', String(roleId));
+  }
+
+  const path = searchParams.toString() ? `/menus?${searchParams.toString()}` : '/menus';
+
+  const response = await apiFetch(path, {
     cache: 'no-store',
     headers: {
       ...authHeaders,

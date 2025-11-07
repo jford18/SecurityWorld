@@ -24,6 +24,20 @@ app.use((req, _res, next) => {
   if (req.originalUrl.includes("/api/")) {
     console.warn("[API][ALERTA] Endpoint incorrecto detectado:", req.originalUrl);
   }
+  const candidateRole =
+    (req.user && typeof req.user === "object" ? req.user.rol_id ?? req.user.role_id : null) ??
+    req.headers["x-role-id"] ??
+    req.headers["x-rol-id"] ??
+    req.query?.rol_id ??
+    req.query?.role_id;
+
+  if (candidateRole !== undefined && candidateRole !== null && candidateRole !== "") {
+    const parsedRole = Number(candidateRole);
+    if (Number.isFinite(parsedRole) && parsedRole > 0) {
+      const baseUser = req.user && typeof req.user === "object" ? req.user : {};
+      req.user = { ...baseUser, rol_id: parsedRole };
+    }
+  }
   next();
 });
 
