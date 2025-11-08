@@ -1,16 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSession } from '../context/SessionContext';
 import FechaHoraFalloPicker from '../ui/FechaHoraFalloPicker';
-import {
-  TechnicalFailure,
-  TechnicalFailureCatalogs,
-  CatalogoDepartamento,
-  CatalogoResponsable,
-} from '../../types';
+import { TechnicalFailure, TechnicalFailureCatalogs, CatalogoNodo } from '../../types';
 import {
   fetchFallos,
   createFallo,
-  updateFallo,
   fetchCatalogos,
   TechnicalFailurePayload,
 } from '../../services/fallosService';
@@ -61,15 +55,49 @@ const emptyCatalogos: TechnicalFailureCatalogs = {
 
 const TechnicalFailuresOperador: React.FC = () => {
   const { session } = useSession();
-  const [failures, setFailures] = useState<TechnicalFailure[]>([]);
+  const [, setFailures] = useState<TechnicalFailure[]>([]);
   const [catalogos, setCatalogos] = useState<TechnicalFailureCatalogs>(emptyCatalogos);
   const [formData, setFormData] = useState<FailureFormData>(buildInitialFormData());
   const [errors, setErrors] = useState<Partial<FailureFormData>>({});
   const [cliente, setCliente] = useState<string | null>(null);
   const [clienteFromConsole, setClienteFromConsole] = useState<string | null>(null);
   const [sitios, setSitios] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [nodos, setNodos] = useState<CatalogoNodo[]>([]);
+  const [nodosError, setNodosError] = useState<string | null>(null);
+  const [isLoadingNodos, setIsLoadingNodos] = useState(false);
+
+  const extractNodosFromResponse = (payload: unknown): CatalogoNodo[] => {
+    const rawArray = Array.isArray(payload)
+      ? payload
+      : payload && typeof payload === 'object' && Array.isArray((payload as { data?: unknown }).data)
+        ? ((payload as { data: unknown[] }).data)
+        : [];
+
+    if (!Array.isArray(rawArray)) {
+      return [];
+    }
+
+    return rawArray
+      .map((item) => {
+        if (!item || typeof item !== 'object') {
+          return null;
+        }
+
+        const idValue = (item as { id?: unknown }).id;
+        const nameValue = (item as { nombre?: unknown }).nombre;
+        const parsedId = Number(idValue);
+        const nombre = typeof nameValue === 'string' ? nameValue : nameValue != null ? String(nameValue) : '';
+
+        if (!Number.isFinite(parsedId) || !nombre) {
+          return null;
+        }
+
+        return { id: parsedId, nombre };
+      })
+      .filter((item): item is CatalogoNodo => item !== null);
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -90,6 +118,38 @@ const TechnicalFailuresOperador: React.FC = () => {
 
     loadData();
   }, []);
+
+  useEffect(() => {
+    const fetchNodos = async () => {
+      setIsLoadingNodos(true);
+      setNodosError(null);
+
+      try {
+        const response = await fetch('/api/nodos');
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const parsedNodos = extractNodosFromResponse(data);
+        setNodos(parsedNodos);
+      } catch (error) {
+        console.error('Error cargando nodos:', error);
+        setNodosError('Error al cargar nodos.');
+        setNodos([]);
+      } finally {
+        setIsLoadingNodos(false);
+      }
+    };
+
+    fetchNodos();
+  }, []);
+
+  const selectedNodo = useMemo(
+    () => nodos.find((nodoItem) => String(nodoItem.id) === formData.nodo) ?? null,
+    [nodos, formData.nodo]
+  );
 
   const validate = (fieldValues: FailureFormData = formData) => {
     let tempErrors: Partial<FailureFormData> = { ...errors };
@@ -202,25 +262,17 @@ const TechnicalFailuresOperador: React.FC = () => {
 
   useEffect(() => {
     if (formData.affectationType === 'Nodo' && formData.nodo) {
-      const relation = catalogos.nodoCliente.find((nc) => nc.nodo === formData.nodo);
-      setCliente(relation ? relation.cliente : 'Cliente no encontrado');
+      const nodoNombre = selectedNodo?.nombre ?? '';
+      if (nodoNombre) {
+        const relation = catalogos.nodoCliente.find((nc) => nc.nodo === nodoNombre);
+        setCliente(relation ? relation.cliente : 'Cliente no encontrado');
+      } else {
+        setCliente('Cliente no encontrado');
+      }
     } else {
       setCliente(null);
     }
-  }, [formData.nodo, formData.affectationType, catalogos.nodoCliente]);
-
-  const normalizeConsoleName = (name: string | null): string => {
-    if (!name) return '';
-    let processed = name.replace('_new', '').toUpperCase();
-    if (processed.startsWith('OPERADOR_')) {
-      const rest = processed.substring('OPERADOR_'.length);
-      if (/^\d+$/.test(rest)) {
-        return 'OPERADOR ' + rest;
-      }
-      return rest;
-    }
-    return processed;
-  };
+  }, [formData.nodo, formData.affectationType, catalogos.nodoCliente, selectedNodo]);
 
   useEffect(() => {
     if (formData.affectationType === 'Punto' || formData.affectationType === 'Equipo') {
@@ -259,7 +311,7 @@ const TechnicalFailuresOperador: React.FC = () => {
 
     let equipo_afectado = 'N/A';
     if (formData.affectationType === 'Nodo') {
-      equipo_afectado = formData.nodo;
+      equipo_afectado = selectedNodo?.nombre || 'N/A';
     } else if (formData.affectationType === 'Equipo') {
       const equipo = formData.camara || formData.tipoEquipo;
       equipo_afectado = `${equipo} en ${formData.sitio}`;
@@ -429,15 +481,22 @@ const TechnicalFailuresOperador: React.FC = () => {
                     name="nodo"
                     value={formData.nodo}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
+                    disabled={isLoadingNodos || nodos.length === 0}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm disabled:bg-gray-100 disabled:text-gray-500"
                   >
-                    <option value="">Seleccione...</option>
-                    {catalogos.nodos.map((n) => (
-                      <option key={n.id} value={n.nombre}>
+                    <option value="">Seleccione un nodo</option>
+                    {nodos.map((n) => (
+                      <option key={n.id} value={String(n.id)}>
                         {n.nombre}
                       </option>
                     ))}
                   </select>
+                  {!isLoadingNodos && nodos.length === 0 && !nodosError && (
+                    <p className="text-sm text-gray-500 mt-1">No hay nodos registrados.</p>
+                  )}
+                  {nodosError && (
+                    <p className="text-red-500 text-xs mt-1">{nodosError}</p>
+                  )}
                   {errors.nodo && <p className="text-red-500 text-xs mt-1">{errors.nodo}</p>}
                 </div>
                 {cliente && (
