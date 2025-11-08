@@ -6,6 +6,7 @@ import { existsSync } from "fs";
 import authRoutes from "./auth.routes.js";
 import consolasRoutes from "./consolas.routes.js";
 import nodosRoutes from "./routes/nodos.routes.js";
+import nodosSitiosRoutes from "./routes/nodosSitios.routes.js";
 import menusRoutes from "./menus.routes.js";
 import fallosRoutes from "./fallos.routes.js";
 import catalogosRoutes from "./catalogos.routes.js";
@@ -33,6 +34,7 @@ const knownApiPrefixes = [
   "/api/catalogos",
   "/api/fallos",
   "/api/nodos",
+  "/api/nodos-sitios",
   "/api/rol-menu",
   "/api/roles",
   "/api/sitios",
@@ -70,6 +72,7 @@ app.use("/", authRoutes);
 app.use("/", consolasRoutes);
 app.use("/", menusRoutes);
 app.use("/api/nodos", nodosRoutes);
+app.use("/api/nodos-sitios", nodosSitiosRoutes);
 app.use("/api/fallos", fallosRoutes);
 app.use("/api/catalogos", catalogosRoutes);
 app.use("/api/catalogo-tipo-problema", catalogoTipoProblemaRoutes);

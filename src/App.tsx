@@ -15,6 +15,7 @@ import TechnicalFailures from './components/views/TechnicalFailures';
 import Intrusions from './components/views/Intrusions';
 import AlertsReportByShift from './components/views/AlertsReportByShift';
 import Sitios from './components/views/Sitios';
+import AsignacionNodosSitios from './components/views/AsignacionNodosSitios';
 import ConsolasScreen from './pages/admin/ConsolasScreen';
 import RolesScreen from './pages/admin/RolesScreen';
 import UsuariosScreen from './pages/admin/UsuariosScreen';
@@ -77,6 +78,11 @@ const routeConfig: RouteDefinition[] = [
   { path: '/intrusiones', element: <Intrusions /> },
   { path: '/reportes/alertas-turno', element: <AlertsReportByShift /> },
   { path: '/administracion/sitios', element: <Sitios /> },
+  {
+    path: '/administracion/asignacion-nodos-sitios',
+    element: <AsignacionNodosSitios />,
+    aliases: ['/admin/asignacion-nodos-sitios'],
+  },
   { path: '/administracion/consolas', element: <ConsolasScreen /> },
   {
     path: '/administracion/nodos',
