@@ -115,8 +115,12 @@ export const findAncestorChainByRoute = (
 
   const visit = (items: MenuNode[], ancestors: number[]): boolean => {
     for (const item of items) {
+      const rawRoute = typeof item.ruta === 'string' ? item.ruta.trim() : '';
+      const normalizedRoute = rawRoute
+        ? (rawRoute.startsWith('/') ? rawRoute : `/${rawRoute}`).replace(/\/+$/, '') || '/'
+        : null;
       const newAncestors = [...ancestors, item.id];
-      if (item.ruta === targetRoute) {
+      if (normalizedRoute && normalizedRoute === targetRoute) {
         chain.push(...ancestors);
         return true;
       }
