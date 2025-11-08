@@ -13,6 +13,7 @@ import rolesRoutes from "./roles.routes.js";
 import usuariosRoutes from "./routes/usuarios.routes.js";
 import usuarioRolesRoutes from "./routes/usuarioRoles.routes.js";
 import rolMenuRoutes from "./routes/rolMenu.js";
+import sitiosRoutes from "./routes/sitios.routes.js";
 
 const app = express();
 app.use(express.json());
@@ -33,6 +34,7 @@ const knownApiPrefixes = [
   "/api/roles",
   "/api/usuario-roles",
   "/api/rol-menu",
+  "/api/sitios",
   "/api/catalogo-tipo-problema",
 ];
 
@@ -72,6 +74,7 @@ app.use("/api/usuarios", usuariosRoutes);
 app.use("/api/roles", rolesRoutes);
 app.use("/api/usuario-roles", usuarioRolesRoutes);
 app.use("/api/rol-menu", rolMenuRoutes);
+app.use("/api/sitios", sitiosRoutes);
 
 const logRoutes = (stack) => {
   stack
