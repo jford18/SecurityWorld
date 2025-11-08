@@ -576,7 +576,6 @@ const TechnicalFailuresOperador: React.FC = () => {
               </div>
             </div>
             {sitioSelectField}
-            {consoleInfoBox}
           </>
         );
       case 'Equipo':
