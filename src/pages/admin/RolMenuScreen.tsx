@@ -1,11 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchRolesDisponibles } from '../../services/usuarioRolesService';
-import {
-  RolMenuItem,
-  SaveRolMenuPayload,
-  getMenusByRol,
-  saveRolMenus,
-} from '../../services/rolMenuService';
+import { SaveRolMenuPayload, getMenusByRol, saveRolMenus } from '../../services/rolMenuService';
 
 const toast = {
   success: (message: string) => {
@@ -30,10 +25,18 @@ type RolOption = {
 const dropdownClasses =
   'mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]';
 
+type RolMenuStateItem = {
+  menu_id: number;
+  nombre: string;
+  seccion: string | null;
+  menu_activo: boolean;
+  activo: boolean;
+};
+
 const RolMenuScreen: React.FC = () => {
   const [roles, setRoles] = useState<RolOption[]>([]);
   const [selectedRolId, setSelectedRolId] = useState<number | null>(null);
-  const [menus, setMenus] = useState<RolMenuItem[]>([]);
+  const [menus, setMenus] = useState<RolMenuStateItem[]>([]);
   const [loadingRoles, setLoadingRoles] = useState<boolean>(false);
   const [loadingMenus, setLoadingMenus] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
@@ -84,11 +87,12 @@ const RolMenuScreen: React.FC = () => {
         throw new Error('Respuesta inválida del servidor');
       }
 
-      const normalizedMenus = response.map((menu) => ({
+      const normalizedMenus = response.map<RolMenuStateItem>((menu) => ({
         menu_id: menu.menu_id,
         nombre: menu.nombre,
         seccion: menu.seccion,
-        activo: Boolean(menu.activo),
+        menu_activo: menu.menu_activo,
+        activo: Boolean(menu.asignado),
       }));
 
       setMenus(normalizedMenus);

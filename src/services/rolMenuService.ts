@@ -30,8 +30,12 @@ const handleError = async (response: Response) => {
 export type RolMenuItem = {
   menu_id: number;
   nombre: string;
+  icono: string | null;
+  ruta: string | null;
   seccion: string | null;
-  activo: boolean;
+  orden: number | null;
+  menu_activo: boolean;
+  asignado: boolean;
 };
 
 export type SaveRolMenuPayload = {
