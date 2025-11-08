@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { existsSync } from "fs";
 import authRoutes from "./auth.routes.js";
 import consolasRoutes from "./consolas.routes.js";
+import nodosRoutes from "./routes/nodos.routes.js";
 import menusRoutes from "./menus.routes.js";
 import fallosRoutes from "./fallos.routes.js";
 import catalogosRoutes from "./catalogos.routes.js";
@@ -28,14 +29,15 @@ app.use(
 );
 
 const knownApiPrefixes = [
-  "/api/fallos",
-  "/api/catalogos",
-  "/api/usuarios",
-  "/api/roles",
-  "/api/usuario-roles",
-  "/api/rol-menu",
-  "/api/sitios",
   "/api/catalogo-tipo-problema",
+  "/api/catalogos",
+  "/api/fallos",
+  "/api/nodos",
+  "/api/rol-menu",
+  "/api/roles",
+  "/api/sitios",
+  "/api/usuario-roles",
+  "/api/usuarios",
 ];
 
 app.use((req, _res, next) => {
@@ -67,6 +69,7 @@ app.use((req, _res, next) => {
 app.use("/", authRoutes);
 app.use("/", consolasRoutes);
 app.use("/", menusRoutes);
+app.use("/api/nodos", nodosRoutes);
 app.use("/api/fallos", fallosRoutes);
 app.use("/api/catalogos", catalogosRoutes);
 app.use("/api/catalogo-tipo-problema", catalogoTipoProblemaRoutes);
