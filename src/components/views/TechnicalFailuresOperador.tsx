@@ -9,6 +9,8 @@ import {
   TechnicalFailurePayload,
 } from '../../services/fallosService';
 
+const API_BASE_URL = 'http://localhost:3000/api';
+
 type AffectationType = 'Nodo' | 'Punto' | 'Equipo' | 'Masivo' | '';
 
 type FailureFormData = {
@@ -125,7 +127,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       setNodosError(null);
 
       try {
-        const response = await fetch('/api/nodos');
+        const response = await fetch(`${API_BASE_URL}/nodos`);
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
@@ -136,7 +138,7 @@ const TechnicalFailuresOperador: React.FC = () => {
         setNodos(parsedNodos);
       } catch (error) {
         console.error('Error cargando nodos:', error);
-        setNodosError('Error al cargar nodos.');
+        setNodosError('Error al cargar nodos');
         setNodos([]);
       } finally {
         setIsLoadingNodos(false);
