@@ -11,6 +11,7 @@ import catalogosRoutes from "./catalogos.routes.js";
 import rolesRoutes from "./roles.routes.js";
 import usuariosRoutes from "./routes/usuarios.routes.js";
 import usuarioRolesRoutes from "./routes/usuarioRoles.routes.js";
+import rolMenuRoutes from "./routes/rolMenu.js";
 
 const app = express();
 app.use(express.json());
@@ -30,6 +31,7 @@ const knownApiPrefixes = [
   "/api/usuarios",
   "/api/roles",
   "/api/usuario-roles",
+  "/api/rol-menu",
 ];
 
 app.use((req, _res, next) => {
@@ -66,6 +68,7 @@ app.use("/api/catalogos", catalogosRoutes);
 app.use("/api/usuarios", usuariosRoutes);
 app.use("/api/roles", rolesRoutes);
 app.use("/api/usuario-roles", usuarioRolesRoutes);
+app.use("/api/rol-menu", rolMenuRoutes);
 
 const logRoutes = (stack) => {
   stack
