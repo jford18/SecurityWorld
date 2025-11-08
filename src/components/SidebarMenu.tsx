@@ -64,9 +64,9 @@ const SidebarMenuItem: React.FC<{
 
   return (
     <li key={menu.id}>
-      {menu.ruta ? (
+      {menuPath ? (
         <Link
-          to={menu.ruta}
+          to={menuPath}
           className={`${linkClasses} ${isActive ? activeClasses : inactiveClasses}`}
           style={{ paddingLeft }}
           onClick={() => {
