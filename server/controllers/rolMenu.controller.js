@@ -29,14 +29,14 @@ export const getMenusByRol = async (req, res) => {
   try {
     const query = `
       SELECT
-          M.ID,
-          M.NOMBRE,
-          M.ICONO,
-          M.RUTA,
-          M.SECCION,
-          M.ORDEN,
-          M.ACTIVO AS MENU_ACTIVO,
-          CASE WHEN RM.MENU_ID IS NOT NULL THEN TRUE ELSE FALSE END AS ASIGNADO
+          M.ID AS menu_id,
+          M.NOMBRE AS nombre,
+          M.ICONO AS icono,
+          M.RUTA AS ruta,
+          M.SECCION AS seccion,
+          M.ORDEN AS orden,
+          M.ACTIVO AS menu_activo,
+          COALESCE(RM.ACTIVO, FALSE) AS asignado
       FROM PUBLIC.MENUS M
       LEFT JOIN PUBLIC.ROL_MENU RM ON (RM.MENU_ID = M.ID AND RM.ROL_ID = $1)
       ORDER BY COALESCE(M.SECCION, ''), M.ORDEN, M.ID;
