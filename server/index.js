@@ -8,7 +8,9 @@ import consolasRoutes from "./consolas.routes.js";
 import menusRoutes from "./menus.routes.js";
 import fallosRoutes from "./fallos.routes.js";
 import catalogosRoutes from "./catalogos.routes.js";
+import rolesRoutes from "./roles.routes.js";
 import usuariosRoutes from "./routes/usuarios.routes.js";
+import usuarioRolesRoutes from "./routes/usuarioRoles.routes.js";
 
 const app = express();
 app.use(express.json());
@@ -22,7 +24,13 @@ app.use(
   })
 );
 
-const knownApiPrefixes = ["/api/fallos", "/api/catalogos", "/api/usuarios"];
+const knownApiPrefixes = [
+  "/api/fallos",
+  "/api/catalogos",
+  "/api/usuarios",
+  "/api/roles",
+  "/api/usuario-roles",
+];
 
 app.use((req, _res, next) => {
   console.log(`[API] ${req.method} ${req.originalUrl}`);
@@ -56,6 +64,8 @@ app.use("/", menusRoutes);
 app.use("/api/fallos", fallosRoutes);
 app.use("/api/catalogos", catalogosRoutes);
 app.use("/api/usuarios", usuariosRoutes);
+app.use("/api/roles", rolesRoutes);
+app.use("/api/usuario-roles", usuarioRolesRoutes);
 
 const logRoutes = (stack) => {
   stack
