@@ -22,6 +22,7 @@ import CatalogoTipoProblemaScreen from './pages/admin/CatalogoTipoProblemaScreen
 import AsignacionRolesScreen from './pages/admin/AsignacionRolesScreen';
 import MenuScreen from './pages/admin/MenuScreen';
 import RolMenuScreen from './pages/admin/RolMenuScreen';
+import Nodos from './components/views/Nodos.jsx';
 import Unauthorized from './pages/Unauthorized';
 import NotFound from './pages/NotFound';
 
@@ -77,6 +78,11 @@ const routeConfig: RouteDefinition[] = [
   { path: '/reportes/alertas-turno', element: <AlertsReportByShift /> },
   { path: '/administracion/sitios', element: <Sitios /> },
   { path: '/administracion/consolas', element: <ConsolasScreen /> },
+  {
+    path: '/administracion/nodos',
+    element: <Nodos />,
+    aliases: ['/admin/nodos'],
+  },
   { path: '/administracion/roles', element: <RolesScreen /> },
   { path: '/administracion/usuarios', element: <UsuariosScreen /> },
   { path: '/administracion/catalogo-tipo-problema', element: <CatalogoTipoProblemaScreen /> },
