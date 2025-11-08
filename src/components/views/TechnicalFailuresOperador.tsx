@@ -511,42 +511,40 @@ const TechnicalFailuresOperador: React.FC = () => {
               </div>
             </div>
             <div className="md:col-span-2">
-              <div className="flex items-center gap-4">
-                <div className="flex-grow">
-                  <label htmlFor="nodo" className="block text-sm font-medium text-gray-700">
-                    Nodo *
-                  </label>
-                  <select
-                    id="nodo"
-                    name="nodo"
-                    value={formData.nodo}
-                    onChange={handleNodoChange}
-                    disabled={isLoadingNodos || nodos.length === 0}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm disabled:bg-gray-100 disabled:text-gray-500"
-                  >
-                    <option value="">Seleccione un nodo</option>
-                    {nodos.map((n) => (
-                      <option key={n.id} value={String(n.id)}>
-                        {n.nombre}
-                      </option>
-                    ))}
-                  </select>
-                  {!isLoadingNodos && nodos.length === 0 && !nodosError && (
-                    <p className="text-sm text-gray-500 mt-1">No hay nodos registrados.</p>
-                  )}
-                  {nodosError && (
-                    <p className="text-red-500 text-xs mt-1">{nodosError}</p>
-                  )}
-                  {errors.nodo && <p className="text-red-500 text-xs mt-1">{errors.nodo}</p>}
-                  {sitio && (
-                    <p className="mt-2 text-[#1C2E4A] font-semibold">
+              <div>
+                <label htmlFor="nodo" className="block text-sm font-medium text-gray-700">
+                  Nodo *
+                </label>
+                <select
+                  id="nodo"
+                  name="nodo"
+                  value={formData.nodo}
+                  onChange={handleNodoChange}
+                  disabled={isLoadingNodos || nodos.length === 0}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                >
+                  <option value="">Seleccione un nodo</option>
+                  {nodos.map((n) => (
+                    <option key={n.id} value={String(n.id)}>
+                      {n.nombre}
+                    </option>
+                  ))}
+                </select>
+                {!isLoadingNodos && nodos.length === 0 && !nodosError && (
+                  <p className="text-sm text-gray-500 mt-1">No hay nodos registrados.</p>
+                )}
+                {nodosError && (
+                  <p className="text-red-500 text-xs mt-1">{nodosError}</p>
+                )}
+                {errors.nodo && <p className="text-red-500 text-xs mt-1">{errors.nodo}</p>}
+                {sitio && (
+                  <div className="d-flex justify-content-end mt-2">
+                    <span
+                      className="badge bg-primary-subtle text-primary fw-semibold px-3 py-2 rounded-pill"
+                      style={{ fontSize: "0.9rem" }}
+                    >
                       → Sitio: {sitio.nombre}
-                    </p>
-                  )}
-                </div>
-                {cliente && (
-                  <div className="mt-6 p-2 bg-blue-100 text-blue-800 rounded-md text-sm font-semibold">
-                    → Cliente: {cliente}
+                    </span>
                   </div>
                 )}
               </div>
