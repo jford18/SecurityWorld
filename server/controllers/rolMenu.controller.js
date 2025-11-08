@@ -29,19 +29,16 @@ export const getMenusByRol = async (req, res) => {
   try {
     const query = `
       SELECT
-          M.id,
-          M.nombre,
-          M.icono,
-          M.ruta,
-          M.seccion,
-          M.orden,
-          M.activo
+          M.ID,
+          M.NOMBRE,
+          M.ICONO,
+          M.RUTA,
+          M.SECCION,
+          M.ORDEN,
+          M.ACTIVO AS MENU_ACTIVO,
+          CASE WHEN RM.MENU_ID IS NOT NULL THEN TRUE ELSE FALSE END AS ASIGNADO
       FROM PUBLIC.MENUS M
-      INNER JOIN PUBLIC.ROL_MENU RM ON (RM.MENU_ID = M.ID)
-      INNER JOIN PUBLIC.ROLES R ON (R.ID = RM.ROL_ID)
-      WHERE RM.ROL_ID = $1
-        AND M.ACTIVO = TRUE
-        AND RM.ACTIVO = TRUE
+      LEFT JOIN PUBLIC.ROL_MENU RM ON (RM.MENU_ID = M.ID AND RM.ROL_ID = $1)
       ORDER BY COALESCE(M.SECCION, ''), M.ORDEN, M.ID;
     `;
 
@@ -49,9 +46,7 @@ export const getMenusByRol = async (req, res) => {
     res.status(200).json(result.rows);
   } catch (error) {
     console.error("[API][ERROR] /api/rol-menu:", error.message);
-    res
-      .status(500)
-      .json({ error: "Error al obtener menús asignados al rol." });
+    res.status(500).json({ error: "Error al obtener todos los menús." });
   }
 };
 
