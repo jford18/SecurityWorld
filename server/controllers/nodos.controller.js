@@ -1,5 +1,7 @@
 import pool from "../db.js";
 
+const SITIO_NOT_FOUND_MESSAGE = "No se encontró sitio";
+
 const formatSuccess = (message, data = null) => ({
   status: "success",
   message,
@@ -20,6 +22,26 @@ export const listNodos = async (_req, res) => {
   } catch (error) {
     console.error("Error al listar nodos:", error);
     res.status(500).json(formatError("Error al listar los nodos"));
+  }
+};
+
+export const getSitioByNodo = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const query = `
+      SELECT S.id, S.nombre
+      FROM nodos_sitios NS
+      INNER JOIN sitios S ON (S.id = NS.sitio_id)
+      WHERE NS.nodo_id = $1
+      LIMIT 1;
+    `;
+    const result = await pool.query(query, [id]);
+    if (result.rows.length === 0)
+      return res.status(404).json({ message: SITIO_NOT_FOUND_MESSAGE });
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("[NODOS] Error al obtener sitio por nodo:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 

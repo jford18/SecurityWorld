@@ -13,6 +13,11 @@ const API_BASE_URL = 'http://localhost:3000/api';
 
 type AffectationType = 'Nodo' | 'Punto' | 'Equipo' | 'Masivo' | '';
 
+type SitioAsociado = {
+  id?: number;
+  nombre: string;
+};
+
 type FailureFormData = {
   fechaHoraFallo: string;
   affectationType: AffectationType;
@@ -64,6 +69,7 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [cliente, setCliente] = useState<string | null>(null);
   const [clienteFromConsole, setClienteFromConsole] = useState<string | null>(null);
   const [sitios, setSitios] = useState<string[]>([]);
+  const [sitio, setSitio] = useState<SitioAsociado | null>(null);
   const [, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [nodos, setNodos] = useState<CatalogoNodo[]>([]);
@@ -239,6 +245,36 @@ const TechnicalFailuresOperador: React.FC = () => {
     validate(newValues);
   };
 
+  const handleNodoChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const nodoId = e.target.value;
+    const newValues: FailureFormData = {
+      ...formData,
+      nodo: nodoId,
+    };
+
+    setFormData(newValues);
+    validate(newValues);
+    setSitio(null);
+
+    if (nodoId) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/nodos/${nodoId}/sitio`);
+        if (response.status === 404) {
+          setSitio({ nombre: 'No asignado' });
+          return;
+        }
+        if (!response.ok) {
+          throw new Error('Error al obtener sitio');
+        }
+        const data: SitioAsociado = await response.json();
+        setSitio(data);
+      } catch (error) {
+        console.error('No se pudo obtener el sitio asociado al nodo seleccionado:', error);
+        setSitio(null);
+      }
+    }
+  };
+
   const handleFechaHoraFalloChange = (isoValue: string) => {
     const newValues: FailureFormData = {
       ...formData,
@@ -260,6 +296,7 @@ const TechnicalFailuresOperador: React.FC = () => {
     setCliente(null);
     setClienteFromConsole(null);
     setSitios([]);
+    setSitio(null);
   };
 
   useEffect(() => {
@@ -377,6 +414,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       setCliente(null);
       setClienteFromConsole(null);
       setSitios([]);
+      setSitio(null);
     } catch (error) {
       console.error('Error al registrar el fallo técnico:', error);
       alert('No se pudo registrar el fallo técnico. Intente nuevamente.');
@@ -482,7 +520,7 @@ const TechnicalFailuresOperador: React.FC = () => {
                     id="nodo"
                     name="nodo"
                     value={formData.nodo}
-                    onChange={handleInputChange}
+                    onChange={handleNodoChange}
                     disabled={isLoadingNodos || nodos.length === 0}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm disabled:bg-gray-100 disabled:text-gray-500"
                   >
@@ -500,6 +538,11 @@ const TechnicalFailuresOperador: React.FC = () => {
                     <p className="text-red-500 text-xs mt-1">{nodosError}</p>
                   )}
                   {errors.nodo && <p className="text-red-500 text-xs mt-1">{errors.nodo}</p>}
+                  {sitio && (
+                    <p className="mt-2 text-[#1C2E4A] font-semibold">
+                      → Sitio: {sitio.nombre}
+                    </p>
+                  )}
                 </div>
                 {cliente && (
                   <div className="mt-6 p-2 bg-blue-100 text-blue-800 rounded-md text-sm font-semibold">
