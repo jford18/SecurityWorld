@@ -80,7 +80,11 @@ const routeConfig: RouteDefinition[] = [
   { path: '/administracion/catalogo-tipo-problema', element: <CatalogoTipoProblemaScreen /> },
   { path: '/administracion/asignacion-roles', element: <AsignacionRolesScreen /> },
   { path: '/administracion/menus', element: <MenuScreen /> },
-  { path: '/administracion/roles-menus', element: <RolMenuScreen /> },
+  {
+    path: '/administracion/roles-menus',
+    element: <RolMenuScreen />,
+    aliases: ['/administracion/rol-menu', '/administracion/roles-menu'],
+  },
 ];
 
 const normalizeRoleTokens = (tokens: unknown): RoleToken[] => {
