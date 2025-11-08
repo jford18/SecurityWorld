@@ -1,4 +1,4 @@
-import pool from "../db.js";
+import db from "../db.js";
 
 const normalizeBoolean = (value, defaultValue = false) => {
   if (typeof value === "boolean") {
@@ -23,44 +23,35 @@ const normalizeBoolean = (value, defaultValue = false) => {
 };
 
 export const getMenusByRol = async (req, res) => {
-  const { rol_id: rolIdParam } = req.params;
-  const rolId = Number(rolIdParam);
-
-  if (!Number.isInteger(rolId) || rolId <= 0) {
-    return res.status(400).json({ message: "Identificador de rol inválido" });
-  }
+  const { rol_id: rolId } = req.params;
+  console.log(`[API] GET /api/rol-menu/${rolId} — manejado correctamente`);
 
   try {
-    const roleResult = await pool.query("SELECT id FROM roles WHERE id = $1", [rolId]);
+    const query = `
+      SELECT
+          M.id,
+          M.nombre,
+          M.icono,
+          M.ruta,
+          M.seccion,
+          M.orden,
+          M.activo
+      FROM PUBLIC.MENUS M
+      INNER JOIN PUBLIC.ROL_MENU RM ON (RM.MENU_ID = M.ID)
+      INNER JOIN PUBLIC.ROLES R ON (R.ID = RM.ROL_ID)
+      WHERE RM.ROL_ID = $1
+        AND M.ACTIVO = TRUE
+        AND RM.ACTIVO = TRUE
+      ORDER BY COALESCE(M.SECCION, ''), M.ORDEN, M.ID;
+    `;
 
-    if (roleResult.rowCount === 0) {
-      return res.status(404).json({ message: "El rol especificado no existe" });
-    }
-
-    const { rows } = await pool.query(
-      `SELECT
-         m.id AS menu_id,
-         m.nombre,
-         m.seccion,
-         COALESCE(rm.activo, false) AS activo
-       FROM menus m
-       LEFT JOIN rol_menu rm
-         ON rm.menu_id = m.id AND rm.rol_id = $1
-       ORDER BY m.seccion NULLS LAST, m.orden ASC NULLS LAST, m.nombre ASC`,
-      [rolId]
-    );
-
-    const normalizedMenus = rows.map((row) => ({
-      menu_id: row.menu_id,
-      nombre: row.nombre,
-      seccion: row.seccion,
-      activo: Boolean(row.activo),
-    }));
-
-    return res.status(200).json(normalizedMenus);
+    const result = await db.query(query, [rolId]);
+    res.status(200).json(result.rows);
   } catch (error) {
-    console.error("Error al obtener menús por rol", error);
-    return res.status(500).json({ message: "Error al obtener los menús del rol" });
+    console.error("[API][ERROR] /api/rol-menu:", error.message);
+    res
+      .status(500)
+      .json({ error: "Error al obtener menús asignados al rol." });
   }
 };
 
@@ -76,12 +67,14 @@ export const saveRolMenus = async (req, res) => {
     return res.status(400).json({ message: "La lista de menús es obligatoria" });
   }
 
-  const client = await pool.connect();
+  const client = await db.connect();
 
   try {
     await client.query("BEGIN");
 
-    const roleResult = await client.query("SELECT id FROM roles WHERE id = $1 FOR SHARE", [rolId]);
+    const roleResult = await client.query("SELECT id FROM roles WHERE id = $1 FOR SHARE", [
+      rolId,
+    ]);
 
     if (roleResult.rowCount === 0) {
       await client.query("ROLLBACK");
@@ -94,7 +87,9 @@ export const saveRolMenus = async (req, res) => {
 
     if (menus.length > 0 && menuIds.length !== menus.length) {
       await client.query("ROLLBACK");
-      return res.status(400).json({ message: "Existen menús con identificadores inválidos" });
+      return res
+        .status(400)
+        .json({ message: "Existen menús con identificadores inválidos" });
     }
 
     if (menuIds.length > 0) {
@@ -108,7 +103,9 @@ export const saveRolMenus = async (req, res) => {
 
       if (missingMenus.length > 0) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ message: "Algunos menús no existen en el sistema" });
+        return res
+          .status(400)
+          .json({ message: "Algunos menús no existen en el sistema" });
       }
     }
 
