@@ -424,25 +424,6 @@ const TechnicalFailuresOperador: React.FC = () => {
   };
 
   const renderConditionalFields = () => {
-    const consoleInfoBox = (
-      <div className="md:col-span-2 p-4 bg-gray-50 rounded-lg border">
-        <h5 className="text-md font-semibold text-[#1C2E4A] mb-2">Información de la Consola</h5>
-        <div className="space-y-2 text-sm">
-          <p>
-            <span className="font-medium text-gray-600">Consola Activa:</span> {session.console}
-          </p>
-          <p>
-            <span className="font-medium text-gray-600">Cliente Asociado:</span>{' '}
-            {clienteFromConsole || 'N/A'}
-          </p>
-          <p>
-            <span className="font-medium text-gray-600">Sitio(s) Asociado(s):</span>{' '}
-            {sitios.length > 0 ? sitios.join(', ') : 'N/A'}
-          </p>
-        </div>
-      </div>
-    );
-
     const sitioSelectField = (
       <div className="md:col-span-2">
         <label htmlFor="sitio" className="block text-sm font-medium text-gray-700">
@@ -692,7 +673,6 @@ const TechnicalFailuresOperador: React.FC = () => {
                 {errors.camara && <p className="text-red-500 text-xs mt-1">{errors.camara}</p>}
               </div>
             )}
-            {consoleInfoBox}
           </>
         );
       default:
