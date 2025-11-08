@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createNodo,
   deleteNodo,
+  getSitioByNodo,
   getNodoById,
   listNodos,
   updateNodo,
@@ -10,6 +11,7 @@ import {
 const router = Router();
 
 router.get("/", listNodos);
+router.get("/:id/sitio", getSitioByNodo);
 router.get("/:id", getNodoById);
 router.post("/", createNodo);
 router.put("/:id", updateNodo);
