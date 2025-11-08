@@ -8,6 +8,7 @@ import consolasRoutes from "./consolas.routes.js";
 import menusRoutes from "./menus.routes.js";
 import fallosRoutes from "./fallos.routes.js";
 import catalogosRoutes from "./catalogos.routes.js";
+import catalogoTipoProblemaRoutes from "./routes/catalogoTipoProblema.js";
 import rolesRoutes from "./roles.routes.js";
 import usuariosRoutes from "./routes/usuarios.routes.js";
 import usuarioRolesRoutes from "./routes/usuarioRoles.routes.js";
@@ -32,6 +33,7 @@ const knownApiPrefixes = [
   "/api/roles",
   "/api/usuario-roles",
   "/api/rol-menu",
+  "/api/catalogo-tipo-problema",
 ];
 
 app.use((req, _res, next) => {
@@ -65,6 +67,7 @@ app.use("/", consolasRoutes);
 app.use("/", menusRoutes);
 app.use("/api/fallos", fallosRoutes);
 app.use("/api/catalogos", catalogosRoutes);
+app.use("/api/catalogo-tipo-problema", catalogoTipoProblemaRoutes);
 app.use("/api/usuarios", usuariosRoutes);
 app.use("/api/roles", rolesRoutes);
 app.use("/api/usuario-roles", usuarioRolesRoutes);
