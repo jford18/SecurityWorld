@@ -3,14 +3,12 @@ import {
   getFallos,
   createFallo,
   updateFallo,
-  getCatalogos,
 } from "./fallos.controller.js";
 
 const router = Router();
 
-router.get("/fallos", getFallos);
-router.post("/fallos", createFallo);
-router.put("/fallos/:id", updateFallo);
-router.get("/catalogos", getCatalogos);
+router.get("/", getFallos);
+router.post("/", createFallo);
+router.put("/:id", updateFallo);
 
 export default router;

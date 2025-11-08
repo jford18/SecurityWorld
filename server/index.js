@@ -6,6 +6,8 @@ import { existsSync } from "fs";
 import authRoutes from "./auth.routes.js";
 import consolasRoutes from "./consolas.routes.js";
 import menusRoutes from "./menus.routes.js";
+import fallosRoutes from "./fallos.routes.js";
+import catalogosRoutes from "./catalogos.routes.js";
 
 const app = express();
 app.use(express.json());
@@ -19,9 +21,14 @@ app.use(
   })
 );
 
+const knownApiPrefixes = ["/api/fallos", "/api/catalogos"];
+
 app.use((req, _res, next) => {
   console.log(`[API] ${req.method} ${req.originalUrl}`);
-  if (req.originalUrl.includes("/api/")) {
+  const shouldWarn =
+    req.originalUrl.includes("/api/") &&
+    !knownApiPrefixes.some((prefix) => req.originalUrl.startsWith(prefix));
+  if (shouldWarn) {
     console.warn("[API][ALERTA] Endpoint incorrecto detectado:", req.originalUrl);
   }
   const candidateRole =
@@ -45,6 +52,8 @@ app.use((req, _res, next) => {
 app.use("/", authRoutes);
 app.use("/", consolasRoutes);
 app.use("/", menusRoutes);
+app.use("/api/fallos", fallosRoutes);
+app.use("/api/catalogos", catalogosRoutes);
 
 const logRoutes = (stack) => {
   stack
