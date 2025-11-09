@@ -473,19 +473,20 @@ const Sitios: React.FC = () => {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-[#1C2E4A]">
-                {modalMode === 'create' ? 'Nuevo Sitio' : 'Editar Sitio'}
-              </h2>
-              <button type="button" className="text-gray-500 hover:text-gray-700" onClick={closeModal}>
-                ×
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="sitio-nombre" className="block text-sm font-medium text-[#1C2E4A]">
-                  Nombre del sitio
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+            <div className="flex max-h-[75vh] flex-col">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-[#1C2E4A]">
+                  {modalMode === 'create' ? 'Nuevo Sitio' : 'Editar Sitio'}
+                </h2>
+                <button type="button" className="text-gray-500 hover:text-gray-700" onClick={closeModal}>
+                  ×
+                </button>
+              </div>
+              <div className="mt-4 flex-1 space-y-4 overflow-y-auto pr-2 min-h-0">
+                <div className="space-y-2">
+                  <label htmlFor="sitio-nombre" className="block text-sm font-medium text-[#1C2E4A]">
+                    Nombre del sitio
                 </label>
                 <input
                   id="sitio-nombre"
@@ -566,7 +567,7 @@ const Sitios: React.FC = () => {
                 </div>
               </div>
               {latitud !== null && longitud !== null && (
-                <div>
+                <div className="animate-fadeIn">
                   <MapPreview
                     latitud={latitud}
                     longitud={longitud}
@@ -592,7 +593,7 @@ const Sitios: React.FC = () => {
               </div>
               {formError && <p className="text-sm text-red-600">{formError}</p>}
             </div>
-            <div className="flex justify-end space-x-3">
+            <div className="mt-4 flex justify-end space-x-3">
               <button type="button" className={secondaryButtonClasses} onClick={closeModal}>
                 Cancelar
               </button>
@@ -601,6 +602,7 @@ const Sitios: React.FC = () => {
               </button>
             </div>
           </div>
+        </div>
         </div>
       )}
     </div>
