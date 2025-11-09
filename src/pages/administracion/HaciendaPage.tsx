@@ -8,7 +8,7 @@ import {
   type HaciendaPayload,
   type HaciendaRecord,
   type HaciendaListResponse,
-} from '../../services/haciendaService';
+} from "@/services/haciendaService";
 import { useSession } from '../../components/context/SessionContext';
 
 const primaryButtonClasses =
@@ -107,7 +107,7 @@ const HaciendaPage: React.FC = () => {
     setErrorMessage('');
 
     try {
-      const response = await getHaciendas({
+      const { data: haciendasResponse } = await getHaciendas({
         page,
         limit,
         q: searchTerm || undefined,
@@ -115,8 +115,8 @@ const HaciendaPage: React.FC = () => {
       });
 
       setFetchState({
-        data: Array.isArray(response.data) ? response.data : [],
-        meta: response.meta ?? { ...defaultMeta, page, limit },
+        data: Array.isArray(haciendasResponse?.data) ? haciendasResponse.data : [],
+        meta: haciendasResponse?.meta ?? { ...defaultMeta, page, limit },
       });
     } catch (error) {
       const message = resolveErrorMessage(error, 'No se pudieron cargar las haciendas');
@@ -150,8 +150,8 @@ const HaciendaPage: React.FC = () => {
     setSuccessMessage('');
 
     try {
-      const response = await getHacienda(record.id);
-      const data = response.data ?? record;
+      const { data: haciendaResponse } = await getHacienda(record.id);
+      const data = haciendaResponse.data ?? record;
       setCurrentRecord(data);
       setFormState({
         nombre: data.nombre ?? '',
