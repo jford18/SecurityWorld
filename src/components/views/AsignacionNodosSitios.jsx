@@ -90,10 +90,26 @@ const AsignacionNodosSitios = () => {
     }
   }, []);
 
-  const loadSitiosCatalogo = useCallback(async () => {
+  const loadSitiosCatalogo = useCallback(async (options = {}) => {
+    const includeIdsRaw = Array.isArray(options.includeIds)
+      ? options.includeIds
+      : [];
+
+    const includeIds = includeIdsRaw
+      .map((value) => Number(value))
+      .filter((id) => Number.isInteger(id) && id > 0);
+
+    const uniqueIncludeIds = Array.from(new Set(includeIds));
+
     try {
       setLoadingSitios(true);
-      const response = await getSitios();
+      const params = { soloDisponibles: true };
+
+      if (uniqueIncludeIds.length > 0) {
+        params.sitioActualId = uniqueIncludeIds;
+      }
+
+      const response = await getSitios(params);
       const lista = Array.isArray(response)
         ? response
         : response?.data;
@@ -122,9 +138,10 @@ const AsignacionNodosSitios = () => {
   const loadAsignaciones = useCallback(
     async (nodoId) => {
       if (!nodoId) {
-        setSelectedSitios(new Set());
-        setInitialSitios(new Set());
-        return;
+        const vacio = new Set();
+        setSelectedSitios(vacio);
+        setInitialSitios(new Set(vacio));
+        return vacio;
       }
 
       try {
@@ -145,6 +162,7 @@ const AsignacionNodosSitios = () => {
         setSelectedSitios(asignados);
         setInitialSitios(new Set(asignados));
         setErrorMessage('');
+        return asignados;
       } catch (error) {
         console.error('Error al cargar asignaciones del nodo:', error);
         const message = resolveErrorMessage(
@@ -153,13 +171,27 @@ const AsignacionNodosSitios = () => {
         );
         setErrorMessage(message);
         toast.error(message);
-        setSelectedSitios(new Set());
-        setInitialSitios(new Set());
+        const vacio = new Set();
+        setSelectedSitios(vacio);
+        setInitialSitios(new Set(vacio));
+        return vacio;
       } finally {
         setLoadingAsignaciones(false);
       }
     },
     []
+  );
+
+  const refreshSitiosDisponibles = useCallback(
+    async (nodoId) => {
+      const asignados = await loadAsignaciones(nodoId);
+      const includeIds = Array.from(asignados ?? []).filter((id) =>
+        Number.isInteger(id)
+      );
+
+      await loadSitiosCatalogo({ includeIds });
+    },
+    [loadAsignaciones, loadSitiosCatalogo]
   );
 
   useEffect(() => {
@@ -168,13 +200,8 @@ const AsignacionNodosSitios = () => {
   }, [loadNodos, loadSitiosCatalogo]);
 
   useEffect(() => {
-    if (selectedNodoId) {
-      loadAsignaciones(selectedNodoId);
-    } else {
-      setSelectedSitios(new Set());
-      setInitialSitios(new Set());
-    }
-  }, [selectedNodoId, loadAsignaciones]);
+    refreshSitiosDisponibles(selectedNodoId);
+  }, [selectedNodoId, refreshSitiosDisponibles]);
 
   const handleSelectNodo = (event) => {
     const value = Number(event.target.value);
@@ -244,7 +271,7 @@ const AsignacionNodosSitios = () => {
       );
 
       toast.success('Cambios guardados correctamente');
-      await loadAsignaciones(selectedNodoId);
+      await refreshSitiosDisponibles(selectedNodoId);
     } catch (error) {
       console.error('Error al guardar cambios de asignación:', error);
       const message = resolveErrorMessage(error, 'No se pudieron guardar los cambios');
@@ -256,10 +283,8 @@ const AsignacionNodosSitios = () => {
   };
 
   const handleRefrescar = async () => {
-    await Promise.all([loadNodos(), loadSitiosCatalogo()]);
-    if (selectedNodoId) {
-      await loadAsignaciones(selectedNodoId);
-    }
+    await loadNodos();
+    await refreshSitiosDisponibles(selectedNodoId);
   };
 
   const isLoading = loadingNodos || loadingSitios || loadingAsignaciones;

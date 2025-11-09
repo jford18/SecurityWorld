@@ -103,6 +103,33 @@ const parseClienteId = (value) => {
   return parsed;
 };
 
+const parseBoolean = (value) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return ["true", "1", "yes", "y"].includes(normalized);
+  }
+
+  return false;
+};
+
+const parseSitioIds = (rawValue) => {
+  const values = Array.isArray(rawValue)
+    ? rawValue
+    : rawValue !== undefined && rawValue !== null
+    ? [rawValue]
+    : [];
+
+  const parsed = values
+    .map((value) => Number.parseInt(String(value), 10))
+    .filter((id) => Number.isInteger(id) && id > 0);
+
+  return Array.from(new Set(parsed));
+};
+
 const normalizeSitioPayload = (body) => {
   const hasClienteId =
     body !== null &&
@@ -150,9 +177,39 @@ const normalizeSitioPayload = (body) => {
   };
 };
 
-export const getSitios = async (_req, res) => {
+export const getSitios = async (req, res) => {
   try {
-    const result = await pool.query(`${SITIO_WITH_CLIENT_BASE_QUERY} ORDER BY S.nombre`);
+    const { soloDisponibles, sitioActualId } = req.query ?? {};
+
+    const onlyAvailable = parseBoolean(soloDisponibles);
+    const includeIds = parseSitioIds(sitioActualId);
+
+    const filters = [];
+    const values = [];
+
+    if (onlyAvailable) {
+      filters.push("S.activo = TRUE");
+
+      if (includeIds.length > 0) {
+        values.push(includeIds);
+        const paramIndex = values.length;
+        filters.push(
+          `(S.id NOT IN (SELECT NS.sitio_id FROM nodos_sitios NS) OR S.id = ANY($${paramIndex}::int[]))`
+        );
+      } else {
+        filters.push("S.id NOT IN (SELECT NS.sitio_id FROM nodos_sitios NS)");
+      }
+    }
+
+    let query = SITIO_WITH_CLIENT_BASE_QUERY;
+
+    if (filters.length > 0) {
+      query += ` WHERE ${filters.join(" AND ")}`;
+    }
+
+    query += " ORDER BY S.nombre";
+
+    const result = await pool.query(query, values);
     res.status(200).json(result.rows);
   } catch (error) {
     console.error("Error al obtener sitios:", error);

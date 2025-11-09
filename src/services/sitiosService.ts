@@ -27,8 +27,13 @@ export interface SitioPayload {
   cliente_id?: number | null;
 }
 
-export const getSitios = async () => {
-  const response = await api.get<Sitio[]>(BASE_PATH);
+export interface GetSitiosParams {
+  soloDisponibles?: boolean;
+  sitioActualId?: number | number[];
+}
+
+export const getSitios = async (params?: GetSitiosParams) => {
+  const response = await api.get<Sitio[]>(BASE_PATH, { params });
   return response.data;
 };
 
