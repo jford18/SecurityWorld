@@ -18,6 +18,7 @@ import usuariosRoutes from "./routes/usuarios.routes.js";
 import usuarioRolesRoutes from "./routes/usuarioRoles.routes.js";
 import rolMenuRoutes from "./routes/rolMenu.js";
 import sitiosRoutes from "./routes/sitios.routes.js";
+import haciendaRoutes from "./routes/hacienda.routes.js";
 
 const app = express();
 app.use(express.json());
@@ -44,6 +45,7 @@ const knownApiPrefixes = [
   "/api/sitios",
   "/api/usuario-roles",
   "/api/usuarios",
+  "/api/hacienda",
 ];
 
 app.use((req, _res, next) => {
@@ -87,6 +89,7 @@ app.use("/api/rol-menu", rolMenuRoutes);
 app.use("/api/sitios", sitiosRoutes);
 app.use("/api/clientes", clientesRoutes);
 app.use("/api/asignar-cliente-sitio", asignarClienteSitioRoutes);
+app.use("/api/hacienda", haciendaRoutes);
 
 const logRoutes = (stack) => {
   stack

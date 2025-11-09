@@ -3,7 +3,7 @@ export interface AxiosRequestConfig {
   method?: string;
   baseURL?: string;
   headers?: Record<string, string>;
-  params?: Record<string, string | number | boolean>;
+  params?: any;
   data?: any;
   withCredentials?: boolean;
 }

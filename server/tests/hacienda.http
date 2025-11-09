@@ -1,0 +1,38 @@
+### Listar haciendas
+GET http://localhost:3000/api/hacienda?page=1&limit=10&q=&activo=true
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Obtener detalle de una hacienda
+GET http://localhost:3000/api/hacienda/1
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Crear nueva hacienda
+POST http://localhost:3000/api/hacienda
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "nombre": "Hacienda Demo",
+  "direccion": "Av. Principal 123",
+  "activo": true
+}
+
+### Actualizar una hacienda existente
+PUT http://localhost:3000/api/hacienda/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "nombre": "Hacienda Demo Actualizada",
+  "direccion": "Av. Principal 456",
+  "activo": false
+}
+
+### Desactivar (borrado lógico) una hacienda
+DELETE http://localhost:3000/api/hacienda/1
+Authorization: Bearer {{token}}
+Accept: application/json
