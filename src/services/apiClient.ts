@@ -32,7 +32,7 @@ const CancelError = axiosWithCancel.Cancel!;
 const isCancel = axiosWithCancel.isCancel!;
 
 const apiClient = axios.create({
-  baseURL: "http://localhost:3000",
+  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:3000",
 });
 
 apiClient.interceptors.request.use((config) => {
