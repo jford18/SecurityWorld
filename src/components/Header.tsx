@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSession, clearSession } from './context/SessionContext';
+import AutocompleteComboBox from './ui/AutocompleteComboBox';
 
 const Header: React.FC = () => {
   const [time, setTime] = useState(new Date());
@@ -19,13 +20,12 @@ const Header: React.FC = () => {
     clearSession(setSession);
   };
 
-  const handleRoleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value;
-    if (!value) {
+  const handleRoleChange = (roleValue: string) => {
+    if (!roleValue) {
       return;
     }
 
-    const roleId = Number(value);
+    const roleId = Number(roleValue);
     if (Number.isNaN(roleId)) {
       return;
     }
@@ -59,6 +59,18 @@ const Header: React.FC = () => {
     }
   };
 
+  const roleItems = useMemo(
+    () => [
+      { id: 'empty', label: session.roles.length === 0 ? 'No hay roles disponibles' : 'Seleccione un rol', value: '' },
+      ...session.roles.map((role) => ({
+        id: String(role.id),
+        label: role.nombre,
+        value: String(role.id),
+      })),
+    ],
+    [session.roles]
+  );
+
   return (
     <header className="flex items-center justify-between h-20 px-6 bg-white border-b">
       <div className="flex items-baseline gap-4">
@@ -89,22 +101,16 @@ const Header: React.FC = () => {
       </div>
       <div className="flex items-center gap-4">
         {session.roles.length > 0 && (
-          <div className="flex items-center gap-2">
-            <label htmlFor="header-role-select" className="text-sm text-gray-600">
-              Rol activo
-            </label>
-            <select
-              id="header-role-select"
-              className="border border-gray-300 rounded-md px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300]"
-              value={session.roleId ?? ''}
+          <div className="w-52">
+            <AutocompleteComboBox
+              label="Rol activo"
+              value={session.roleId != null ? String(session.roleId) : ''}
               onChange={handleRoleChange}
-            >
-              {session.roles.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {role.nombre}
-                </option>
-              ))}
-            </select>
+              items={roleItems}
+              displayField="label"
+              valueField="value"
+              placeholder="Buscar rol..."
+            />
           </div>
         )}
         <div className="text-right">

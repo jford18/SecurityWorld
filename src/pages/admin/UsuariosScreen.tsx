@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import AutocompleteComboBox from '@/components/ui/AutocompleteComboBox';
 import {
   createUsuario,
   deleteUsuario,
@@ -34,6 +35,12 @@ const initialUpdateState: UsuarioUpdatePayload = {
   nombre_completo: '',
   activo: true,
 };
+
+const statusItems = [
+  { id: 'empty', label: 'Seleccione...', value: '' },
+  { id: 'true', label: 'Activo', value: 'true' },
+  { id: 'false', label: 'Inactivo', value: 'false' },
+];
 
 const Modal: React.FC<{
   title: string;
@@ -347,18 +354,15 @@ const UsuariosScreen: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700" htmlFor="edit_activo">
-              Estado
-            </label>
-            <select
-              id="edit_activo"
+            <AutocompleteComboBox
+              label="Estado"
               value={updateForm.activo ? 'true' : 'false'}
-              onChange={(event) => handleUpdateChange('activo', event.target.value === 'true')}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-            >
-              <option value="true">Activo</option>
-              <option value="false">Inactivo</option>
-            </select>
+              onChange={(value: string) => handleUpdateChange('activo', value === 'true')}
+              items={statusItems}
+              displayField="label"
+              valueField="value"
+              placeholder="Buscar estado..."
+            />
           </div>
         </Modal>
       )}

@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useSession } from '../context/SessionContext';
 import {
   TechnicalFailure,
   TechnicalFailureCatalogs,
@@ -13,6 +12,7 @@ import {
   TechnicalFailurePayload,
 } from '../../services/fallosService';
 import { calcularEstado } from './TechnicalFailuresUtils';
+import AutocompleteComboBox from '../ui/AutocompleteComboBox';
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
   departamentos: [],
@@ -40,12 +40,40 @@ const EditFailureModal: React.FC<{
     setEditData(failure);
   }, [failure]);
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
+  const updateField = (name: keyof TechnicalFailure, value: string) => {
     setEditData((prev) => ({ ...prev, [name]: value }));
   };
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    updateField(name as keyof TechnicalFailure, value);
+  };
+
+  const departamentoItems = useMemo(
+    () => [
+      { id: 'empty', label: 'Seleccione...', value: '' },
+      ...departamentos.map((departamento) => ({
+        id: String(departamento.id),
+        label: departamento.nombre,
+        value: departamento.nombre,
+      })),
+    ],
+    [departamentos]
+  );
+
+  const responsableItems = useMemo(
+    () => [
+      { id: 'empty', label: 'Seleccione...', value: '' },
+      ...responsables.map((responsable) => ({
+        id: String(responsable.id),
+        label: responsable.nombre,
+        value: responsable.nombre,
+      })),
+    ],
+    [responsables]
+  );
 
   const handleSave = () => {
     onSave(editData);
@@ -57,20 +85,17 @@ const EditFailureModal: React.FC<{
         <h4 className="text-[#1C2E4A] text-xl font-semibold mb-6">Editar Reporte de Fallo (Supervisor)</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Dpto. Responsable</label>
-            <select
-              name="deptResponsable"
-              value={editData.deptResponsable || ''}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-            >
-              <option value="">Seleccione...</option>
-              {departamentos.map((d) => (
-                <option key={d.id} value={d.nombre}>
-                  {d.nombre}
-                </option>
-              ))}
-            </select>
+            <AutocompleteComboBox
+              label="Dpto. Responsable"
+              value={editData.deptResponsable ?? ''}
+              onChange={(value: string) => updateField('deptResponsable', value)}
+              items={departamentoItems}
+              displayField="label"
+              valueField="value"
+              placeholder="Buscar departamento..."
+              disabled={departamentos.length === 0}
+              emptyMessage={departamentos.length === 0 ? 'No hay departamentos disponibles' : 'No se encontraron departamentos'}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Fecha Resolución</label>
@@ -93,40 +118,30 @@ const EditFailureModal: React.FC<{
             />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Responsable Verificación Apertura
-            </label>
-            <select
-              name="verificacionApertura"
-              value={editData.verificacionApertura || ''}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-            >
-              <option value="">Seleccione...</option>
-              {responsables.map((r) => (
-                <option key={r.id} value={r.nombre}>
-                  {r.nombre}
-                </option>
-              ))}
-            </select>
+            <AutocompleteComboBox
+              label="Responsable Verificación Apertura"
+              value={editData.verificacionApertura ?? ''}
+              onChange={(value: string) => updateField('verificacionApertura', value)}
+              items={responsableItems}
+              displayField="label"
+              valueField="value"
+              placeholder="Buscar responsable..."
+              disabled={responsables.length === 0}
+              emptyMessage={responsables.length === 0 ? 'No hay responsables disponibles' : 'No se encontraron responsables'}
+            />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Responsable Verificación Cierre
-            </label>
-            <select
-              name="verificacionCierre"
-              value={editData.verificacionCierre || ''}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-            >
-              <option value="">Seleccione...</option>
-              {responsables.map((r) => (
-                <option key={r.id} value={r.nombre}>
-                  {r.nombre}
-                </option>
-              ))}
-            </select>
+            <AutocompleteComboBox
+              label="Responsable Verificación Cierre"
+              value={editData.verificacionCierre ?? ''}
+              onChange={(value: string) => updateField('verificacionCierre', value)}
+              items={responsableItems}
+              displayField="label"
+              valueField="value"
+              placeholder="Buscar responsable..."
+              disabled={responsables.length === 0}
+              emptyMessage={responsables.length === 0 ? 'No hay responsables disponibles' : 'No se encontraron responsables'}
+            />
           </div>
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700">Novedad Detectada</label>
@@ -160,7 +175,6 @@ const EditFailureModal: React.FC<{
 };
 
 const TechnicalFailuresSupervisor: React.FC = () => {
-  const { session } = useSession();
   const [failures, setFailures] = useState<TechnicalFailure[]>([]);
   const [catalogos, setCatalogos] = useState<TechnicalFailureCatalogs>(emptyCatalogos);
   const [isModalOpen, setIsModalOpen] = useState(false);

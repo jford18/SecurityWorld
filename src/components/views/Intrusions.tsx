@@ -1,9 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { intrusionsData } from '../../data/mockData';
 // import { Intrusion } from '../../types';
+import AutocompleteComboBox from '../ui/AutocompleteComboBox';
 
 // NOTE: This component uses mock data and is not affected by the session context changes.
+const alertLevelItems = [
+  { id: 'empty', label: 'Seleccione...', value: '' },
+  { id: 'low', label: 'Baja', value: 'Baja' },
+  { id: 'medium', label: 'Media', value: 'Media' },
+  { id: 'high', label: 'Alta', value: 'Alta' },
+];
+
 const Intrusions: React.FC = () => {
+  const [alertLevel, setAlertLevel] = useState('');
   return (
     <div>
       <h3 className="text-3xl font-medium text-[#1C2E4A]">Registro de Intrusiones</h3>
@@ -23,13 +32,16 @@ const Intrusions: React.FC = () => {
             <label htmlFor="tipo_intrusion" className="block text-sm font-medium text-gray-700">Tipo de Intrusión</label>
             <input type="text" name="tipo_intrusion" id="tipo_intrusion" placeholder="Ej: Movimiento no autorizado" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
           </div>
-           <div>
-            <label htmlFor="nivel_alerta" className="block text-sm font-medium text-gray-700">Nivel de Alerta</label>
-            <select id="nivel_alerta" name="nivel_alerta" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-              <option>Baja</option>
-              <option>Media</option>
-              <option>Alta</option>
-            </select>
+          <div>
+            <AutocompleteComboBox
+              label="Nivel de Alerta"
+              value={alertLevel}
+              onChange={setAlertLevel}
+              items={alertLevelItems}
+              displayField="label"
+              valueField="value"
+              placeholder="Buscar nivel..."
+            />
           </div>
           <div className="md:col-span-2">
             <label htmlFor="observacion" className="block text-sm font-medium text-gray-700">Observaciones</label>
