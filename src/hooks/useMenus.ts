@@ -49,6 +49,34 @@ const addRouteWithSynonyms = (route: string, bucket: Set<string>) => {
   }
 };
 
+export const normalizeMenuRoute = (route: string | null | undefined): string | null => {
+  if (typeof route !== 'string') {
+    return null;
+  }
+
+  const trimmed = route.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const absolutePattern = /^(https?:)?\/\//i;
+  if (absolutePattern.test(trimmed)) {
+    try {
+      const url = new URL(trimmed, 'http://localhost');
+      const composedPath = `${url.pathname}${url.search}${url.hash}`;
+      const normalizedAbsolute = composedPath.startsWith('/')
+        ? composedPath
+        : `/${composedPath}`;
+      return normalizedAbsolute.replace(/\/+$/, '') || '/';
+    } catch {
+      // Si la URL es inválida, continuamos con la normalización estándar.
+    }
+  }
+
+  const normalized = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return normalized.replace(/\/+$/, '') || '/';
+};
+
 export const useMenus = (token: string | null, roleId: number | null, userId: number | null) => {
   const [menus, setMenus] = useState<MenuNode[]>([]);
   const [loading, setLoading] = useState(false);
@@ -93,11 +121,9 @@ export const flattenMenuRoutes = (nodes: MenuNode[]): string[] => {
 
   const visit = (items: MenuNode[]) => {
     items.forEach((item) => {
-      if (item.ruta && typeof item.ruta === 'string' && item.ruta.trim() !== '') {
-        const trimmed = item.ruta.trim();
-        const normalized = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-        const withoutTrailing = normalized.replace(/\/+$/, '') || '/';
-        addRouteWithSynonyms(withoutTrailing, routes);
+      const normalizedRoute = normalizeMenuRoute(item.ruta);
+      if (normalizedRoute) {
+        addRouteWithSynonyms(normalizedRoute, routes);
       }
       if (item.hijos?.length) {
         visit(item.hijos);
@@ -118,10 +144,7 @@ export const findAncestorChainByRoute = (
 
   const visit = (items: MenuNode[], ancestors: number[]): boolean => {
     for (const item of items) {
-      const rawRoute = typeof item.ruta === 'string' ? item.ruta.trim() : '';
-      const normalizedRoute = rawRoute
-        ? (rawRoute.startsWith('/') ? rawRoute : `/${rawRoute}`).replace(/\/+$/, '') || '/'
-        : null;
+      const normalizedRoute = normalizeMenuRoute(item.ruta);
       const newAncestors = [...ancestors, item.id];
       if (normalizedRoute && normalizedRoute === targetRoute) {
         chain.push(...ancestors);
