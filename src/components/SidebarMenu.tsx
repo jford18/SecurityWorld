@@ -7,6 +7,35 @@ import * as allIcons from 'lucide-react';
 
 const iconMap = allIcons as unknown as Record<string, React.ComponentType<any>>;
 
+const CLIENTES_ROUTE = '/administracion/clientes';
+const CLIENTES_MENU_ENTRY: MenuNode = {
+  id: -1000,
+  nombre: 'Clientes',
+  icono: 'Users',
+  ruta: CLIENTES_ROUTE,
+  seccion: 'MANTENIMIENTO',
+  orden: 999,
+  hijos: [],
+};
+
+const hasRoute = (items: MenuNode[], targetRoute: string): boolean => {
+  for (const item of items) {
+    const rawRoute = typeof item.ruta === 'string' ? item.ruta.trim() : '';
+    const normalizedRoute = rawRoute
+      ? (rawRoute.startsWith('/') ? rawRoute : `/${rawRoute}`).replace(/\/+$/, '') || '/'
+      : null;
+
+    if (normalizedRoute === targetRoute) {
+      return true;
+    }
+
+    if (item.hijos?.length && hasRoute(item.hijos, targetRoute)) {
+      return true;
+    }
+  }
+  return false;
+};
+
 interface DynamicIconProps extends allIcons.LucideProps {
   name: string;
 }
@@ -108,9 +137,21 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ menus }) => {
   const location = useLocation();
   const currentPath = location.pathname.replace(/\/+$/, '') || '/';
 
+  const effectiveMenus = useMemo(() => {
+    if (!menus.length) {
+      return [CLIENTES_MENU_ENTRY];
+    }
+
+    if (hasRoute(menus, CLIENTES_ROUTE)) {
+      return menus;
+    }
+
+    return [...menus, CLIENTES_MENU_ENTRY];
+  }, [menus]);
+
   const activeAncestors = useMemo(
-    () => findAncestorChainByRoute(menus, currentPath),
-    [menus, currentPath]
+    () => findAncestorChainByRoute(effectiveMenus, currentPath),
+    [effectiveMenus, currentPath]
   );
 
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set(activeAncestors));
@@ -136,16 +177,16 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ menus }) => {
   };
 
   const groupedAndSortedMenus = useMemo(() => {
-    const topLevelMenus = menus.filter(item => !menus.some(parent => parent.hijos.some(child => child.id === item.id)));
+    const topLevelMenus = effectiveMenus.filter(item => !effectiveMenus.some(parent => parent.hijos.some(child => child.id === item.id)));
     const grouped = groupBy(topLevelMenus, 'seccion');
     const sortedSections = Object.entries(grouped).map(([seccion, items]) => ({
       seccion,
       items: sortBy(items, 'orden'),
     }));
     return sortBy(sortedSections, section => section.items[0]?.orden ?? 0);
-  }, [menus]);
+  }, [effectiveMenus]);
 
-  if (!menus.length) {
+  if (!effectiveMenus.length) {
     console.warn('[Menús] Respuesta vacía del backend en SidebarMenu:', menus);
     return (
       <div className="px-4 py-2 text-sm text-gray-400">
