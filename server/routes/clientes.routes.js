@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express from "express";
 import {
   createCliente,
   deleteCliente,
@@ -6,7 +6,7 @@ import {
   updateCliente,
 } from "../controllers/clientes.controller.js";
 
-const router = Router();
+const router = express.Router();
 
 router.get("/", getClientes);
 router.post("/", createCliente);
