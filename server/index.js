@@ -10,6 +10,7 @@ import nodosSitiosRoutes from "./routes/nodosSitios.routes.js";
 import menusRoutes from "./menus.routes.js";
 import fallosRoutes from "./fallos.routes.js";
 import clientesRoutes from "./routes/clientes.routes.js";
+import asignarClienteSitioRoutes from "./routes/asignar_cliente_sitio.routes.js";
 import catalogosRoutes from "./catalogos.routes.js";
 import catalogoTipoProblemaRoutes from "./routes/catalogoTipoProblema.js";
 import rolesRoutes from "./roles.routes.js";
@@ -33,6 +34,7 @@ app.use(
 const knownApiPrefixes = [
   "/api/catalogo-tipo-problema",
   "/api/catalogos",
+  "/api/asignar-cliente-sitio",
   "/api/fallos",
   "/api/nodos",
   "/api/clientes",
@@ -84,6 +86,7 @@ app.use("/api/usuario-roles", usuarioRolesRoutes);
 app.use("/api/rol-menu", rolMenuRoutes);
 app.use("/api/sitios", sitiosRoutes);
 app.use("/api/clientes", clientesRoutes);
+app.use("/api/asignar-cliente-sitio", asignarClienteSitioRoutes);
 
 const logRoutes = (stack) => {
   stack
