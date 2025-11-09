@@ -25,6 +25,6 @@ app.use(express.json());
 // Rutas principales
 app.use("/api/auth", authRoutes);
 app.use("/api/clientes", clientesRoutes);
-app.use("/api", fallosRoutes);
+app.use("/api/fallos", fallosRoutes);
 
 export default app;
