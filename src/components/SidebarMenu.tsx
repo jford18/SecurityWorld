@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import React, { useEffect, useMemo, useState, Suspense } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type { MenuNode } from '../hooks/useMenus';
 import { findAncestorChainByRoute } from '../hooks/useMenus';
 import { groupBy, sortBy } from 'lodash';
 import * as allIcons from 'lucide-react';
 
-const iconMap = allIcons as Record<string, React.FC<allIcons.LucideProps>>;
+const iconMap = allIcons as unknown as Record<string, React.ComponentType<any>>;
 
 interface DynamicIconProps extends allIcons.LucideProps {
   name: string;

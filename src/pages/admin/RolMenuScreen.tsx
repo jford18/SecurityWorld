@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import AutocompleteComboBox from '@/components/ui/AutocompleteComboBox';
 import { fetchRolesDisponibles } from '../../services/usuarioRolesService';
 import { SaveRolMenuPayload, getMenusByRol, saveRolMenus } from '../../services/rolMenuService';
 
@@ -22,9 +23,6 @@ type RolOption = {
   nombre: string;
 };
 
-const dropdownClasses =
-  'mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]';
-
 type RolMenuStateItem = {
   menu_id: number;
   nombre: string;
@@ -41,6 +39,18 @@ const RolMenuScreen: React.FC = () => {
   const [loadingMenus, setLoadingMenus] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
+
+  const roleItems = useMemo(
+    () => [
+      { id: 'empty', label: roles.length === 0 ? 'No hay roles disponibles' : 'Seleccione un rol', value: '' },
+      ...roles.map((rol) => ({
+        id: String(rol.id),
+        label: rol.nombre,
+        value: String(rol.id),
+      })),
+    ],
+    [roles]
+  );
 
   const loadRoles = useCallback(async () => {
     try {
@@ -181,26 +191,24 @@ const RolMenuScreen: React.FC = () => {
       </div>
 
       <div className="rounded-lg bg-white p-4 shadow-sm">
-        <label htmlFor="rol-select" className="block text-sm font-medium text-gray-700">
-          Rol del sistema
-        </label>
-        <select
-          id="rol-select"
-          className={dropdownClasses}
-          value={selectedRolId ?? ''}
-          onChange={(event) => {
-            const value = Number(event.target.value);
-            setSelectedRolId(Number.isNaN(value) ? null : value);
+        <AutocompleteComboBox
+          label="Rol del sistema"
+          value={selectedRolId != null ? String(selectedRolId) : ''}
+          onChange={(value: string) => {
+            if (!value) {
+              setSelectedRolId(null);
+              return;
+            }
+            const parsed = Number(value);
+            setSelectedRolId(Number.isNaN(parsed) ? null : parsed);
           }}
+          items={roleItems}
+          displayField="label"
+          valueField="value"
+          placeholder="Buscar rol..."
           disabled={loadingRoles || roles.length === 0}
-        >
-          {roles.length === 0 && <option value="">No hay roles disponibles</option>}
-          {roles.map((rol) => (
-            <option key={rol.id} value={rol.id}>
-              {rol.nombre}
-            </option>
-          ))}
-        </select>
+          emptyMessage={roles.length === 0 ? 'No hay roles disponibles' : 'No se encontraron roles'}
+        />
         {loadingRoles && <p className="mt-2 text-sm text-gray-500">Cargando roles...</p>}
       </div>
 

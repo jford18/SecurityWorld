@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { alertsData } from '../../data/mockData';
 import { Alert } from '../../types';
+import AutocompleteComboBox from '../ui/AutocompleteComboBox';
 
 type Tab = 'creadas' | 'aceptadas' | 'ignoradas';
 
@@ -31,12 +32,20 @@ const AlertTable: React.FC<{ alerts: Alert[] }> = ({ alerts }) => (
 
 const SystemLogs: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('creadas');
-  
+
   const tabs: { id: Tab; label: string }[] = [
     { id: 'creadas', label: 'Alertas Creadas' },
     { id: 'aceptadas', label: 'Alertas Aceptadas' },
     { id: 'ignoradas', label: 'Alertas Ignoradas' },
   ];
+
+  const tabItems = useMemo(
+    () => [
+      { id: 'empty', label: 'Seleccione una pestaña', value: '' },
+      ...tabs.map((tab) => ({ id: tab.id, label: tab.label, value: tab.id })),
+    ],
+    [tabs]
+  );
 
   return (
     <div>
@@ -44,16 +53,19 @@ const SystemLogs: React.FC = () => {
       
       <div className="mt-8">
         <div className="sm:hidden">
-          <label htmlFor="tabs" className="sr-only">Select a tab</label>
-          <select 
-            id="tabs" 
-            name="tabs" 
-            className="block w-full focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
-            onChange={(e) => setActiveTab(e.target.value as Tab)}
+          <AutocompleteComboBox
+            label="Selecciona una pestaña"
             value={activeTab}
-          >
-            {tabs.map((tab) => <option key={tab.id}>{tab.label}</option>)}
-          </select>
+            onChange={(value: string) => {
+              if (value) {
+                setActiveTab(value as Tab);
+              }
+            }}
+            items={tabItems}
+            displayField="label"
+            valueField="value"
+            placeholder="Buscar pestaña..."
+          />
         </div>
         <div className="hidden sm:block">
           <div className="border-b border-gray-200">

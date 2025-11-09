@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSession } from '../context/SessionContext';
 import FechaHoraFalloPicker from '../ui/FechaHoraFalloPicker';
+import AutocompleteComboBox from '../ui/AutocompleteComboBox';
 import { TechnicalFailure, TechnicalFailureCatalogs, CatalogoNodo } from '../../types';
 import {
   fetchFallos,
@@ -75,6 +76,66 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [nodos, setNodos] = useState<CatalogoNodo[]>([]);
   const [nodosError, setNodosError] = useState<string | null>(null);
   const [isLoadingNodos, setIsLoadingNodos] = useState(false);
+
+  const sitioItems = useMemo(
+    () => [
+      { id: 'empty', nombre: 'Seleccione...', value: '' },
+      ...sitios.map((nombre) => ({ id: nombre, nombre, value: nombre })),
+    ],
+    [sitios]
+  );
+
+  const tipoProblemaItems = useMemo(
+    () => [
+      { id: 'empty', descripcion: 'Seleccione...', value: '' },
+      ...catalogos.tiposProblema.map((tp) => ({
+        id: String(tp.id ?? tp.descripcion ?? ''),
+        descripcion: tp.descripcion,
+        value: tp.descripcion ?? '',
+      })),
+    ],
+    [catalogos.tiposProblema]
+  );
+
+  const nodoItems = useMemo(
+    () => [
+      { id: 'empty', nombre: 'Seleccione un nodo', value: '' },
+      ...nodos.map((nodoItem) => ({
+        id: String(nodoItem.id),
+        nombre: nodoItem.nombre,
+        value: String(nodoItem.id),
+      })),
+    ],
+    [nodos]
+  );
+
+  const tipoEquipoItems = useMemo(
+    () => [
+      { id: 'empty', label: 'Seleccione...', value: '' },
+      ...catalogos.tiposEquipo.map((tipo) => ({ id: tipo, label: tipo, value: tipo })),
+    ],
+    [catalogos.tiposEquipo]
+  );
+
+  const tipoProblemaEquipoItems = useMemo(
+    () => [
+      { id: 'empty', label: 'Seleccione...', value: '' },
+      ...catalogos.tiposProblemaEquipo.map((tipo) => ({ id: tipo, label: tipo, value: tipo })),
+    ],
+    [catalogos.tiposProblemaEquipo]
+  );
+
+  const camaraItems = useMemo(
+    () => [
+      { id: 'empty', nombre: 'Seleccione...', value: '' },
+      ...catalogos.dispositivos.map((dispositivo) => ({
+        id: String(dispositivo.id ?? dispositivo.nombre ?? ''),
+        nombre: dispositivo.nombre,
+        value: dispositivo.nombre,
+      })),
+    ],
+    [catalogos.dispositivos]
+  );
 
   const extractNodosFromResponse = (payload: unknown): CatalogoNodo[] => {
     const rawArray = Array.isArray(payload)
@@ -223,13 +284,10 @@ const TechnicalFailuresOperador: React.FC = () => {
     return Object.values(tempErrors).every((x) => x === '' || x === undefined);
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-    const checked = (e.target as HTMLInputElement).checked;
-
+  const applyFieldUpdate = (name: keyof FailureFormData, rawValue: string | boolean) => {
     const newValues: FailureFormData = {
       ...formData,
-      [name]: type === 'checkbox' ? checked : value,
+      [name]: rawValue,
     } as FailureFormData;
 
     if (name === 'tipoEquipo') {
@@ -237,28 +295,34 @@ const TechnicalFailuresOperador: React.FC = () => {
       newValues.tipoProblemaEquipo = '';
     }
 
-    if (name === 'affectationType') {
-      newValues.sitio = '';
-    }
-
     setFormData(newValues);
     validate(newValues);
   };
 
-  const handleNodoChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const nodoId = e.target.value;
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, type } = e.target;
+    const fieldName = name as keyof FailureFormData;
+    const value = type === 'checkbox'
+      ? (e.target as HTMLInputElement).checked
+      : e.target.value;
+
+    applyFieldUpdate(fieldName, value);
+  };
+
+  const handleNodoChange = async (nodoId: string) => {
+    const normalizedId = nodoId ?? '';
     const newValues: FailureFormData = {
       ...formData,
-      nodo: nodoId,
+      nodo: normalizedId,
     };
 
     setFormData(newValues);
     validate(newValues);
     setSitio(null);
 
-    if (nodoId) {
+    if (normalizedId) {
       try {
-        const response = await fetch(`${API_BASE_URL}/nodos/${nodoId}/sitio`);
+        const response = await fetch(`${API_BASE_URL}/nodos/${normalizedId}/sitio`);
         if (response.status === 404) {
           setSitio({ nombre: 'No asignado' });
           return;
@@ -272,6 +336,8 @@ const TechnicalFailuresOperador: React.FC = () => {
         console.error('No se pudo obtener el sitio asociado al nodo seleccionado:', error);
         setSitio(null);
       }
+    } else {
+      setSitio(null);
     }
   };
 
@@ -426,24 +492,18 @@ const TechnicalFailuresOperador: React.FC = () => {
   const renderConditionalFields = () => {
     const sitioSelectField = (
       <div className="md:col-span-2">
-        <label htmlFor="sitio" className="block text-sm font-medium text-gray-700">
-          Sitio *
-        </label>
-        <select
-          id="sitio"
-          name="sitio"
+        <AutocompleteComboBox
+          label="Sitio *"
           value={formData.sitio}
-          onChange={handleInputChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-        >
-          <option value="">Seleccione...</option>
-          {sitios.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        {errors.sitio && <p className="text-red-500 text-xs mt-1">{errors.sitio}</p>}
+          onChange={(selected: string) => applyFieldUpdate('sitio', selected)}
+          items={sitioItems}
+          displayField="nombre"
+          valueField="value"
+          placeholder="Buscar sitio..."
+          disabled={sitios.length === 0}
+          error={errors.sitio}
+          emptyMessage={sitios.length === 0 ? 'No hay sitios disponibles' : 'No se encontraron sitios'}
+        />
       </div>
     );
 
@@ -453,23 +513,15 @@ const TechnicalFailuresOperador: React.FC = () => {
           <>
             <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label htmlFor="tipoProblema" className="block text-sm font-medium text-gray-700">
-                  Tipo de Problema *
-                </label>
-                <select
-                  id="tipoProblema"
-                  name="tipoProblema"
+                <AutocompleteComboBox
+                  label="Tipo de Problema *"
                   value={formData.tipoProblema}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-                >
-                  <option value="">Seleccione...</option>
-                  {catalogos.tiposProblema.map((tp) => (
-                    <option key={tp.id} value={tp.descripcion}>
-                      {tp.descripcion}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(selected: string) => applyFieldUpdate('tipoProblema', selected)}
+                  items={tipoProblemaItems}
+                  displayField="descripcion"
+                  valueField="value"
+                  placeholder="Buscar tipo de problema..."
+                />
               </div>
               <div className="flex items-end">
                 <div className="flex items-start">
@@ -492,43 +544,34 @@ const TechnicalFailuresOperador: React.FC = () => {
               </div>
             </div>
             <div className="md:col-span-2">
-              <div>
-                <label htmlFor="nodo" className="block text-sm font-medium text-gray-700">
-                  Nodo *
-                </label>
-                <select
-                  id="nodo"
-                  name="nodo"
-                  value={formData.nodo}
-                  onChange={handleNodoChange}
-                  disabled={isLoadingNodos || nodos.length === 0}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm disabled:bg-gray-100 disabled:text-gray-500"
-                >
-                  <option value="">Seleccione un nodo</option>
-                  {nodos.map((n) => (
-                    <option key={n.id} value={String(n.id)}>
-                      {n.nombre}
-                    </option>
-                  ))}
-                </select>
-                {!isLoadingNodos && nodos.length === 0 && !nodosError && (
-                  <p className="text-sm text-gray-500 mt-1">No hay nodos registrados.</p>
-                )}
-                {nodosError && (
-                  <p className="text-red-500 text-xs mt-1">{nodosError}</p>
-                )}
-                {errors.nodo && <p className="text-red-500 text-xs mt-1">{errors.nodo}</p>}
-                {sitio && (
-                  <div className="d-flex justify-content-end mt-2">
-                    <span
-                      className="badge bg-primary-subtle text-primary fw-semibold px-3 py-2 rounded-pill"
-                      style={{ fontSize: "0.9rem" }}
-                    >
-                      → Sitio: {sitio.nombre}
-                    </span>
-                  </div>
-                )}
-              </div>
+              <AutocompleteComboBox
+                label="Nodo *"
+                value={formData.nodo}
+                onChange={handleNodoChange}
+                items={nodoItems}
+                displayField="nombre"
+                valueField="value"
+                placeholder="Buscar nodo..."
+                disabled={isLoadingNodos || nodos.length === 0}
+                error={errors.nodo}
+                emptyMessage={nodos.length === 0 ? 'No hay nodos registrados.' : 'No se encontraron nodos'}
+              />
+              {!isLoadingNodos && nodos.length === 0 && !nodosError && (
+                <p className="text-sm text-gray-500 mt-1">No hay nodos registrados.</p>
+              )}
+              {nodosError && (
+                <p className="text-red-500 text-xs mt-1">{nodosError}</p>
+              )}
+              {sitio && (
+                <div className="d-flex justify-content-end mt-2">
+                  <span
+                    className="badge bg-primary-subtle text-primary fw-semibold px-3 py-2 rounded-pill"
+                    style={{ fontSize: '0.9rem' }}
+                  >
+                    → Sitio: {sitio.nombre}
+                  </span>
+                </div>
+              )}
             </div>
           </>
         );
@@ -537,23 +580,15 @@ const TechnicalFailuresOperador: React.FC = () => {
           <>
             <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label htmlFor="tipoProblema" className="block text-sm font-medium text-gray-700">
-                  Tipo de Problema *
-                </label>
-                <select
-                  id="tipoProblema"
-                  name="tipoProblema"
+                <AutocompleteComboBox
+                  label="Tipo de Problema *"
                   value={formData.tipoProblema}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-                >
-                  <option value="">Seleccione...</option>
-                  {catalogos.tiposProblema.map((tp) => (
-                    <option key={tp.id} value={tp.descripcion}>
-                      {tp.descripcion}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(selected: string) => applyFieldUpdate('tipoProblema', selected)}
+                  items={tipoProblemaItems}
+                  displayField="descripcion"
+                  valueField="value"
+                  placeholder="Buscar tipo de problema..."
+                />
               </div>
               <div className="flex items-end">
                 <div className="flex items-start">
@@ -583,24 +618,16 @@ const TechnicalFailuresOperador: React.FC = () => {
           <>
             <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label htmlFor="tipoEquipo" className="block text-sm font-medium text-gray-700">
-                  Tipo de Equipo Afectado *
-                </label>
-                <select
-                  id="tipoEquipo"
-                  name="tipoEquipo"
+                <AutocompleteComboBox
+                  label="Tipo de Equipo Afectado *"
                   value={formData.tipoEquipo}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-                >
-                  <option value="">Seleccione...</option>
-                  {catalogos.tiposEquipo.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-                {errors.tipoEquipo && <p className="text-red-500 text-xs mt-1">{errors.tipoEquipo}</p>}
+                  onChange={(selected: string) => applyFieldUpdate('tipoEquipo', selected)}
+                  items={tipoEquipoItems}
+                  displayField="label"
+                  valueField="value"
+                  placeholder="Buscar tipo de equipo..."
+                  error={errors.tipoEquipo}
+                />
               </div>
               <div className="flex items-end">
                 <div className="flex items-start">
@@ -625,51 +652,30 @@ const TechnicalFailuresOperador: React.FC = () => {
             {sitioSelectField}
             {formData.tipoEquipo && formData.tipoEquipo !== 'Cámara' && (
               <div className="md:col-span-2">
-                <label
-                  htmlFor="tipoProblemaEquipo"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Tipo de problema en equipo *
-                </label>
-                <select
-                  id="tipoProblemaEquipo"
-                  name="tipoProblemaEquipo"
+                <AutocompleteComboBox
+                  label="Tipo de problema en equipo *"
                   value={formData.tipoProblemaEquipo}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-                >
-                  <option value="">Seleccione...</option>
-                  {catalogos.tiposProblemaEquipo.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-                {errors.tipoProblemaEquipo && (
-                  <p className="text-red-500 text-xs mt-1">{errors.tipoProblemaEquipo}</p>
-                )}
+                  onChange={(selected: string) => applyFieldUpdate('tipoProblemaEquipo', selected)}
+                  items={tipoProblemaEquipoItems}
+                  displayField="label"
+                  valueField="value"
+                  placeholder="Buscar tipo de problema..."
+                  error={errors.tipoProblemaEquipo}
+                />
               </div>
             )}
             {formData.tipoEquipo === 'Cámara' && (
               <div className="md:col-span-2">
-                <label htmlFor="camara" className="block text-sm font-medium text-gray-700">
-                  Cámara *
-                </label>
-                <select
-                  id="camara"
-                  name="camara"
+                <AutocompleteComboBox
+                  label="Cámara *"
                   value={formData.camara}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-                >
-                  <option value="">Seleccione...</option>
-                  {catalogos.dispositivos.map((d) => (
-                    <option key={d.id} value={d.nombre}>
-                      {d.nombre}
-                    </option>
-                  ))}
-                </select>
-                {errors.camara && <p className="text-red-500 text-xs mt-1">{errors.camara}</p>}
+                  onChange={(selected: string) => applyFieldUpdate('camara', selected)}
+                  items={camaraItems}
+                  displayField="nombre"
+                  valueField="value"
+                  placeholder="Buscar cámara..."
+                  error={errors.camara}
+                />
               </div>
             )}
           </>
