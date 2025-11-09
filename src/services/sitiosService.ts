@@ -12,6 +12,8 @@ export interface Sitio {
   longitud: number | null;
   activo: boolean;
   fecha_creacion?: string;
+  cliente_id: number | null;
+  cliente_nombre: string | null;
 }
 
 export interface SitioPayload {
@@ -22,6 +24,7 @@ export interface SitioPayload {
   link_mapa: string;
   latitud: number;
   longitud: number;
+  cliente_id?: number | null;
 }
 
 export const getSitios = async () => {

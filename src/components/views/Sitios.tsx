@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import AutocompleteComboBox from '../ui/AutocompleteComboBox';
+import api from '../../services/api';
 import {
   Sitio,
   SitioPayload,
@@ -67,6 +69,98 @@ const extractCoordinatesFromLink = (
   }
 
   return null;
+};
+
+interface ClienteOption {
+  id: number;
+  nombre: string | null;
+}
+
+const CLIENTES_ENDPOINT = '/api/clientes';
+
+const parseClienteIdValue = (value: unknown): number | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+
+    if (!trimmed) {
+      return null;
+    }
+
+    const parsed = Number.parseInt(trimmed, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  return null;
+};
+
+const normalizeClienteNombre = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  return String(value);
+};
+
+const isClienteActivo = (value: unknown): boolean => {
+  if (value === null || value === undefined) {
+    return true;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return value !== 0;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+
+    if (!normalized) {
+      return true;
+    }
+
+    if (['0', 'false', 'f', 'no', 'n', 'inactivo', 'inactive', 'desactivado'].includes(normalized)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  return true;
+};
+
+const resolveClientesPayload = (raw: unknown): unknown[] => {
+  if (Array.isArray(raw)) {
+    return raw;
+  }
+
+  if (raw && typeof raw === 'object') {
+    const firstLevel = (raw as { data?: unknown }).data;
+
+    if (Array.isArray(firstLevel)) {
+      return firstLevel;
+    }
+
+    if (firstLevel && typeof firstLevel === 'object') {
+      const secondLevel = (firstLevel as { data?: unknown }).data;
+
+      if (Array.isArray(secondLevel)) {
+        return secondLevel;
+      }
+    }
+  }
+
+  return [];
 };
 
 interface MapPreviewProps {
@@ -157,6 +251,10 @@ const Sitios: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<ModalMode>('create');
   const [selectedSitio, setSelectedSitio] = useState<Sitio | null>(null);
+  const [clientes, setClientes] = useState<ClienteOption[]>([]);
+  const [clientesLoading, setClientesLoading] = useState<boolean>(false);
+  const [clientesError, setClientesError] = useState<string | null>(null);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<string>('');
 
   const [nombre, setNombre] = useState<string>('');
   const [descripcion, setDescripcion] = useState<string>('');
@@ -191,9 +289,108 @@ const Sitios: React.FC = () => {
     }
   };
 
+  const loadClientes = useCallback(async () => {
+    try {
+      setClientesLoading(true);
+      setClientesError(null);
+
+      const response = await api.get(CLIENTES_ENDPOINT);
+      const payload = resolveClientesPayload(response?.data ?? response);
+
+      const unique = new Map<number, ClienteOption>();
+
+      for (const entry of payload) {
+        if (!entry || typeof entry !== 'object') {
+          continue;
+        }
+
+        const candidate = entry as { id?: unknown; nombre?: unknown; activo?: unknown };
+
+        if (!isClienteActivo(candidate.activo)) {
+          continue;
+        }
+
+        const parsedId = parseClienteIdValue(candidate.id);
+
+        if (parsedId === null) {
+          continue;
+        }
+
+        const rawNombre = normalizeClienteNombre(candidate.nombre);
+        const cleanedNombre = rawNombre && rawNombre.trim() ? rawNombre.trim() : null;
+
+        unique.set(parsedId, { id: parsedId, nombre: cleanedNombre });
+      }
+
+      const ordered = Array.from(unique.values()).sort((a, b) =>
+        (a.nombre ?? `Cliente ${a.id}`).localeCompare(b.nombre ?? `Cliente ${b.id}`, 'es', {
+          sensitivity: 'base',
+        })
+      );
+
+      setClientes(ordered);
+    } catch (error) {
+      console.error('Error al cargar clientes:', error);
+
+      const responseMessage = (error as {
+        response?: { data?: { message?: unknown } };
+      })?.response?.data?.message;
+
+      const message =
+        typeof responseMessage === 'string' && responseMessage.trim()
+          ? responseMessage.trim()
+          : error instanceof Error && error.message
+          ? error.message
+          : 'No se pudieron cargar los clientes';
+
+      setClientesError(message);
+      setClientes([]);
+    } finally {
+      setClientesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadSitios();
   }, []);
+
+  useEffect(() => {
+    loadClientes();
+  }, [loadClientes]);
+
+  const clienteItems = useMemo((): Array<{ id: string; nombre: string }> => {
+    const unique = new Map<string, { id: string; nombre: string }>();
+
+    for (const cliente of clientes) {
+      const key = String(cliente.id);
+      const nombre = cliente.nombre && cliente.nombre.trim()
+        ? cliente.nombre.trim()
+        : `Cliente ${key}`;
+
+      unique.set(key, { id: key, nombre });
+    }
+
+    const selectedId = selectedSitio?.cliente_id;
+
+    if (selectedId !== null && selectedId !== undefined) {
+      const key = String(selectedId);
+
+      if (!unique.has(key)) {
+        const selectedNombre =
+          selectedSitio?.cliente_nombre && selectedSitio.cliente_nombre.trim()
+            ? selectedSitio.cliente_nombre.trim()
+            : `Cliente ${key}`;
+
+        unique.set(key, { id: key, nombre: selectedNombre });
+      }
+    }
+
+    const sorted = Array.from(unique.values()).sort((a, b) =>
+      a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' })
+    );
+
+    return [{ id: '', nombre: 'Sin cliente asignado' }, ...sorted];
+  }, [clientes, selectedSitio]);
 
   const resetForm = () => {
     setNombre('');
@@ -207,12 +404,16 @@ const Sitios: React.FC = () => {
     setLinkError('');
     setMapError('');
     setMapStatus('idle');
+    setClienteSeleccionado('');
   };
 
   const handleOpenCreateModal = () => {
     resetForm();
     setModalMode('create');
     setSelectedSitio(null);
+    if (!clientesLoading && clientes.length === 0) {
+      loadClientes();
+    }
     setIsModalOpen(true);
   };
 
@@ -223,6 +424,11 @@ const Sitios: React.FC = () => {
     setDescripcion(sitio.descripcion ?? '');
     setUbicacion(sitio.ubicacion ?? '');
     setActivo(Boolean(sitio.activo));
+    setClienteSeleccionado(
+      sitio.cliente_id !== null && sitio.cliente_id !== undefined
+        ? String(sitio.cliente_id)
+        : ''
+    );
     setFormError('');
     const latValue =
       typeof sitio.latitud === 'number'
@@ -242,6 +448,9 @@ const Sitios: React.FC = () => {
     setLinkError('');
     setMapError('');
     setMapStatus(latValue !== null && lngValue !== null ? 'loading' : 'idle');
+    if (!clientesLoading && clientes.length === 0) {
+      loadClientes();
+    }
     setIsModalOpen(true);
   };
 
@@ -344,6 +553,8 @@ const Sitios: React.FC = () => {
       return;
     }
 
+    const clienteId = parseClienteIdValue(clienteSeleccionado);
+
     const payload: SitioPayload = {
       nombre: trimmedName,
       descripcion: trimmedDescripcion || null,
@@ -352,6 +563,7 @@ const Sitios: React.FC = () => {
       link_mapa: trimmedLinkMapa,
       latitud,
       longitud,
+      cliente_id: clienteId,
     };
 
     try {
@@ -428,6 +640,9 @@ const Sitios: React.FC = () => {
                     Ubicación
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                    Cliente
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
                     Activo
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
@@ -445,6 +660,11 @@ const Sitios: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       {sitio.ubicacion && sitio.ubicacion.trim() ? sitio.ubicacion : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {sitio.cliente_nombre && sitio.cliente_nombre.trim()
+                        ? sitio.cliente_nombre.trim()
+                        : 'Sin asignar'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">{sitio.activo ? 'Sí' : 'No'}</td>
                     <td className="px-4 py-3 text-sm text-gray-700 space-x-2">
@@ -521,6 +741,25 @@ const Sitios: React.FC = () => {
                   onChange={(event) => setUbicacion(event.target.value)}
                   className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
                   placeholder="Ubicación física o referencia"
+                />
+              </div>
+              <div className="space-y-2">
+                <AutocompleteComboBox
+                  label="Cliente"
+                  items={clienteItems}
+                  value={clienteSeleccionado}
+                  onChange={(value) => {
+                    setClienteSeleccionado(value ?? '');
+                    setFormError('');
+                  }}
+                  placeholder="Buscar cliente..."
+                  displayField="nombre"
+                  valueField="id"
+                  disabled={clientesLoading}
+                  emptyMessage={
+                    clientesLoading ? 'Cargando clientes...' : 'No se encontraron clientes activos'
+                  }
+                  error={clientesError ?? undefined}
                 />
               </div>
               <div className="space-y-2">
