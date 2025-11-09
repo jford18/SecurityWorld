@@ -24,6 +24,7 @@ import AsignacionRolesScreen from './pages/admin/AsignacionRolesScreen';
 import MenuScreen from './pages/admin/MenuScreen';
 import RolMenuScreen from './pages/admin/RolMenuScreen';
 import Nodos from './components/views/Nodos.jsx';
+import Clientes from './pages/administracion/Clientes';
 import Unauthorized from './pages/Unauthorized';
 import NotFound from './pages/NotFound';
 
@@ -89,6 +90,7 @@ const routeConfig: RouteDefinition[] = [
     element: <Nodos />,
     aliases: ['/admin/nodos'],
   },
+  { path: '/administracion/clientes', element: <Clientes /> },
   { path: '/administracion/roles', element: <RolesScreen /> },
   { path: '/administracion/usuarios', element: <UsuariosScreen /> },
   { path: '/administracion/catalogo-tipo-problema', element: <CatalogoTipoProblemaScreen /> },

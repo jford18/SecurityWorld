@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import authRoutes from "./auth.routes.js";
 import fallosRoutes from "./fallos.routes.js";
+import clientesRoutes from "./routes/clientes.routes.js";
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use(express.json());
 
 // Rutas principales
 app.use("/api/auth", authRoutes);
+app.use("/api/clientes", clientesRoutes);
 app.use("/api", fallosRoutes);
 
 export default app;
