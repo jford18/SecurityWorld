@@ -7,6 +7,9 @@ export interface Sitio {
   nombre: string;
   descripcion: string | null;
   ubicacion: string | null;
+  link_mapa: string | null;
+  latitud: number | null;
+  longitud: number | null;
   activo: boolean;
   fecha_creacion?: string;
 }
@@ -16,6 +19,9 @@ export interface SitioPayload {
   descripcion?: string | null;
   ubicacion?: string | null;
   activo?: boolean;
+  link_mapa: string;
+  latitud: number;
+  longitud: number;
 }
 
 export const getSitios = async () => {
