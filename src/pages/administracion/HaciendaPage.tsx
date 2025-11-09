@@ -9,6 +9,7 @@ import {
   type HaciendaRecord,
   type HaciendaListResponse,
 } from '../../services/haciendaService';
+import { useSession } from '../../components/context/SessionContext';
 
 const primaryButtonClasses =
   'inline-flex items-center justify-center rounded-md bg-[#1C2E4A] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#243b55] focus:outline-none focus:ring-2 focus:ring-[#1C2E4A] focus:ring-offset-2';
@@ -70,6 +71,8 @@ const resolveErrorMessage = (error: unknown, fallback: string) => {
 };
 
 const HaciendaPage: React.FC = () => {
+  const { session } = useSession();
+  const hasAuthToken = Boolean(session.token);
   const [fetchState, setFetchState] = useState<FetchState>({ data: [], meta: defaultMeta });
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -96,6 +99,10 @@ const HaciendaPage: React.FC = () => {
   }, [fetchState.meta.limit, fetchState.meta.total]);
 
   const fetchHaciendas = useCallback(async () => {
+    if (!hasAuthToken) {
+      return;
+    }
+
     setLoading(true);
     setErrorMessage('');
 
@@ -118,11 +125,15 @@ const HaciendaPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [activoFilter, limit, page, searchTerm]);
+  }, [activoFilter, hasAuthToken, limit, page, searchTerm]);
 
   useEffect(() => {
+    if (!hasAuthToken) {
+      return;
+    }
+
     fetchHaciendas();
-  }, [fetchHaciendas]);
+  }, [fetchHaciendas, hasAuthToken]);
 
   const openCreateModal = () => {
     setModalMode('create');
