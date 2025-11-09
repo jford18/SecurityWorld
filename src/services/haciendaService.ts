@@ -1,6 +1,6 @@
-import api from './api';
+import apiClient from "@/services/apiClient";
 
-const BASE_PATH = '/api/hacienda';
+const BASE_PATH = "/api/hacienda";
 
 export interface HaciendaRecord {
   id: number;
@@ -27,7 +27,7 @@ export interface HaciendaFilters {
   page?: number;
   limit?: number;
   q?: string;
-  activo?: 'true' | 'false';
+  activo?: "true" | "false";
 }
 
 export interface HaciendaPayload {
@@ -36,42 +36,17 @@ export interface HaciendaPayload {
   activo?: boolean;
 }
 
-export const getHaciendas = async (filters: HaciendaFilters = {}) => {
-  const params: Record<string, string | number | boolean> = {};
+export const getHaciendas = (params?: HaciendaFilters) =>
+  apiClient.get<HaciendaListResponse>(BASE_PATH, { params });
 
-  if (typeof filters.page === 'number') {
-    params.page = filters.page;
-  }
-  if (typeof filters.limit === 'number') {
-    params.limit = filters.limit;
-  }
-  if (filters.q) {
-    params.q = filters.q;
-  }
-  if (filters.activo === 'true' || filters.activo === 'false') {
-    params.activo = filters.activo;
-  }
+export const getHacienda = (id: number) =>
+  apiClient.get<HaciendaSingleResponse>(`${BASE_PATH}/${id}`);
 
-  const response = await api.get<HaciendaListResponse>(BASE_PATH, { params });
-  return response.data;
-};
+export const createHacienda = (payload: HaciendaPayload) =>
+  apiClient.post<HaciendaSingleResponse>(BASE_PATH, payload);
 
-export const getHacienda = async (id: number) => {
-  const response = await api.get<HaciendaSingleResponse>(`${BASE_PATH}/${id}`);
-  return response.data;
-};
+export const updateHacienda = (id: number, payload: HaciendaPayload) =>
+  apiClient.put<HaciendaSingleResponse>(`${BASE_PATH}/${id}`, payload);
 
-export const createHacienda = async (payload: HaciendaPayload) => {
-  const response = await api.post<HaciendaSingleResponse>(BASE_PATH, payload);
-  return response.data;
-};
-
-export const updateHacienda = async (id: number, payload: HaciendaPayload) => {
-  const response = await api.put<HaciendaSingleResponse>(`${BASE_PATH}/${id}`, payload);
-  return response.data;
-};
-
-export const deleteHacienda = async (id: number) => {
-  const response = await api.delete<HaciendaSingleResponse>(`${BASE_PATH}/${id}`);
-  return response.data;
-};
+export const deleteHacienda = (id: number) =>
+  apiClient.delete<HaciendaSingleResponse>(`${BASE_PATH}/${id}`);
