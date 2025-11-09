@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, Suspense } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type { MenuNode } from '../hooks/useMenus';
-import { findAncestorChainByRoute } from '../hooks/useMenus';
+import { findAncestorChainByRoute, normalizeMenuRoute } from '../hooks/useMenus';
 import { groupBy, sortBy } from 'lodash';
 import * as allIcons from 'lucide-react';
 
@@ -20,10 +20,7 @@ const CLIENTES_MENU_ENTRY: MenuNode = {
 
 const hasRoute = (items: MenuNode[], targetRoute: string): boolean => {
   for (const item of items) {
-    const rawRoute = typeof item.ruta === 'string' ? item.ruta.trim() : '';
-    const normalizedRoute = rawRoute
-      ? (rawRoute.startsWith('/') ? rawRoute : `/${rawRoute}`).replace(/\/+$/, '') || '/'
-      : null;
+    const normalizedRoute = normalizeMenuRoute(item.ruta);
 
     if (normalizedRoute === targetRoute) {
       return true;
@@ -74,8 +71,7 @@ const SidebarMenuItem: React.FC<{
   const hasChildren = menu.hijos && menu.hijos.length > 0;
   const isExpanded = expandedItems.has(menu.id);
   const currentPath = location.pathname.replace(/\/+$/, '') || '/';
-  const menuPath = menu.ruta ? (menu.ruta.startsWith('/') ? menu.ruta : `/${menu.ruta}`) : null;
-  const normalizedMenuPath = menuPath ? menuPath.replace(/\/+$/, '') || '/' : null;
+  const normalizedMenuPath = normalizeMenuRoute(menu.ruta);
   const isActive = normalizedMenuPath ? currentPath === normalizedMenuPath : false;
   const paddingLeft = 16 + depth * 12;
 
@@ -93,9 +89,9 @@ const SidebarMenuItem: React.FC<{
 
   return (
     <li key={menu.id}>
-      {menuPath ? (
+      {normalizedMenuPath ? (
         <Link
-          to={menuPath}
+          to={normalizedMenuPath}
           className={`${linkClasses} ${isActive ? activeClasses : inactiveClasses}`}
           style={{ paddingLeft }}
           onClick={() => {
