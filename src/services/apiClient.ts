@@ -32,8 +32,15 @@ const CancelError = axiosWithCancel.Cancel!;
 const isCancel = axiosWithCancel.isCancel!;
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:3000",
+  baseURL: "http://localhost:3000",
 });
+
+if (!apiClient.defaults.baseURL?.includes("3000")) {
+  console.warn(
+    "[⚠️ API WARNING] Forzando puerto 3000 en todas las peticiones...",
+  );
+  apiClient.defaults.baseURL = "http://localhost:3000";
+}
 
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
