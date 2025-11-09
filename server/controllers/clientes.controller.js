@@ -1,5 +1,7 @@
 import pool from "../db.js";
 
+console.log("[API] Controlador CLIENTES activo y conectado a la tabla public.clientes");
+
 const formatSuccess = (message, data = null) => ({
   status: "success",
   message,
@@ -13,7 +15,7 @@ const formatError = (message) => ({
 
 const CLIENTES_BASE_QUERY = `
   SELECT id, nombre, identificacion, direccion, telefono, activo, fecha_creacion
-  FROM clientes
+  FROM public.clientes
   ORDER BY id
 `;
 
@@ -80,7 +82,7 @@ export const createCliente = async (req, res) => {
 
   try {
     const insertQuery = `
-      INSERT INTO clientes (nombre, identificacion, direccion, telefono, activo)
+      INSERT INTO public.clientes (nombre, identificacion, direccion, telefono, activo)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING id, nombre, identificacion, direccion, telefono, activo, fecha_creacion
     `;
@@ -164,7 +166,7 @@ export const updateCliente = async (req, res) => {
 
   try {
     const updateQuery = `
-      UPDATE clientes
+      UPDATE public.clientes
       SET ${updates.join(", ")}
       WHERE id = $${index}
       RETURNING id, nombre, identificacion, direccion, telefono, activo, fecha_creacion
@@ -196,7 +198,7 @@ export const deleteCliente = async (req, res) => {
 
   try {
     const deleteQuery = `
-      DELETE FROM clientes
+      DELETE FROM public.clientes
       WHERE id = $1
       RETURNING id
     `;
