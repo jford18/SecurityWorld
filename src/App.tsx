@@ -94,7 +94,7 @@ const routeConfig: RouteDefinition[] = [
   },
   { path: '/administracion/clientes', element: <Clientes /> },
   { path: '/administracion/asignar-cliente-sitio', element: <AsignarClienteSitio /> },
-  { path: '/administracion/hacienda', element: <HaciendaPage /> },
+  { path: '/administracion/haciendas', element: <HaciendaPage /> },
   { path: '/administracion/roles', element: <RolesScreen /> },
   { path: '/administracion/usuarios', element: <UsuariosScreen /> },
   { path: '/administracion/catalogo-tipo-problema', element: <CatalogoTipoProblemaScreen /> },
