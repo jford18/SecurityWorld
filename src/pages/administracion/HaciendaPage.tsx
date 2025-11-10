@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Card } from '@/components/ui/Card';
 import {
   createHacienda,
   deleteHacienda,
@@ -23,8 +24,10 @@ const HaciendaPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<ModalMode>('create');
   const [selectedHacienda, setSelectedHacienda] = useState<Hacienda | null>(null);
-  const [nombre, setNombre] = useState<string>('');
-  const [direccion, setDireccion] = useState<string>('');
+  const [formData, setFormData] = useState<HaciendaPayload>({
+    nombre: '',
+    direccion: '',
+  });
 
   const loadHaciendas = async () => {
     try {
@@ -56,21 +59,26 @@ const HaciendaPage: React.FC = () => {
     loadHaciendas();
   }, []);
 
+  useEffect(() => {
+    if (!isModalOpen) {
+      setFormData({ nombre: '', direccion: '' });
+      setFormError('');
+    }
+  }, [isModalOpen]);
+
   const handleOpenCreateModal = () => {
     setModalMode('create');
     setSelectedHacienda(null);
-    setNombre('');
-    setDireccion('');
-    setFormError('');
     setIsModalOpen(true);
   };
 
   const handleOpenEditModal = (hacienda: Hacienda) => {
     setModalMode('edit');
     setSelectedHacienda(hacienda);
-    setNombre(hacienda.nombre);
-    setDireccion(hacienda.direccion || '');
-    setFormError('');
+    setFormData({
+      nombre: hacienda.nombre,
+      direccion: hacienda.direccion || '',
+    });
     setIsModalOpen(true);
   };
 
@@ -79,7 +87,7 @@ const HaciendaPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    const trimmedName = nombre.trim();
+    const trimmedName = formData.nombre.trim();
     if (!trimmedName) {
       setFormError('El nombre es obligatorio');
       return;
@@ -96,7 +104,10 @@ const HaciendaPage: React.FC = () => {
       return;
     }
 
-    const payload: HaciendaPayload = { nombre: trimmedName, direccion: direccion.trim() };
+    const payload: HaciendaPayload = {
+      nombre: trimmedName,
+      direccion: formData.direccion.trim(),
+    };
 
     try {
       if (modalMode === 'create') {
@@ -134,124 +145,130 @@ const HaciendaPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[#1C2E4A]">Mantenimiento de Haciendas</h1>
-          <p className="text-sm text-gray-500">
-            Gestiona las haciendas disponibles en el sistema.
-          </p>
+    <div className="p-4">
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-[#1C2E4A]">Mantenimiento de Haciendas</h1>
+            <p className="text-sm text-gray-500">
+              Gestiona las haciendas disponibles en el sistema.
+            </p>
+          </div>
+          <button type="button" className={primaryButtonClasses} onClick={handleOpenCreateModal}>
+            Nueva Hacienda
+          </button>
         </div>
-        <button type="button" className={primaryButtonClasses} onClick={handleOpenCreateModal}>
-          Nueva Hacienda
-        </button>
-      </div>
 
-      <div className="bg-white rounded-lg shadow p-6 space-y-4">
-        {loading ? (
-          <p className="text-sm text-gray-500">Cargando haciendas...</p>
-        ) : error ? (
-          <p className="text-sm text-red-600">{error}</p>
-        ) : haciendas.length === 0 ? (
-          <p className="text-sm text-gray-500">No se registran haciendas actualmente.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-[#1C2E4A]">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">ID</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Nombre</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Dirección</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                    Fecha Creación
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {haciendas.map((hacienda) => (
-                  <tr key={hacienda.id}>
-                    <td className="px-4 py-3 text-sm text-gray-700">{hacienda.id}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{hacienda.nombre}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{hacienda.direccion || 'N/A'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      {new Date(hacienda.fecha_creacion).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700 space-x-2">
-                      <button
-                        type="button"
-                        className={secondaryButtonClasses}
-                        onClick={() => handleOpenEditModal(hacienda)}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        className={primaryButtonClasses}
-                        onClick={() => handleDelete(hacienda)}
-                      >
-                        Eliminar
-                      </button>
-                    </td>
+        <Card>
+          {loading ? (
+            <p className="text-sm text-gray-500">Cargando haciendas...</p>
+          ) : error ? (
+            <p className="text-sm text-red-600">{error}</p>
+          ) : haciendas.length === 0 ? (
+            <p className="text-sm text-gray-500">No se registran haciendas actualmente.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-[#1C2E4A]">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Nombre</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Dirección</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                      Fecha Creación
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {haciendas.map((hacienda) => (
+                    <tr key={hacienda.id}>
+                      <td className="px-4 py-3 text-sm text-gray-700">{hacienda.id}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700">{hacienda.nombre}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700">{hacienda.direccion || 'N/A'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700">
+                        {new Date(hacienda.fecha_creacion).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700 space-x-2">
+                        <button
+                          type="button"
+                          className={secondaryButtonClasses}
+                          onClick={() => handleOpenEditModal(hacienda)}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          className={primaryButtonClasses}
+                          onClick={() => handleDelete(hacienda)}
+                        >
+                          Eliminar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-[#1C2E4A]">
+                  {modalMode === 'create' ? 'Nueva Hacienda' : 'Editar Hacienda'}
+                </h2>
+                <button type="button" className="text-gray-500 hover:text-gray-700" onClick={closeModal}>
+                  ×
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="nombre" className="block text-sm font-medium text-[#1C2E4A]">
+                    Nombre de la hacienda
+                  </label>
+                  <input
+                    id="nombre"
+                    type="text"
+                    value={formData.nombre}
+                    onChange={(event) =>
+                      setFormData({ ...formData, nombre: event.target.value })
+                    }
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                    placeholder="Ingresa el nombre"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="direccion" className="block text-sm font-medium text-[#1C2E4A]">
+                    Dirección
+                  </label>
+                  <input
+                    id="direccion"
+                    type="text"
+                    value={formData.direccion}
+                    onChange={(event) =>
+                      setFormData({ ...formData, direccion: event.target.value })
+                    }
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                    placeholder="Ingresa la dirección"
+                  />
+                </div>
+                {formError && <p className="text-sm text-red-600">{formError}</p>}
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button type="button" className={secondaryButtonClasses} onClick={closeModal}>
+                  Cancelar
+                </button>
+                <button type="button" className={primaryButtonClasses} onClick={handleSubmit}>
+                  {modalMode === 'create' ? 'Crear' : 'Guardar'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-[#1C2E4A]">
-                {modalMode === 'create' ? 'Nueva Hacienda' : 'Editar Hacienda'}
-              </h2>
-              <button type="button" className="text-gray-500 hover:text-gray-700" onClick={closeModal}>
-                ×
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="nombre" className="block text-sm font-medium text-[#1C2E4A]">
-                  Nombre de la hacienda
-                </label>
-                <input
-                  id="nombre"
-                  type="text"
-                  value={nombre}
-                  onChange={(event) => setNombre(event.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
-                  placeholder="Ingresa el nombre"
-                />
-              </div>
-              <div>
-                <label htmlFor="direccion" className="block text-sm font-medium text-[#1C2E4A]">
-                  Dirección
-                </label>
-                <input
-                  id="direccion"
-                  type="text"
-                  value={direccion}
-                  onChange={(event) => setDireccion(event.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
-                  placeholder="Ingresa la dirección"
-                />
-              </div>
-              {formError && <p className="text-sm text-red-600">{formError}</p>}
-            </div>
-            <div className="flex justify-end space-x-3">
-              <button type="button" className={secondaryButtonClasses} onClick={closeModal}>
-                Cancelar
-              </button>
-              <button type="button" className={primaryButtonClasses} onClick={handleSubmit}>
-                {modalMode === 'create' ? 'Crear' : 'Guardar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
