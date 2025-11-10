@@ -30,7 +30,12 @@ const HaciendaPage: React.FC = () => {
     try {
       setLoading(true);
       const response = await getHaciendas();
-      const lista = Array.isArray(response.data) ? response.data : [];
+      const lista = response?.data?.data;
+
+      if (!Array.isArray(lista)) {
+        throw new Error('Respuesta inválida del servidor');
+      }
+
       setHaciendas(lista);
       setError(null);
     } catch (err) {
