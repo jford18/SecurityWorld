@@ -1,6 +1,20 @@
-import api from './api';
+import { API_BASE_URL } from './api';
 
-const BASE_PATH = "/api/hacienda";
+const jsonContentType = 'application/json';
+
+const handleResponse = async (response: Response) => {
+  if (response.ok) {
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes(jsonContentType)) {
+      return response.json();
+    }
+    return { message: 'Respuesta inválida del servidor' };
+  }
+
+  const errorBody = await response.json().catch(() => ({ message: 'Error al comunicarse con el servidor' }));
+  const errorMessage = errorBody?.message || 'Error desconocido';
+  throw new Error(errorMessage);
+};
 
 export interface HaciendaRecord {
   id: number;
@@ -36,17 +50,66 @@ export interface HaciendaPayload {
   activo?: boolean;
 }
 
-export const getHaciendas = (params?: HaciendaFilters) =>
-  api.get<HaciendaListResponse>(BASE_PATH, { params });
+const buildQueryString = (params?: HaciendaFilters) => {
+  if (!params) return '';
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) {
+      query.append(key, String(value));
+    }
+  });
+  return `?${query.toString()}`;
+};
 
-export const getHacienda = (id: number) =>
-  api.get<HaciendaSingleResponse>(`${BASE_PATH}/${id}`);
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  const headers: HeadersInit = {
+    'Content-Type': jsonContentType,
+    Accept: jsonContentType,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+};
 
-export const createHacienda = (payload: HaciendaPayload) =>
-  api.post<HaciendaSingleResponse>(BASE_PATH, payload);
+export const getHaciendas = async (params?: HaciendaFilters) => {
+  const queryString = buildQueryString(params);
+  const response = await fetch(`${API_BASE_URL}/api/hacienda${queryString}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
 
-export const updateHacienda = (id: number, payload: HaciendaPayload) =>
-  api.put<HaciendaSingleResponse>(`${BASE_PATH}/${id}`, payload);
+export const getHacienda = async (id: number) => {
+  const response = await fetch(`${API_BASE_URL}/api/hacienda/${id}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
 
-export const deleteHacienda = (id: number) =>
-  api.delete<HaciendaSingleResponse>(`${BASE_PATH}/${id}`);
+export const createHacienda = async (payload: HaciendaPayload) => {
+  const response = await fetch(`${API_BASE_URL}/api/hacienda`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+};
+
+export const updateHacienda = async (id: number, payload: HaciendaPayload) => {
+  const response = await fetch(`${API_BASE_URL}/api/hacienda/${id}`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+};
+
+export const deleteHacienda = async (id: number) => {
+  const response = await fetch(`${API_BASE_URL}/api/hacienda/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
