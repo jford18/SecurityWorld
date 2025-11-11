@@ -12,8 +12,10 @@ const TipoAreaList = () => {
 
   const fetchTiposArea = async () => {
     try {
+
       const response = await axios.get('http://localhost:3000/api/v1/tipo-area');
       setTiposArea(response.data.data);
+
     } catch (err) {
       setError('Error al obtener los tipos de área');
       console.error(err);
