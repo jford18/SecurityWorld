@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { getTipoArea, createTipoArea, updateTipoArea } from '../../services/tipoAreaService';
 
 const TipoAreaForm = () => {
   const { id } = useParams();
@@ -17,8 +17,8 @@ const TipoAreaForm = () => {
     if (isEditing) {
       const fetchTipoArea = async () => {
         try {
-          const response = await axios.get(`/api/tipo-area/${id}`);
-          setFormData(response.data);
+          const data = await getTipoArea(id);
+          setFormData(data);
         } catch (err) {
           setError('No se pudo cargar el tipo de área para edición.');
           console.error(err);
@@ -40,9 +40,9 @@ const TipoAreaForm = () => {
     e.preventDefault();
     try {
       if (isEditing) {
-        await axios.put(`/api/tipo-area/${id}`, formData);
+        await updateTipoArea(id, formData);
       } else {
-        await axios.post('/api/tipo-area', formData);
+        await createTipoArea(formData);
       }
       navigate('/administracion/tipo-area');
     } catch (err) {

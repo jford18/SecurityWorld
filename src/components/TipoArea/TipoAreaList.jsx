@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
+import { getTiposArea, deleteTipoArea } from '../../services/tipoAreaService';
 
 const TipoAreaList = () => {
   const [tiposArea, setTiposArea] = useState([]);
@@ -8,8 +8,8 @@ const TipoAreaList = () => {
 
   const fetchTiposArea = async () => {
     try {
-      const response = await axios.get('/api/tipo-area');
-      setTiposArea(response.data);
+      const data = await getTiposArea();
+      setTiposArea(data);
     } catch (err) {
       setError('No se pudieron cargar los tipos de área.');
       console.error(err);
@@ -22,7 +22,7 @@ const TipoAreaList = () => {
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`/api/tipo-area/${id}`);
+      await deleteTipoArea(id);
       fetchTiposArea();
     } catch (err) {
       setError('No se pudo eliminar el tipo de área.');
