@@ -4,6 +4,7 @@ import authRoutes from "./auth.routes.js";
 import fallosRoutes from "./fallos.routes.js";
 import clientesRoutes from "./routes/clientes.routes.js";
 import asignarClienteSitioRoutes from "./routes/asignar_cliente_sitio.routes.js";
+import tipoAreaRoutes from "./routes/tipoArea.routes.js";
 
 const app = express();
 
@@ -28,5 +29,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/clientes", clientesRoutes);
 app.use("/api/fallos", fallosRoutes);
 app.use("/api/asignar-cliente-sitio", asignarClienteSitioRoutes);
+app.use("/api/v1/tipo-area", tipoAreaRoutes);
 
 export default app;
