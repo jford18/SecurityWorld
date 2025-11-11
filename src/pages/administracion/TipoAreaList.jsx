@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const TipoAreaList = () => {
+  const navigate = useNavigate();
   const [tiposArea, setTiposArea] = useState([]);
   const [error, setError] = useState(null);
 
@@ -34,13 +35,20 @@ const TipoAreaList = () => {
     }
   };
 
+  const handleCreate = () => {
+    navigate('/administracion/tipo-area/nuevo');
+  };
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Tipos de Área</h1>
       {error && <p className="text-red-500">{error}</p>}
-      <Link to="/administracion/tipo-area/nuevo" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4 inline-block">
+      <button
+        onClick={handleCreate}
+        className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4 inline-block"
+      >
         Crear Nuevo Tipo de Área
-      </Link>
+      </button>
       <table className="min-w-full bg-white">
         <thead>
           <tr>
