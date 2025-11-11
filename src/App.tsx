@@ -26,6 +26,9 @@ import RolMenuScreen from './pages/admin/RolMenuScreen';
 import Nodos from './components/views/Nodos.jsx';
 import Clientes from './pages/administracion/Clientes';
 import AsignarClienteSitio from './pages/administracion/AsignarClienteSitio';
+import TipoAreaList from './components/TipoArea/TipoAreaList';
+import TipoAreaForm from './components/TipoArea/TipoAreaForm';
+
 
 import HaciendaPage from './pages/administracion/HaciendaPage.tsx';
 
@@ -107,6 +110,9 @@ const routeConfig: RouteDefinition[] = [
     aliases: ['/administracion/rol-menu', '/administracion/roles-menu'],
   },
   { path: '/administracion/hacienda', element: <HaciendaPage /> },
+  { path: '/administracion/tipo-area', element: <TipoAreaList /> },
+  { path: '/administracion/tipo-area/nuevo', element: <TipoAreaForm /> },
+  { path: '/administracion/tipo-area/editar/:id', element: <TipoAreaForm /> },
 ];
 
 const normalizeRoleTokens = (tokens: unknown): RoleToken[] => {
