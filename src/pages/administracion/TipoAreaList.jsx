@@ -1,0 +1,73 @@
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { getAllTipoArea, deleteTipoArea } from '../../services/tipoAreaService';
+
+const TipoAreaList = () => {
+  const [tiposArea, setTiposArea] = useState([]);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchTiposArea();
+  }, []);
+
+  const fetchTiposArea = async () => {
+    try {
+      const response = await getAllTipoArea();
+      setTiposArea(response.data);
+    } catch (err) {
+      setError('Error al obtener los tipos de área');
+      console.error(err);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm('¿Está seguro de que desea eliminar este tipo de área?')) {
+      try {
+        await deleteTipoArea(id);
+        fetchTiposArea();
+      } catch (err) {
+        setError('Error al eliminar el tipo de área');
+        console.error(err);
+      }
+    }
+  };
+
+  return (
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Tipos de Área</h1>
+      {error && <p className="text-red-500">{error}</p>}
+      <Link to="/administracion/tipo-area/nuevo" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4 inline-block">
+        Crear Nuevo Tipo de Área
+      </Link>
+      <table className="min-w-full bg-white">
+        <thead>
+          <tr>
+            <th className="py-2 px-4 border-b">Nombre</th>
+            <th className="py-2 px-4 border-b">Descripción</th>
+            <th className="py-2 px-4 border-b">Activo</th>
+            <th className="py-2 px-4 border-b">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tiposArea.map((tipo) => (
+            <tr key={tipo.id}>
+              <td className="py-2 px-4 border-b">{tipo.nombre}</td>
+              <td className="py-2 px-4 border-b">{tipo.descripcion}</td>
+              <td className="py-2 px-4 border-b">{tipo.activo ? 'Sí' : 'No'}</td>
+              <td className="py-2 px-4 border-b">
+                <Link to={`/administracion/tipo-area/editar/${tipo.id}`} className="text-blue-500 hover:underline mr-2">
+                  Editar
+                </Link>
+                <button onClick={() => handleDelete(tipo.id)} className="text-red-500 hover:underline">
+                  Eliminar
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+export default TipoAreaList;
