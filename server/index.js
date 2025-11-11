@@ -19,6 +19,7 @@ import usuarioRolesRoutes from "./routes/usuarioRoles.routes.js";
 import rolMenuRoutes from "./routes/rolMenu.js";
 import sitiosRoutes from "./routes/sitios.routes.js";
 import haciendaRoutes from "./routes/hacienda.routes.js";
+import tipoAreaRoutes from "./routes/tipoArea.routes.js";
 
 const app = express();
 app.use(express.json());
@@ -89,6 +90,7 @@ app.use("/api/sitios", sitiosRoutes);
 app.use("/api/clientes", clientesRoutes);
 app.use("/api/asignar-cliente-sitio", asignarClienteSitioRoutes);
 app.use("/api/v1/hacienda", haciendaRoutes);
+app.use("/api/v1/tipo-area", tipoAreaRoutes);
 
 const logRoutes = (stack) => {
   stack
