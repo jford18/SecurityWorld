@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+
+import axios from 'axios';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getTipoAreaById, createTipoArea, updateTipoArea } from '../../services/tipoAreaService';
+
 
 const TipoAreaForm = () => {
   const [nombre, setNombre] = useState('');
@@ -18,8 +20,8 @@ const TipoAreaForm = () => {
 
   const fetchTipoArea = async (id) => {
     try {
-      const response = await getTipoAreaById(id);
-      const { nombre, descripcion, activo } = response.data;
+      const response = await axios.get(`http://localhost:3000/api/v1/tipo-area/${id}`);
+      const { nombre, descripcion, activo } = response.data.data;
       setNombre(nombre);
       setDescripcion(descripcion);
       setActivo(activo);
@@ -35,9 +37,9 @@ const TipoAreaForm = () => {
 
     try {
       if (id) {
-        await updateTipoArea(id, tipoAreaData);
+        await axios.put(`http://localhost:3000/api/v1/tipo-area/${id}`, tipoAreaData);
       } else {
-        await createTipoArea(tipoAreaData);
+        await axios.post('http://localhost:3000/api/v1/tipo-area', tipoAreaData);
       }
       navigate('/administracion/tipo-area');
     } catch (err) {
