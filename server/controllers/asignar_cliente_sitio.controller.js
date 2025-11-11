@@ -1,4 +1,4 @@
-import db from "../services/db.js";
+import db from "../db.js";
 
 const ensurePositiveInteger = (value) => {
   const parsed = Number(value);

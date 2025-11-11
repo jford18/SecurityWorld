@@ -140,3 +140,11 @@ export enum View {
   // NEW: Vista para el mantenimiento del catálogo de menús.
   AdminMenus,
 }
+
+export interface Hacienda {
+  id: number;
+  nombre: string;
+  direccion: string;
+  activo: boolean;
+  fecha_creacion: string;
+}
