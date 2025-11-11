@@ -26,9 +26,8 @@ import RolMenuScreen from './pages/admin/RolMenuScreen';
 import Nodos from './components/views/Nodos.jsx';
 import Clientes from './pages/administracion/Clientes';
 import AsignarClienteSitio from './pages/administracion/AsignarClienteSitio';
-import TipoAreaList from './components/TipoArea/TipoAreaList';
-import TipoAreaForm from './components/TipoArea/TipoAreaForm';
-
+import TipoAreaList from './pages/administracion/TipoAreaList';
+import TipoAreaForm from './pages/administracion/TipoAreaForm';
 
 import HaciendaPage from './pages/administracion/HaciendaPage.tsx';
 

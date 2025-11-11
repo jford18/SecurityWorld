@@ -8,6 +8,8 @@ import * as allIcons from 'lucide-react';
 const iconMap = allIcons as unknown as Record<string, React.ComponentType<any>>;
 
 const CLIENTES_ROUTE = '/administracion/clientes';
+const TIPO_AREA_ROUTE = '/administracion/tipo-area';
+
 const CLIENTES_MENU_ENTRY: MenuNode = {
   id: -1000,
   nombre: 'Clientes',
@@ -17,6 +19,17 @@ const CLIENTES_MENU_ENTRY: MenuNode = {
   orden: 999,
   hijos: [],
 };
+
+const TIPO_AREA_MENU_ENTRY: MenuNode = {
+  id: -1001,
+  nombre: 'Tipo Área',
+  icono: 'Layers',
+  ruta: TIPO_AREA_ROUTE,
+  seccion: 'MANTENIMIENTO',
+  orden: 1000,
+  hijos: [],
+};
+
 
 const hasRoute = (items: MenuNode[], targetRoute: string): boolean => {
   for (const item of items) {
@@ -138,15 +151,17 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ menus }) => {
   const currentPath = location.pathname.replace(/\/+$/, '') || '/';
 
   const effectiveMenus = useMemo(() => {
-    if (!menus.length) {
-      return [CLIENTES_MENU_ENTRY];
+    let baseMenus = menus.length > 0 ? menus : [];
+
+    if (!hasRoute(baseMenus, CLIENTES_ROUTE)) {
+      baseMenus = [...baseMenus, CLIENTES_MENU_ENTRY];
     }
 
-    if (hasRoute(menus, CLIENTES_ROUTE)) {
-      return menus;
+    if (!hasRoute(baseMenus, TIPO_AREA_ROUTE)) {
+      baseMenus = [...baseMenus, TIPO_AREA_MENU_ENTRY];
     }
 
-    return [...menus, CLIENTES_MENU_ENTRY];
+    return baseMenus;
   }, [menus]);
 
   const activeAncestors = useMemo(

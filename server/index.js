@@ -90,7 +90,7 @@ app.use("/api/sitios", sitiosRoutes);
 app.use("/api/clientes", clientesRoutes);
 app.use("/api/asignar-cliente-sitio", asignarClienteSitioRoutes);
 app.use("/api/v1/hacienda", haciendaRoutes);
-app.use("/api/tipo-area", tipoAreaRoutes);
+app.use("/api/v1/tipo-area", tipoAreaRoutes);
 
 const logRoutes = (stack) => {
   stack

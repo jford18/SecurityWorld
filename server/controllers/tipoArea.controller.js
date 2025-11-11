@@ -1,81 +1,58 @@
-import pool from '../db.js';
+import * as tipoAreaService from '../services/tipoArea.service.js';
 
-export const getTiposArea = async (req, res) => {
+export const getAll = async (req, res, next) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM tipo_area ORDER BY id ASC');
-    res.status(200).json(rows);
+    const tiposArea = await tipoAreaService.getAll();
+    res.json({ data: tiposArea });
   } catch (error) {
-    console.error('Error al obtener tipos de área:', error);
-    res.status(500).json({ message: 'Error interno del servidor' });
+    next(error);
   }
 };
 
-export const getTipoAreaById = async (req, res) => {
-  const { id } = req.params;
+export const getById = async (req, res, next) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM tipo_area WHERE id = $1', [id]);
-    if (rows.length === 0) {
-      return res.status(404).json({ message: 'Tipo de área no encontrado' });
+    const { id } = req.params;
+    const tipoArea = await tipoAreaService.getById(id);
+    if (!tipoArea) {
+      return res.status(404).json({ message: 'Tipo de Área no encontrado' });
     }
-    res.status(200).json(rows[0]);
+    res.json({ data: tipoArea });
   } catch (error) {
-    console.error('Error al obtener tipo de área por ID:', error);
-    res.status(500).json({ message: 'Error interno del servidor' });
+    next(error);
   }
 };
 
-export const createTipoArea = async (req, res) => {
-  const { nombre, descripcion } = req.body;
+export const create = async (req, res, next) => {
   try {
-    const { rows } = await pool.query(
-      'INSERT INTO tipo_area (nombre, descripcion) VALUES ($1, $2) RETURNING *',
-      [nombre, descripcion]
-    );
-    res.status(201).json({
-      message: 'Tipo de área creado correctamente',
-      data: rows[0],
-    });
+    const newTipoArea = await tipoAreaService.create(req.body);
+    res.status(201).json({ data: newTipoArea });
   } catch (error) {
-    console.error('Error al crear tipo de área:', error);
-    res.status(500).json({ message: 'Error interno del servidor' });
+    next(error);
   }
 };
 
-export const updateTipoArea = async (req, res) => {
-  const { id } = req.params;
-  const { nombre, descripcion, activo } = req.body;
+export const update = async (req, res, next) => {
   try {
-    const { rows } = await pool.query(
-      'UPDATE tipo_area SET nombre = $1, descripcion = $2, activo = $3, fecha_actualizacion = NOW() WHERE id = $4 RETURNING *',
-      [nombre, descripcion, activo, id]
-    );
-    if (rows.length === 0) {
-      return res.status(404).json({ message: 'Tipo de área no encontrado' });
+    const { id } = req.params;
+    const updatedTipoArea = await tipoAreaService.update(id, req.body);
+    if (!updatedTipoArea) {
+      return res.status(404).json({ message: 'Tipo de Área no encontrado' });
     }
-    res.status(200).json({
-      message: 'Tipo de área actualizado correctamente',
-      data: rows[0],
-    });
+    res.json({ data: updatedTipoArea });
   } catch (error) {
-    console.error('Error al actualizar tipo de área:', error);
-    res.status(500).json({ message: 'Error interno del servidor' });
+    next(error);
   }
 };
 
-export const deleteTipoArea = async (req, res) => {
-  const { id } = req.params;
+export const logicalDelete = async (req, res, next) => {
   try {
-    console.log('Eliminando lógicamente tipo de área con ID:', id);
-    const { rows } = await pool.query(
-      'UPDATE tipo_area SET activo = false, fecha_actualizacion = NOW() WHERE id = $1 RETURNING *',
-      [id]
-    );
-    if (rows.length === 0) {
-      return res.status(404).json({ message: 'Tipo de área no encontrado' });
+    const { id } = req.params;
+    const deletedTipoArea = await tipoAreaService.logicalDelete(id);
+    if (!deletedTipoArea) {
+      return res.status(404).json({ message: 'Tipo de Área no encontrado' });
     }
-    res.status(200).json({ message: 'Tipo de área eliminado (lógicamente) correctamente' });
+    res.json({ message: 'Tipo de Área eliminado lógicamente' });
   } catch (error) {
-    console.error('Error al eliminar tipo de área:', error);
-    res.status(500).json({ message: 'Error interno del servidor' });
+    next(error);
   }
 };
