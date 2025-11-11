@@ -26,7 +26,9 @@ import RolMenuScreen from './pages/admin/RolMenuScreen';
 import Nodos from './components/views/Nodos.jsx';
 import Clientes from './pages/administracion/Clientes';
 import AsignarClienteSitio from './pages/administracion/AsignarClienteSitio';
-import HaciendaPage from './pages/administracion/HaciendaPage';
+
+import HaciendaPage from './pages/administracion/HaciendaPage.tsx';
+
 import Unauthorized from './pages/Unauthorized';
 import NotFound from './pages/NotFound';
 
