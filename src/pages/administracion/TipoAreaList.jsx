@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../../services/api';
 import { Link, useNavigate } from 'react-router-dom';
 
 const TipoAreaList = () => {
@@ -13,10 +13,8 @@ const TipoAreaList = () => {
 
   const fetchTiposArea = async () => {
     try {
-
-      const response = await axios.get('http://localhost:3000/api/v1/tipo-area');
+      const response = await api.get('/api/tipo_area');
       setTiposArea(response.data.data);
-
     } catch (err) {
       setError('Error al obtener los tipos de área');
       console.error(err);
@@ -26,7 +24,7 @@ const TipoAreaList = () => {
   const handleDelete = async (id) => {
     if (window.confirm('¿Está seguro de que desea eliminar este tipo de área?')) {
       try {
-        await axios.delete(`http://localhost:3000/api/v1/tipo-area/${id}`);
+        await api.delete(`/api/tipo_area/${id}`);
         fetchTiposArea();
       } catch (err) {
         setError('Error al eliminar el tipo de área');
