@@ -328,7 +328,7 @@ const Clientes = () => {
             <div className="md:col-span-1">
               <AutocompleteComboBox
                 label="Hacienda"
-                endpoint={`${API_BASE_URL}/api/hacienda`}
+                endpoint={`${API_BASE_URL}/api/haciendas`}
                 value={formState.hacienda_id}
                 onChange={(value) => handleComboBoxChange("hacienda_id", value)}
                 placeholder="Buscar hacienda"
