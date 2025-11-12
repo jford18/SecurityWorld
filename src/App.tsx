@@ -51,7 +51,13 @@ const GuardedRoute: React.FC<GuardedRouteProps> = ({
     return <Navigate to="/sin-permiso" replace />;
   }
 
-  return allowedPaths.has(path) ? element : <Navigate to={fallbackPath} replace />;
+  const isAllowed =
+    allowedPaths.has(path) ||
+    Array.from(allowedPaths).some(
+      (allowed) => allowed !== '/' && path.startsWith(`${allowed}/`)
+    );
+
+  return isAllowed ? element : <Navigate to={fallbackPath} replace />;
 };
 
 const RequireAuth: React.FC<{ children: React.ReactElement }> = ({ children }) => {
