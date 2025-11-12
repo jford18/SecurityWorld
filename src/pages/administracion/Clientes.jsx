@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-import axios from "axios";
 import AutocompleteComboBox from "../../components/ui/AutocompleteComboBox.jsx";
+import api from "../../services/api.js";
 
 const toast = {
   success: (message) => {
@@ -56,7 +56,7 @@ const Clientes = () => {
 
   const fetchClientes = useCallback(async () => {
     try {
-      const { data } = await axios.get("/api/clientes", {
+      const { data } = await api.get("/api/clientes", {
         params: { q: search || undefined },
       });
       setClientes(data || []);
@@ -70,8 +70,8 @@ const Clientes = () => {
   const fetchComboBoxData = useCallback(async () => {
     try {
       const [haciendasRes, tipoAreasRes] = await Promise.all([
-        axios.get("/api/haciendas"),
-        axios.get("/api/tipo_area"),
+        api.get("/api/haciendas"),
+        api.get("/api/tipo_area"),
       ]);
       setHaciendas(haciendasRes.data.data || []);
       setTipoAreas(tipoAreasRes.data.data || []);
@@ -121,10 +121,10 @@ const Clientes = () => {
     try {
       setSubmitting(true);
       if (clienteId) {
-        await axios.put(`/api/clientes/${clienteId}`, payload);
+        await api.put(`/api/clientes/${clienteId}`, payload);
         toast.success("Cliente actualizado correctamente");
       } else {
-        await axios.post(`/api/clientes`, payload);
+        await api.post(`/api/clientes`, payload);
         toast.success("Cliente guardado correctamente");
       }
       await fetchClientes();
@@ -160,7 +160,7 @@ const Clientes = () => {
     }
 
     try {
-      await axios.delete(`/api/clientes/${id}`);
+      await api.delete(`/api/clientes/${id}`);
       toast.success("Cliente eliminado correctamente");
       await fetchClientes();
     } catch (error) {
