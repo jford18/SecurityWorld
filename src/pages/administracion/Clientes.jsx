@@ -59,11 +59,16 @@ const Clientes = () => {
       const { data } = await axios.get("/api/clientes", {
         params: { q: search || undefined },
       });
-      setClientes(data || []);
+      // Garantiza que siempre sea array
+      setClientes(Array.isArray(data) ? data : data?.rows || []);
     } catch (error) {
-      const message = resolveErrorMessage(error, "No se pudieron cargar los clientes");
+      console.error("[ERROR] No se pudieron cargar los clientes:", error);
+      const message = resolveErrorMessage(
+        error,
+        "No se pudieron cargar los clientes"
+      );
       toast.error(message);
-      setClientes([]);
+      setClientes([]); // Evita romper el renderizado
     }
   }, [search]);
 
@@ -320,13 +325,7 @@ const Clientes = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {clientes.length === 0 ? (
-                <tr>
-                  <td className="px-4 py-6 text-center text-sm text-gray-500" colSpan={6}>
-                    No se encontraron clientes
-                  </td>
-                </tr>
-              ) : (
+              {Array.isArray(clientes) && clientes.length > 0 ? (
                 clientes.map((cliente) => (
                   <tr key={cliente.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm text-gray-600">{cliente.id}</td>
@@ -370,6 +369,12 @@ const Clientes = () => {
                     </td>
                   </tr>
                 ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="text-center text-gray-500 py-4">
+                    No hay clientes disponibles
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
