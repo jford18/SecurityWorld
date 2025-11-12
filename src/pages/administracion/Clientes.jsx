@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { API_BASE_URL } from "../../services/api";
+import AutocompleteComboBox from "../../components/ui/AutocompleteComboBox.jsx";
 
 const toast = {
   success: (message) => {
@@ -26,6 +27,8 @@ const initialFormState = {
   direccion: "",
   telefono: "",
   activo: true,
+  hacienda_id: "",
+  tipo_area_id: "",
 };
 
 const baseButtonClasses =
@@ -130,6 +133,13 @@ const Clientes = () => {
     }));
   };
 
+  const handleComboBoxChange = (name, value) => {
+    setFormState((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
   const resetForm = () => {
     setFormState(initialFormState);
     setEditingId(null);
@@ -158,6 +168,8 @@ const Clientes = () => {
       direccion,
       telefono,
       activo,
+      hacienda_id: formState.hacienda_id,
+      tipo_area_id: formState.tipo_area_id,
     };
 
     try {
@@ -192,6 +204,8 @@ const Clientes = () => {
       direccion: cliente.direccion ?? "",
       telefono: cliente.telefono ?? "",
       activo: normalizeBoolean(cliente.activo, true),
+      hacienda_id: cliente.hacienda_id ?? "",
+      tipo_area_id: cliente.tipo_area_id ?? "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -311,6 +325,28 @@ const Clientes = () => {
                 placeholder="Número de contacto"
               />
             </label>
+            <div className="md:col-span-1">
+              <AutocompleteComboBox
+                label="Hacienda"
+                endpoint={`${API_BASE_URL}/api/haciendas`}
+                value={formState.hacienda_id}
+                onChange={(value) => handleComboBoxChange("hacienda_id", value)}
+                placeholder="Buscar hacienda"
+                displayField="nombre"
+                valueField="id"
+              />
+            </div>
+            <div className="md:col-span-1">
+              <AutocompleteComboBox
+                label="Tipo Área"
+                endpoint={`${API_BASE_URL}/api/tipo_area`}
+                value={formState.tipo_area_id}
+                onChange={(value) => handleComboBoxChange("tipo_area_id", value)}
+                placeholder="Buscar tipo de área"
+                displayField="nombre"
+                valueField="id"
+              />
+            </div>
             <label className="flex items-center gap-3 text-sm">
               <input
                 type="checkbox"
