@@ -94,6 +94,8 @@ const parseClientesResponse = (response) => {
 
 const Clientes = () => {
   const [clientes, setClientes] = useState([]);
+  const [haciendas, setHaciendas] = useState([]);
+  const [tipoAreas, setTipoAreas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [formState, setFormState] = useState(initialFormState);
   const [editingId, setEditingId] = useState(null);
@@ -101,6 +103,21 @@ const Clientes = () => {
   const [globalError, setGlobalError] = useState("");
   const [filterTerm, setFilterTerm] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const fetchComboBoxData = useCallback(async () => {
+    try {
+      const [haciendasRes, tipoAreasRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/haciendas`, { withCredentials: true }),
+        axios.get(`${API_BASE_URL}/api/tipo_Area`, { withCredentials: true }),
+      ]);
+      setHaciendas(haciendasRes.data.data || []);
+      setTipoAreas(tipoAreasRes.data.data || []);
+    } catch (error) {
+      const message = resolveErrorMessage(error, "No se pudieron cargar los datos para los combos");
+      setGlobalError(message);
+      toast.error(message);
+    }
+  }, []);
 
   const fetchClientes = useCallback(async () => {
     try {
@@ -123,7 +140,8 @@ const Clientes = () => {
 
   useEffect(() => {
     fetchClientes();
-  }, [fetchClientes]);
+    fetchComboBoxData();
+  }, [fetchClientes, fetchComboBoxData]);
 
   const handleInputChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -328,7 +346,7 @@ const Clientes = () => {
             <div className="md:col-span-1">
               <AutocompleteComboBox
                 label="Hacienda"
-                endpoint={`${API_BASE_URL}/api/haciendas`}
+                items={haciendas}
                 value={formState.hacienda_id}
                 onChange={(value) => handleComboBoxChange("hacienda_id", value)}
                 placeholder="Buscar hacienda"
@@ -339,7 +357,7 @@ const Clientes = () => {
             <div className="md:col-span-1">
               <AutocompleteComboBox
                 label="Tipo Área"
-                endpoint={`${API_BASE_URL}/api/tipo_Area`}
+                items={tipoAreas}
                 value={formState.tipo_area_id}
                 onChange={(value) => handleComboBoxChange("tipo_area_id", value)}
                 placeholder="Buscar tipo de área"
