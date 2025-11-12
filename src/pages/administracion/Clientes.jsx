@@ -21,16 +21,6 @@ const toast = {
 
 const CLIENTES_API_URL = `${API_BASE_URL}/api/clientes`;
 
-const initialFormState = {
-  nombre: "",
-  identificacion: "",
-  direccion: "",
-  telefono: "",
-  activo: true,
-  hacienda_id: "",
-  tipo_area_id: "",
-};
-
 const baseButtonClasses =
   "inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors";
 const primaryButtonClasses = `${baseButtonClasses} bg-yellow-400 text-[#1C2E4A] shadow-sm hover:bg-yellow-500 focus:ring-yellow-400`;
@@ -97,8 +87,14 @@ const Clientes = () => {
   const [haciendas, setHaciendas] = useState([]);
   const [tipoAreas, setTipoAreas] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [formState, setFormState] = useState(initialFormState);
-  const [editingId, setEditingId] = useState(null);
+  const [clienteId, setClienteId] = useState(null);
+  const [nombre, setNombre] = useState("");
+  const [identificacion, setIdentificacion] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [direccion, setDireccion] = useState("");
+  const [activo, setActivo] = useState(true);
+  const [selectedHacienda, setSelectedHacienda] = useState(null);
+  const [selectedTipoArea, setSelectedTipoArea] = useState(null);
   const [formError, setFormError] = useState("");
   const [globalError, setGlobalError] = useState("");
   const [filterTerm, setFilterTerm] = useState("");
@@ -119,7 +115,7 @@ const Clientes = () => {
     }
   }, []);
 
-  const fetchClientes = useCallback(async () => {
+  const cargarClientes = useCallback(async () => {
     try {
       setLoading(true);
       setGlobalError("");
@@ -158,53 +154,51 @@ const Clientes = () => {
     }));
   };
 
-  const resetForm = () => {
-    setFormState(initialFormState);
-    setEditingId(null);
-    setFormError("");
-    setSubmitting(false);
+  const limpiarFormulario = () => {
+    setClienteId(null);
+    setNombre("");
+    setIdentificacion("");
+    setTelefono("");
+    setDireccion("");
+    setActivo(true);
+    setSelectedHacienda(null);
+    setSelectedTipoArea(null);
   };
 
-  const handleSubmit = async (event) => {
+  const handleSave = async (event) => {
     event.preventDefault();
     setFormError("");
-
-    const nombre = formState.nombre.trim();
-    const identificacion = formState.identificacion.trim();
-    const direccion = formState.direccion.trim();
-    const telefono = formState.telefono.trim();
-    const activo = normalizeBoolean(formState.activo, true);
 
     if (!nombre || !identificacion) {
       setFormError("Nombre e identificación son obligatorios");
       return;
     }
 
-    const payload = {
+    const data = {
       nombre,
       identificacion,
-      direccion,
       telefono,
+      direccion,
       activo,
-      hacienda_id: formState.hacienda_id,
-      tipo_area_id: formState.tipo_area_id,
+      hacienda_id: selectedHacienda?.id || null,
+      tipo_area_id: selectedTipoArea?.id || null,
     };
 
     try {
       setSubmitting(true);
-      if (editingId !== null) {
-        await axios.put(`${CLIENTES_API_URL}/${editingId}`, payload, {
+      if (clienteId) {
+        await axios.put(`${CLIENTES_API_URL}/${clienteId}`, data, {
           withCredentials: true,
         });
         toast.success("Cliente actualizado correctamente");
       } else {
-        await axios.post(CLIENTES_API_URL, payload, {
+        await axios.post(CLIENTES_API_URL, data, {
           withCredentials: true,
         });
         toast.success("Cliente guardado correctamente");
       }
-      await fetchClientes();
-      resetForm();
+      await cargarClientes();
+      limpiarFormulario();
     } catch (error) {
       const message = resolveErrorMessage(error, "No se pudo guardar el cliente");
       setFormError(message);
@@ -215,17 +209,31 @@ const Clientes = () => {
   };
 
   const handleEdit = (cliente) => {
-    setEditingId(cliente.id);
-    setFormState({
-      nombre: cliente.nombre ?? "",
-      identificacion: cliente.identificacion ?? "",
-      direccion: cliente.direccion ?? "",
-      telefono: cliente.telefono ?? "",
-      activo: normalizeBoolean(cliente.activo, true),
-      hacienda_id: cliente.hacienda_id ?? "",
-      tipo_area_id: cliente.tipo_area_id ?? "",
-    });
+    setClienteId(cliente.id);
+    setNombre(cliente.nombre || "");
+    setIdentificacion(cliente.identificacion || "");
+    setTelefono(cliente.telefono || "");
+    setDireccion(cliente.direccion || "");
+    setActivo(cliente.activo);
     window.scrollTo({ top: 0, behavior: "smooth" });
+
+    if (cliente.hacienda_id) {
+      setSelectedHacienda({
+        id: cliente.hacienda_id,
+        nombre: cliente.hacienda_nombre || "",
+      });
+    } else {
+      setSelectedHacienda(null);
+    }
+
+    if (cliente.tipo_area_id) {
+      setSelectedTipoArea({
+        id: cliente.tipo_area_id,
+        nombre: cliente.tipo_area_nombre || "",
+      });
+    } else {
+      setSelectedTipoArea(null);
+    }
   };
 
   const handleDelete = async (cliente) => {
@@ -286,8 +294,8 @@ const Clientes = () => {
             Registra, edita y elimina clientes del sistema administrativo.
           </p>
         </div>
-        {editingId !== null && (
-          <button type="button" className={secondaryButtonClasses} onClick={resetForm}>
+        {clienteId !== null && (
+          <button type="button" className={secondaryButtonClasses} onClick={limpiarFormulario}>
             Cancelar edición
           </button>
         )}
@@ -295,17 +303,17 @@ const Clientes = () => {
 
       <section className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-semibold text-[#1C2E4A] mb-4">
-          {editingId !== null ? "Editar cliente" : "Registrar nuevo cliente"}
+          {clienteId !== null ? "Editar cliente" : "Registrar nuevo cliente"}
         </h2>
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form className="space-y-4" onSubmit={handleSave}>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-medium text-gray-700">Nombre *</span>
               <input
                 type="text"
                 name="nombre"
-                value={formState.nombre}
-                onChange={handleInputChange}
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
                 className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
                 placeholder="Nombre del cliente"
               />
@@ -315,8 +323,8 @@ const Clientes = () => {
               <input
                 type="text"
                 name="identificacion"
-                value={formState.identificacion}
-                onChange={handleInputChange}
+                value={identificacion}
+                onChange={(e) => setIdentificacion(e.target.value)}
                 className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
                 placeholder="RUC / Cédula"
               />
@@ -326,8 +334,8 @@ const Clientes = () => {
               <input
                 type="text"
                 name="direccion"
-                value={formState.direccion}
-                onChange={handleInputChange}
+                value={direccion}
+                onChange={(e) => setDireccion(e.target.value)}
                 className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
                 placeholder="Dirección principal"
               />
@@ -337,8 +345,8 @@ const Clientes = () => {
               <input
                 type="tel"
                 name="telefono"
-                value={formState.telefono}
-                onChange={handleInputChange}
+                value={telefono}
+                onChange={(e) => setTelefono(e.target.value)}
                 className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
                 placeholder="Número de contacto"
               />
@@ -347,8 +355,8 @@ const Clientes = () => {
               <AutocompleteComboBox
                 label="Hacienda"
                 items={haciendas}
-                value={formState.hacienda_id}
-                onChange={(value) => handleComboBoxChange("hacienda_id", value)}
+                value={selectedHacienda}
+                onChange={setSelectedHacienda}
                 placeholder="Buscar hacienda"
                 displayField="nombre"
                 valueField="id"
@@ -358,8 +366,8 @@ const Clientes = () => {
               <AutocompleteComboBox
                 label="Tipo Área"
                 items={tipoAreas}
-                value={formState.tipo_area_id}
-                onChange={(value) => handleComboBoxChange("tipo_area_id", value)}
+                value={selectedTipoArea}
+                onChange={setSelectedTipoArea}
                 placeholder="Buscar tipo de área"
                 displayField="nombre"
                 valueField="id"
@@ -369,8 +377,8 @@ const Clientes = () => {
               <input
                 type="checkbox"
                 name="activo"
-                checked={Boolean(formState.activo)}
-                onChange={handleInputChange}
+                checked={activo}
+                onChange={(e) => setActivo(e.target.checked)}
                 className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
               />
               <span className="font-medium text-gray-700">Cliente activo</span>
@@ -385,7 +393,7 @@ const Clientes = () => {
             <button type="submit" className={primaryButtonClasses} disabled={submitting}>
               {submitting ? "Guardando..." : "Guardar"}
             </button>
-            <button type="button" className={secondaryButtonClasses} onClick={resetForm}>
+            <button type="button" className={secondaryButtonClasses} onClick={limpiarFormulario}>
               Limpiar
             </button>
           </div>
