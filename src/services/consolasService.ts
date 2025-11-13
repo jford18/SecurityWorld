@@ -22,10 +22,12 @@ export type ConsolaPayload = {
   nombre: string;
 };
 
-export const getConsolas = async () => {
+const getAll = async () => {
   const response = await api.get('/consolas');
   return response.data;
 };
+
+export const getConsolas = getAll;
 
 // NEW: Servicio para crear una consola garantizando cuerpo JSON y validaciones del backend.
 export const createConsola = async (payload: ConsolaPayload) => {
@@ -69,4 +71,11 @@ export const deleteConsola = async (id: number) => {
     throw new Error(`Error HTTP ${response.status}`);
   }
   return handleResponse(response);
+};
+
+export default {
+  getAll,
+  createConsola,
+  updateConsola,
+  deleteConsola,
 };
