@@ -201,9 +201,13 @@ const EditFailureModal: React.FC<{
   const [editData, setEditData] = useState<TechnicalFailure>(() =>
     normalizeFailure(failure),
   );
+  const [activeTab, setActiveTab] = useState<'general' | 'supervisor'>(
+    'general',
+  );
 
   useEffect(() => {
     setEditData(normalizeFailure(failure));
+    setActiveTab('general');
   }, [failure, normalizeFailure]);
 
   const updateField = (name: keyof TechnicalFailure, value: string | undefined) => {
@@ -283,129 +287,196 @@ const EditFailureModal: React.FC<{
     onSave(editData);
   };
 
+  const renderReadOnlyInfo = (label: string, value?: string) => (
+    <div>
+      <label className="block text-sm font-medium text-gray-700">{label}</label>
+      <input
+        type="text"
+        value={value && value.trim() ? value : 'Sin información'}
+        readOnly
+        className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
+      />
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
-      <div className="bg-white rounded-lg shadow-xl p-8 max-w-3xl w-full">
-        <h4 className="text-[#1C2E4A] text-xl font-semibold mb-6">Editar Reporte de Fallo (Supervisor)</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Fecha hora de fallo</label>
-            <input
-              type="text"
-              value={fechaHoraFalloDisplay}
-              readOnly
-              disabled
-              className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Fecha y Hora Resolución</label>
-            <input
-              type="datetime-local"
-              name="fechaHoraResolucion"
-              value={editData.fechaHoraResolucion || ''}
-              onChange={(e) => handleResolutionChange(e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-            />
-          </div>
-          <div>
-            <AutocompleteComboBox
-              label="Departamento Responsable"
-              value={editData.departamentoResponsableId ?? ''}
-              onChange={(value: string) =>
-                setEditData((prev) => ({ ...prev, departamentoResponsableId: value }))
-              }
-              onItemSelect={handleDepartamentoSelect}
-              items={departamentoItems}
-              displayField="label"
-              valueField="value"
-              placeholder="Seleccione..."
-              disabled={departamentos.length === 0}
-              emptyMessage={
-                departamentos.length === 0
-                  ? 'No hay departamentos disponibles'
-                  : 'No se encontraron departamentos'
-              }
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Descripción</label>
-            <textarea
-              value={editData.descripcion_fallo || ''}
-              readOnly
-              rows={3}
-              className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <AutocompleteComboBox
-              label="Responsable Verificación Apertura"
-              value={editData.verificacionAperturaId ?? ''}
-              onChange={(value: string) =>
-                setEditData((prev) => ({ ...prev, verificacionAperturaId: value }))
-              }
-              onItemSelect={(item) =>
-                applyResponsableSelection('verificacionAperturaId', 'verificacionApertura', item)
-              }
-              items={responsableItems}
-              displayField="label"
-              valueField="value"
-              placeholder="Seleccione..."
-              disabled
-              emptyMessage={
-                responsables.length === 0
-                  ? 'No hay responsables disponibles'
-                  : 'No se encontraron responsables'
-              }
-            />
-          </div>
-          <div className="md:col-span-2">
-            <AutocompleteComboBox
-              label="Responsable Verificación Cierre"
-              value={editData.verificacionCierreId ?? ''}
-              onChange={(value: string) =>
-                setEditData((prev) => ({ ...prev, verificacionCierreId: value }))
-              }
-              onItemSelect={(item) =>
-                applyResponsableSelection('verificacionCierreId', 'verificacionCierre', item)
-              }
-              items={responsableItems}
-              displayField="label"
-              valueField="value"
-              placeholder="Seleccione..."
-              disabled={responsables.length === 0}
-              emptyMessage={
-                responsables.length === 0
-                  ? 'No hay responsables disponibles'
-                  : 'No se encontraron responsables'
-              }
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">Novedad Detectada</label>
-            <textarea
-              name="novedadDetectada"
-              value={editData.novedadDetectada || ''}
-              onChange={handleChange}
-              rows={4}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-            ></textarea>
-          </div>
+      <div className="bg-white rounded-lg shadow-xl p-8 max-w-4xl w-full">
+        <h4 className="text-[#1C2E4A] text-xl font-semibold mb-6">
+          Editar Reporte de Fallo (Supervisor)
+        </h4>
+
+        <div className="mb-6 border-b border-gray-200">
+          <nav className="-mb-px flex space-x-6" aria-label="Tabs">
+            {[
+              { id: 'general' as const, label: 'Datos generales' },
+              { id: 'supervisor' as const, label: 'Verificación Supervisor' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-[#F9C300] text-[#1C2E4A]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
         </div>
-        <div className="mt-8 flex justify-end gap-4">
-          <button
-            onClick={onClose}
-            className="px-6 py-2 bg-gray-200 text-gray-800 font-semibold rounded-md hover:bg-gray-300 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="px-6 py-2 bg-[#F9C300] text-[#1C2E4A] font-semibold rounded-md hover:bg-yellow-400 transition-colors disabled:opacity-60"
-          >
-            {isSaving ? 'Guardando...' : 'Guardar Cambios'}
-          </button>
+
+        {activeTab === 'general' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {renderReadOnlyInfo('Fecha de reporte', editData.fecha)}
+            {renderReadOnlyInfo('Sitio', editData.sitio_nombre)}
+            {renderReadOnlyInfo('Tipo de afectación', editData.tipo_afectacion)}
+            {renderReadOnlyInfo('Equipo afectado', editData.equipo_afectado)}
+            {renderReadOnlyInfo('Responsable inicial', editData.responsable)}
+            {renderReadOnlyInfo(
+              'Departamento asignado',
+              editData.deptResponsable ||
+                departamentos.find(
+                  (departamento) =>
+                    String(departamento.id) === editData.departamentoResponsableId,
+                )?.nombre,
+            )}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700">Novedad Detectada</label>
+              <textarea
+                name="novedadDetectada"
+                value={editData.novedadDetectada || ''}
+                onChange={handleChange}
+                rows={4}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
+              ></textarea>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'supervisor' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Fecha hora de fallo
+              </label>
+              <input
+                type="text"
+                value={fechaHoraFalloDisplay}
+                readOnly
+                disabled
+                className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Fecha y Hora Resolución
+              </label>
+              <input
+                type="datetime-local"
+                name="fechaHoraResolucion"
+                value={editData.fechaHoraResolucion || ''}
+                onChange={(e) => handleResolutionChange(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <AutocompleteComboBox
+                label="Departamento Responsable"
+                value={editData.departamentoResponsableId ?? ''}
+                onChange={(value: string) =>
+                  setEditData((prev) => ({ ...prev, departamentoResponsableId: value }))
+                }
+                onItemSelect={handleDepartamentoSelect}
+                items={departamentoItems}
+                displayField="label"
+                valueField="value"
+                placeholder="Seleccione..."
+                searchPlaceholder="Escriba para filtrar"
+                disabled={departamentos.length === 0}
+                emptyMessage={
+                  departamentos.length === 0
+                    ? 'No hay departamentos disponibles'
+                    : 'No se encontraron departamentos'
+                }
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700">Descripción</label>
+              <textarea
+                value={editData.descripcion_fallo || ''}
+                readOnly
+                rows={3}
+                className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <AutocompleteComboBox
+                label="Responsable Verificación Apertura"
+                value={editData.verificacionAperturaId ?? ''}
+                onChange={(value: string) =>
+                  setEditData((prev) => ({ ...prev, verificacionAperturaId: value }))
+                }
+                onItemSelect={(item) =>
+                  applyResponsableSelection('verificacionAperturaId', 'verificacionApertura', item)
+                }
+                items={responsableItems}
+                displayField="label"
+                valueField="value"
+                placeholder="Seleccione..."
+                searchPlaceholder="Escriba para filtrar"
+                disabled
+                emptyMessage={
+                  responsables.length === 0
+                    ? 'No hay responsables disponibles'
+                    : 'No se encontraron responsables'
+                }
+              />
+            </div>
+            <div className="md:col-span-2">
+              <AutocompleteComboBox
+                label="Responsable Verificación Cierre"
+                value={editData.verificacionCierreId ?? ''}
+                onChange={(value: string) =>
+                  setEditData((prev) => ({ ...prev, verificacionCierreId: value }))
+                }
+                onItemSelect={(item) =>
+                  applyResponsableSelection('verificacionCierreId', 'verificacionCierre', item)
+                }
+                items={responsableItems}
+                displayField="label"
+                valueField="value"
+                placeholder="Seleccione..."
+                searchPlaceholder="Escriba para filtrar"
+                disabled={responsables.length === 0}
+                emptyMessage={
+                  responsables.length === 0
+                    ? 'No hay responsables disponibles'
+                    : 'No se encontraron responsables'
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="mt-8 flex flex-col gap-3 border-t border-gray-100 pt-6 md:flex-row md:justify-end">
+          <div className="flex gap-4 justify-end">
+            <button
+              onClick={onClose}
+              className="px-6 py-2 bg-gray-200 text-gray-800 font-semibold rounded-md hover:bg-gray-300 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="px-6 py-2 bg-[#F9C300] text-[#1C2E4A] font-semibold rounded-md hover:bg-yellow-400 transition-colors disabled:opacity-60"
+            >
+              {isSaving ? 'Guardando...' : 'Guardar Cambios'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

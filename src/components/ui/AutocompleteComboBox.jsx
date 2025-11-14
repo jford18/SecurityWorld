@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
 
 const AutocompleteComboBox = ({
@@ -8,7 +8,8 @@ const AutocompleteComboBox = ({
   items: providedItems,
   value,
   onChange,
-  placeholder = "Buscar...",
+  placeholder = "Seleccione...",
+  searchPlaceholder = "Buscar...",
   displayField = "nombre",
   valueField = "id",
   disabled = false,
@@ -22,6 +23,9 @@ const AutocompleteComboBox = ({
   const [query, setQuery] = useState("");
   const [fetchError, setFetchError] = useState(null);
   const [selectedLabel, setSelectedLabel] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
 
   const items = useMemo(() => {
     if (Array.isArray(providedItems) && providedItems.length > 0) {
@@ -126,6 +130,33 @@ const AutocompleteComboBox = ({
     return items.filter((item) => getItemLabel(item).toLowerCase().includes(normalizedQuery));
   }, [items, query]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      setQuery("");
+      return;
+    }
+
+    const handleClickOutside = (event) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      clearTimeout(timer);
+    };
+  }, [isOpen]);
+
   const handleSelect = (selectedValue) => {
     const normalizedValue = selectedValue != null ? String(selectedValue) : "";
     const matchedItem = items.find((item) => String(getItemValue(item) ?? "") === normalizedValue);
@@ -140,66 +171,87 @@ const AutocompleteComboBox = ({
 
     setSelectedLabel(matchedItem ? getItemLabel(matchedItem) : "");
     setQuery("");
+    setIsOpen(false);
   };
 
   const isEmpty = !loading && filteredItems.length === 0;
 
   return (
-    <div className="flex flex-col space-y-2">
+    <div className="flex flex-col space-y-2" ref={containerRef}>
       {label && (
         <label className="text-sm font-medium text-[#1C2E4A]">{label}</label>
       )}
-      <div
-        className={`p-2 rounded-2xl border border-gray-200 shadow-sm ${
-          disabled ? "pointer-events-none opacity-60" : ""
-        }`}
-      >
-        <Command>
-          <CommandInput
-            placeholder={placeholder}
-            value={query}
-            onValueChange={setQuery}
-            disabled={disabled}
-            className="border-none bg-transparent px-2 py-1 text-sm text-gray-700 placeholder:text-gray-400 focus:border-none focus:outline-none focus:ring-0"
-          />
-          {selectedLabel && (
-            <div className="px-2 pb-1 text-xs text-gray-500">
-              Seleccionado:{" "}
-              <span className="font-medium text-gray-700">{selectedLabel}</span>
-            </div>
-          )}
-          <CommandList className="max-h-48 overflow-y-auto space-y-1">
-            {loading && (
-              <div className="p-2 text-center text-sm text-gray-500">{loadingMessage}</div>
-            )}
-            {fetchError && !loading && (
-              <div className="p-2 text-center text-sm text-red-500">{fetchError}</div>
-            )}
-            {isEmpty && (
-              <div className="p-2 text-center text-sm text-gray-400">{emptyMessage}</div>
-            )}
-            {!loading &&
-              filteredItems.map((item, index) => {
-                const itemValue = getItemValue(item);
-                const key = `${String(itemValue ?? index)}-${index}`;
-                const isSelected = String(value ?? "") === String(itemValue ?? "");
-                return (
-                  <CommandItem
-                    key={key}
-                    value={itemValue != null ? String(itemValue) : ""}
-                    onSelect={handleSelect}
-                    className={`cursor-pointer rounded-md px-2 py-1 text-sm transition-colors ${
-                      isSelected
-                        ? "bg-gray-100 text-gray-900"
-                        : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                    }`}
-                  >
-                    {getItemLabel(item)}
-                  </CommandItem>
-                );
-              })}
-          </CommandList>
-        </Command>
+      <div className={`relative ${disabled ? "opacity-60" : ""}`}>
+        <button
+          type="button"
+          onClick={() => {
+            if (disabled) return;
+            setIsOpen((prev) => !prev);
+          }}
+          className={`flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2 text-left text-sm text-gray-700 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#F9C300] ${
+            disabled ? "cursor-not-allowed bg-gray-50" : "hover:border-[#F9C300]"
+          }`}
+        >
+          <span className={selectedLabel ? "text-gray-900" : "text-gray-400"}>
+            {selectedLabel || placeholder}
+          </span>
+          <svg
+            className={`h-4 w-4 text-gray-500 transition-transform ${
+              isOpen ? "rotate-180" : ""
+            }`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {isOpen && !disabled && (
+          <div className="absolute left-0 right-0 z-20 mt-2 rounded-xl border border-gray-200 bg-white p-3 shadow-lg">
+            <Command>
+              <CommandInput
+                ref={inputRef}
+                placeholder={searchPlaceholder}
+                value={query}
+                onValueChange={setQuery}
+                disabled={disabled}
+                className="border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-[#F9C300] focus:outline-none focus:ring-1 focus:ring-[#F9C300]"
+              />
+              <CommandList className="mt-2 max-h-48 overflow-y-auto space-y-1">
+                {loading && (
+                  <div className="p-2 text-center text-sm text-gray-500">{loadingMessage}</div>
+                )}
+                {fetchError && !loading && (
+                  <div className="p-2 text-center text-sm text-red-500">{fetchError}</div>
+                )}
+                {isEmpty && (
+                  <div className="p-2 text-center text-sm text-gray-400">{emptyMessage}</div>
+                )}
+                {!loading &&
+                  filteredItems.map((item, index) => {
+                    const itemValue = getItemValue(item);
+                    const key = `${String(itemValue ?? index)}-${index}`;
+                    const isSelected = String(value ?? "") === String(itemValue ?? "");
+                    return (
+                      <CommandItem
+                        key={key}
+                        value={itemValue != null ? String(itemValue) : ""}
+                        onSelect={handleSelect}
+                        className={`w-full cursor-pointer rounded-md px-2 py-1 text-sm transition-colors ${
+                          isSelected
+                            ? "bg-gray-100 text-gray-900"
+                            : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                        }`}
+                      >
+                        {getItemLabel(item)}
+                      </CommandItem>
+                    );
+                  })}
+              </CommandList>
+            </Command>
+          </div>
+        )}
       </div>
       {error && <span className="text-xs text-red-500">{error}</span>}
     </div>
