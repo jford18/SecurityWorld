@@ -1,6 +1,5 @@
-import { API_BASE_URL } from './api';
-
 const jsonContentType = 'application/json';
+const USUARIOS_ENDPOINT = '/api/usuarios';
 
 // FIX: Función auxiliar para validar si la respuesta contiene JSON antes de intentar parsearla.
 const parseJsonSafe = async (response: Response) => {
@@ -38,14 +37,14 @@ export type UsuarioUpdatePayload = {
 
 export const getUsuarios = async () => {
   // NEW: Recupera la lista de usuarios desde el backend asegurando ruta /api/usuarios.
-  const response = await fetch(`${API_BASE_URL}/api/usuarios`, {
+  const response = await fetch(USUARIOS_ENDPOINT, {
     headers: { Accept: jsonContentType },
   });
   return handleResponse(response);
 };
 
 export const createUsuario = async (payload: UsuarioPayload) => {
-  const response = await fetch(`${API_BASE_URL}/api/usuarios`, {
+  const response = await fetch(USUARIOS_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': jsonContentType,
@@ -57,7 +56,7 @@ export const createUsuario = async (payload: UsuarioPayload) => {
 };
 
 export const updateUsuario = async (id: number, payload: UsuarioUpdatePayload) => {
-  const response = await fetch(`${API_BASE_URL}/api/usuarios/${id}`, {
+  const response = await fetch(`${USUARIOS_ENDPOINT}/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': jsonContentType,
@@ -69,7 +68,7 @@ export const updateUsuario = async (id: number, payload: UsuarioUpdatePayload) =
 };
 
 export const deleteUsuario = async (id: number) => {
-  const response = await fetch(`${API_BASE_URL}/api/usuarios/${id}`, {
+  const response = await fetch(`${USUARIOS_ENDPOINT}/${id}`, {
     method: 'DELETE',
     headers: { Accept: jsonContentType },
   });

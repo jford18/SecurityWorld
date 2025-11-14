@@ -1,6 +1,5 @@
-import { API_BASE_URL } from './api';
-
 const jsonContentType = 'application/json';
+const ROL_MENU_ENDPOINT = '/api/rol-menu';
 
 const ensureJsonResponse = async (response: Response) => {
   const contentType = response.headers.get('content-type');
@@ -48,7 +47,7 @@ export const getMenusByRol = async (rolId: number) => {
     throw new Error('Identificador de rol inválido');
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/rol-menu/${rolId}`, {
+  const response = await fetch(`${ROL_MENU_ENDPOINT}/${rolId}`, {
     headers: { Accept: jsonContentType },
   });
 
@@ -64,7 +63,7 @@ export const saveRolMenus = async (rolId: number, menus: SaveRolMenuPayload[]) =
     throw new Error('Identificador de rol inválido');
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/rol-menu`, {
+  const response = await fetch(ROL_MENU_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': jsonContentType,

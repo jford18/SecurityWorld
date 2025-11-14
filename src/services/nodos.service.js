@@ -1,4 +1,4 @@
-import api, { API_BASE_URL } from './api';
+import api from './api';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -6,7 +6,7 @@ const JSON_HEADERS = {
 };
 
 const BASE_PATH = '/api/nodos';
-const API_URL = `${API_BASE_URL}${BASE_PATH}`;
+const API_URL = BASE_PATH;
 
 const extractData = (response) => {
   if (!response || typeof response !== 'object') {
