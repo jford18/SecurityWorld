@@ -17,11 +17,6 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/login': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-        secure: false,
-      },
       '/consolas': {
         target: 'http://localhost:3000',
         changeOrigin: true,
