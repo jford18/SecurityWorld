@@ -8,6 +8,7 @@ declare module '@/components/ui/AutocompleteComboBox' {
     value?: string;
     onChange?: (value: string) => void;
     placeholder?: string;
+    searchPlaceholder?: string;
     displayField?: string;
     valueField?: string;
     disabled?: boolean;
