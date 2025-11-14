@@ -272,6 +272,8 @@ export const createFallo = async (req, res) => {
     responsable,
     deptResponsable,
     tipoProblema,
+    tipo_problema_id: tipoProblemaIdSnake,
+    tipoProblemaId: tipoProblemaIdCamel,
     consola,
     fechaResolucion,
     horaResolucion,
@@ -280,6 +282,7 @@ export const createFallo = async (req, res) => {
     novedadDetectada,
     affectationType,
     sitio_id: rawSitioId,
+    sitioId: rawSitioIdCamel,
   } = req.body || {};
 
   if (!fecha || !equipo_afectado || !descripcion_fallo || !responsable) {
@@ -289,19 +292,49 @@ export const createFallo = async (req, res) => {
     });
   }
 
+  const sitioIdSource =
+    rawSitioId !== undefined && rawSitioId !== null && rawSitioId !== ""
+      ? rawSitioId
+      : rawSitioIdCamel;
+
   const sitioIdValue =
-    rawSitioId === undefined || rawSitioId === null || rawSitioId === ""
+    sitioIdSource === undefined || sitioIdSource === null || sitioIdSource === ""
       ? null
-      : Number(rawSitioId);
+      : Number(sitioIdSource);
 
   if (
-    rawSitioId !== undefined &&
-    rawSitioId !== null &&
-    rawSitioId !== "" &&
+    sitioIdSource !== undefined &&
+    sitioIdSource !== null &&
+    sitioIdSource !== "" &&
     (Number.isNaN(sitioIdValue) || !Number.isInteger(sitioIdValue))
   ) {
     return res.status(400).json({
       mensaje: "El identificador del sitio proporcionado no es válido.",
+    });
+  }
+
+  const tipoProblemaIdSource =
+    tipoProblemaIdSnake !== undefined &&
+    tipoProblemaIdSnake !== null &&
+    tipoProblemaIdSnake !== ""
+      ? tipoProblemaIdSnake
+      : tipoProblemaIdCamel;
+
+  const parsedTipoProblemaId =
+    tipoProblemaIdSource === undefined ||
+    tipoProblemaIdSource === null ||
+    tipoProblemaIdSource === ""
+      ? null
+      : Number(tipoProblemaIdSource);
+
+  if (
+    tipoProblemaIdSource !== undefined &&
+    tipoProblemaIdSource !== null &&
+    tipoProblemaIdSource !== "" &&
+    (Number.isNaN(parsedTipoProblemaId) || !Number.isInteger(parsedTipoProblemaId))
+  ) {
+    return res.status(400).json({
+      mensaje: "El identificador del tipo de problema proporcionado no es válido.",
     });
   }
 
@@ -340,10 +373,14 @@ export const createFallo = async (req, res) => {
       "SELECT id, descripcion FROM catalogo_tipo_problema"
     );
     const tipos = tiposProblemaResult.rows;
-    const tipoProblemaId = tipos.find((t) => {
-      return String(t.descripcion).trim().toLowerCase() ===
-        String(tipoProblema || descripcion_fallo || "").trim().toLowerCase();
-    })?.id ?? null;
+    let tipoProblemaId = parsedTipoProblemaId;
+    if (tipoProblemaId === null) {
+      tipoProblemaId =
+        tipos.find((t) => {
+          return String(t.descripcion).trim().toLowerCase() ===
+            String(tipoProblema || descripcion_fallo || "").trim().toLowerCase();
+        })?.id ?? null;
+    }
 
     const consolasResult = await client.query(
       "SELECT id, nombre FROM consolas"
@@ -364,13 +401,12 @@ export const createFallo = async (req, res) => {
         tipo_problema_id,
         consola_id,
         sitio_id,
-        tipo_afectacion,
         fecha_resolucion,
         hora_resolucion,
         fecha_creacion,
         fecha_actualizacion
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()
       ) RETURNING id`,
       [
         fecha,
@@ -381,7 +417,6 @@ export const createFallo = async (req, res) => {
         tipoProblemaId,
         consolaId,
         sitioIdValue,
-        affectationType || null,
         fechaResolucion || null,
         horaResolucion || null, // FIX: exclude estado so the generated column is calculated by PostgreSQL during inserts.
       ]
