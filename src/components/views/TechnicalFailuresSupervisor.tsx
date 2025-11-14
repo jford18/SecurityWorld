@@ -269,6 +269,12 @@ const TechnicalFailuresSupervisor: React.FC = () => {
                   Equipo
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Sitio
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Tipo afectación
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Descripción
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -285,7 +291,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {failures.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
                     {isLoading ? 'Cargando fallos técnicos...' : 'No hay registros disponibles.'}
                   </td>
                 </tr>
@@ -295,6 +301,12 @@ const TechnicalFailuresSupervisor: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.fecha}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {fallo.equipo_afectado}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {fallo.sitio_nombre || 'Sin sitio asignado'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {fallo.tipo_afectacion || 'Sin tipo'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {fallo.descripcion_fallo}

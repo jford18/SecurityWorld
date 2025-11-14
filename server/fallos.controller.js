@@ -175,6 +175,8 @@ const mapFalloRowToDto = (row) => ({
   responsable: row.responsable || "",
   deptResponsable: row.departamento || undefined,
   consola: row.consola || undefined, // FIX: expose consola name retrieved via the LEFT JOIN so the frontend can display it without additional lookups.
+  sitio_nombre: row.sitio_nombre || "",
+  tipo_afectacion: row.tipo_afectacion || "",
   fechaResolucion: formatDate(row.fecha_resolucion) || undefined,
   horaResolucion: row.hora_resolucion || undefined,
   verificacionApertura: row.verificacion_apertura || undefined,
@@ -191,6 +193,8 @@ const fetchFalloById = async (client, id) => {
         ft.descripcion_fallo,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
+        sitio.nombre AS sitio_nombre,
+        ft.tipo_afectacion,
         ft.fecha_resolucion,
         ft.hora_resolucion,
         seguimiento.novedad_detectada,
@@ -199,6 +203,7 @@ const fetchFalloById = async (client, id) => {
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
+      LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
       LEFT JOIN seguimiento_fallos seguimiento ON seguimiento.fallo_id = ft.id
       LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
       LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
@@ -228,12 +233,15 @@ export const getFallos = async (req, res) => {
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
         consola.nombre AS consola,
+        sitio.nombre AS sitio_nombre,
+        ft.tipo_afectacion,
         ft.fecha_resolucion,
         ft.hora_resolucion
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
       LEFT JOIN consolas consola ON consola.id = ft.consola_id
+      LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
       ORDER BY ft.fecha DESC, ft.id DESC`
     ); // FIX: rewritten query uses LEFT JOINs only with existing lookup tables to avoid failing when optional relations are missing and to provide the consola name.
 
