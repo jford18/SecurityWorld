@@ -1,11 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { getUsuarios } from '../../services/usuariosService';
-import {
-  asignarRol,
-  eliminarRol,
-  fetchRolesDisponibles,
-  fetchUsuarioRoles,
-} from '../../services/usuarioRolesService';
+import usuarioRolesService from '../../services/usuarioRolesService';
 
 export type UsuarioListado = {
   id: number;
@@ -48,8 +43,8 @@ const AsignacionRolesScreen: React.FC = () => {
 
       const [usuariosResponse, rolesResponse, asignacionesResponse] = await Promise.all([
         getUsuarios(),
-        fetchRolesDisponibles(),
-        fetchUsuarioRoles(),
+        usuarioRolesService.getRolesDisponibles(),
+        usuarioRolesService.getAsignaciones(),
       ]);
 
       if (!Array.isArray(usuariosResponse) || !Array.isArray(rolesResponse) || !Array.isArray(asignacionesResponse)) {
@@ -121,7 +116,7 @@ const AsignacionRolesScreen: React.FC = () => {
       setSavingFlag(usuarioId, rolId, true);
 
       if (checked) {
-        await asignarRol({ usuario_id: usuarioId, rol_id: rolId });
+        await usuarioRolesService.asignarRol({ usuario_id: usuarioId, rol_id: rolId });
         setAsignaciones((prev) => {
           const current = new Set(prev[usuarioId] ?? []);
           current.add(rolId);
@@ -134,7 +129,7 @@ const AsignacionRolesScreen: React.FC = () => {
           return;
         }
 
-        await eliminarRol(usuarioId, rolId);
+        await usuarioRolesService.eliminarAsignacion(usuarioId, rolId);
         setAsignaciones((prev) => {
           const current = new Set(prev[usuarioId] ?? []);
           current.delete(rolId);

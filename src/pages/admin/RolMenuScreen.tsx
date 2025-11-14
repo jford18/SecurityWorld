@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AutocompleteComboBox from '@/components/ui/AutocompleteComboBox';
-import { fetchRolesDisponibles } from '../../services/usuarioRolesService';
+import usuarioRolesService from '../../services/usuarioRolesService';
 import { SaveRolMenuPayload, getMenusByRol, saveRolMenus } from '../../services/rolMenuService';
 
 const toast = {
@@ -57,7 +57,7 @@ const RolMenuScreen: React.FC = () => {
       setLoadingRoles(true);
       setErrorMessage('');
 
-      const response = await fetchRolesDisponibles();
+      const response = await usuarioRolesService.getRolesDisponibles();
       if (!Array.isArray(response)) {
         throw new Error('Respuesta inválida del servidor');
       }
