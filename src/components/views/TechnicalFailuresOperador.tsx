@@ -2,7 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useSession } from '../context/SessionContext';
 import FechaHoraFalloPicker from '../ui/FechaHoraFalloPicker';
 import AutocompleteComboBox from '../ui/AutocompleteComboBox';
-import { TechnicalFailure, TechnicalFailureCatalogs, CatalogoNodo } from '../../types';
+import {
+  TechnicalFailure,
+  TechnicalFailureCatalogs,
+  CatalogoNodo,
+  SitioPorConsola,
+} from '../../types';
 import {
   fetchFallos,
   createFallo,
@@ -71,7 +76,7 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [errors, setErrors] = useState<Partial<FailureFormData>>({});
   const [cliente, setCliente] = useState<string | null>(null);
   const [clienteFromConsole, setClienteFromConsole] = useState<string | null>(null);
-  const [sitios, setSitios] = useState<string[]>([]);
+  const [sitios, setSitios] = useState<SitioPorConsola[]>([]);
   const [sitio, setSitio] = useState<SitioAsociado | null>(null);
   const [, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -82,7 +87,11 @@ const TechnicalFailuresOperador: React.FC = () => {
   const sitioItems = useMemo(
     () => [
       { id: 'empty', nombre: 'Seleccione...', value: '' },
-      ...sitios.map((nombre) => ({ id: nombre, nombre, value: nombre })),
+      ...sitios.map((sitioItem) => ({
+        id: sitioItem.sitio,
+        nombre: sitioItem.sitio,
+        value: sitioItem.sitio,
+      })),
     ],
     [sitios]
   );
@@ -325,6 +334,18 @@ const TechnicalFailuresOperador: React.FC = () => {
     setSitio(null);
   };
 
+  const handleSitioChange = (selected: string) => {
+    applyFieldUpdate('sitio', selected);
+
+    if (!selected) {
+      setClienteFromConsole(null);
+      return;
+    }
+
+    const sitioSeleccionado = sitios.find((sitioItem) => sitioItem.sitio === selected);
+    setClienteFromConsole(sitioSeleccionado?.cliente ?? null);
+  };
+
   useEffect(() => {
     if (formData.affectationType === 'Nodo' && formData.nodo) {
       const nodoNombre = selectedNodo?.nombre ?? '';
@@ -343,19 +364,28 @@ const TechnicalFailuresOperador: React.FC = () => {
     if (formData.affectationType === 'Punto' || formData.affectationType === 'Equipo') {
       const allSites = catalogos.sitiosPorConsola;
       if (allSites.length > 0) {
-        const uniqueSites = [...new Set(allSites.map((s) => s.sitio))];
+        const uniqueSitesMap = new Map<string, SitioPorConsola>();
+        allSites.forEach((site) => {
+          if (!uniqueSitesMap.has(site.sitio)) {
+            uniqueSitesMap.set(site.sitio, site);
+          }
+        });
+        const uniqueSites = Array.from(uniqueSitesMap.values());
         setSitios(uniqueSites);
-        // If you need to set a default client, you can pick the first one
-        setClienteFromConsole(allSites[0].cliente);
+
+        if (formData.sitio) {
+          const existingSitio = uniqueSites.find((site) => site.sitio === formData.sitio);
+          setClienteFromConsole(existingSitio?.cliente ?? null);
+        }
       } else {
-        setClienteFromConsole('No encontrado');
+        setClienteFromConsole(null);
         setSitios([]);
       }
     } else {
       setClienteFromConsole(null);
       setSitios([]);
     }
-  }, [formData.affectationType, catalogos.sitiosPorConsola]);
+  }, [formData.affectationType, catalogos.sitiosPorConsola, formData.sitio]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -451,19 +481,31 @@ const TechnicalFailuresOperador: React.FC = () => {
 
   const renderConditionalFields = () => {
     const sitioSelectField = (
-      <div className="md:col-span-2">
-        <AutocompleteComboBox
-          label="Sitio *"
-          value={formData.sitio}
-          onChange={(selected: string) => applyFieldUpdate('sitio', selected)}
-          items={sitioItems}
-          displayField="nombre"
-          valueField="value"
-          placeholder="Buscar sitio..."
-          disabled={sitios.length === 0}
-          error={errors.sitio}
-          emptyMessage={sitios.length === 0 ? 'No hay sitios disponibles' : 'No se encontraron sitios'}
-        />
+      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <AutocompleteComboBox
+            label="Sitio *"
+            value={formData.sitio}
+            onChange={handleSitioChange}
+            items={sitioItems}
+            displayField="nombre"
+            valueField="value"
+            placeholder="Buscar sitio..."
+            disabled={sitios.length === 0}
+            error={errors.sitio}
+            emptyMessage={sitios.length === 0 ? 'No hay sitios disponibles' : 'No se encontraron sitios'}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Cliente asociado</label>
+          <input
+            type="text"
+            value={clienteFromConsole ?? ''}
+            readOnly
+            placeholder={sitios.length === 0 ? 'No hay sitios disponibles' : 'Seleccione un sitio'}
+            className="mt-1 block w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-gray-700 focus:border-[#F9C300] focus:ring-[#F9C300]"
+          />
+        </div>
       </div>
     );
 
