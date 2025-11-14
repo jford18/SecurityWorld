@@ -143,6 +143,6 @@ export const getUsuarios = async () => {
 };
 
 export const getConsolas = async () => {
-  const { data } = await apiClient.get('/consolas');
+  const { data } = await apiClient.get('/api/consolas');
   return Array.isArray(data) ? data : [];
 };
