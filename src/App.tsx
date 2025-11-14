@@ -28,6 +28,7 @@ import Clientes from './pages/administracion/Clientes';
 import AsignarClienteSitio from './pages/administracion/AsignarClienteSitio';
 import TipoAreaList from './pages/administracion/TipoAreaList';
 import TipoAreaForm from './pages/administracion/TipoAreaForm';
+import DepartamentosResponsablesPage from './pages/administracion/DepartamentosResponsablesPage';
 
 import HaciendaPage from './pages/administracion/HaciendaPage.tsx';
 
@@ -104,6 +105,7 @@ const routeConfig: RouteDefinition[] = [
   },
   { path: '/administracion/clientes', element: <Clientes /> },
   { path: '/administracion/asignar-cliente-sitio', element: <AsignarClienteSitio /> },
+  { path: '/administracion/departamento-responsable', element: <DepartamentosResponsablesPage /> },
   { path: '/administracion/roles', element: <RolesScreen /> },
   { path: '/administracion/usuarios', element: <UsuariosScreen /> },
   { path: '/administracion/catalogo-tipo-problema', element: <CatalogoTipoProblemaScreen /> },
