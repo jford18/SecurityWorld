@@ -20,6 +20,7 @@ import rolMenuRoutes from "./routes/rolMenu.js";
 import sitiosRoutes from "./routes/sitios.routes.js";
 import haciendasRoutes from "./routes/haciendas.routes.js";
 import tipoAreaRoutes from "./routes/tipoArea.routes.js";
+import departamentosResponsablesRoutes from "./routes/departamentosResponsables.routes.js";
 
 const app = express();
 app.use(express.json());
@@ -49,6 +50,7 @@ const knownApiPrefixes = [
   "/api/usuarios",
   "/api/haciendas",
   "/api/tipo-area",
+  "/api/v1/departamentos-responsables",
 ];
 
 app.use((req, _res, next) => {
@@ -94,6 +96,7 @@ app.use("/api/clientes", clientesRoutes);
 app.use("/api/asignar-cliente-sitio", asignarClienteSitioRoutes);
 app.use("/api", haciendasRoutes);
 app.use("/api", tipoAreaRoutes);
+app.use("/api/v1/departamentos-responsables", departamentosResponsablesRoutes);
 
 const logRoutes = (stack) => {
   stack
