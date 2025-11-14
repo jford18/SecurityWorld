@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSession, clearSession } from './context/SessionContext';
 import AutocompleteComboBox from './ui/AutocompleteComboBox';
 
 const Header: React.FC = () => {
   const [time, setTime] = useState(new Date());
   const { session, setSession } = useSession();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const timerId = setInterval(() => setTime(new Date()), 1000);
@@ -18,6 +20,7 @@ const Header: React.FC = () => {
     localStorage.removeItem('activeRoleId');
     localStorage.removeItem('selectedConsole');
     clearSession(setSession);
+    navigate('/login', { replace: true });
   };
 
   const handleRoleChange = (roleValue: string) => {

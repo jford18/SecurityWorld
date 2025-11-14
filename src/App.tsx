@@ -254,16 +254,19 @@ const AppContent: React.FC = () => {
 
   return (
     <Routes>
-      <Route
-        path="/login"
-        element={
-          isAuthenticated ? (
-            <Navigate to={defaultAuthorizedPath} replace />
-          ) : (
-            <LoginScreen onLogin={handleLogin} />
-          )
-        }
-      />
+      {['/login', '/auth/login'].map((loginPath) => (
+        <Route
+          key={loginPath}
+          path={loginPath}
+          element={
+            isAuthenticated ? (
+              <Navigate to={defaultAuthorizedPath} replace />
+            ) : (
+              <LoginScreen onLogin={handleLogin} />
+            )
+          }
+        />
+      ))}
       <Route
         path="/"
         element={
