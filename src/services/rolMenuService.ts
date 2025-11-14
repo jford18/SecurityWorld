@@ -1,29 +1,42 @@
-const jsonContentType = 'application/json';
+import api from './api';
+
 const ROL_MENU_ENDPOINT = '/api/rol-menu';
 
-const ensureJsonResponse = async (response: Response) => {
-  const contentType = response.headers.get('content-type');
-  if (!contentType || !contentType.includes(jsonContentType)) {
-    throw new Error('Respuesta inválida del servidor');
-  }
-  return response.json();
+type ApiErrorResponse = {
+  message?: string;
+  error?: string;
 };
 
-const handleError = async (response: Response) => {
-  try {
-    const data = await ensureJsonResponse(response);
-    if (data && typeof data === 'object' && 'message' in data) {
-      const maybeMessage = (data as { message?: unknown }).message;
-      if (typeof maybeMessage === 'string' && maybeMessage.trim() !== '') {
-        throw new Error(maybeMessage);
+type AxiosErrorLike = Error & {
+  response?: {
+    data?: ApiErrorResponse;
+  };
+  isAxiosError?: boolean;
+};
+
+const isAxiosErrorLike = (error: unknown): error is AxiosErrorLike =>
+  Boolean(error) && typeof error === 'object' && 'isAxiosError' in (error as Record<string, unknown>);
+
+const resolveRequestError = (error: unknown): Error => {
+  if (isAxiosErrorLike(error)) {
+    const data = error.response?.data;
+    if (data) {
+      const serverMessage = data.message ?? data.error;
+      if (typeof serverMessage === 'string' && serverMessage.trim() !== '') {
+        return new Error(serverMessage);
       }
     }
-  } catch (error) {
-    if (error instanceof Error && error.message !== 'Respuesta inválida del servidor') {
-      throw error;
+    const axiosMessage = typeof error.message === 'string' ? error.message : '';
+    if (axiosMessage.trim() !== '') {
+      return new Error(axiosMessage);
     }
   }
-  throw new Error(`Error HTTP ${response.status}`);
+
+  if (error instanceof Error) {
+    return error;
+  }
+
+  return new Error('Error al procesar la solicitud de Roles ↔ Menús');
 };
 
 export type RolMenuItem = {
@@ -47,15 +60,12 @@ export const getMenusByRol = async (rolId: number) => {
     throw new Error('Identificador de rol inválido');
   }
 
-  const response = await fetch(`${ROL_MENU_ENDPOINT}/${rolId}`, {
-    headers: { Accept: jsonContentType },
-  });
-
-  if (!response.ok) {
-    await handleError(response);
+  try {
+    const { data } = await api.get<RolMenuItem[]>(`${ROL_MENU_ENDPOINT}/${rolId}`);
+    return data;
+  } catch (error) {
+    throw resolveRequestError(error);
   }
-
-  return ensureJsonResponse(response) as Promise<RolMenuItem[]>;
 };
 
 export const saveRolMenus = async (rolId: number, menus: SaveRolMenuPayload[]) => {
@@ -63,18 +73,26 @@ export const saveRolMenus = async (rolId: number, menus: SaveRolMenuPayload[]) =
     throw new Error('Identificador de rol inválido');
   }
 
-  const response = await fetch(ROL_MENU_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': jsonContentType,
-      Accept: jsonContentType,
-    },
-    body: JSON.stringify({ rol_id: rolId, menus }),
-  });
+  try {
+    const { data } = await api.post<{ message: string }>(ROL_MENU_ENDPOINT, {
+      rol_id: rolId,
+      menus,
+    });
+    return data;
+  } catch (error) {
+    throw resolveRequestError(error);
+  }
+};
 
-  if (!response.ok) {
-    await handleError(response);
+export const deleteRolMenu = async (id: number) => {
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error('Identificador de asignación inválido');
   }
 
-  return ensureJsonResponse(response) as Promise<{ message: string }>;
+  try {
+    const { data } = await api.delete<{ message: string }>(`${ROL_MENU_ENDPOINT}/${id}`);
+    return data;
+  } catch (error) {
+    throw resolveRequestError(error);
+  }
 };
