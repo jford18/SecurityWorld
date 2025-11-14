@@ -176,6 +176,7 @@ const mapFalloRowToDto = (row) => ({
   deptResponsable: row.departamento || undefined,
   consola: row.consola || undefined, // FIX: expose consola name retrieved via the LEFT JOIN so the frontend can display it without additional lookups.
   sitio_nombre: row.sitio_nombre || "",
+  tipo_problema_id: row.tipo_problema_id ?? null,
   tipo_afectacion: row.tipo_afectacion || "",
   fechaResolucion: formatDate(row.fecha_resolucion) || undefined,
   horaResolucion: row.hora_resolucion || undefined,
@@ -186,7 +187,7 @@ const mapFalloRowToDto = (row) => ({
 
 const fetchFalloById = async (client, id) => {
   const result = await client.query(
-    `SELECT
+      `SELECT
         ft.id,
         ft.fecha,
         ft.equipo_afectado,
@@ -194,7 +195,8 @@ const fetchFalloById = async (client, id) => {
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
         sitio.nombre AS sitio_nombre,
-        ft.tipo_afectacion,
+        ft.tipo_problema_id,
+        tp.descripcion AS tipo_afectacion,
         ft.fecha_resolucion,
         ft.hora_resolucion,
         seguimiento.novedad_detectada,
@@ -204,6 +206,7 @@ const fetchFalloById = async (client, id) => {
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
       LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
+      LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
       LEFT JOIN seguimiento_fallos seguimiento ON seguimiento.fallo_id = ft.id
       LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
       LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
@@ -234,7 +237,8 @@ export const getFallos = async (req, res) => {
         dept.nombre AS departamento,
         consola.nombre AS consola,
         sitio.nombre AS sitio_nombre,
-        ft.tipo_afectacion,
+        ft.tipo_problema_id,
+        tp.descripcion AS tipo_afectacion,
         ft.fecha_resolucion,
         ft.hora_resolucion
       FROM fallos_tecnicos ft
@@ -242,6 +246,7 @@ export const getFallos = async (req, res) => {
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
       LEFT JOIN consolas consola ON consola.id = ft.consola_id
       LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
+      LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
       ORDER BY ft.fecha DESC, ft.id DESC`
     ); // FIX: rewritten query uses LEFT JOINs only with existing lookup tables to avoid failing when optional relations are missing and to provide the consola name.
 
