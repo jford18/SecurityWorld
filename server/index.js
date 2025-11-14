@@ -38,6 +38,7 @@ const knownApiPrefixes = [
   "/api/catalogos",
   "/api/asignar-cliente-sitio",
   "/api/fallos",
+  "/api/consolas",
   "/api/nodos",
   "/api/clientes",
   "/api/nodos-sitios",
@@ -77,7 +78,7 @@ app.use((req, _res, next) => {
 
 // Rutas principales
 app.use("/", authRoutes);
-app.use("/", consolasRoutes);
+app.use("/api/consolas", consolasRoutes);
 app.use("/", menusRoutes);
 app.use("/api/nodos", nodosRoutes);
 app.use("/api/nodos-sitios", nodosSitiosRoutes);
