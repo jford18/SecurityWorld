@@ -508,21 +508,17 @@ export const updateFallo = async (req, res) => {
         String(deptResponsable || "").trim().toLowerCase();
     })?.id ?? null;
 
-    const estado = fechaResolucion ? "RESUELTO" : "PENDIENTE";
-
     await client.query(
       `UPDATE fallos_tecnicos
          SET departamento_id = $1,
              fecha_resolucion = $2,
              hora_resolucion = $3,
-             estado = $4,
              fecha_actualizacion = NOW()
-       WHERE id = $5`,
+        WHERE id = $4`,
       [
         departamentoId,
         fechaResolucion || null,
         horaResolucion || null,
-        estado,
         id,
       ]
     );
