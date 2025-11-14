@@ -46,6 +46,7 @@ const knownApiPrefixes = [
   "/api/sitios",
   "/api/usuario-roles",
   "/api/usuarios",
+  "/api/haciendas",
 ];
 
 app.use((req, _res, next) => {
@@ -89,7 +90,7 @@ app.use("/api/rol-menu", rolMenuRoutes);
 app.use("/api/sitios", sitiosRoutes);
 app.use("/api/clientes", clientesRoutes);
 app.use("/api/asignar-cliente-sitio", asignarClienteSitioRoutes);
-app.use("/api/haciendas", haciendasRoutes);
+app.use("/api", haciendasRoutes);
 app.use("/api/tipo_area", tipoAreaRoutes);
 
 const logRoutes = (stack) => {
