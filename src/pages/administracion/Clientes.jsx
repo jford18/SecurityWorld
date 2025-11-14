@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../services/api";
 import AutocompleteComboBox from "../../components/ui/AutocompleteComboBox.jsx";
+import { getAllTipoArea } from "../../services/tipoAreaService";
 
 const toast = {
   success: (message) => {
@@ -74,12 +75,13 @@ const Clientes = () => {
 
   const fetchComboBoxData = useCallback(async () => {
     try {
-      const [haciendasRes, tipoAreasRes] = await Promise.all([
+      const [haciendasRes, tipoAreasData] = await Promise.all([
         api.get("/api/haciendas"),
-        api.get("/api/tipo_area"),
+        getAllTipoArea(),
       ]);
-      setHaciendas(haciendasRes.data.data || []);
-      setTipoAreas(tipoAreasRes.data.data || []);
+      const haciendasPayload = haciendasRes.data?.data ?? haciendasRes.data ?? [];
+      setHaciendas(Array.isArray(haciendasPayload) ? haciendasPayload : []);
+      setTipoAreas(Array.isArray(tipoAreasData) ? tipoAreasData : []);
     } catch (error) {
       const message = resolveErrorMessage(error, "No se pudieron cargar los datos para los combos");
       toast.error(message);

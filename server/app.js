@@ -29,6 +29,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/clientes", clientesRoutes);
 app.use("/api/fallos", fallosRoutes);
 app.use("/api/asignar-cliente-sitio", asignarClienteSitioRoutes);
-app.use("/api/v1/tipo-area", tipoAreaRoutes);
+app.use("/api", tipoAreaRoutes);
 
 export default app;

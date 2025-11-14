@@ -28,3 +28,5 @@ export const Navigate: React.FC<NavigateProps>;
 export const Link: React.FC<LinkProps>;
 export const Outlet: React.FC;
 export const useLocation: () => { pathname: string };
+export const useNavigate: () => (to: string, options?: NavigateOptions) => void;
+export const useParams: <T extends Record<string, string | undefined> = Record<string, string | undefined>>() => T;

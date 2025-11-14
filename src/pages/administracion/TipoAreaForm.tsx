@@ -1,16 +1,21 @@
-import React, { useState, useEffect } from 'react';
-
-import axios from 'axios';
+import { useState, useEffect, FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { getTipoAreaById, createTipoArea, updateTipoArea } from '../../services/tipoAreaService';
+
+type TipoAreaEntity = {
+  nombre?: string;
+  descripcion?: string | null;
+  activo?: boolean | null;
+};
 
 
 const TipoAreaForm = () => {
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [activo, setActivo] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { id } = useParams();
+  const { id } = useParams<{ id?: string }>();
 
   useEffect(() => {
     if (id) {
@@ -18,28 +23,28 @@ const TipoAreaForm = () => {
     }
   }, [id]);
 
-  const fetchTipoArea = async (id) => {
+  const fetchTipoArea = async (tipoAreaId: string) => {
     try {
-      const response = await axios.get(`http://localhost:3000/api/v1/tipo-area/${id}`);
-      const { nombre, descripcion, activo } = response.data.data;
-      setNombre(nombre);
-      setDescripcion(descripcion);
-      setActivo(activo);
+      const data = (await getTipoAreaById(tipoAreaId)) as TipoAreaEntity | null;
+      const { nombre, descripcion, activo } = data ?? {};
+      setNombre(nombre ?? '');
+      setDescripcion(descripcion ?? '');
+      setActivo(typeof activo === 'boolean' ? activo : true);
     } catch (err) {
       setError('Error al obtener el tipo de área');
       console.error(err);
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const tipoAreaData = { nombre, descripcion, activo };
 
     try {
       if (id) {
-        await axios.put(`http://localhost:3000/api/v1/tipo-area/${id}`, tipoAreaData);
+        await updateTipoArea(id, tipoAreaData);
       } else {
-        await axios.post('http://localhost:3000/api/v1/tipo-area', tipoAreaData);
+        await createTipoArea(tipoAreaData);
       }
       navigate('/administracion/tipo-area');
     } catch (err) {

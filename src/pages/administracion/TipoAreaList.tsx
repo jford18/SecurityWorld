@@ -1,11 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { getAllTipoArea, deleteTipoArea } from '../../services/tipoAreaService';
+
+type TipoArea = {
+  id: number;
+  nombre: string;
+  descripcion?: string | null;
+  activo?: boolean | null;
+};
 
 const TipoAreaList = () => {
   const navigate = useNavigate();
-  const [tiposArea, setTiposArea] = useState([]);
-  const [error, setError] = useState(null);
+  const [tiposArea, setTiposArea] = useState<TipoArea[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTiposArea();
@@ -13,18 +20,19 @@ const TipoAreaList = () => {
 
   const fetchTiposArea = async () => {
     try {
-      const response = await api.get('/api/tipo_area');
-      setTiposArea(response.data.data);
+      const data = await getAllTipoArea();
+      setTiposArea(Array.isArray(data) ? data : []);
+      setError(null);
     } catch (err) {
       setError('Error al obtener los tipos de área');
       console.error(err);
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id: number) => {
     if (window.confirm('¿Está seguro de que desea eliminar este tipo de área?')) {
       try {
-        await api.delete(`/api/tipo_area/${id}`);
+        await deleteTipoArea(id);
         fetchTiposArea();
       } catch (err) {
         setError('Error al eliminar el tipo de área');

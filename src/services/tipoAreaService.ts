@@ -1,28 +1,59 @@
 import api from './api';
 
-const API_URL = '/api/v1/tipo-area';
+const API_URL = '/api/tipo-area';
 
-export const getAllTipoArea = async () => {
-  const response = await api.get(API_URL);
-  return response.data;
+type TipoArea = {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  activo: boolean;
 };
 
-export const getTipoAreaById = async (id) => {
-  const response = await api.get(`${API_URL}/${id}`);
-  return response.data;
+export type TipoAreaPayload = {
+  nombre: string;
+  descripcion?: string | null;
+  activo?: boolean;
 };
 
-export const createTipoArea = async (data) => {
-  const response = await api.post(API_URL, data);
-  return response.data;
+type ApiEnvelope<T> = T | { data: T };
+
+const hasDataProp = (payload: unknown): payload is { data: unknown } => {
+  return typeof payload === 'object' && payload !== null && 'data' in payload;
 };
 
-export const updateTipoArea = async (id, data) => {
-  const response = await api.put(`${API_URL}/${id}`, data);
-  return response.data;
+const unwrapDataContainer = <T>(payload: ApiEnvelope<T>): T => {
+  if (hasDataProp(payload)) {
+    return payload.data as T;
+  }
+
+  return payload as T;
 };
 
-export const deleteTipoArea = async (id) => {
-  const response = await api.delete(`${API_URL}/${id}`);
-  return response.data;
+const normalizeListResponse = (payload: ApiEnvelope<TipoArea[]>): TipoArea[] => {
+  const normalized = unwrapDataContainer(payload);
+  return Array.isArray(normalized) ? normalized : [];
+};
+
+export const getAllTipoArea = async (): Promise<TipoArea[]> => {
+  const response = await api.get<ApiEnvelope<TipoArea[]>>(API_URL);
+  return normalizeListResponse(response.data);
+};
+
+export const getTipoAreaById = async (id: number | string): Promise<TipoArea | null> => {
+  const response = await api.get<ApiEnvelope<TipoArea | null>>(`${API_URL}/${id}`);
+  return unwrapDataContainer(response.data);
+};
+
+export const createTipoArea = async (data: TipoAreaPayload): Promise<TipoArea> => {
+  const response = await api.post<ApiEnvelope<TipoArea>>(API_URL, data);
+  return unwrapDataContainer(response.data);
+};
+
+export const updateTipoArea = async (id: number | string, data: TipoAreaPayload): Promise<TipoArea> => {
+  const response = await api.put<ApiEnvelope<TipoArea>>(`${API_URL}/${id}`, data);
+  return unwrapDataContainer(response.data);
+};
+
+export const deleteTipoArea = async (id: number | string): Promise<void> => {
+  await api.delete(`${API_URL}/${id}`);
 };
