@@ -1,11 +1,8 @@
 import axios from 'axios';
-import { API_BASE_URL } from './api';
 import { TechnicalFailure, TechnicalFailureCatalogs } from '../types';
 
-const baseURL = `${API_BASE_URL}/api`;
-
 const http = axios.create({
-  baseURL,
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json',
   },

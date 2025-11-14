@@ -1,6 +1,6 @@
-import { API_BASE_URL } from './api';
-
 const jsonContentType = 'application/json';
+const USUARIO_ROLES_ENDPOINT = '/api/usuario-roles';
+const ROLES_ENDPOINT = '/api/roles';
 
 // FIX: Función auxiliar que garantiza la lectura segura de JSON para evitar "Unexpected token '<'".
 const parseJsonSafe = async (response: Response) => {
@@ -31,7 +31,7 @@ export type UsuarioRolPayload = {
 
 // NEW: Recupera todas las asignaciones entre usuarios y roles con agrupación por usuario.
 export const fetchUsuarioRoles = async () => {
-  const response = await fetch(`${API_BASE_URL}/api/usuario-roles`, {
+  const response = await fetch(USUARIO_ROLES_ENDPOINT, {
     headers: { Accept: jsonContentType },
   });
   return handleResponse(response);
@@ -43,7 +43,7 @@ export const fetchRolesPorUsuario = async (usuarioId: number) => {
     throw new Error('Identificador de usuario inválido');
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/usuario-roles/${usuarioId}`, {
+  const response = await fetch(`${USUARIO_ROLES_ENDPOINT}/${usuarioId}`, {
     headers: { Accept: jsonContentType },
   });
   return handleResponse(response);
@@ -51,7 +51,7 @@ export const fetchRolesPorUsuario = async (usuarioId: number) => {
 
 // NEW: Obtiene el catálogo de roles disponibles para asignar.
 export const fetchRolesDisponibles = async () => {
-  const response = await fetch(`${API_BASE_URL}/api/roles`, {
+  const response = await fetch(ROLES_ENDPOINT, {
     headers: { Accept: jsonContentType },
   });
   return handleResponse(response);
@@ -63,7 +63,7 @@ export const asignarRol = async ({ usuario_id, rol_id }: UsuarioRolPayload) => {
     throw new Error('Datos incompletos');
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/usuario-roles`, {
+  const response = await fetch(USUARIO_ROLES_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': jsonContentType,
@@ -81,7 +81,7 @@ export const eliminarRol = async (usuarioId: number, rolId: number) => {
     throw new Error('Datos incompletos');
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/usuario-roles/${usuarioId}/${rolId}`, {
+  const response = await fetch(`${USUARIO_ROLES_ENDPOINT}/${usuarioId}/${rolId}`, {
     method: 'DELETE',
     headers: { Accept: jsonContentType },
   });

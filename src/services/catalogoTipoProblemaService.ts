@@ -1,8 +1,8 @@
 // NEW: Servicio especializado para consumir el backend de catálogo tipo problema.
-import { API_BASE_URL } from './api';
 import type { CatalogoTipoProblema } from '../types';
 
 const jsonContentType = 'application/json';
+const CATALOGO_TIPO_PROBLEMA_ENDPOINT = '/api/catalogo-tipo-problema';
 
 // FIX: Se valida el header Content-Type antes de intentar parsear JSON y evitar "Unexpected token".
 const parseJsonSafe = async (response: Response) => {
@@ -32,7 +32,7 @@ export type CatalogoTipoProblemaPayload = {
 };
 
 export const fetchCatalogoTiposProblema = async (): Promise<CatalogoTipoProblema[]> => {
-  const response = await fetch(`${API_BASE_URL}/api/catalogo-tipo-problema`, {
+  const response = await fetch(CATALOGO_TIPO_PROBLEMA_ENDPOINT, {
     headers: { Accept: jsonContentType },
   });
   const payload = await handleResponse(response);
@@ -46,7 +46,7 @@ export const fetchCatalogoTiposProblema = async (): Promise<CatalogoTipoProblema
 };
 
 export const createCatalogoTipoProblema = async (payload: CatalogoTipoProblemaPayload) => {
-  const response = await fetch(`${API_BASE_URL}/api/catalogo-tipo-problema`, {
+  const response = await fetch(CATALOGO_TIPO_PROBLEMA_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': jsonContentType,
@@ -61,7 +61,7 @@ export const updateCatalogoTipoProblema = async (
   id: number,
   payload: CatalogoTipoProblemaPayload,
 ) => {
-  const response = await fetch(`${API_BASE_URL}/api/catalogo-tipo-problema/${id}`, {
+  const response = await fetch(`${CATALOGO_TIPO_PROBLEMA_ENDPOINT}/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': jsonContentType,
@@ -73,7 +73,7 @@ export const updateCatalogoTipoProblema = async (
 };
 
 export const deleteCatalogoTipoProblema = async (id: number) => {
-  const response = await fetch(`${API_BASE_URL}/api/catalogo-tipo-problema/${id}`, {
+  const response = await fetch(`${CATALOGO_TIPO_PROBLEMA_ENDPOINT}/${id}`, {
     method: 'DELETE',
     headers: { Accept: jsonContentType },
   });

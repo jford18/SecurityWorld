@@ -1,7 +1,7 @@
-import api, { API_BASE_URL } from './api';
+import api from './api';
 
 const BASE_PATH = '/api/nodos-sitios';
-const API_URL = `${API_BASE_URL}${BASE_PATH}`;
+const API_URL = BASE_PATH;
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
