@@ -1,24 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from 'recharts';
 import Card from '../ui/Card';
 import { deviceInventoryData, alertsData, technicalFailuresData } from '../../data/mockData';
 
 // NOTE: This component uses mock data and is not affected by the session context changes.
-// Recharts is loaded from a CDN, so we need to handle its asynchronous loading.
+// La librería de gráficos proviene del paquete local. Instalar con: npm install recharts
 
 const DashboardHome: React.FC = () => {
-  const [recharts, setRecharts] = useState<any>(null);
-
-  useEffect(() => {
-    // Poll for the Recharts library on the window object.
-    const intervalId = setInterval(() => {
-      if ((window as any).Recharts) {
-        setRecharts((window as any).Recharts);
-        clearInterval(intervalId);
-      }
-    }, 100);
-
-    return () => clearInterval(intervalId); // Cleanup on unmount
-  }, []);
 
   const onlineDevices = deviceInventoryData.filter(d => d.estado === 'online').length;
   const offlineDevices = deviceInventoryData.length - onlineDevices;
@@ -49,11 +49,8 @@ const DashboardHome: React.FC = () => {
   const recentLogs = [
     ...alertsData.creadas,
     ...alertsData.aceptadas,
-    ...alertsData.ignoradas
+    ...alertsData.ignoradas,
   ].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()).slice(0, 5);
-
-  // Destructure components from the recharts state object once it's loaded
-  const { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = recharts || {};
 
   return (
     <div>
@@ -70,40 +67,35 @@ const DashboardHome: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h4 className="text-[#1C2E4A] text-lg font-semibold">Estado de Dispositivos</h4>
           <div className="h-80">
-            {recharts ? (
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={120}
-                    fill="#8884d8"
-                    dataKey="value"
-                    nameKey="name"
-                    // @ts-ignore - recharts label callback params inferred as any in this context
-                    label={({ name, percent }: { name: string; percent: number }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {pieData.map((entry, index) => {
-                      void entry; // eslint-disable-line @typescript-eslint/no-unused-expressions
-                      return <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />;
-                    })}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-                <div className="flex justify-center items-center h-full text-gray-500">Cargando gráfico...</div>
-            )}
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  outerRadius={120}
+                  fill="#8884d8"
+                  dataKey="value"
+                  nameKey="name"
+                  // @ts-ignore - recharts label callback params inferred as any in this context
+                  label={({ name, percent }: { name: string; percent: number }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                >
+                  {pieData.map((entry, index) => {
+                    void entry; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                    return <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />;
+                  })}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
         <div className="bg-white p-6 rounded-lg shadow-md">
            <h4 className="text-[#1C2E4A] text-lg font-semibold">Alertas por Tipo</h4>
            <div className="h-80">
-            {recharts ? (
              <ResponsiveContainer>
                 <BarChart data={barData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -114,9 +106,6 @@ const DashboardHome: React.FC = () => {
                     <Bar dataKey="count" fill="#F9C300" name="Cantidad" />
                 </BarChart>
              </ResponsiveContainer>
-             ) : (
-                <div className="flex justify-center items-center h-full text-gray-500">Cargando gráfico...</div>
-            )}
            </div>
         </div>
       </div>
