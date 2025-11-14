@@ -610,6 +610,19 @@ const TechnicalFailuresOperador: React.FC = () => {
               </div>
             </div>
             {sitioSelectField}
+            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <AutocompleteComboBox
+                  label="Tipo de Problema *"
+                  value={formData.tipoProblema}
+                  onChange={(selected: string) => applyFieldUpdate('tipoProblema', selected)}
+                  items={tipoProblemaItems}
+                  displayField="descripcion"
+                  valueField="value"
+                  placeholder="Buscar tipo de problema..."
+                />
+              </div>
+            </div>
             {formData.tipoEquipo && formData.tipoEquipo !== 'Cámara' && (
               <div className="md:col-span-2">
                 <AutocompleteComboBox
