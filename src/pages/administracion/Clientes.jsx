@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
-import api from "../../services/api";
-import AutocompleteComboBox from "../../components/ui/AutocompleteComboBox.jsx";
-import { getAllTipoArea } from "../../services/tipoAreaService";
+import api from "@/services/api";
+import AutocompleteComboBox from "@/components/ui/AutocompleteComboBox.jsx";
+import { getAllTipoArea } from "@/services/tipoAreaService";
 
 const toast = {
   success: (message) => {

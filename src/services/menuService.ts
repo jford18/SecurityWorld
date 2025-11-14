@@ -1,16 +1,17 @@
-import { apiFetch } from '../lib/http';
+import api from './api';
 
 const jsonContentType = 'application/json';
 
-const buildAuthHeaders = (): Record<string, string> => {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    return {};
-  }
+type ApiErrorResponse = {
+  message?: string;
+  error?: string;
+};
 
-  return {
-    Authorization: `Bearer ${token}`,
+type AxiosErrorLike = Error & {
+  response?: {
+    data?: ApiErrorResponse;
   };
+  isAxiosError?: boolean;
 };
 
 const parseNumber = (value: unknown): number | null => {
@@ -46,28 +47,43 @@ type GetMenusOptions = {
   userId?: number | null;
 };
 
-const ensureJsonResponse = async (response: Response) => {
-  const contentType = response.headers.get('content-type');
-  if (!contentType || !contentType.includes(jsonContentType)) {
-    throw new Error('Respuesta inválida del servidor');
+const isAxiosErrorLike = (error: unknown): error is AxiosErrorLike =>
+  Boolean(error) && typeof error === 'object' && 'isAxiosError' in (error as Record<string, unknown>);
+
+const resolveRequestError = (error: unknown): Error => {
+  if (isAxiosErrorLike(error)) {
+    const data = error.response?.data;
+    const messageFromServer = data?.message ?? data?.error ?? '';
+    if (typeof messageFromServer === 'string' && messageFromServer.trim() !== '') {
+      return new Error(messageFromServer);
+    }
+    if (typeof error.message === 'string' && error.message.trim() !== '') {
+      return new Error(error.message);
+    }
   }
-  return response.json();
+
+  if (error instanceof Error) {
+    return error;
+  }
+
+  return new Error('Error al procesar la solicitud de menús');
 };
 
-const handleError = async (response: Response) => {
-  let message = `Error HTTP ${response.status}`;
-  try {
-    const data = await response.json();
-    if (data && typeof data === 'object' && 'message' in data) {
-      const maybeMessage = (data as { message?: unknown }).message;
-      if (typeof maybeMessage === 'string' && maybeMessage.trim() !== '') {
-        message = maybeMessage;
-      }
-    }
-  } catch (_error) {
-    // ignore JSON parsing errors, we already have a fallback message
+const buildRequestHeaders = (hasBody = false): Record<string, string> => {
+  const headers: Record<string, string> = {
+    Accept: jsonContentType,
+  };
+
+  if (hasBody) {
+    headers['Content-Type'] = jsonContentType;
   }
-  throw new Error(message);
+
+  const token = localStorage.getItem('token');
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return headers;
 };
 
 export type MenuPayload = {
@@ -81,82 +97,58 @@ export type MenuPayload = {
 
 export const getMenus = async (options: GetMenusOptions = {}) => {
   const { roleId = null, userId = null } = options;
-  const authHeaders = buildAuthHeaders();
-  const searchParams = new URLSearchParams();
   const resolvedUserId = parseNumber(userId) ?? getStoredUserId();
   const resolvedRoleId = parseNumber(roleId);
+  const params: Record<string, number> = {};
 
   if (resolvedUserId !== null) {
-    searchParams.set('usuario_id', String(resolvedUserId));
+    params.usuario_id = resolvedUserId;
   }
 
   if (resolvedRoleId !== null) {
-    searchParams.set('rol_id', String(resolvedRoleId));
+    params.rol_id = resolvedRoleId;
   }
 
-  const path = searchParams.toString() ? `/menus?${searchParams.toString()}` : '/menus';
-
-  const response = await apiFetch(path, {
-    cache: 'no-store',
-    headers: {
-      ...authHeaders,
-      Accept: jsonContentType,
-    },
-  });
-  if (!response.ok) {
-    await handleError(response);
+  try {
+    const { data } = await api.get('/menus', {
+      params: Object.keys(params).length ? params : undefined,
+      headers: buildRequestHeaders(),
+    });
+    return data;
+  } catch (error) {
+    throw resolveRequestError(error);
   }
-  return ensureJsonResponse(response);
 };
 
 export const createMenu = async (payload: MenuPayload) => {
-  const authHeaders = buildAuthHeaders();
-  const response = await apiFetch('/menus', {
-    method: 'POST',
-    headers: {
-      'Content-Type': jsonContentType,
-      Accept: jsonContentType,
-      ...authHeaders,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    await handleError(response);
+  try {
+    const { data } = await api.post('/menus', payload, {
+      headers: buildRequestHeaders(true),
+    });
+    return data;
+  } catch (error) {
+    throw resolveRequestError(error);
   }
-
-  return ensureJsonResponse(response);
 };
 
 export const updateMenu = async (id: number, payload: MenuPayload) => {
-  const authHeaders = buildAuthHeaders();
-  const response = await apiFetch(`/menus/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': jsonContentType,
-      Accept: jsonContentType,
-      ...authHeaders,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    await handleError(response);
+  try {
+    const { data } = await api.put(`/menus/${id}`, payload, {
+      headers: buildRequestHeaders(true),
+    });
+    return data;
+  } catch (error) {
+    throw resolveRequestError(error);
   }
-
-  return ensureJsonResponse(response);
 };
 
 export const deleteMenu = async (id: number) => {
-  const authHeaders = buildAuthHeaders();
-  const response = await apiFetch(`/menus/${id}`, {
-    method: 'DELETE',
-    headers: { Accept: jsonContentType, ...authHeaders },
-  });
-
-  if (!response.ok) {
-    await handleError(response);
+  try {
+    const { data } = await api.delete(`/menus/${id}`, {
+      headers: buildRequestHeaders(),
+    });
+    return data;
+  } catch (error) {
+    throw resolveRequestError(error);
   }
-
-  return ensureJsonResponse(response);
 };
