@@ -13,6 +13,7 @@ export interface TechnicalFailurePayload {
   descripcion_fallo: string;
   responsable: string;
   deptResponsable?: string;
+  departamentoResponsableId?: string | number | null;
   tipoProblema?: string;
   tipoEquipo?: string;
   tipoProblemaEquipo?: string;
@@ -21,8 +22,11 @@ export interface TechnicalFailurePayload {
   consola?: string | null;
   fechaResolucion?: string;
   horaResolucion?: string;
+  fechaHoraResolucion?: string;
   verificacionApertura?: string;
+  verificacionAperturaId?: string | number | null;
   verificacionCierre?: string;
+  verificacionCierreId?: string | number | null;
   novedadDetectada?: string;
   reportadoCliente?: boolean;
   affectationType?: string;

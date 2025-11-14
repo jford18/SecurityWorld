@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   TechnicalFailure,
   TechnicalFailureCatalogs,
@@ -13,6 +13,8 @@ import {
 } from '../../services/fallosService';
 import { calcularEstado } from './TechnicalFailuresUtils';
 import AutocompleteComboBox from '../ui/AutocompleteComboBox';
+import { useSession } from '../context/SessionContext';
+import { getAllDepartamentosResponsables } from '../../services/departamentosResponsablesService';
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
   departamentos: [],
@@ -26,6 +28,113 @@ const emptyCatalogos: TechnicalFailureCatalogs = {
   sitiosPorConsola: [],
 };
 
+const toDateTimeLocalValue = (date?: string, time?: string) => {
+  if (!date) {
+    return '';
+  }
+  const sanitizedTime = (time ?? '00:00').slice(0, 5);
+  return `${date}T${sanitizedTime}`;
+};
+
+const splitDateTimeLocalValue = (value?: string) => {
+  if (!value) {
+    return { date: undefined, time: undefined };
+  }
+  const [datePart, timePartRaw] = value.split('T');
+  const timePart = timePartRaw ? timePartRaw.slice(0, 5) : undefined;
+  return {
+    date: datePart || undefined,
+    time: timePart || undefined,
+  };
+};
+
+const findDepartamentoIdByName = (
+  departamentos: CatalogoDepartamento[],
+  nombre?: string,
+) => {
+  if (!nombre) {
+    return undefined;
+  }
+  const normalized = nombre.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+  const matched = departamentos.find((departamento) => {
+    return departamento.nombre?.trim().toLowerCase() === normalized;
+  });
+  return matched ? String(matched.id) : undefined;
+};
+
+const findResponsableIdByName = (
+  responsables: CatalogoResponsable[],
+  nombre?: string,
+) => {
+  if (!nombre) {
+    return undefined;
+  }
+  const normalized = nombre.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+  const matched = responsables.find((responsable) => {
+    return responsable.nombre?.trim().toLowerCase() === normalized;
+  });
+  return matched ? String(matched.id) : undefined;
+};
+
+const buildFailureDateTimeValue = (failure: TechnicalFailure) => {
+  if (failure.fechaHoraFallo) {
+    return failure.fechaHoraFallo;
+  }
+  if (failure.fecha) {
+    return failure.horaFallo
+      ? `${failure.fecha}T${failure.horaFallo}`
+      : failure.fecha;
+  }
+  return undefined;
+};
+
+const formatFechaHoraDisplay = (
+  dateTime?: string,
+  fallbackDate?: string,
+  fallbackTime?: string,
+) => {
+  const candidate =
+    dateTime ||
+    (fallbackDate
+      ? `${fallbackDate}${fallbackTime ? `T${fallbackTime}` : ''}`
+      : '');
+
+  if (!candidate) {
+    return '';
+  }
+
+  if (!candidate.includes('T')) {
+    return candidate;
+  }
+
+  const parsed = new Date(candidate);
+  if (Number.isNaN(parsed.getTime())) {
+    return candidate.replace('T', ' ').replace('Z', '');
+  }
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  const hours = String(parsed.getHours()).padStart(2, '0');
+  const minutes = String(parsed.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+};
+
+const toComparableDate = (value?: string) => {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.includes('T') ? value : `${value}T00:00`;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 const EditFailureModal: React.FC<{
   failure: TechnicalFailure;
   departamentos: CatalogoDepartamento[];
@@ -33,47 +142,142 @@ const EditFailureModal: React.FC<{
   onSave: (updatedFailure: TechnicalFailure) => void;
   onClose: () => void;
   isSaving: boolean;
-}> = ({ failure, departamentos, responsables, onSave, onClose, isSaving }) => {
-  const [editData, setEditData] = useState<TechnicalFailure>(failure);
+  currentUserName?: string | null;
+}> = ({
+  failure,
+  departamentos,
+  responsables,
+  onSave,
+  onClose,
+  isSaving,
+  currentUserName,
+}) => {
+  const normalizeFailure = useCallback(
+    (failureToNormalize: TechnicalFailure) => {
+      const departamentoId =
+        failureToNormalize.departamentoResponsableId ??
+        findDepartamentoIdByName(departamentos, failureToNormalize.deptResponsable);
+      const aperturaId =
+        failureToNormalize.verificacionAperturaId ??
+        findResponsableIdByName(responsables, failureToNormalize.verificacionApertura);
+      let cierreId =
+        failureToNormalize.verificacionCierreId ??
+        findResponsableIdByName(responsables, failureToNormalize.verificacionCierre);
+      let cierreNombre = failureToNormalize.verificacionCierre;
+
+      if (!cierreId && currentUserName) {
+        const matched = responsables.find(
+          (responsable) =>
+            responsable.nombre?.trim().toLowerCase() ===
+            currentUserName.trim().toLowerCase(),
+        );
+        if (matched) {
+          cierreId = String(matched.id);
+          cierreNombre = matched.nombre;
+        }
+      }
+
+      return {
+        ...failureToNormalize,
+        fechaHoraResolucion:
+          failureToNormalize.fechaHoraResolucion ??
+          toDateTimeLocalValue(
+            failureToNormalize.fechaResolucion,
+            failureToNormalize.horaResolucion,
+          ),
+        fechaHoraFallo:
+          failureToNormalize.fechaHoraFallo ??
+          buildFailureDateTimeValue(failureToNormalize) ??
+          failureToNormalize.fecha,
+        departamentoResponsableId: departamentoId ?? '',
+        verificacionAperturaId: aperturaId ?? '',
+        verificacionCierreId: cierreId ?? '',
+        verificacionCierre: cierreNombre,
+      };
+    },
+    [departamentos, responsables, currentUserName],
+  );
+
+  const [editData, setEditData] = useState<TechnicalFailure>(() =>
+    normalizeFailure(failure),
+  );
 
   useEffect(() => {
-    setEditData(failure);
-  }, [failure]);
+    setEditData(normalizeFailure(failure));
+  }, [failure, normalizeFailure]);
 
-  const updateField = (name: keyof TechnicalFailure, value: string) => {
+  const updateField = (name: keyof TechnicalFailure, value: string | undefined) => {
     setEditData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
     updateField(name as keyof TechnicalFailure, value);
   };
 
+  const handleResolutionChange = (value: string) => {
+    const { date, time } = splitDateTimeLocalValue(value);
+    setEditData((prev) => ({
+      ...prev,
+      fechaHoraResolucion: value,
+      fechaResolucion: date,
+      horaResolucion: time,
+    }));
+  };
+
   const departamentoItems = useMemo(
-    () => [
-      { id: 'empty', label: 'Seleccione...', value: '' },
-      ...departamentos.map((departamento) => ({
+    () =>
+      departamentos.map((departamento) => ({
         id: String(departamento.id),
         label: departamento.nombre,
-        value: departamento.nombre,
+        value: String(departamento.id),
       })),
-    ],
-    [departamentos]
+    [departamentos],
   );
 
   const responsableItems = useMemo(
-    () => [
-      { id: 'empty', label: 'Seleccione...', value: '' },
-      ...responsables.map((responsable) => ({
+    () =>
+      responsables.map((responsable) => ({
         id: String(responsable.id),
         label: responsable.nombre,
-        value: responsable.nombre,
+        value: String(responsable.id),
       })),
-    ],
-    [responsables]
+    [responsables],
   );
+
+  const handleDepartamentoSelect = (item?: { label?: string; value?: string }) => {
+    setEditData((prev) => ({
+      ...prev,
+      departamentoResponsableId: item?.value ?? '',
+      deptResponsable: item?.label ?? '',
+    }));
+  };
+
+  const applyResponsableSelection = (
+    idKey: 'verificacionAperturaId' | 'verificacionCierreId',
+    nameKey: 'verificacionApertura' | 'verificacionCierre',
+    item?: { label?: string; value?: string },
+  ) => {
+    setEditData((prev) => {
+      const next: TechnicalFailure = { ...prev };
+      next[idKey] = item?.value ?? '';
+      next[nameKey] = item?.label ?? '';
+      return next;
+    });
+  };
+
+  const fechaHoraFalloDisplay = useMemo(() => {
+    const combined = buildFailureDateTimeValue(editData);
+    return (
+      formatFechaHoraDisplay(
+        combined,
+        editData.fecha,
+        editData.horaFallo,
+      ) || 'Sin información'
+    );
+  }, [editData.fechaHoraFallo, editData.fecha, editData.horaFallo]);
 
   const handleSave = () => {
     onSave(editData);
@@ -81,66 +285,100 @@ const EditFailureModal: React.FC<{
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
-      <div className="bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full">
+      <div className="bg-white rounded-lg shadow-xl p-8 max-w-3xl w-full">
         <h4 className="text-[#1C2E4A] text-xl font-semibold mb-6">Editar Reporte de Fallo (Supervisor)</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
+            <label className="block text-sm font-medium text-gray-700">Fecha hora de fallo</label>
+            <input
+              type="text"
+              value={fechaHoraFalloDisplay}
+              readOnly
+              disabled
+              className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Fecha y Hora Resolución</label>
+            <input
+              type="datetime-local"
+              name="fechaHoraResolucion"
+              value={editData.fechaHoraResolucion || ''}
+              onChange={(e) => handleResolutionChange(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
+            />
+          </div>
+          <div>
             <AutocompleteComboBox
-              label="Dpto. Responsable"
-              value={editData.deptResponsable ?? ''}
-              onChange={(value: string) => updateField('deptResponsable', value)}
+              label="Departamento Responsable"
+              value={editData.departamentoResponsableId ?? ''}
+              onChange={(value: string) =>
+                setEditData((prev) => ({ ...prev, departamentoResponsableId: value }))
+              }
+              onItemSelect={handleDepartamentoSelect}
               items={departamentoItems}
               displayField="label"
               valueField="value"
-              placeholder="Buscar departamento..."
+              placeholder="Seleccione..."
               disabled={departamentos.length === 0}
-              emptyMessage={departamentos.length === 0 ? 'No hay departamentos disponibles' : 'No se encontraron departamentos'}
+              emptyMessage={
+                departamentos.length === 0
+                  ? 'No hay departamentos disponibles'
+                  : 'No se encontraron departamentos'
+              }
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Fecha Resolución</label>
-            <input
-              type="date"
-              name="fechaResolucion"
-              value={editData.fechaResolucion || ''}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Hora Resolución</label>
-            <input
-              type="time"
-              name="horaResolucion"
-              value={editData.horaResolucion || ''}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
+            <label className="block text-sm font-medium text-gray-700">Descripción</label>
+            <textarea
+              value={editData.descripcion_fallo || ''}
+              readOnly
+              rows={3}
+              className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
             />
           </div>
           <div className="md:col-span-2">
             <AutocompleteComboBox
               label="Responsable Verificación Apertura"
-              value={editData.verificacionApertura ?? ''}
-              onChange={(value: string) => updateField('verificacionApertura', value)}
+              value={editData.verificacionAperturaId ?? ''}
+              onChange={(value: string) =>
+                setEditData((prev) => ({ ...prev, verificacionAperturaId: value }))
+              }
+              onItemSelect={(item) =>
+                applyResponsableSelection('verificacionAperturaId', 'verificacionApertura', item)
+              }
               items={responsableItems}
               displayField="label"
               valueField="value"
-              placeholder="Buscar responsable..."
-              disabled={responsables.length === 0}
-              emptyMessage={responsables.length === 0 ? 'No hay responsables disponibles' : 'No se encontraron responsables'}
+              placeholder="Seleccione..."
+              disabled
+              emptyMessage={
+                responsables.length === 0
+                  ? 'No hay responsables disponibles'
+                  : 'No se encontraron responsables'
+              }
             />
           </div>
           <div className="md:col-span-2">
             <AutocompleteComboBox
               label="Responsable Verificación Cierre"
-              value={editData.verificacionCierre ?? ''}
-              onChange={(value: string) => updateField('verificacionCierre', value)}
+              value={editData.verificacionCierreId ?? ''}
+              onChange={(value: string) =>
+                setEditData((prev) => ({ ...prev, verificacionCierreId: value }))
+              }
+              onItemSelect={(item) =>
+                applyResponsableSelection('verificacionCierreId', 'verificacionCierre', item)
+              }
               items={responsableItems}
               displayField="label"
               valueField="value"
-              placeholder="Buscar responsable..."
+              placeholder="Seleccione..."
               disabled={responsables.length === 0}
-              emptyMessage={responsables.length === 0 ? 'No hay responsables disponibles' : 'No se encontraron responsables'}
+              emptyMessage={
+                responsables.length === 0
+                  ? 'No hay responsables disponibles'
+                  : 'No se encontraron responsables'
+              }
             />
           </div>
           <div className="md:col-span-2">
@@ -175,6 +413,7 @@ const EditFailureModal: React.FC<{
 };
 
 const TechnicalFailuresSupervisor: React.FC = () => {
+  const { session } = useSession();
   const [failures, setFailures] = useState<TechnicalFailure[]>([]);
   const [catalogos, setCatalogos] = useState<TechnicalFailureCatalogs>(emptyCatalogos);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -182,14 +421,36 @@ const TechnicalFailuresSupervisor: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const responsables = useMemo(
+    () => catalogos.responsablesVerificacion,
+    [catalogos.responsablesVerificacion],
+  );
+
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [catalogData, fallosData] = await Promise.all([
+        const departamentosPromise = getAllDepartamentosResponsables().catch(
+          (error) => {
+            console.error(
+              'Error al cargar los departamentos responsables:',
+              error,
+            );
+            return [] as CatalogoDepartamento[];
+          },
+        );
+
+        const [catalogData, fallosData, departamentosData] = await Promise.all([
           fetchCatalogos(),
           fetchFallos(),
+          departamentosPromise,
         ]);
-        setCatalogos(catalogData);
+
+        const departamentosActualizados =
+          departamentosData.length > 0
+            ? departamentosData
+            : catalogData.departamentos;
+
+        setCatalogos({ ...catalogData, departamentos: departamentosActualizados });
         setFailures(fallosData);
       } catch (error) {
         console.error('Error al cargar los datos de fallos técnicos:', error);
@@ -208,12 +469,39 @@ const TechnicalFailuresSupervisor: React.FC = () => {
   };
 
   const handleUpdateFailure = async (updatedFailure: TechnicalFailure) => {
-    if (
-      updatedFailure.fechaResolucion &&
-      new Date(updatedFailure.fechaResolucion) < new Date(updatedFailure.fecha)
-    ) {
+    const { date: resolutionDate, time: resolutionTime } = splitDateTimeLocalValue(
+      updatedFailure.fechaHoraResolucion,
+    );
+
+    const failureDateTimeValue =
+      buildFailureDateTimeValue(updatedFailure) ?? updatedFailure.fecha;
+
+    const resolutionComparable = toComparableDate(
+      updatedFailure.fechaHoraResolucion ||
+        (resolutionDate
+          ? `${resolutionDate}${resolutionTime ? `T${resolutionTime}` : ''}`
+          : undefined),
+    );
+    const failureComparable = toComparableDate(failureDateTimeValue);
+
+    if (resolutionComparable && failureComparable && resolutionComparable < failureComparable) {
       alert('La fecha de resolución debe ser igual o posterior a la fecha de fallo.');
       return;
+    }
+
+    let verificacionCierreNombre = updatedFailure.verificacionCierre?.trim();
+    let verificacionCierreId = updatedFailure.verificacionCierreId;
+
+    if ((!verificacionCierreNombre || !verificacionCierreId) && session.user) {
+      const matched = responsables.find(
+        (responsable) =>
+          responsable.nombre?.trim().toLowerCase() ===
+          session.user?.trim().toLowerCase(),
+      );
+      if (matched) {
+        verificacionCierreNombre = matched.nombre;
+        verificacionCierreId = String(matched.id);
+      }
     }
 
     const payload: TechnicalFailurePayload = {
@@ -222,11 +510,16 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       descripcion_fallo: updatedFailure.descripcion_fallo,
       responsable: updatedFailure.responsable,
       deptResponsable: updatedFailure.deptResponsable,
-      fechaResolucion: updatedFailure.fechaResolucion,
-      horaResolucion: updatedFailure.horaResolucion,
+      departamentoResponsableId: updatedFailure.departamentoResponsableId,
+      fechaResolucion: resolutionDate,
+      horaResolucion: resolutionTime,
+      fechaHoraResolucion: updatedFailure.fechaHoraResolucion || undefined,
       verificacionApertura: updatedFailure.verificacionApertura,
-      verificacionCierre: updatedFailure.verificacionCierre,
+      verificacionAperturaId: updatedFailure.verificacionAperturaId,
+      verificacionCierre: verificacionCierreNombre,
+      verificacionCierreId,
       novedadDetectada: updatedFailure.novedadDetectada,
+      fechaHoraFallo: failureDateTimeValue,
     };
 
     try {
@@ -243,11 +536,6 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       setIsSubmitting(false);
     }
   };
-
-  const responsables = useMemo(
-    () => catalogos.responsablesVerificacion,
-    [catalogos.responsablesVerificacion]
-  );
 
   return (
     <div>
@@ -266,7 +554,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
                   Fecha
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Equipo
+                  Descripción
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Sitio
@@ -275,7 +563,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
                   Tipo afectación
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Descripción
+                  Equipo
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Responsable
@@ -299,8 +587,8 @@ const TechnicalFailuresSupervisor: React.FC = () => {
                 failures.map((fallo) => (
                   <tr key={fallo.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.fecha}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {fallo.equipo_afectado}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {fallo.descripcion_fallo}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {fallo.sitio_nombre || 'Sin sitio asignado'}
@@ -308,8 +596,8 @@ const TechnicalFailuresSupervisor: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {fallo.tipo_afectacion || 'Sin tipo'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {fallo.descripcion_fallo}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {fallo.equipo_afectado || 'Sin equipo'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {fallo.responsable}
@@ -359,6 +647,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
           onSave={handleUpdateFailure}
           onClose={() => setIsModalOpen(false)}
           isSaving={isSubmitting}
+          currentUserName={session.user}
         />
       )}
     </div>
