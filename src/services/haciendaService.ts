@@ -9,7 +9,7 @@ export type HaciendaPayload = {
 
 export const fetchHaciendas = async (): Promise<Hacienda[]> => {
   const { data } = await api.get('/api/haciendas');
-  return data.data;
+  return data;
 };
 
 export const createHacienda = async (payload: HaciendaPayload) => {
