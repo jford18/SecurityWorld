@@ -8,16 +8,12 @@ import {
   createFallo,
   fetchCatalogos,
   TechnicalFailurePayload,
+  getNodos,
+  getNodoSitio,
+  SitioAsociado,
 } from '../../services/fallosService';
 
-const API_BASE_URL = 'http://localhost:3000/api';
-
 type AffectationType = 'Nodo' | 'Punto' | 'Equipo' | 'Masivo' | '';
-
-type SitioAsociado = {
-  id?: number;
-  nombre: string;
-};
 
 type FailureFormData = {
   fechaHoraFallo: string;
@@ -59,6 +55,12 @@ const emptyCatalogos: TechnicalFailureCatalogs = {
   tiposProblemaEquipo: [],
   dispositivos: [],
   sitiosPorConsola: [],
+};
+
+const hasHttpStatusResponse = (
+  error: unknown
+): error is { response?: { status?: number } } => {
+  return typeof error === 'object' && error !== null && 'response' in error;
 };
 
 const TechnicalFailuresOperador: React.FC = () => {
@@ -137,37 +139,6 @@ const TechnicalFailuresOperador: React.FC = () => {
     [catalogos.dispositivos]
   );
 
-  const extractNodosFromResponse = (payload: unknown): CatalogoNodo[] => {
-    const rawArray = Array.isArray(payload)
-      ? payload
-      : payload && typeof payload === 'object' && Array.isArray((payload as { data?: unknown }).data)
-        ? ((payload as { data: unknown[] }).data)
-        : [];
-
-    if (!Array.isArray(rawArray)) {
-      return [];
-    }
-
-    return rawArray
-      .map((item) => {
-        if (!item || typeof item !== 'object') {
-          return null;
-        }
-
-        const idValue = (item as { id?: unknown }).id;
-        const nameValue = (item as { nombre?: unknown }).nombre;
-        const parsedId = Number(idValue);
-        const nombre = typeof nameValue === 'string' ? nameValue : nameValue != null ? String(nameValue) : '';
-
-        if (!Number.isFinite(parsedId) || !nombre) {
-          return null;
-        }
-
-        return { id: parsedId, nombre };
-      })
-      .filter((item): item is CatalogoNodo => item !== null);
-  };
-
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -194,15 +165,8 @@ const TechnicalFailuresOperador: React.FC = () => {
       setNodosError(null);
 
       try {
-        const response = await fetch(`${API_BASE_URL}/nodos`);
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-        const parsedNodos = extractNodosFromResponse(data);
-        setNodos(parsedNodos);
+        const nodosResponse = await getNodos();
+        setNodos(nodosResponse);
       } catch (error) {
         console.error('Error cargando nodos:', error);
         setNodosError('Error al cargar nodos');
@@ -322,17 +286,13 @@ const TechnicalFailuresOperador: React.FC = () => {
 
     if (normalizedId) {
       try {
-        const response = await fetch(`${API_BASE_URL}/nodos/${normalizedId}/sitio`);
-        if (response.status === 404) {
+        const data = await getNodoSitio(normalizedId);
+        setSitio(data);
+      } catch (error) {
+        if (hasHttpStatusResponse(error) && error.response?.status === 404) {
           setSitio({ nombre: 'No asignado' });
           return;
         }
-        if (!response.ok) {
-          throw new Error('Error al obtener sitio');
-        }
-        const data: SitioAsociado = await response.json();
-        setSitio(data);
-      } catch (error) {
         console.error('No se pudo obtener el sitio asociado al nodo seleccionado:', error);
         setSitio(null);
       }
