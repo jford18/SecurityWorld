@@ -2,12 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useSession } from '../context/SessionContext';
 import FechaHoraFalloPicker from '../ui/FechaHoraFalloPicker';
 import AutocompleteComboBox from '../ui/AutocompleteComboBox';
-import {
-  TechnicalFailure,
-  TechnicalFailureCatalogs,
-  CatalogoNodo,
-  SitioPorConsola,
-} from '../../types';
+import { TechnicalFailure, TechnicalFailureCatalogs, CatalogoNodo } from '../../types';
+import { Sitio, getSitios } from '../../services/sitiosService';
 import {
   fetchFallos,
   createFallo,
@@ -76,7 +72,7 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [errors, setErrors] = useState<Partial<FailureFormData>>({});
   const [cliente, setCliente] = useState<string | null>(null);
   const [clienteFromConsole, setClienteFromConsole] = useState<string | null>(null);
-  const [sitios, setSitios] = useState<SitioPorConsola[]>([]);
+  const [sitios, setSitios] = useState<Sitio[]>([]);
   const [sitio, setSitio] = useState<SitioAsociado | null>(null);
   const [, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -88,13 +84,31 @@ const TechnicalFailuresOperador: React.FC = () => {
     () => [
       { id: 'empty', nombre: 'Seleccione...', value: '' },
       ...sitios.map((sitioItem) => ({
-        id: sitioItem.sitio,
-        nombre: sitioItem.sitio,
-        value: sitioItem.sitio,
+        id: String(sitioItem.id),
+        nombre: sitioItem.nombre,
+        value: sitioItem.nombre,
       })),
     ],
     [sitios]
   );
+
+  useEffect(() => {
+    const loadSitios = async () => {
+      try {
+        const data = await getSitios();
+        const lista = Array.isArray(data)
+          ? data
+          : (data as { data?: Sitio[] } | null | undefined)?.data;
+
+        setSitios(Array.isArray(lista) ? lista : []);
+      } catch (error) {
+        console.error('Error al cargar sitios:', error);
+        setSitios([]);
+      }
+    };
+
+    loadSitios();
+  }, []);
 
   const tipoProblemaItems = useMemo(
     () => [
@@ -330,7 +344,6 @@ const TechnicalFailuresOperador: React.FC = () => {
     setErrors({});
     setCliente(null);
     setClienteFromConsole(null);
-    setSitios([]);
     setSitio(null);
   };
 
@@ -342,8 +355,8 @@ const TechnicalFailuresOperador: React.FC = () => {
       return;
     }
 
-    const sitioSeleccionado = sitios.find((sitioItem) => sitioItem.sitio === selected);
-    setClienteFromConsole(sitioSeleccionado?.cliente ?? null);
+    const sitioSeleccionado = sitios.find((sitioItem) => sitioItem.nombre === selected);
+    setClienteFromConsole(sitioSeleccionado?.cliente_nombre ?? null);
   };
 
   useEffect(() => {
@@ -361,31 +374,19 @@ const TechnicalFailuresOperador: React.FC = () => {
   }, [formData.nodo, formData.affectationType, catalogos.nodoCliente, selectedNodo]);
 
   useEffect(() => {
-    if (formData.affectationType === 'Punto' || formData.affectationType === 'Equipo') {
-      const allSites = catalogos.sitiosPorConsola;
-      if (allSites.length > 0) {
-        const uniqueSitesMap = new Map<string, SitioPorConsola>();
-        allSites.forEach((site) => {
-          if (!uniqueSitesMap.has(site.sitio)) {
-            uniqueSitesMap.set(site.sitio, site);
-          }
-        });
-        const uniqueSites = Array.from(uniqueSitesMap.values());
-        setSitios(uniqueSites);
-
-        if (formData.sitio) {
-          const existingSitio = uniqueSites.find((site) => site.sitio === formData.sitio);
-          setClienteFromConsole(existingSitio?.cliente ?? null);
-        }
-      } else {
-        setClienteFromConsole(null);
-        setSitios([]);
-      }
-    } else {
+    if (formData.affectationType !== 'Punto' && formData.affectationType !== 'Equipo') {
       setClienteFromConsole(null);
-      setSitios([]);
+      return;
     }
-  }, [formData.affectationType, catalogos.sitiosPorConsola, formData.sitio]);
+
+    if (!formData.sitio) {
+      setClienteFromConsole(null);
+      return;
+    }
+
+    const sitioSeleccionado = sitios.find((site) => site.nombre === formData.sitio);
+    setClienteFromConsole(sitioSeleccionado?.cliente_nombre ?? null);
+  }, [formData.affectationType, formData.sitio, sitios]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -469,7 +470,6 @@ const TechnicalFailuresOperador: React.FC = () => {
       setErrors({});
       setCliente(null);
       setClienteFromConsole(null);
-      setSitios([]);
       setSitio(null);
     } catch (error) {
       console.error('Error al registrar el fallo técnico:', error);
