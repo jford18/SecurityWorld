@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   TechnicalFailure,
   TechnicalFailureCatalogs,
-  CatalogoDepartamento,
   CatalogoResponsable,
 } from '../../types';
 import {
@@ -13,6 +12,11 @@ import {
 } from '../../services/fallosService';
 import { calcularEstado } from './TechnicalFailuresUtils';
 import AutocompleteComboBox from '../ui/AutocompleteComboBox';
+import { useSession } from '../context/SessionContext';
+import {
+  DepartamentoResponsable,
+  getAllDepartamentosResponsables,
+} from '../../services/departamentosResponsablesService';
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
   departamentos: [],
@@ -26,22 +30,97 @@ const emptyCatalogos: TechnicalFailureCatalogs = {
   sitiosPorConsola: [],
 };
 
+const toInputDateTimeValue = (value?: string, fallback?: string) => {
+  const source = value ?? fallback;
+  if (!source) {
+    return '';
+  }
+  const date = new Date(source);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const tzOffset = date.getTimezoneOffset() * 60000;
+  const localDate = new Date(date.getTime() - tzOffset);
+  return localDate.toISOString().slice(0, 16);
+};
+
+const toIsoString = (value: string) => {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+  return date.toISOString();
+};
+
+const getDatePart = (value?: string) => {
+  if (!value) return undefined;
+  const [datePart] = value.split('T');
+  return datePart;
+};
+
+const formatDateTimeDisplay = (value?: string, fallback?: string) => {
+  const source = value ?? fallback;
+  if (!source) return '';
+  const date = new Date(source);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+};
+
+const normalizeFailureForEdit = (failure: TechnicalFailure): TechnicalFailure => {
+  let normalizedFechaHora = failure.fechaHoraFallo;
+  if (!normalizedFechaHora && failure.fecha) {
+    const fallbackDate = new Date(failure.fecha);
+    if (!Number.isNaN(fallbackDate.getTime())) {
+      normalizedFechaHora = fallbackDate.toISOString();
+    }
+  }
+  return {
+    ...failure,
+    fechaHoraFallo: normalizedFechaHora,
+    responsableVerificacionApertura:
+      failure.responsableVerificacionApertura ?? failure.verificacionApertura,
+    responsableVerificacionCierre:
+      failure.responsableVerificacionCierre ?? failure.verificacionCierre,
+  };
+};
+
 const EditFailureModal: React.FC<{
   failure: TechnicalFailure;
-  departamentos: CatalogoDepartamento[];
+  departamentos: DepartamentoResponsable[];
   responsables: CatalogoResponsable[];
+  currentUserName?: string | null;
   onSave: (updatedFailure: TechnicalFailure) => void;
   onClose: () => void;
   isSaving: boolean;
-}> = ({ failure, departamentos, responsables, onSave, onClose, isSaving }) => {
-  const [editData, setEditData] = useState<TechnicalFailure>(failure);
+}> = ({ failure, departamentos, responsables, currentUserName, onSave, onClose, isSaving }) => {
+  const [editData, setEditData] = useState<TechnicalFailure>(normalizeFailureForEdit(failure));
 
   useEffect(() => {
-    setEditData(failure);
+    setEditData(normalizeFailureForEdit(failure));
   }, [failure]);
 
-  const updateField = (name: keyof TechnicalFailure, value: string) => {
-    setEditData((prev) => ({ ...prev, [name]: value }));
+  useEffect(() => {
+    if (
+      editData.fechaResolucion &&
+      currentUserName &&
+      !(editData.responsableVerificacionCierre || editData.verificacionCierre)
+    ) {
+      setEditData((prev) => ({
+        ...prev,
+        responsableVerificacionCierre: currentUserName,
+        verificacionCierre: currentUserName,
+      }));
+    }
+  }, [editData.fechaResolucion, editData.responsableVerificacionCierre, editData.verificacionCierre, currentUserName]);
+
+  const updateField = (
+    name: keyof TechnicalFailure,
+    value: string | number | null | undefined,
+  ) => {
+    setEditData((prev) => ({ ...prev, [name]: value ?? undefined }));
   };
 
   const handleChange = (
@@ -57,7 +136,8 @@ const EditFailureModal: React.FC<{
       ...departamentos.map((departamento) => ({
         id: String(departamento.id),
         label: departamento.nombre,
-        value: departamento.nombre,
+        value: String(departamento.id),
+        nombre: departamento.nombre,
       })),
     ],
     [departamentos]
@@ -75,20 +155,80 @@ const EditFailureModal: React.FC<{
     [responsables]
   );
 
-  const handleSave = () => {
-    onSave(editData);
+  const handleFechaHoraFalloChange = (value: string) => {
+    const isoValue = toIsoString(value);
+    setEditData((prev) => ({
+      ...prev,
+      fechaHoraFallo: isoValue,
+      fecha: isoValue ? getDatePart(isoValue) ?? prev.fecha : prev.fecha,
+    }));
   };
+
+  const handleDepartamentoChange = (value: string) => {
+    updateField(
+      'departamentoResponsableId',
+      value ? Number(value) : null,
+    );
+  };
+
+  const handleDepartamentoSelect = (item: { nombre?: string; label?: string } | undefined) => {
+    updateField('deptResponsable', item?.nombre ?? item?.label ?? '');
+  };
+
+  const handleResponsableAperturaChange = (value: string) => {
+    setEditData((prev) => ({
+      ...prev,
+      responsableVerificacionApertura: value || undefined,
+      verificacionApertura: value || undefined,
+    }));
+  };
+
+  const handleResponsableCierreChange = (value: string) => {
+    setEditData((prev) => ({
+      ...prev,
+      responsableVerificacionCierre: value || undefined,
+      verificacionCierre: value || undefined,
+    }));
+  };
+
+  const handleSave = () => {
+    const normalized: TechnicalFailure = {
+      ...editData,
+      fecha: editData.fechaHoraFallo ? getDatePart(editData.fechaHoraFallo) ?? editData.fecha : editData.fecha,
+    };
+    onSave(normalized);
+  };
+
+  const fechaHoraFalloInputValue = useMemo(
+    () => toInputDateTimeValue(editData.fechaHoraFallo, editData.fecha),
+    [editData.fechaHoraFallo, editData.fecha]
+  );
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
       <div className="bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full">
         <h4 className="text-[#1C2E4A] text-xl font-semibold mb-6">Editar Reporte de Fallo (Supervisor)</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700">Fecha hora de fallo</label>
+            <input
+              type="datetime-local"
+              name="fechaHoraFallo"
+              value={fechaHoraFalloInputValue}
+              onChange={(event) => handleFechaHoraFalloChange(event.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
+            />
+          </div>
           <div>
             <AutocompleteComboBox
-              label="Dpto. Responsable"
-              value={editData.deptResponsable ?? ''}
-              onChange={(value: string) => updateField('deptResponsable', value)}
+              label="Departamento Responsable"
+              value={
+                editData.departamentoResponsableId != null
+                  ? String(editData.departamentoResponsableId)
+                  : ''
+              }
+              onChange={handleDepartamentoChange}
+              onItemSelect={handleDepartamentoSelect}
               items={departamentoItems}
               displayField="label"
               valueField="value"
@@ -120,8 +260,10 @@ const EditFailureModal: React.FC<{
           <div className="md:col-span-2">
             <AutocompleteComboBox
               label="Responsable Verificación Apertura"
-              value={editData.verificacionApertura ?? ''}
-              onChange={(value: string) => updateField('verificacionApertura', value)}
+              value={
+                editData.responsableVerificacionApertura ?? editData.verificacionApertura ?? ''
+              }
+              onChange={handleResponsableAperturaChange}
               items={responsableItems}
               displayField="label"
               valueField="value"
@@ -133,8 +275,10 @@ const EditFailureModal: React.FC<{
           <div className="md:col-span-2">
             <AutocompleteComboBox
               label="Responsable Verificación Cierre"
-              value={editData.verificacionCierre ?? ''}
-              onChange={(value: string) => updateField('verificacionCierre', value)}
+              value={
+                editData.responsableVerificacionCierre ?? editData.verificacionCierre ?? ''
+              }
+              onChange={handleResponsableCierreChange}
               items={responsableItems}
               displayField="label"
               valueField="value"
@@ -175,8 +319,10 @@ const EditFailureModal: React.FC<{
 };
 
 const TechnicalFailuresSupervisor: React.FC = () => {
+  const { session } = useSession();
   const [failures, setFailures] = useState<TechnicalFailure[]>([]);
   const [catalogos, setCatalogos] = useState<TechnicalFailureCatalogs>(emptyCatalogos);
+  const [departamentosResponsables, setDepartamentosResponsables] = useState<DepartamentoResponsable[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentFailure, setCurrentFailure] = useState<TechnicalFailure | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -185,12 +331,14 @@ const TechnicalFailuresSupervisor: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [catalogData, fallosData] = await Promise.all([
+        const [catalogData, fallosData, departamentosData] = await Promise.all([
           fetchCatalogos(),
           fetchFallos(),
+          getAllDepartamentosResponsables(),
         ]);
         setCatalogos(catalogData);
         setFailures(fallosData);
+        setDepartamentosResponsables(departamentosData);
       } catch (error) {
         console.error('Error al cargar los datos de fallos técnicos:', error);
         alert('No se pudo cargar la información inicial de fallos técnicos.');
@@ -208,24 +356,50 @@ const TechnicalFailuresSupervisor: React.FC = () => {
   };
 
   const handleUpdateFailure = async (updatedFailure: TechnicalFailure) => {
+    const fechaResolucionDate = updatedFailure.fechaResolucion
+      ? new Date(updatedFailure.fechaResolucion)
+      : null;
+    const fechaFalloDate = updatedFailure.fechaHoraFallo
+      ? new Date(updatedFailure.fechaHoraFallo)
+      : updatedFailure.fecha
+      ? new Date(updatedFailure.fecha)
+      : null;
+
     if (
-      updatedFailure.fechaResolucion &&
-      new Date(updatedFailure.fechaResolucion) < new Date(updatedFailure.fecha)
+      fechaResolucionDate &&
+      fechaFalloDate &&
+      fechaResolucionDate < fechaFalloDate
     ) {
       alert('La fecha de resolución debe ser igual o posterior a la fecha de fallo.');
       return;
     }
 
+    const fechaPayload =
+      updatedFailure.fechaHoraFallo
+        ? getDatePart(updatedFailure.fechaHoraFallo) ?? updatedFailure.fecha
+        : updatedFailure.fecha;
+    const responsableApertura =
+      updatedFailure.responsableVerificacionApertura ?? updatedFailure.verificacionApertura;
+    const responsableCierre =
+      updatedFailure.responsableVerificacionCierre ?? updatedFailure.verificacionCierre;
+
     const payload: TechnicalFailurePayload = {
-      fecha: updatedFailure.fecha,
-      equipo_afectado: updatedFailure.equipo_afectado,
+      fecha: fechaPayload || updatedFailure.fecha || '',
+      fechaHoraFallo: updatedFailure.fechaHoraFallo,
+      equipo_afectado:
+        updatedFailure.descripcionEquipo || updatedFailure.equipo_afectado || 'Sin descripción',
+      descripcionEquipo:
+        updatedFailure.descripcionEquipo || updatedFailure.descripcion_fallo || undefined,
       descripcion_fallo: updatedFailure.descripcion_fallo,
       responsable: updatedFailure.responsable,
       deptResponsable: updatedFailure.deptResponsable,
+      departamentoResponsableId: updatedFailure.departamentoResponsableId ?? null,
       fechaResolucion: updatedFailure.fechaResolucion,
       horaResolucion: updatedFailure.horaResolucion,
-      verificacionApertura: updatedFailure.verificacionApertura,
-      verificacionCierre: updatedFailure.verificacionCierre,
+      verificacionApertura: responsableApertura,
+      verificacionCierre: responsableCierre,
+      responsableVerificacionApertura: responsableApertura,
+      responsableVerificacionCierre: responsableCierre,
       novedadDetectada: updatedFailure.novedadDetectada,
     };
 
@@ -263,10 +437,10 @@ const TechnicalFailuresSupervisor: React.FC = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fecha
+                  Fecha hora de fallo
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Equipo
+                  Descripción
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Sitio
@@ -297,11 +471,13 @@ const TechnicalFailuresSupervisor: React.FC = () => {
                 </tr>
               ) : (
                 failures.map((fallo) => (
-                  <tr key={fallo.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.fecha}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {fallo.equipo_afectado}
-                    </td>
+                    <tr key={fallo.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {formatDateTimeDisplay(fallo.fechaHoraFallo, fallo.fecha)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {fallo.descripcionEquipo || fallo.descripcion_fallo || fallo.equipo_afectado}
+                      </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {fallo.sitio_nombre || 'Sin sitio asignado'}
                     </td>
@@ -354,8 +530,9 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       {isModalOpen && currentFailure && (
         <EditFailureModal
           failure={currentFailure}
-          departamentos={catalogos.departamentos}
+          departamentos={departamentosResponsables}
           responsables={responsables}
+          currentUserName={session.user}
           onSave={handleUpdateFailure}
           onClose={() => setIsModalOpen(false)}
           isSaving={isSubmitting}

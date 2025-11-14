@@ -18,6 +18,15 @@ const formatDate = (value) => {
   return date.toISOString().split("T")[0];
 };
 
+const formatDateTimeIso = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toISOString();
+};
+
 const findUserId = (users, nameOrUsername) => {
   if (!nameOrUsername) return null;
   const normalized = String(nameOrUsername).trim().toLowerCase();
@@ -170,10 +179,13 @@ const seedFallosIfNeeded = async (client) => {
 const mapFalloRowToDto = (row) => ({
   id: String(row.id),
   fecha: formatDate(row.fecha) || "",
+  fechaHoraFallo: formatDateTimeIso(row.fecha) || undefined,
   equipo_afectado: row.equipo_afectado ?? "",
   descripcion_fallo: row.descripcion_fallo ?? "",
+  descripcionEquipo: row.descripcion_equipo || row.descripcion_fallo || row.equipo_afectado || "",
   responsable: row.responsable || "",
   deptResponsable: row.departamento || undefined,
+  departamentoResponsableId: row.departamento_id ?? null,
   consola: row.consola || undefined, // FIX: expose consola name retrieved via the LEFT JOIN so the frontend can display it without additional lookups.
   sitio_nombre: row.sitio_nombre || "",
   tipo_problema_id: row.tipo_problema_id ?? null,
@@ -182,6 +194,8 @@ const mapFalloRowToDto = (row) => ({
   horaResolucion: row.hora_resolucion || undefined,
   verificacionApertura: row.verificacion_apertura || undefined,
   verificacionCierre: row.verificacion_cierre || undefined,
+  responsableVerificacionApertura: row.verificacion_apertura || undefined,
+  responsableVerificacionCierre: row.verificacion_cierre || undefined,
   novedadDetectada: row.novedad_detectada || undefined,
 });
 
@@ -192,8 +206,10 @@ const fetchFalloById = async (client, id) => {
         ft.fecha,
         ft.equipo_afectado,
         ft.descripcion_fallo,
+        ft.descripcion_fallo AS descripcion_equipo,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
+        ft.departamento_id,
         sitio.nombre AS sitio_nombre,
         ft.tipo_problema_id,
         tp.descripcion AS tipo_afectacion,
@@ -233,20 +249,28 @@ export const getFallos = async (req, res) => {
         ft.fecha,
         ft.equipo_afectado,
         ft.descripcion_fallo,
+        ft.descripcion_fallo AS descripcion_equipo,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
+        ft.departamento_id,
         consola.nombre AS consola,
         sitio.nombre AS sitio_nombre,
         ft.tipo_problema_id,
         tp.descripcion AS tipo_afectacion,
         ft.fecha_resolucion,
-        ft.hora_resolucion
+        ft.hora_resolucion,
+        seguimiento.novedad_detectada,
+        COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
+        COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
       LEFT JOIN consolas consola ON consola.id = ft.consola_id
       LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
       LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
+      LEFT JOIN seguimiento_fallos seguimiento ON seguimiento.fallo_id = ft.id
+      LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
+      LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
       ORDER BY ft.fecha DESC, ft.id DESC`
     ); // FIX: rewritten query uses LEFT JOINs only with existing lookup tables to avoid failing when optional relations are missing and to provide the consola name.
 
@@ -267,10 +291,12 @@ export const getFallos = async (req, res) => {
 export const createFallo = async (req, res) => {
   const {
     fecha,
+    fechaHoraFallo,
     equipo_afectado,
     descripcion_fallo,
     responsable,
     deptResponsable,
+    departamentoResponsableId,
     tipoProblema,
     tipo_problema_id: tipoProblemaIdSnake,
     tipoProblemaId: tipoProblemaIdCamel,
@@ -279,16 +305,22 @@ export const createFallo = async (req, res) => {
     horaResolucion,
     verificacionApertura,
     verificacionCierre,
+    responsableVerificacionApertura,
+    responsableVerificacionCierre,
+    descripcionEquipo,
     novedadDetectada,
     affectationType,
     sitio_id: rawSitioId,
     sitioId: rawSitioIdCamel,
   } = req.body || {};
 
-  if (!fecha || !equipo_afectado || !descripcion_fallo || !responsable) {
+  const fechaFalloSource = fechaHoraFallo || fecha;
+  const equipoDescripcion = descripcionEquipo || equipo_afectado;
+
+  if (!fechaFalloSource || !equipoDescripcion || !descripcion_fallo || !responsable) {
     return res.status(400).json({
       mensaje:
-        "Los campos fecha, equipo_afectado, descripcion_fallo y responsable son obligatorios.",
+        "Los campos fecha (o fechaHoraFallo), equipo_afectado/descripcionEquipo, descripcion_fallo y responsable son obligatorios.",
     });
   }
 
@@ -338,6 +370,28 @@ export const createFallo = async (req, res) => {
     });
   }
 
+  const departamentoIdSource =
+    departamentoResponsableId !== undefined &&
+    departamentoResponsableId !== null &&
+    departamentoResponsableId !== ""
+      ? departamentoResponsableId
+      : req.body?.departamento_id;
+
+  let parsedDepartamentoId = null;
+  if (
+    departamentoIdSource !== undefined &&
+    departamentoIdSource !== null &&
+    departamentoIdSource !== ""
+  ) {
+    const maybeNumber = Number(departamentoIdSource);
+    if (Number.isNaN(maybeNumber) || !Number.isInteger(maybeNumber)) {
+      return res.status(400).json({
+        mensaje: "El identificador del departamento proporcionado no es válido.",
+      });
+    }
+    parsedDepartamentoId = maybeNumber;
+  }
+
   const client = await pool.connect();
 
   try {
@@ -364,10 +418,14 @@ export const createFallo = async (req, res) => {
     );
     const dept = deptResult.rows;
 
-    const departamentoId = dept.find((d) => {
-      return String(d.nombre).trim().toLowerCase() ===
-        String(deptResponsable || "").trim().toLowerCase();
-    })?.id ?? null;
+    let departamentoId = parsedDepartamentoId;
+    if (departamentoId === null) {
+      departamentoId =
+        dept.find((d) => {
+          return String(d.nombre).trim().toLowerCase() ===
+            String(deptResponsable || "").trim().toLowerCase();
+        })?.id ?? null;
+    }
 
     const tiposProblemaResult = await client.query(
       "SELECT id, descripcion FROM catalogo_tipo_problema"
@@ -409,8 +467,8 @@ export const createFallo = async (req, res) => {
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()
       ) RETURNING id`,
       [
-        fecha,
-        equipo_afectado,
+        fechaFalloSource,
+        equipoDescripcion,
         descripcion_fallo,
         responsableId,
         departamentoId,
@@ -428,8 +486,14 @@ export const createFallo = async (req, res) => {
       throw new Error("No se pudo crear el fallo técnico.");
     }
 
-    const verificacionAperturaId = findUserId(usuarios, verificacionApertura);
-    const verificacionCierreId = findUserId(usuarios, verificacionCierre);
+    const verificacionAperturaId = findUserId(
+      usuarios,
+      responsableVerificacionApertura || verificacionApertura
+    );
+    const verificacionCierreId = findUserId(
+      usuarios,
+      responsableVerificacionCierre || verificacionCierre
+    );
 
     if (
       verificacionAperturaId ||
@@ -472,15 +536,44 @@ export const updateFallo = async (req, res) => {
   const { id } = req.params;
   const {
     deptResponsable,
+    departamentoResponsableId,
+    fechaHoraFallo,
     fechaResolucion,
     horaResolucion,
     verificacionApertura,
     verificacionCierre,
+    responsableVerificacionApertura,
+    responsableVerificacionCierre,
     novedadDetectada,
+    fecha,
   } = req.body || {};
 
   if (!id) {
     return res.status(400).json({ mensaje: "El identificador del fallo es obligatorio." });
+  }
+
+  const fechaFalloSource = fechaHoraFallo || fecha || null;
+
+  const departamentoIdSource =
+    departamentoResponsableId !== undefined &&
+    departamentoResponsableId !== null &&
+    departamentoResponsableId !== ""
+      ? departamentoResponsableId
+      : req.body?.departamento_id;
+
+  let parsedDepartamentoId = null;
+  if (
+    departamentoIdSource !== undefined &&
+    departamentoIdSource !== null &&
+    departamentoIdSource !== ""
+  ) {
+    const maybeNumber = Number(departamentoIdSource);
+    if (Number.isNaN(maybeNumber) || !Number.isInteger(maybeNumber)) {
+      return res.status(400).json({
+        mensaje: "El identificador del departamento proporcionado no es válido.",
+      });
+    }
+    parsedDepartamentoId = maybeNumber;
   }
 
   const client = await pool.connect();
@@ -503,10 +596,14 @@ export const updateFallo = async (req, res) => {
     );
     const dept = deptResult.rows;
 
-    const departamentoId = dept.find((d) => {
-      return String(d.nombre).trim().toLowerCase() ===
-        String(deptResponsable || "").trim().toLowerCase();
-    })?.id ?? null;
+    let departamentoId = parsedDepartamentoId;
+    if (departamentoId === null) {
+      departamentoId =
+        dept.find((d) => {
+          return String(d.nombre).trim().toLowerCase() ===
+            String(deptResponsable || "").trim().toLowerCase();
+        })?.id ?? null;
+    }
 
     const estado = fechaResolucion ? "RESUELTO" : "PENDIENTE";
 
@@ -516,13 +613,15 @@ export const updateFallo = async (req, res) => {
              fecha_resolucion = $2,
              hora_resolucion = $3,
              estado = $4,
+             fecha = COALESCE($5, fecha),
              fecha_actualizacion = NOW()
-       WHERE id = $5`,
+       WHERE id = $6`,
       [
         departamentoId,
         fechaResolucion || null,
         horaResolucion || null,
         estado,
+        fechaFalloSource || null,
         id,
       ]
     );
@@ -532,8 +631,14 @@ export const updateFallo = async (req, res) => {
     );
     const usuarios = usuariosResult.rows;
 
-    const verificacionAperturaId = findUserId(usuarios, verificacionApertura);
-    const verificacionCierreId = findUserId(usuarios, verificacionCierre);
+    const verificacionAperturaId = findUserId(
+      usuarios,
+      responsableVerificacionApertura || verificacionApertura
+    );
+    const verificacionCierreId = findUserId(
+      usuarios,
+      responsableVerificacionCierre || verificacionCierre
+    );
 
     const seguimientoResult = await client.query(
       "SELECT id FROM seguimiento_fallos WHERE fallo_id = $1",

@@ -9,10 +9,13 @@ import {
 export interface TechnicalFailurePayload {
   id?: string;
   fecha: string;
+  fechaHoraFallo?: string;
   equipo_afectado: string;
   descripcion_fallo: string;
+  descripcionEquipo?: string;
   responsable: string;
   deptResponsable?: string;
+  departamentoResponsableId?: number | string | null;
   tipoProblema?: string;
   tipoEquipo?: string;
   tipoProblemaEquipo?: string;
@@ -28,10 +31,11 @@ export interface TechnicalFailurePayload {
   affectationType?: string;
   horaFallo?: string;
   // NEW: Campo combinado en formato ISO para fecha y hora del fallo.
-  fechaHoraFallo?: string;
   camara?: string;
   cliente?: string | null;
   sitio_id?: number | string | null;
+  responsableVerificacionApertura?: string;
+  responsableVerificacionCierre?: string;
 }
 
 export type SitioAsociado = {

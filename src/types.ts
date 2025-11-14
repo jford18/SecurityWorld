@@ -1,17 +1,22 @@
 export interface TechnicalFailure {
   id: string;
   fecha: string;
+  fechaHoraFallo?: string;
   equipo_afectado: string;
   descripcion_fallo: string;
+  descripcionEquipo?: string;
   responsable: string;
   // Campos nuevos (solo supervisor)
   deptResponsable?: string;
+  departamentoResponsableId?: number | null;
   sitio_nombre?: string;
   tipo_afectacion?: string;
   fechaResolucion?: string;
   horaResolucion?: string;
   verificacionApertura?: string;
   verificacionCierre?: string;
+  responsableVerificacionApertura?: string;
+  responsableVerificacionCierre?: string;
   novedadDetectada?: string;
 }
 
