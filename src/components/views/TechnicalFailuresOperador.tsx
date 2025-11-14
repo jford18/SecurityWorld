@@ -209,6 +209,20 @@ const TechnicalFailuresOperador: React.FC = () => {
       else delete tempErrors.nodo;
     }
 
+    if (
+      fieldValues.affectationType === 'Nodo' ||
+      fieldValues.affectationType === 'Punto' ||
+      fieldValues.affectationType === 'Equipo'
+    ) {
+      if (!fieldValues.tipoProblema) {
+        tempErrors.tipoProblema = 'El tipo de problema es obligatorio.';
+      } else {
+        delete tempErrors.tipoProblema;
+      }
+    } else {
+      delete tempErrors.tipoProblema;
+    }
+
     if (fieldValues.affectationType === 'Punto' || fieldValues.affectationType === 'Equipo') {
       if (!fieldValues.sitio) tempErrors.sitio = 'El sitio es obligatorio.';
       else delete tempErrors.sitio;
@@ -481,6 +495,7 @@ const TechnicalFailuresOperador: React.FC = () => {
                   displayField="descripcion"
                   valueField="value"
                   placeholder="Buscar tipo de problema..."
+                  error={errors.tipoProblema}
                 />
               </div>
               <div className="flex items-end">
@@ -548,6 +563,7 @@ const TechnicalFailuresOperador: React.FC = () => {
                   displayField="descripcion"
                   valueField="value"
                   placeholder="Buscar tipo de problema..."
+                  error={errors.tipoProblema}
                 />
               </div>
               <div className="flex items-end">
@@ -576,6 +592,18 @@ const TechnicalFailuresOperador: React.FC = () => {
       case 'Equipo':
         return (
           <>
+            <div className="md:col-span-2">
+              <AutocompleteComboBox
+                label="Tipo de Problema *"
+                value={formData.tipoProblema}
+                onChange={(selected: string) => applyFieldUpdate('tipoProblema', selected)}
+                items={tipoProblemaItems}
+                displayField="descripcion"
+                valueField="value"
+                placeholder="Buscar tipo de problema..."
+                error={errors.tipoProblema}
+              />
+            </div>
             <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <AutocompleteComboBox
