@@ -27,13 +27,29 @@ export interface SitioPayload {
   cliente_id?: number | null;
 }
 
-export interface GetSitiosParams {
+export interface GetSitiosParams extends Record<string, string | number | boolean | number[] | undefined> {
   soloDisponibles?: boolean;
   sitioActualId?: number | number[];
 }
 
 export const getSitios = async (params?: GetSitiosParams) => {
-  const response = await api.get<Sitio[]>(BASE_PATH, { params });
+  const normalizedParams = params
+    ? Object.entries(params).reduce<Record<string, string | number | boolean>>((acc, [key, value]) => {
+        if (value === undefined) {
+          return acc;
+        }
+
+        if (Array.isArray(value)) {
+          acc[key] = value.join(',');
+        } else {
+          acc[key] = value;
+        }
+
+        return acc;
+      }, {})
+    : undefined;
+
+  const response = await api.get<Sitio[]>(BASE_PATH, { params: normalizedParams });
   return response.data;
 };
 
