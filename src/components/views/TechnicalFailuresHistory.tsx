@@ -7,6 +7,8 @@ interface TechnicalFailuresHistoryProps {
   isLoading: boolean;
   activeRole: string | undefined;
   handleEdit: (failure: TechnicalFailure) => void;
+  selectedId?: string | null;
+  actionLabel?: string;
 }
 
 const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
@@ -14,6 +16,8 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   isLoading,
   activeRole,
   handleEdit,
+  selectedId,
+  actionLabel = 'Editar',
 }) => {
   return (
     <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
@@ -29,10 +33,10 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                 Fecha
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Equipo
+                Descripción
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Descripción
+                Sitio
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Responsable
@@ -56,13 +60,18 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               </tr>
             ) : (
               failures.map((fallo) => (
-                <tr key={fallo.id} className="hover:bg-gray-50">
+                <tr
+                  key={fallo.id}
+                  className={`hover:bg-gray-50 ${
+                    selectedId && selectedId === fallo.id ? 'bg-yellow-50' : ''
+                  }`}
+                >
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.fecha}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {fallo.equipo_afectado}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    {fallo.descripcion_fallo || 'Sin descripción'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {fallo.descripcion_fallo}
+                    {fallo.sitio_nombre || 'Sin sitio asignado'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {fallo.responsable}
@@ -95,7 +104,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                         onClick={() => handleEdit(fallo)}
                         className="text-indigo-600 hover:text-indigo-900"
                       >
-                        Editar
+                        {actionLabel}
                       </button>
                     </td>
                   )}

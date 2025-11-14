@@ -167,6 +167,15 @@ const seedFallosIfNeeded = async (client) => {
   }
 };
 
+const formatDateTimeIso = (value) => {
+  if (!value) return undefined;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+  return date.toISOString();
+};
+
 const mapFalloRowToDto = (row) => ({
   id: String(row.id),
   fecha: formatDate(row.fecha) || "",
@@ -174,6 +183,10 @@ const mapFalloRowToDto = (row) => ({
   descripcion_fallo: row.descripcion_fallo ?? "",
   responsable: row.responsable || "",
   deptResponsable: row.departamento || undefined,
+  deptResponsableId:
+    row.departamento_id !== undefined && row.departamento_id !== null
+      ? String(row.departamento_id)
+      : undefined,
   consola: row.consola || undefined, // FIX: expose consola name retrieved via the LEFT JOIN so the frontend can display it without additional lookups.
   sitio_nombre: row.sitio_nombre || "",
   tipo_problema_id: row.tipo_problema_id ?? null,
@@ -183,6 +196,8 @@ const mapFalloRowToDto = (row) => ({
   verificacionApertura: row.verificacion_apertura || undefined,
   verificacionCierre: row.verificacion_cierre || undefined,
   novedadDetectada: row.novedad_detectada || undefined,
+  fechaHoraFallo:
+    formatDateTimeIso(row.fecha_hora_fallo) || formatDateTimeIso(row.fecha) || undefined,
 });
 
 const fetchFalloById = async (client, id) => {
@@ -190,6 +205,7 @@ const fetchFalloById = async (client, id) => {
       `SELECT
         ft.id,
         ft.fecha,
+        ft.departamento_id,
         ft.equipo_afectado,
         ft.descripcion_fallo,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
@@ -231,6 +247,7 @@ export const getFallos = async (req, res) => {
       `SELECT
         ft.id,
         ft.fecha,
+        ft.departamento_id,
         ft.equipo_afectado,
         ft.descripcion_fallo,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
@@ -240,13 +257,19 @@ export const getFallos = async (req, res) => {
         ft.tipo_problema_id,
         tp.descripcion AS tipo_afectacion,
         ft.fecha_resolucion,
-        ft.hora_resolucion
+        ft.hora_resolucion,
+        seguimiento.novedad_detectada,
+        COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
+        COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
       LEFT JOIN consolas consola ON consola.id = ft.consola_id
       LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
       LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
+      LEFT JOIN seguimiento_fallos seguimiento ON seguimiento.fallo_id = ft.id
+      LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
+      LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
       ORDER BY ft.fecha DESC, ft.id DESC`
     ); // FIX: rewritten query uses LEFT JOINs only with existing lookup tables to avoid failing when optional relations are missing and to provide the consola name.
 
@@ -364,10 +387,28 @@ export const createFallo = async (req, res) => {
     );
     const dept = deptResult.rows;
 
-    const departamentoId = dept.find((d) => {
-      return String(d.nombre).trim().toLowerCase() ===
-        String(deptResponsable || "").trim().toLowerCase();
-    })?.id ?? null;
+    const resolveDepartamentoId = (value) => {
+      if (value === undefined || value === null || value === "") {
+        return null;
+      }
+
+      const numericCandidate = Number(value);
+      if (Number.isInteger(numericCandidate)) {
+        const directMatch = dept.find((d) => d.id === numericCandidate);
+        if (directMatch) {
+          return directMatch.id;
+        }
+      }
+
+      const normalized = String(value || "").trim().toLowerCase();
+      return (
+        dept.find(
+          (d) => String(d.nombre).trim().toLowerCase() === normalized,
+        )?.id ?? null
+      );
+    };
+
+    const departamentoId = resolveDepartamentoId(deptResponsable);
 
     const tiposProblemaResult = await client.query(
       "SELECT id, descripcion FROM catalogo_tipo_problema"
@@ -503,10 +544,28 @@ export const updateFallo = async (req, res) => {
     );
     const dept = deptResult.rows;
 
-    const departamentoId = dept.find((d) => {
-      return String(d.nombre).trim().toLowerCase() ===
-        String(deptResponsable || "").trim().toLowerCase();
-    })?.id ?? null;
+    const resolveDepartamentoId = (value) => {
+      if (value === undefined || value === null || value === "") {
+        return null;
+      }
+
+      const numericCandidate = Number(value);
+      if (Number.isInteger(numericCandidate)) {
+        const directMatch = dept.find((d) => d.id === numericCandidate);
+        if (directMatch) {
+          return directMatch.id;
+        }
+      }
+
+      const normalized = String(value || "").trim().toLowerCase();
+      return (
+        dept.find(
+          (d) => String(d.nombre).trim().toLowerCase() === normalized,
+        )?.id ?? null
+      );
+    };
+
+    const departamentoId = resolveDepartamentoId(deptResponsable);
 
     const estado = fechaResolucion ? "RESUELTO" : "PENDIENTE";
 
@@ -532,8 +591,24 @@ export const updateFallo = async (req, res) => {
     );
     const usuarios = usuariosResult.rows;
 
-    const verificacionAperturaId = findUserId(usuarios, verificacionApertura);
-    const verificacionCierreId = findUserId(usuarios, verificacionCierre);
+    const resolveUsuarioId = (value) => {
+      if (!value) {
+        return null;
+      }
+
+      const numericCandidate = Number(value);
+      if (Number.isInteger(numericCandidate)) {
+        const directMatch = usuarios.find((usuario) => usuario.id === numericCandidate);
+        if (directMatch) {
+          return directMatch.id;
+        }
+      }
+
+      return findUserId(usuarios, value);
+    };
+
+    const verificacionAperturaId = resolveUsuarioId(verificacionApertura);
+    const verificacionCierreId = resolveUsuarioId(verificacionCierre);
 
     const seguimientoResult = await client.query(
       "SELECT id FROM seguimiento_fallos WHERE fallo_id = $1",

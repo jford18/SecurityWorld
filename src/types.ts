@@ -6,6 +6,7 @@ export interface TechnicalFailure {
   responsable: string;
   // Campos nuevos (solo supervisor)
   deptResponsable?: string;
+  deptResponsableId?: string;
   sitio_nombre?: string;
   tipo_afectacion?: string;
   fechaResolucion?: string;
@@ -13,6 +14,7 @@ export interface TechnicalFailure {
   verificacionApertura?: string;
   verificacionCierre?: string;
   novedadDetectada?: string;
+  fechaHoraFallo?: string;
 }
 
 export interface CatalogoDepartamento {
