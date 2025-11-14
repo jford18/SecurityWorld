@@ -25,7 +25,7 @@ type FailureFormData = {
   tipoEquipo: string;
   camara: string;
   tipoProblemaEquipo: string;
-  sitio: string;
+  sitioId: string;
 };
 
 const getLocalDateTimeValue = () => {
@@ -43,7 +43,7 @@ const buildInitialFormData = (): FailureFormData => ({
   tipoEquipo: '',
   camara: '',
   tipoProblemaEquipo: '',
-  sitio: '',
+  sitioId: '',
 });
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
@@ -86,7 +86,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       ...sitios.map((sitioItem) => ({
         id: String(sitioItem.id),
         nombre: sitioItem.nombre,
-        value: sitioItem.nombre,
+        value: String(sitioItem.id),
       })),
     ],
     [sitios]
@@ -207,6 +207,11 @@ const TechnicalFailuresOperador: React.FC = () => {
     [nodos, formData.nodo]
   );
 
+  const selectedSitio = useMemo(
+    () => sitios.find((sitioItem) => String(sitioItem.id) === formData.sitioId) ?? null,
+    [sitios, formData.sitioId]
+  );
+
   const validate = (fieldValues: FailureFormData = formData) => {
     let tempErrors: Partial<FailureFormData> = { ...errors };
 
@@ -233,10 +238,10 @@ const TechnicalFailuresOperador: React.FC = () => {
     }
 
     if (fieldValues.affectationType === 'Punto' || fieldValues.affectationType === 'Equipo') {
-      if (!fieldValues.sitio) tempErrors.sitio = 'El sitio es obligatorio.';
-      else delete tempErrors.sitio;
+      if (!fieldValues.sitioId) tempErrors.sitioId = 'El sitio es obligatorio.';
+      else delete tempErrors.sitioId;
     } else {
-      delete tempErrors.sitio;
+      delete tempErrors.sitioId;
     }
 
     if (fieldValues.affectationType === 'Equipo') {
@@ -348,14 +353,16 @@ const TechnicalFailuresOperador: React.FC = () => {
   };
 
   const handleSitioChange = (selected: string) => {
-    applyFieldUpdate('sitio', selected);
+    applyFieldUpdate('sitioId', selected);
 
     if (!selected) {
       setClienteFromConsole(null);
       return;
     }
 
-    const sitioSeleccionado = sitios.find((sitioItem) => sitioItem.nombre === selected);
+    const sitioSeleccionado = sitios.find(
+      (sitioItem) => String(sitioItem.id) === selected
+    );
     setClienteFromConsole(sitioSeleccionado?.cliente_nombre ?? null);
   };
 
@@ -379,14 +386,13 @@ const TechnicalFailuresOperador: React.FC = () => {
       return;
     }
 
-    if (!formData.sitio) {
+    if (!selectedSitio) {
       setClienteFromConsole(null);
       return;
     }
 
-    const sitioSeleccionado = sitios.find((site) => site.nombre === formData.sitio);
-    setClienteFromConsole(sitioSeleccionado?.cliente_nombre ?? null);
-  }, [formData.affectationType, formData.sitio, sitios]);
+    setClienteFromConsole(selectedSitio.cliente_nombre ?? null);
+  }, [formData.affectationType, selectedSitio]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -406,13 +412,14 @@ const TechnicalFailuresOperador: React.FC = () => {
     }
 
     let equipo_afectado = 'N/A';
+    const sitioNombre = selectedSitio?.nombre ?? '';
     if (formData.affectationType === 'Nodo') {
       equipo_afectado = selectedNodo?.nombre || 'N/A';
     } else if (formData.affectationType === 'Equipo') {
       const equipo = formData.camara || formData.tipoEquipo;
-      equipo_afectado = `${equipo} en ${formData.sitio}`;
+      equipo_afectado = `${equipo} en ${sitioNombre}`;
     } else if (formData.affectationType === 'Punto') {
-      equipo_afectado = `Punto en ${formData.sitio}`;
+      equipo_afectado = `Punto en ${sitioNombre}`;
     }
 
     let descripcion_fallo = 'N/A';
@@ -454,7 +461,8 @@ const TechnicalFailuresOperador: React.FC = () => {
       tipoProblema: formData.tipoProblema || formData.tipoProblemaEquipo,
       tipoEquipo: formData.tipoEquipo,
       nodo: formData.nodo,
-      sitio: formData.sitio,
+      sitio: sitioNombre,
+      sitio_id: selectedSitio ? selectedSitio.id : undefined,
       consola: session.console,
       reportadoCliente: formData.reportadoCliente,
       camara: formData.camara,
@@ -485,14 +493,14 @@ const TechnicalFailuresOperador: React.FC = () => {
         <div>
           <AutocompleteComboBox
             label="Sitio *"
-            value={formData.sitio}
+            value={formData.sitioId}
             onChange={handleSitioChange}
             items={sitioItems}
             displayField="nombre"
             valueField="value"
             placeholder="Buscar sitio..."
             disabled={sitios.length === 0}
-            error={errors.sitio}
+            error={errors.sitioId}
             emptyMessage={sitios.length === 0 ? 'No hay sitios disponibles' : 'No se encontraron sitios'}
           />
         </div>

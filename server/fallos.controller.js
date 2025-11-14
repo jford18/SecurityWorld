@@ -273,12 +273,30 @@ export const createFallo = async (req, res) => {
     verificacionApertura,
     verificacionCierre,
     novedadDetectada,
+    affectationType,
+    sitio_id: rawSitioId,
   } = req.body || {};
 
   if (!fecha || !equipo_afectado || !descripcion_fallo || !responsable) {
     return res.status(400).json({
       mensaje:
         "Los campos fecha, equipo_afectado, descripcion_fallo y responsable son obligatorios.",
+    });
+  }
+
+  const sitioIdValue =
+    rawSitioId === undefined || rawSitioId === null || rawSitioId === ""
+      ? null
+      : Number(rawSitioId);
+
+  if (
+    rawSitioId !== undefined &&
+    rawSitioId !== null &&
+    rawSitioId !== "" &&
+    (Number.isNaN(sitioIdValue) || !Number.isInteger(sitioIdValue))
+  ) {
+    return res.status(400).json({
+      mensaje: "El identificador del sitio proporcionado no es válido.",
     });
   }
 
@@ -340,12 +358,14 @@ export const createFallo = async (req, res) => {
         departamento_id,
         tipo_problema_id,
         consola_id,
+        sitio_id,
+        tipo_afectacion,
         fecha_resolucion,
         hora_resolucion,
         fecha_creacion,
         fecha_actualizacion
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW()
       ) RETURNING id`,
       [
         fecha,
@@ -355,6 +375,8 @@ export const createFallo = async (req, res) => {
         departamentoId,
         tipoProblemaId,
         consolaId,
+        sitioIdValue,
+        affectationType || null,
         fechaResolucion || null,
         horaResolucion || null, // FIX: exclude estado so the generated column is calculated by PostgreSQL during inserts.
       ]

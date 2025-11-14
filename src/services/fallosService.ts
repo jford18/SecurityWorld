@@ -31,6 +31,7 @@ export interface TechnicalFailurePayload {
   fechaHoraFallo?: string;
   camara?: string;
   cliente?: string | null;
+  sitio_id?: number | string | null;
 }
 
 export type SitioAsociado = {
