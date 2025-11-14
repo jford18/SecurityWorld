@@ -5,8 +5,8 @@ import {
   deleteMenu,
   getMenus,
   updateMenu,
-} from '../../services/menuService';
-import { useSession } from '../../components/context/SessionContext';
+} from '@/services/menuService';
+import { useSession } from '@/components/context/SessionContext';
 
 export type MenuItem = {
   id: number;

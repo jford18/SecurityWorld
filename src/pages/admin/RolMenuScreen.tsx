@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AutocompleteComboBox from '@/components/ui/AutocompleteComboBox';
-import usuarioRolesService from '../../services/usuarioRolesService';
-import { SaveRolMenuPayload, getMenusByRol, saveRolMenus } from '../../services/rolMenuService';
+import usuarioRolesService from '@/services/usuarioRolesService';
+import { SaveRolMenuPayload, getMenusByRol, saveRolMenus } from '@/services/rolMenuService';
 
 const toast = {
   success: (message: string) => {
