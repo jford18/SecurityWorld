@@ -1,28 +1,7 @@
-const jsonContentType = 'application/json';
+import api from './api';
+
 const USUARIOS_ENDPOINT = '/api/usuarios';
-
-// FIX: Función auxiliar para validar si la respuesta contiene JSON antes de intentar parsearla.
-const parseJsonSafe = async (response: Response) => {
-  const contentType = response.headers.get('content-type');
-  if (contentType && contentType.includes(jsonContentType)) {
-    return response.json();
-  }
-
-  // FIX: Evitamos el error "Unexpected token '<'" retornando un objeto estándar cuando la respuesta no es JSON.
-  return { message: 'Respuesta inválida del servidor' };
-};
-
-const handleResponse = async (response: Response) => {
-  if (response.ok) {
-    return parseJsonSafe(response);
-  }
-
-  const errorBody = await parseJsonSafe(response);
-  const errorMessage =
-    (errorBody && typeof errorBody === 'object' && 'message' in errorBody && errorBody.message) ||
-    'Error al comunicarse con el servidor';
-  throw new Error(String(errorMessage));
-};
+const DEFAULT_ERROR_MESSAGE = 'Error al comunicarse con el servidor';
 
 export type UsuarioPayload = {
   nombre_usuario: string;
@@ -35,42 +14,95 @@ export type UsuarioUpdatePayload = {
   activo: boolean;
 };
 
-export const getUsuarios = async () => {
-  // NEW: Recupera la lista de usuarios desde el backend asegurando ruta /api/usuarios.
-  const response = await fetch(USUARIOS_ENDPOINT, {
-    headers: { Accept: jsonContentType },
-  });
-  return handleResponse(response);
+type ApiEnvelope<T> = T | { data: T };
+
+type AxiosErrorLike = {
+  isAxiosError?: boolean;
+  message?: string;
+  response?: {
+    data?: unknown;
+  };
 };
 
-export const createUsuario = async (payload: UsuarioPayload) => {
-  const response = await fetch(USUARIOS_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': jsonContentType,
-      Accept: jsonContentType,
-    },
-    body: JSON.stringify(payload),
-  });
-  return handleResponse(response);
+type UsuarioResponse = {
+  id: number;
+  nombre_usuario: string;
+  nombre_completo: string | null;
+  activo: boolean;
+  fecha_creacion: string;
 };
 
-export const updateUsuario = async (id: number, payload: UsuarioUpdatePayload) => {
-  const response = await fetch(`${USUARIOS_ENDPOINT}/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': jsonContentType,
-      Accept: jsonContentType,
-    },
-    body: JSON.stringify(payload),
-  });
-  return handleResponse(response);
+const hasDataProperty = <T>(payload: ApiEnvelope<T>): payload is { data: T } => {
+  return typeof payload === 'object' && payload !== null && 'data' in payload;
 };
 
-export const deleteUsuario = async (id: number) => {
-  const response = await fetch(`${USUARIOS_ENDPOINT}/${id}`, {
-    method: 'DELETE',
-    headers: { Accept: jsonContentType },
-  });
-  return handleResponse(response);
+const unwrapResponse = <T>(payload: ApiEnvelope<T>): T => {
+  if (hasDataProperty(payload)) {
+    return payload.data;
+  }
+  return payload as T;
+};
+
+const normalizeUsuariosList = (payload: ApiEnvelope<UsuarioResponse[]>): UsuarioResponse[] => {
+  const unwrapped = unwrapResponse(payload);
+  return Array.isArray(unwrapped) ? unwrapped : [];
+};
+
+const isAxiosError = (error: unknown): error is AxiosErrorLike => {
+  return Boolean(error) && typeof error === 'object' && 'isAxiosError' in (error as Record<string, unknown>);
+};
+
+const extractErrorMessage = (error: unknown): string => {
+  if (isAxiosError(error)) {
+    const responseData = error.response?.data as { message?: string; error?: string } | string | undefined;
+    if (typeof responseData === 'string') {
+      return responseData || error.message || DEFAULT_ERROR_MESSAGE;
+    }
+
+    return responseData?.message || responseData?.error || error.message || DEFAULT_ERROR_MESSAGE;
+  }
+
+  if (error instanceof Error) {
+    return error.message || DEFAULT_ERROR_MESSAGE;
+  }
+
+  return DEFAULT_ERROR_MESSAGE;
+};
+
+export const getUsuarios = async (): Promise<UsuarioResponse[]> => {
+  try {
+    const response = await api.get<ApiEnvelope<UsuarioResponse[]>>(USUARIOS_ENDPOINT);
+    return normalizeUsuariosList(response.data);
+  } catch (error) {
+    throw new Error(extractErrorMessage(error));
+  }
+};
+
+export const createUsuario = async (payload: UsuarioPayload): Promise<UsuarioResponse> => {
+  try {
+    const response = await api.post<ApiEnvelope<UsuarioResponse>>(USUARIOS_ENDPOINT, payload);
+    return unwrapResponse(response.data);
+  } catch (error) {
+    throw new Error(extractErrorMessage(error));
+  }
+};
+
+export const updateUsuario = async (
+  id: number,
+  payload: UsuarioUpdatePayload
+): Promise<UsuarioResponse> => {
+  try {
+    const response = await api.put<ApiEnvelope<UsuarioResponse>>(`${USUARIOS_ENDPOINT}/${id}`, payload);
+    return unwrapResponse(response.data);
+  } catch (error) {
+    throw new Error(extractErrorMessage(error));
+  }
+};
+
+export const deleteUsuario = async (id: number): Promise<void> => {
+  try {
+    await api.delete(`${USUARIOS_ENDPOINT}/${id}`);
+  } catch (error) {
+    throw new Error(extractErrorMessage(error));
+  }
 };
