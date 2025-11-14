@@ -1,27 +1,18 @@
-const jsonContentType = 'application/json';
-const USUARIO_ROLES_ENDPOINT = '/api/usuario-roles';
+import type { AxiosResponse } from 'axios';
+import api from './api';
+
 const ROLES_ENDPOINT = '/api/roles';
+const USUARIO_ROLES_ENDPOINT = '/api/usuario-roles';
+const DEFAULT_ERROR_MESSAGE = 'Error al comunicarse con el servidor';
 
-// FIX: Función auxiliar que garantiza la lectura segura de JSON para evitar "Unexpected token '<'".
-const parseJsonSafe = async (response: Response) => {
-  const contentType = response.headers.get('content-type');
-  if (contentType && contentType.includes(jsonContentType)) {
-    return response.json();
-  }
+type ApiEnvelope<T> = T | { data: T };
 
-  return { message: 'Respuesta inválida del servidor' } as const;
-};
-
-const handleResponse = async (response: Response) => {
-  if (response.ok) {
-    return parseJsonSafe(response);
-  }
-
-  const errorBody = await parseJsonSafe(response);
-  const message =
-    (errorBody && typeof errorBody === 'object' && 'message' in errorBody && errorBody.message) ||
-    'Error al comunicarse con el servidor';
-  throw new Error(String(message));
+type AxiosErrorLike = {
+  isAxiosError?: boolean;
+  message?: string;
+  response?: {
+    data?: unknown;
+  };
 };
 
 export type UsuarioRolPayload = {
@@ -29,62 +20,67 @@ export type UsuarioRolPayload = {
   rol_id: number;
 };
 
-// NEW: Recupera todas las asignaciones entre usuarios y roles con agrupación por usuario.
-export const fetchUsuarioRoles = async () => {
-  const response = await fetch(USUARIO_ROLES_ENDPOINT, {
-    headers: { Accept: jsonContentType },
-  });
-  return handleResponse(response);
+const hasDataProperty = <T>(payload: ApiEnvelope<T>): payload is { data: T } => {
+  return typeof payload === 'object' && payload !== null && 'data' in payload;
 };
 
-// NEW: Recupera únicamente los roles de un usuario específico utilizando la API centralizada.
-export const fetchRolesPorUsuario = async (usuarioId: number) => {
-  if (!Number.isInteger(usuarioId)) {
-    throw new Error('Identificador de usuario inválido');
+const unwrapResponse = <T>(payload: ApiEnvelope<T>): T => {
+  if (hasDataProperty(payload)) {
+    return payload.data;
+  }
+  return payload as T;
+};
+
+const isAxiosError = (error: unknown): error is AxiosErrorLike => {
+  return Boolean(error) && typeof error === 'object' && 'isAxiosError' in (error as Record<string, unknown>);
+};
+
+const extractErrorMessage = (error: unknown): string => {
+  if (isAxiosError(error)) {
+    const responseData = error.response?.data as { message?: string; error?: string } | string | undefined;
+    if (typeof responseData === 'string') {
+      return responseData || error.message || DEFAULT_ERROR_MESSAGE;
+    }
+
+    return responseData?.message || responseData?.error || error.message || DEFAULT_ERROR_MESSAGE;
   }
 
-  const response = await fetch(`${USUARIO_ROLES_ENDPOINT}/${usuarioId}`, {
-    headers: { Accept: jsonContentType },
-  });
-  return handleResponse(response);
-};
-
-// NEW: Obtiene el catálogo de roles disponibles para asignar.
-export const fetchRolesDisponibles = async () => {
-  const response = await fetch(ROLES_ENDPOINT, {
-    headers: { Accept: jsonContentType },
-  });
-  return handleResponse(response);
-};
-
-// NEW: Asigna un rol a un usuario validando datos antes de enviar la solicitud.
-export const asignarRol = async ({ usuario_id, rol_id }: UsuarioRolPayload) => {
-  if (!Number.isInteger(usuario_id) || !Number.isInteger(rol_id)) {
-    throw new Error('Datos incompletos');
+  if (error instanceof Error) {
+    return error.message || DEFAULT_ERROR_MESSAGE;
   }
 
-  const response = await fetch(USUARIO_ROLES_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': jsonContentType,
-      Accept: jsonContentType,
-    },
-    body: JSON.stringify({ usuario_id, rol_id }),
-  });
-
-  return handleResponse(response);
+  return DEFAULT_ERROR_MESSAGE;
 };
 
-// NEW: Elimina la relación usuario-rol validando que ambos identificadores sean correctos.
-export const eliminarRol = async (usuarioId: number, rolId: number) => {
-  if (!Number.isInteger(usuarioId) || !Number.isInteger(rolId)) {
-    throw new Error('Datos incompletos');
+const resolveRequest = async <T>(request: Promise<AxiosResponse<ApiEnvelope<T>>>): Promise<T> => {
+  try {
+    const response = await request;
+    return unwrapResponse(response.data);
+  } catch (error) {
+    throw new Error(extractErrorMessage(error));
   }
-
-  const response = await fetch(`${USUARIO_ROLES_ENDPOINT}/${usuarioId}/${rolId}`, {
-    method: 'DELETE',
-    headers: { Accept: jsonContentType },
-  });
-
-  return handleResponse(response);
 };
+
+const usuarioRolesService = {
+  async getRolesDisponibles<T = unknown>(): Promise<T> {
+    return resolveRequest<T>(api.get(ROLES_ENDPOINT));
+  },
+
+  async getAsignaciones<T = unknown>(): Promise<T> {
+    return resolveRequest<T>(api.get(USUARIO_ROLES_ENDPOINT));
+  },
+
+  async getRolesPorUsuario<T = unknown>(usuarioId: number): Promise<T> {
+    return resolveRequest<T>(api.get(`${USUARIO_ROLES_ENDPOINT}/${usuarioId}`));
+  },
+
+  async asignarRol<T = unknown>(payload: UsuarioRolPayload): Promise<T> {
+    return resolveRequest<T>(api.post(USUARIO_ROLES_ENDPOINT, payload));
+  },
+
+  async eliminarAsignacion<T = unknown>(usuarioId: number, rolId: number): Promise<T> {
+    return resolveRequest<T>(api.delete(`${USUARIO_ROLES_ENDPOINT}/${usuarioId}/${rolId}`));
+  },
+};
+
+export default usuarioRolesService;
