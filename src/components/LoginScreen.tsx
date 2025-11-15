@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { RoleOption, RoleToken } from './context/SessionContext';
-import { getConsolas } from '../services/consolasService';
 import api from '../services/api';
 
 interface LoginScreenProps {
@@ -26,29 +25,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [usuarioAutenticado, setUsuarioAutenticado] = useState<UsuarioAutenticado | null>(null);
-  const [availableRoles, setAvailableRoles] = useState<RoleOption[]>([]);
-  const [roleTokens, setRoleTokens] = useState<RoleToken[]>([]);
-  const [consoleOptions, setConsoleOptions] = useState<string[]>([]);
-  const [selectedConsole, setSelectedConsole] = useState('');
-  const [selectedRoleId, setSelectedRoleId] = useState<number | ''>('');
-
-  useEffect(() => {
-    const fetchConsolas = async () => {
-      try {
-        const data = await getConsolas();
-        const consoleNames = data.map((c: { nombre: string }) => c.nombre);
-        setConsoleOptions(consoleNames);
-        if (consoleNames.length > 0) {
-          setSelectedConsole(consoleNames[0]);
-        }
-      } catch (error) {
-        console.error("Error fetching consoles:", error);
-        setError("Error al cargar la lista de consolas.");
-      }
-    };
-    fetchConsolas();
-  }, []);
+  const [roleInfo, setRoleInfo] = useState<RoleOption | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,98 +35,88 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       return;
     }
 
-    if (!usuarioAutenticado) {
-      setIsLoading(true); // FIX: Activar indicador de carga durante la fase de autenticación.
+    setIsLoading(true);
 
-      try {
-        const response = await api.post('/login', {
-          nombre_usuario: username,
-          contrasena_plana: password,
-        });
+    try {
+      const response = await api.post('/login', {
+        nombre_usuario: username,
+        contrasena_plana: password,
+      });
 
-        const data = response.data ?? {};
+      const data = response.data ?? {};
 
-        const primaryRole: RoleOption = {
-          id:
-            typeof data.rol_id === 'number'
-              ? data.rol_id
-              : typeof data.id === 'number'
-              ? data.id
-              : 1,
-          nombre:
-            typeof data.rol === 'string' && data.rol.trim().length > 0
-              ? data.rol
-              : 'Administrador',
-        };
+      const normalizedRoles: RoleOption[] = Array.isArray(data.roles)
+        ? data.roles
+            .filter(
+              (role: unknown): role is { id: number; nombre: string } =>
+                !!role &&
+                typeof role === 'object' &&
+                typeof (role as { id?: unknown }).id === 'number' &&
+                typeof (role as { nombre?: unknown }).nombre === 'string'
+            )
+            .map((role: { id: number; nombre: string }) => ({ id: role.id, nombre: role.nombre }))
+        : [];
 
-        const usuario: UsuarioAutenticado = {
-          id: Number(data.id) || 0,
-          nombre_usuario: typeof data.usuario === 'string' ? data.usuario : username,
-          roles: [primaryRole],
-          rol_activo: primaryRole,
-        };
+      const primaryRole =
+        normalizedRoles[0] ??
+        (typeof data.rol_id === 'number' && typeof data.rol_nombre === 'string'
+          ? { id: data.rol_id, nombre: data.rol_nombre }
+          : null);
 
-        setUsuarioAutenticado(usuario); // FIX: Conservar al usuario autenticado para la segunda fase.
-        setAvailableRoles([primaryRole]);
-
-        const tokenFromResponse =
-          typeof data.token === 'string' && data.token.trim().length > 0
-            ? data.token
-            : 'fake-jwt-token';
-
-        const tokensToUse: RoleToken[] = [
-          {
-            roleId: primaryRole.id,
-            token: tokenFromResponse,
-          },
-        ];
-
-        setRoleTokens(tokensToUse);
-        setSelectedRoleId(primaryRole.id);
-      } catch (error) {
-        console.error('Error al iniciar sesión:', error);
-        setError('Error de autenticación'); // FIX: Unificar mensaje de error en fallos de red o servidor durante autenticación.
-      } finally {
-        setIsLoading(false); // FIX: Finalizar indicador de carga al concluir la fase de autenticación.
+      if (!primaryRole) {
+        setError('No se pudo determinar el rol del usuario.');
+        setRoleInfo(null);
+        return;
       }
 
-      return;
-    }
+      setRoleInfo(primaryRole);
 
-    if (!selectedConsole) {
-      setError('Seleccione una consola para continuar.'); // FIX: Validar que el usuario elija una consola antes de continuar.
-      return;
-    }
+      const usuario: UsuarioAutenticado = {
+        id: Number(data.id) || 0,
+        nombre_usuario:
+          typeof data.nombre_usuario === 'string'
+            ? data.nombre_usuario
+            : typeof data.usuario === 'string'
+            ? data.usuario
+            : username,
+        roles: normalizedRoles.length > 0 ? normalizedRoles : [primaryRole],
+        rol_activo: primaryRole,
+      };
 
-    if (selectedRoleId === '' || typeof selectedRoleId !== 'number') {
-      setError('Seleccione un rol válido.');
-      return;
-    }
+      const tokenFromResponse =
+        typeof data.token === 'string' && data.token.trim().length > 0
+          ? data.token
+          : 'fake-jwt-token';
 
-    const selectedRole = availableRoles.find((role) => role.id === selectedRoleId);
-    if (!selectedRole) {
-      setError('No se encontró un rol asignado.');
-      return;
-    }
+      const tokensToUse: RoleToken[] = [
+        {
+          roleId: primaryRole.id,
+          token: tokenFromResponse,
+        },
+      ];
 
-    const roleToken = roleTokens.find((entry) => entry.roleId === selectedRole.id);
-    if (!roleToken) {
-      setError('No se encontró un token para el rol seleccionado.');
-      return;
-    }
-
-    setIsLoading(true); // FIX: Mostrar carga durante el envío de la selección de consola.
-    try {
       onLogin({
-        user: usuarioAutenticado,
-        selectedRole,
-        consoleName: selectedConsole,
-        token: roleToken.token,
-        roles: availableRoles,
-        roleTokens,
-      }); // FIX: Completar la fase de selección de consola y navegar.
+        user: usuario,
+        selectedRole: primaryRole,
+        consoleName: '',
+        token: tokenFromResponse,
+        roles: usuario.roles,
+        roleTokens: tokensToUse,
+      });
+    } catch (error) {
+      let backendMessage: string | null = null;
+      if (typeof error === 'object' && error !== null && 'response' in error) {
+        const maybeResponse = (error as { response?: { data?: { message?: unknown } } }).response;
+        const maybeMessage = maybeResponse?.data?.message;
+        if (typeof maybeMessage === 'string') {
+          backendMessage = maybeMessage;
+        }
+      }
+
+      setError(backendMessage ?? 'Error de autenticación');
+      setRoleInfo(null);
     } finally {
-      setIsLoading(false); // FIX: Asegurar que el estado de carga se desactive tras finalizar la fase de consola.
+      setIsLoading(false);
     }
   };
 
@@ -165,110 +132,65 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         </div>
         <h2 className="text-3xl font-bold text-center text-[#1C2E4A]">Portal Administrativo</h2>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {!usuarioAutenticado ? (
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="username" className="block text-sm font-medium text-[#1C2E4A]">
-                  Usuario
-                </label>
-                <input
-                  id="username"
-                  name="username"
-                  type="text"
-                  autoComplete="username"
-                  required
-                  value={username}
-                  onChange={(event) => {
-                    setUsername(event.target.value);
-                    if (error) {
-                      setError('');
-                    }
-                  }}
-                  className="appearance-none block w-full px-3 py-3 border border-gray-300 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300] sm:text-sm rounded-md"
-                  placeholder="Ingrese su usuario"
-                />
-              </div>
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-[#1C2E4A]">
-                  Contraseña
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(event) => {
-                    setPassword(event.target.value);
-                    if (error) {
-                      setError('');
-                    }
-                  }}
-                  className="appearance-none block w-full px-3 py-3 border border-gray-300 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300] sm:text-sm rounded-md"
-                  placeholder="Ingrese su contraseña"
-                />
-              </div>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-[#1C2E4A]">
+                Usuario
+              </label>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                required
+                value={username}
+                onChange={(event) => {
+                  setUsername(event.target.value);
+                  if (error) {
+                    setError('');
+                  }
+                }}
+                className="appearance-none block w-full px-3 py-3 border border-gray-300 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300] sm:text-sm rounded-md"
+                placeholder="Ingrese su usuario"
+              />
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="role" className="block text-sm font-medium text-[#1C2E4A]">
-                  Rol
-                </label>
-                <select
-                  id="role"
-                  name="role"
-                  value={selectedRoleId === '' ? '' : selectedRoleId}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setSelectedRoleId(value ? Number(value) : '');
-                    if (error) {
-                      setError('');
-                    }
-                  }}
-                  className="block w-full px-3 py-3 border border-gray-300 bg-white text-gray-900 rounded-md focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300]"
-                >
-                  {availableRoles.length === 0 ? (
-                    <option value="">Sin rol asignado</option>
-                  ) : (
-                    availableRoles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.nombre}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="console" className="block text-sm font-medium text-[#1C2E4A]">
-                  Seleccione Consola
-                </label>
-                <select
-                  id="console"
-                  name="console"
-                  required
-                  value={selectedConsole}
-                  onChange={(event) => {
-                    setSelectedConsole(event.target.value);
-                    if (error) {
-                      setError('');
-                    }
-                  }}
-                  className="block w-full px-3 py-3 border border-gray-300 bg-white text-gray-900 rounded-md focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300]"
-                >
-                  <option value="" disabled>
-                    Seleccione una consola
-                  </option>
-                  {consoleOptions.map((consoleName) => (
-                    <option key={consoleName} value={consoleName}>
-                      {consoleName}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-[#1C2E4A]">
+                Contraseña
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  if (error) {
+                    setError('');
+                  }
+                }}
+                className="appearance-none block w-full px-3 py-3 border border-gray-300 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300] sm:text-sm rounded-md"
+                placeholder="Ingrese su contraseña"
+              />
             </div>
-          )}
+            <div>
+              <label htmlFor="role" className="block text-sm font-medium text-[#1C2E4A]">
+                Rol asignado
+              </label>
+              <input
+                id="role"
+                name="role"
+                type="text"
+                value={roleInfo?.nombre ?? ''}
+                placeholder="Se mostrará al iniciar sesión"
+                readOnly
+                disabled
+                className="block w-full px-3 py-3 border border-gray-300 bg-gray-100 text-gray-600 rounded-md cursor-not-allowed"
+              />
+            </div>
+          </div>
 
           {error && <p className="text-red-500 text-xs text-center pt-2">{error}</p>}
           {isLoading && !error && (
