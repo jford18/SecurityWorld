@@ -164,6 +164,18 @@ const EditFailureModal: React.FC<{
         failureToNormalize.verificacionCierreId ??
         findResponsableIdByName(responsables, failureToNormalize.verificacionCierre);
       let cierreNombre = failureToNormalize.verificacionCierre;
+      const ultimoUsuarioEditoIdRaw =
+        failureToNormalize.ultimo_usuario_edito_id ??
+        findResponsableIdByName(
+          responsables,
+          failureToNormalize.ultimo_usuario_edito_nombre,
+        );
+      const ultimoUsuarioEditoId =
+        ultimoUsuarioEditoIdRaw !== undefined &&
+        ultimoUsuarioEditoIdRaw !== null &&
+        ultimoUsuarioEditoIdRaw !== ''
+          ? Number(ultimoUsuarioEditoIdRaw)
+          : undefined;
 
       if (!cierreId && currentUserName) {
         const matched = responsables.find(
@@ -193,6 +205,11 @@ const EditFailureModal: React.FC<{
         verificacionAperturaId: aperturaId ?? '',
         verificacionCierreId: cierreId ?? '',
         verificacionCierre: cierreNombre,
+        ultimo_usuario_edito_id:
+          Number.isFinite(ultimoUsuarioEditoId ?? NaN) && ultimoUsuarioEditoId !== undefined
+            ? ultimoUsuarioEditoId ?? null
+            : failureToNormalize.ultimo_usuario_edito_id ?? null,
+        ultimo_usuario_edito_nombre: failureToNormalize.ultimo_usuario_edito_nombre,
       };
     },
     [departamentos, responsables, currentUserName],
@@ -414,13 +431,35 @@ const EditFailureModal: React.FC<{
             </div>
             <div className="md:col-span-2">
               <AutocompleteComboBox
-                label="Responsable Verificación Apertura"
-                value={editData.verificacionAperturaId ?? ''}
+                label="Último usuario que editó"
+                value={
+                  editData.ultimo_usuario_edito_id != null
+                    ? String(editData.ultimo_usuario_edito_id)
+                    : ''
+                }
                 onChange={(value: string) =>
-                  setEditData((prev) => ({ ...prev, verificacionAperturaId: value }))
+                  setEditData((prev) => ({
+                    ...prev,
+                    ultimo_usuario_edito_id: value ? Number(value) : null,
+                  }))
                 }
                 onItemSelect={(item) =>
-                  applyResponsableSelection('verificacionAperturaId', 'verificacionApertura', item)
+                  setEditData((prev) => ({
+                    ...prev,
+                    ultimo_usuario_edito_id: item?.value
+                      ? Number(item.value)
+                      : null,
+                    ultimo_usuario_edito_nombre: (() => {
+                      const rawLabel = item?.label ?? item?.nombre;
+                      if (typeof rawLabel === 'string') {
+                        return rawLabel;
+                      }
+                      if (rawLabel != null) {
+                        return String(rawLabel);
+                      }
+                      return prev.ultimo_usuario_edito_nombre;
+                    })(),
+                  }))
                 }
                 items={responsableItems}
                 displayField="label"
@@ -591,6 +630,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       verificacionCierreId,
       novedadDetectada: updatedFailure.novedadDetectada,
       fechaHoraFallo: failureDateTimeValue,
+      ultimo_usuario_edito_id: session.userId ?? null,
     };
 
     try {

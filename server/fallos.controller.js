@@ -29,6 +29,31 @@ const findUserId = (users, nameOrUsername) => {
   return user ? user.id : null;
 };
 
+const resolveAuthenticatedUserId = (req) => {
+  if (!req || !req.user || typeof req.user !== "object") {
+    return null;
+  }
+
+  const candidate =
+    req.user.usuario_id ??
+    req.user.usuarioId ??
+    req.user.user_id ??
+    req.user.userId ??
+    req.user.id ??
+    null;
+
+  const parsed = Number(candidate);
+  return Number.isInteger(parsed) ? parsed : null;
+};
+
+const parseNullableInteger = (value) => {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : null;
+};
+
 const seedFallosIfNeeded = async (client) => {
   const countResult = await client.query(
     "SELECT COUNT(*)::int AS total FROM fallos_tecnicos"
@@ -183,6 +208,14 @@ const mapFalloRowToDto = (row) => ({
   verificacionApertura: row.verificacion_apertura || undefined,
   verificacionCierre: row.verificacion_cierre || undefined,
   novedadDetectada: row.novedad_detectada || undefined,
+  ultimo_usuario_edito_id: (() => {
+    if (row.ultimo_usuario_edito_id === null || row.ultimo_usuario_edito_id === undefined) {
+      return null;
+    }
+    const parsed = Number(row.ultimo_usuario_edito_id);
+    return Number.isFinite(parsed) ? parsed : null;
+  })(),
+  ultimo_usuario_edito_nombre: row.ultimo_usuario_edito || undefined,
 });
 
 const fetchFalloById = async (client, id) => {
@@ -200,8 +233,10 @@ const fetchFalloById = async (client, id) => {
         ft.fecha_resolucion,
         ft.hora_resolucion,
         seguimiento.novedad_detectada,
+        seguimiento.ultimo_usuario_edito_id,
         COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
-        COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre
+        COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre,
+        COALESCE(ultimo.nombre_completo, ultimo.nombre_usuario) AS ultimo_usuario_edito
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
@@ -210,6 +245,7 @@ const fetchFalloById = async (client, id) => {
       LEFT JOIN seguimiento_fallos seguimiento ON seguimiento.fallo_id = ft.id
       LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
       LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
+      LEFT JOIN usuarios ultimo ON ultimo.id = seguimiento.ultimo_usuario_edito_id
       WHERE ft.id = $1`,
     [id]
   );
@@ -240,13 +276,22 @@ export const getFallos = async (req, res) => {
         ft.tipo_problema_id,
         tp.descripcion AS tipo_afectacion,
         ft.fecha_resolucion,
-        ft.hora_resolucion
+        ft.hora_resolucion,
+        seguimiento.novedad_detectada,
+        seguimiento.ultimo_usuario_edito_id,
+        COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
+        COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre,
+        COALESCE(ultimo.nombre_completo, ultimo.nombre_usuario) AS ultimo_usuario_edito
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
       LEFT JOIN consolas consola ON consola.id = ft.consola_id
       LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
       LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
+      LEFT JOIN seguimiento_fallos seguimiento ON seguimiento.fallo_id = ft.id
+      LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
+      LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
+      LEFT JOIN usuarios ultimo ON ultimo.id = seguimiento.ultimo_usuario_edito_id
       ORDER BY ft.fecha DESC, ft.id DESC`
     ); // FIX: rewritten query uses LEFT JOINs only with existing lookup tables to avoid failing when optional relations are missing and to provide the consola name.
 
@@ -477,6 +522,7 @@ export const updateFallo = async (req, res) => {
     verificacionApertura,
     verificacionCierre,
     novedadDetectada,
+    ultimo_usuario_edito_id: ultimoUsuarioEditoBody,
   } = req.body || {};
 
   if (!id) {
@@ -487,6 +533,9 @@ export const updateFallo = async (req, res) => {
 
   try {
     await client.query("BEGIN");
+
+    const lastEditorIdFromAuth = resolveAuthenticatedUserId(req);
+    const lastEditorId = lastEditorIdFromAuth ?? parseNullableInteger(ultimoUsuarioEditoBody);
 
     const existingResult = await client.query(
       "SELECT id FROM fallos_tecnicos WHERE id = $1",
@@ -541,12 +590,14 @@ export const updateFallo = async (req, res) => {
         `UPDATE seguimiento_fallos
            SET verificacion_apertura_id = $1,
                verificacion_cierre_id = $2,
-               novedad_detectada = $3
-         WHERE fallo_id = $4`,
+               novedad_detectada = $3,
+               ultimo_usuario_edito_id = $4
+         WHERE fallo_id = $5`,
         [
           verificacionAperturaId || null,
           verificacionCierreId || null,
           novedadDetectada || null,
+          lastEditorId,
           id,
         ]
       );
@@ -561,13 +612,15 @@ export const updateFallo = async (req, res) => {
           verificacion_apertura_id,
           verificacion_cierre_id,
           novedad_detectada,
-          fecha_creacion
-        ) VALUES ($1, $2, $3, $4, NOW())`,
+          fecha_creacion,
+          ultimo_usuario_edito_id
+        ) VALUES ($1, $2, $3, $4, NOW(), $5)`,
         [
           id,
           verificacionAperturaId || null,
           verificacionCierreId || null,
           novedadDetectada || null,
+          lastEditorId,
         ]
       );
     }
