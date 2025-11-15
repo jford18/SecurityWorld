@@ -201,9 +201,9 @@ const EditFailureModal: React.FC<{
   const [editData, setEditData] = useState<TechnicalFailure>(() =>
     normalizeFailure(failure),
   );
-  const [activeTab, setActiveTab] = useState<'general' | 'supervisor'>(
-    'general',
-  );
+  const [activeTab, setActiveTab] = useState<
+    'general' | 'supervisor' | 'cierre'
+  >('general');
 
   useEffect(() => {
     setEditData(normalizeFailure(failure));
@@ -311,6 +311,7 @@ const EditFailureModal: React.FC<{
             {[
               { id: 'general' as const, label: 'Datos generales' },
               { id: 'supervisor' as const, label: 'Verificación Supervisor' },
+              { id: 'cierre' as const, label: 'Verificación de cierre' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -343,16 +344,6 @@ const EditFailureModal: React.FC<{
                     String(departamento.id) === editData.departamentoResponsableId,
                 )?.nombre,
             )}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700">Novedad Detectada</label>
-              <textarea
-                name="novedadDetectada"
-                value={editData.novedadDetectada || ''}
-                onChange={handleChange}
-                rows={4}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-              ></textarea>
-            </div>
           </div>
         )}
 
@@ -368,18 +359,6 @@ const EditFailureModal: React.FC<{
                 readOnly
                 disabled
                 className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Fecha y Hora Resolución
-              </label>
-              <input
-                type="datetime-local"
-                name="fechaHoraResolucion"
-                value={editData.fechaHoraResolucion || ''}
-                onChange={(e) => handleResolutionChange(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
               />
             </div>
             <div className="md:col-span-2">
@@ -427,6 +406,33 @@ const EditFailureModal: React.FC<{
                 readOnly
                 disabled
                 className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700">Novedad Detectada</label>
+              <textarea
+                name="novedadDetectada"
+                value={editData.novedadDetectada || ''}
+                onChange={handleChange}
+                rows={4}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
+              ></textarea>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'cierre' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Fecha y Hora Resolución
+              </label>
+              <input
+                type="datetime-local"
+                name="fechaHoraResolucion"
+                value={editData.fechaHoraResolucion || ''}
+                onChange={(e) => handleResolutionChange(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
               />
             </div>
             <div className="md:col-span-2">
