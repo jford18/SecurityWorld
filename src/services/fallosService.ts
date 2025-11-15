@@ -29,6 +29,7 @@ export interface TechnicalFailurePayload {
   verificacionCierreId?: string | number | null;
   novedadDetectada?: string;
   ultimoUsuarioEditoId?: number | string | null;
+  responsable_verificacion_cierre_id?: number | string | null;
   reportadoCliente?: boolean;
   affectationType?: string;
   horaFallo?: string;

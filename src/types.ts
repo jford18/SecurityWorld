@@ -21,6 +21,8 @@ export interface TechnicalFailure {
   novedadDetectada?: string;
   ultimo_usuario_edito_id?: number | null;
   ultimo_usuario_edito_nombre?: string | null;
+  responsable_verificacion_cierre_id?: number | null;
+  responsable_verificacion_cierre_nombre?: string | null;
 }
 
 export interface CatalogoDepartamento {
