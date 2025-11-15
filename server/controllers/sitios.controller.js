@@ -11,16 +11,46 @@ const SITIO_WITH_CLIENT_BASE_QUERY = `
     S.longitud,
     S.activo,
     S.fecha_creacion,
+    S.hacienda_id AS hacienda_id,
+    S.tipo_area_id AS tipo_area_id,
+    S.consola_id AS consola_id,
     C.id AS cliente_id,
-    C.nombre AS cliente_nombre
+    C.nombre AS cliente_nombre,
+    H.nombre AS hacienda_nombre,
+    TA.nombre AS tipo_area_nombre,
+    TA.descripcion AS tipo_area_descripcion,
+    CO.nombre AS consola_nombre
   FROM sitios S
   LEFT JOIN sitios_cliente SC ON SC.sitio_id = S.id AND SC.activo = TRUE
   LEFT JOIN clientes C ON C.id = SC.cliente_id
+  LEFT JOIN hacienda H ON H.id = S.hacienda_id
+  LEFT JOIN tipo_area TA ON TA.id = S.tipo_area_id
+  LEFT JOIN consolas CO ON CO.id = S.consola_id
 `;
+
+const mapSitioRow = (row) => {
+  if (!row || typeof row !== "object") {
+    return row ?? null;
+  }
+
+  return {
+    ...row,
+    clienteId: row.clienteId ?? row.cliente_id ?? null,
+    clienteNombre: row.clienteNombre ?? row.cliente_nombre ?? null,
+    haciendaId: row.haciendaId ?? row.hacienda_id ?? null,
+    haciendaNombre: row.haciendaNombre ?? row.hacienda_nombre ?? null,
+    tipoAreaId: row.tipoAreaId ?? row.tipo_area_id ?? null,
+    tipoAreaNombre: row.tipoAreaNombre ?? row.tipo_area_nombre ?? null,
+    tipoAreaDescripcion:
+      row.tipoAreaDescripcion ?? row.tipo_area_descripcion ?? null,
+    consolaId: row.consolaId ?? row.consola_id ?? null,
+    consolaNombre: row.consolaNombre ?? row.consola_nombre ?? null,
+  };
+};
 
 const fetchSitioWithClienteById = async (queryable, id) => {
   const result = await queryable.query(`${SITIO_WITH_CLIENT_BASE_QUERY} WHERE S.id = $1`, [id]);
-  return result.rows[0] ?? null;
+  return mapSitioRow(result.rows[0] ?? null);
 };
 
 const coordinatePatterns = [
@@ -89,7 +119,7 @@ const extractCoordinatesFromLink = (link) => {
   return null;
 };
 
-const parseClienteId = (value) => {
+const parseNullableId = (value) => {
   if (value === null || value === undefined || value === "") {
     return null;
   }
@@ -130,11 +160,14 @@ const parseSitioIds = (rawValue) => {
   return Array.from(new Set(parsed));
 };
 
+const hasOwnProperty = (target, property) =>
+  target !== null &&
+  typeof target === "object" &&
+  Object.prototype.hasOwnProperty.call(target, property);
+
 const normalizeSitioPayload = (body) => {
   const hasClienteId =
-    body !== null &&
-    typeof body === "object" &&
-    Object.prototype.hasOwnProperty.call(body, "cliente_id");
+    hasOwnProperty(body, "cliente_id") || hasOwnProperty(body, "clienteId");
 
   const nombre = typeof body.nombre === "string" ? body.nombre.trim() : "";
   const descripcion =
@@ -162,7 +195,10 @@ const normalizeSitioPayload = (body) => {
     }
   }
 
-  const cliente_id = parseClienteId(body.cliente_id);
+  const clienteId = parseNullableId(body.clienteId ?? body.cliente_id);
+  const haciendaId = parseNullableId(body.haciendaId ?? body.hacienda_id);
+  const tipoAreaId = parseNullableId(body.tipoAreaId ?? body.tipo_area_id);
+  const consolaId = parseNullableId(body.consolaId ?? body.consola_id);
 
   return {
     nombre,
@@ -172,7 +208,10 @@ const normalizeSitioPayload = (body) => {
     link_mapa,
     latitud,
     longitud,
-    cliente_id,
+    clienteId,
+    haciendaId,
+    tipoAreaId,
+    consolaId,
     clienteIdProvided: hasClienteId,
   };
 };
@@ -210,7 +249,7 @@ export const getSitios = async (req, res) => {
     query += " ORDER BY S.nombre";
 
     const result = await pool.query(query, values);
-    res.status(200).json(result.rows);
+    res.status(200).json(result.rows.map(mapSitioRow));
   } catch (error) {
     console.error("Error al obtener sitios:", error);
     res.status(500).json({ message: "Error al obtener sitios" });
@@ -229,7 +268,7 @@ export const getSitioById = async (req, res) => {
       return res.status(404).json({ message: "Sitio no encontrado" });
     }
 
-    res.status(200).json(result.rows[0]);
+    res.status(200).json(mapSitioRow(result.rows[0]));
   } catch (error) {
     console.error("Error al obtener el sitio:", error);
     res.status(500).json({ message: "Error al obtener el sitio" });
@@ -246,7 +285,10 @@ export const createSitio = async (req, res) => {
       link_mapa,
       latitud,
       longitud,
-      cliente_id,
+      clienteId,
+      haciendaId,
+      tipoAreaId,
+      consolaId,
       clienteIdProvided,
     } =
       normalizeSitioPayload(
@@ -282,20 +324,31 @@ export const createSitio = async (req, res) => {
       transactionStarted = true;
 
       const result = await client.query(
-        `INSERT INTO sitios (nombre, descripcion, ubicacion, activo, link_mapa, latitud, longitud)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, nombre, descripcion, ubicacion, link_mapa, latitud, longitud, activo, fecha_creacion`,
-        [nombre, descripcion, ubicacion, activo, link_mapa, latitud, longitud]
+        `INSERT INTO sitios (nombre, descripcion, ubicacion, activo, link_mapa, latitud, longitud, hacienda_id, tipo_area_id, consola_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING id, nombre, descripcion, ubicacion, link_mapa, latitud, longitud, activo, fecha_creacion, hacienda_id, tipo_area_id, consola_id`,
+        [
+          nombre,
+          descripcion,
+          ubicacion,
+          activo,
+          link_mapa,
+          latitud,
+          longitud,
+          haciendaId,
+          tipoAreaId,
+          consolaId,
+        ]
       );
 
       const sitioInsertado = result.rows[0];
       const sitioId = sitioInsertado.id;
 
-      if (clienteIdProvided && cliente_id !== null) {
+      if (clienteIdProvided && clienteId !== null) {
         await client.query(
           `INSERT INTO sitios_cliente (sitio_id, cliente_id, activo, fecha_asignacion)
            VALUES ($1, $2, TRUE, NOW())`,
-          [sitioId, cliente_id]
+          [sitioId, clienteId]
         );
       }
 
@@ -306,7 +359,7 @@ export const createSitio = async (req, res) => {
 
       res.status(201).json({
         message: "Sitio creado correctamente",
-        data: sitioConCliente ?? sitioInsertado,
+        data: mapSitioRow(sitioConCliente ?? sitioInsertado),
       });
     } catch (error) {
       if (transactionStarted) {
@@ -333,7 +386,10 @@ export const updateSitio = async (req, res) => {
       link_mapa,
       latitud,
       longitud,
-      cliente_id,
+      clienteId,
+      haciendaId,
+      tipoAreaId,
+      consolaId,
       clienteIdProvided,
     } =
       normalizeSitioPayload(
@@ -376,10 +432,25 @@ export const updateSitio = async (req, res) => {
              activo = $4,
              link_mapa = $5,
              latitud = $6,
-             longitud = $7
-         WHERE id = $8
-         RETURNING id, nombre, descripcion, ubicacion, link_mapa, latitud, longitud, activo, fecha_creacion`,
-        [nombre, descripcion, ubicacion, activo, link_mapa, latitud, longitud, id]
+             longitud = $7,
+             hacienda_id = $8,
+             tipo_area_id = $9,
+             consola_id = $10
+         WHERE id = $11
+         RETURNING id, nombre, descripcion, ubicacion, link_mapa, latitud, longitud, activo, fecha_creacion, hacienda_id, tipo_area_id, consola_id`,
+        [
+          nombre,
+          descripcion,
+          ubicacion,
+          activo,
+          link_mapa,
+          latitud,
+          longitud,
+          haciendaId,
+          tipoAreaId,
+          consolaId,
+          id,
+        ]
       );
 
       if (result.rowCount === 0) {
@@ -394,11 +465,11 @@ export const updateSitio = async (req, res) => {
           [id]
         );
 
-        if (cliente_id !== null) {
+        if (clienteId !== null) {
           await client.query(
             `INSERT INTO sitios_cliente (sitio_id, cliente_id, activo, fecha_asignacion)
              VALUES ($1, $2, TRUE, NOW())`,
-            [id, cliente_id]
+            [id, clienteId]
           );
         }
       }
@@ -410,7 +481,7 @@ export const updateSitio = async (req, res) => {
 
       res.status(200).json({
         message: "Sitio actualizado correctamente",
-        data: sitioActualizado ?? result.rows[0],
+        data: mapSitioRow(sitioActualizado ?? result.rows[0]),
       });
     } catch (error) {
       if (transactionStarted) {

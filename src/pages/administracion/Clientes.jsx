@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "@/services/api";
-import AutocompleteComboBox from "@/components/ui/AutocompleteComboBox.jsx";
-import { getAllTipoArea } from "@/services/tipoAreaService";
 
 const toast = {
   success: (message) => {
@@ -41,16 +39,11 @@ const Clientes = () => {
   const [clientes, setClientes] = useState([]);
   const [search, setSearch] = useState("");
 
-  const [haciendas, setHaciendas] = useState([]);
-  const [tipoAreas, setTipoAreas] = useState([]);
-
   const [clienteId, setClienteId] = useState(null);
   const [nombre, setNombre] = useState("");
   const [identificacion, setIdentificacion] = useState("");
   const [telefono, setTelefono] = useState("");
   const [activo, setActivo] = useState(true);
-  const [selectedHacienda, setSelectedHacienda] = useState(null);
-  const [selectedTipoArea, setSelectedTipoArea] = useState(null);
 
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -73,28 +66,9 @@ const Clientes = () => {
     }
   }, [search]);
 
-  const fetchComboBoxData = useCallback(async () => {
-    try {
-      const [haciendasRes, tipoAreasData] = await Promise.all([
-        api.get("/api/haciendas"),
-        getAllTipoArea(),
-      ]);
-      const haciendasPayload = haciendasRes.data?.data ?? haciendasRes.data ?? [];
-      setHaciendas(Array.isArray(haciendasPayload) ? haciendasPayload : []);
-      setTipoAreas(Array.isArray(tipoAreasData) ? tipoAreasData : []);
-    } catch (error) {
-      const message = resolveErrorMessage(error, "No se pudieron cargar los datos para los combos");
-      toast.error(message);
-    }
-  }, []);
-
   useEffect(() => {
     fetchClientes();
   }, [fetchClientes]);
-
-  useEffect(() => {
-    fetchComboBoxData();
-  }, [fetchComboBoxData]);
 
   const limpiarFormulario = () => {
     setClienteId(null);
@@ -102,8 +76,6 @@ const Clientes = () => {
     setIdentificacion("");
     setTelefono("");
     setActivo(true);
-    setSelectedHacienda(null);
-    setSelectedTipoArea(null);
     setFormError("");
   };
 
@@ -121,8 +93,6 @@ const Clientes = () => {
       identificacion,
       telefono,
       activo,
-      hacienda_id: selectedHacienda?.id ?? null,
-      tipo_area_id: selectedTipoArea?.id ?? null,
     };
 
     try {
@@ -151,8 +121,6 @@ const Clientes = () => {
     setIdentificacion(c.identificacion ?? "");
     setTelefono(c.telefono ?? "");
     setActivo(Boolean(c.activo));
-    setSelectedHacienda(c.hacienda_id ? { id: c.hacienda_id, nombre: c.hacienda_nombre ?? "" } : null);
-    setSelectedTipoArea(c.tipo_area_id ? { id: c.tipo_area_id, nombre: c.tipo_area_nombre ?? "" } : null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -233,28 +201,6 @@ const Clientes = () => {
                 placeholder="Número de contacto"
               />
             </label>
-            <div className="md:col-span-1">
-              <AutocompleteComboBox
-                label="Hacienda"
-                items={haciendas}
-                value={selectedHacienda}
-                onChange={setSelectedHacienda}
-                placeholder="Buscar hacienda"
-                displayField="nombre"
-                valueField="id"
-              />
-            </div>
-            <div className="md:col-span-1">
-              <AutocompleteComboBox
-                label="Tipo Área"
-                items={tipoAreas}
-                value={selectedTipoArea}
-                onChange={setSelectedTipoArea}
-                placeholder="Buscar tipo de área"
-                displayField="nombre"
-                valueField="id"
-              />
-            </div>
             <label className="flex items-center gap-3 text-sm">
               <input
                 type="checkbox"

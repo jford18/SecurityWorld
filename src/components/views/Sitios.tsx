@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AutocompleteComboBox from '../ui/AutocompleteComboBox';
 import api from '../../services/api';
+import { fetchHaciendas } from '../../services/haciendaService';
+import { getAllTipoArea } from '../../services/tipoAreaService';
+import { getConsolas } from '../../services/consolasService';
 import {
   Sitio,
   SitioPayload,
@@ -76,9 +79,11 @@ interface ClienteOption {
   nombre: string | null;
 }
 
+type ComboItem = { id: string; nombre: string };
+
 const CLIENTES_ENDPOINT = '/api/clientes';
 
-const parseClienteIdValue = (value: unknown): number | null => {
+const parseNumericIdValue = (value: unknown): number | null => {
   if (value === null || value === undefined) {
     return null;
   }
@@ -162,6 +167,126 @@ const resolveClientesPayload = (raw: unknown): unknown[] => {
 
   return [];
 };
+
+const appendSelectedOption = (
+  items: ComboItem[],
+  value: string,
+  fallbackLabel?: string | null,
+): ComboItem[] => {
+  if (!value) {
+    return items;
+  }
+
+  if (items.some((item) => item.id === value)) {
+    return items;
+  }
+
+  const normalizedLabel =
+    fallbackLabel && fallbackLabel.trim()
+      ? fallbackLabel.trim()
+      : `Opción ${value}`;
+
+  return [...items, { id: value, nombre: normalizedLabel }];
+};
+
+const formatRelationLabel = (value: unknown, emptyLabel: string): string => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed || emptyLabel;
+  }
+
+  if (value === null || value === undefined) {
+    return emptyLabel;
+  }
+
+  const stringValue = String(value).trim();
+  return stringValue || emptyLabel;
+};
+
+const getSitioClienteId = (sitio: Sitio | null): number | null => {
+  if (!sitio) {
+    return null;
+  }
+
+  if (typeof sitio.clienteId === 'number') {
+    return sitio.clienteId;
+  }
+
+  if (typeof sitio.cliente_id === 'number') {
+    return sitio.cliente_id;
+  }
+
+  return sitio.clienteId ?? sitio.cliente_id ?? null;
+};
+
+const getSitioClienteNombre = (sitio: Sitio | null): string | null => {
+  if (!sitio) {
+    return null;
+  }
+
+  const nombre = sitio.clienteNombre ?? sitio.cliente_nombre ?? null;
+  return typeof nombre === 'string' ? nombre : nombre === null ? null : String(nombre);
+};
+
+const getSitioHaciendaId = (sitio: Sitio | null): number | null => {
+  if (!sitio) {
+    return null;
+  }
+
+  if (typeof sitio.haciendaId === 'number') {
+    return sitio.haciendaId;
+  }
+
+  if (typeof sitio.hacienda_id === 'number') {
+    return sitio.hacienda_id;
+  }
+
+  return sitio.haciendaId ?? sitio.hacienda_id ?? null;
+};
+
+const getSitioHaciendaNombre = (sitio: Sitio | null): string | null =>
+  sitio?.haciendaNombre ?? sitio?.hacienda_nombre ?? null;
+
+const getSitioTipoAreaId = (sitio: Sitio | null): number | null => {
+  if (!sitio) {
+    return null;
+  }
+
+  if (typeof sitio.tipoAreaId === 'number') {
+    return sitio.tipoAreaId;
+  }
+
+  if (typeof sitio.tipo_area_id === 'number') {
+    return sitio.tipo_area_id;
+  }
+
+  return sitio.tipoAreaId ?? sitio.tipo_area_id ?? null;
+};
+
+const getSitioTipoAreaNombre = (sitio: Sitio | null): string | null =>
+  sitio?.tipoAreaNombre ?? sitio?.tipo_area_nombre ?? null;
+
+const getSitioTipoAreaDescripcion = (sitio: Sitio | null): string | null =>
+  sitio?.tipoAreaDescripcion ?? sitio?.tipo_area_descripcion ?? null;
+
+const getSitioConsolaId = (sitio: Sitio | null): number | null => {
+  if (!sitio) {
+    return null;
+  }
+
+  if (typeof sitio.consolaId === 'number') {
+    return sitio.consolaId;
+  }
+
+  if (typeof sitio.consola_id === 'number') {
+    return sitio.consola_id;
+  }
+
+  return sitio.consolaId ?? sitio.consola_id ?? null;
+};
+
+const getSitioConsolaNombre = (sitio: Sitio | null): string | null =>
+  sitio?.consolaNombre ?? sitio?.consola_nombre ?? null;
 
 interface MapPreviewProps {
   latitud: number;
@@ -255,6 +380,18 @@ const Sitios: React.FC = () => {
   const [clientesLoading, setClientesLoading] = useState<boolean>(false);
   const [clientesError, setClientesError] = useState<string | null>(null);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>('');
+  const [haciendas, setHaciendas] = useState<ComboItem[]>([]);
+  const [haciendasLoading, setHaciendasLoading] = useState<boolean>(false);
+  const [haciendasError, setHaciendasError] = useState<string | null>(null);
+  const [haciendaSeleccionada, setHaciendaSeleccionada] = useState<string>('');
+  const [tipoAreas, setTipoAreas] = useState<ComboItem[]>([]);
+  const [tipoAreasLoading, setTipoAreasLoading] = useState<boolean>(false);
+  const [tipoAreasError, setTipoAreasError] = useState<string | null>(null);
+  const [tipoAreaSeleccionada, setTipoAreaSeleccionada] = useState<string>('');
+  const [consolas, setConsolas] = useState<ComboItem[]>([]);
+  const [consolasLoading, setConsolasLoading] = useState<boolean>(false);
+  const [consolasError, setConsolasError] = useState<string | null>(null);
+  const [consolaSeleccionada, setConsolaSeleccionada] = useState<string>('');
 
   const [nombre, setNombre] = useState<string>('');
   const [descripcion, setDescripcion] = useState<string>('');
@@ -310,7 +447,7 @@ const Sitios: React.FC = () => {
           continue;
         }
 
-        const parsedId = parseClienteIdValue(candidate.id);
+        const parsedId = parseNumericIdValue(candidate.id);
 
         if (parsedId === null) {
           continue;
@@ -350,6 +487,165 @@ const Sitios: React.FC = () => {
     }
   }, []);
 
+  const loadHaciendas = useCallback(async () => {
+    try {
+      setHaciendasLoading(true);
+      setHaciendasError(null);
+
+      const response = await fetchHaciendas();
+      const lista = Array.isArray(response)
+        ? response
+        : (response as { data?: unknown } | null | undefined)?.data;
+
+      if (!Array.isArray(lista)) {
+        throw new Error('Respuesta inválida al cargar haciendas');
+      }
+
+      const normalized = lista
+        .map((item) => {
+          if (!item || typeof item !== 'object') {
+            return null;
+          }
+
+          const candidate = item as { id?: unknown; nombre?: unknown };
+          const parsedId = parseNumericIdValue(candidate.id);
+
+          if (parsedId === null) {
+            return null;
+          }
+
+          const nombre =
+            typeof candidate.nombre === 'string' && candidate.nombre.trim()
+              ? candidate.nombre.trim()
+              : `Hacienda ${parsedId}`;
+
+          return { id: String(parsedId), nombre };
+        })
+        .filter((item): item is ComboItem => item !== null)
+        .sort((a, b) =>
+          a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }),
+        );
+
+      setHaciendas(normalized);
+    } catch (error) {
+      console.error('Error al cargar haciendas:', error);
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'No se pudieron cargar las haciendas';
+      setHaciendasError(message);
+      setHaciendas([]);
+    } finally {
+      setHaciendasLoading(false);
+    }
+  }, []);
+
+  const loadTipoAreas = useCallback(async () => {
+    try {
+      setTipoAreasLoading(true);
+      setTipoAreasError(null);
+
+      const response = await getAllTipoArea();
+      const lista = Array.isArray(response)
+        ? response
+        : (response as { data?: unknown } | null | undefined)?.data;
+
+      if (!Array.isArray(lista)) {
+        throw new Error('Respuesta inválida al cargar tipos de área');
+      }
+
+      const normalized = lista
+        .map((item) => {
+          if (!item || typeof item !== 'object') {
+            return null;
+          }
+
+          const candidate = item as { id?: unknown; nombre?: unknown };
+          const parsedId = parseNumericIdValue(candidate.id);
+
+          if (parsedId === null) {
+            return null;
+          }
+
+          const nombre =
+            typeof candidate.nombre === 'string' && candidate.nombre.trim()
+              ? candidate.nombre.trim()
+              : `Tipo de área ${parsedId}`;
+
+          return { id: String(parsedId), nombre };
+        })
+        .filter((item): item is ComboItem => item !== null)
+        .sort((a, b) =>
+          a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }),
+        );
+
+      setTipoAreas(normalized);
+    } catch (error) {
+      console.error('Error al cargar tipos de área:', error);
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'No se pudieron cargar los tipos de área';
+      setTipoAreasError(message);
+      setTipoAreas([]);
+    } finally {
+      setTipoAreasLoading(false);
+    }
+  }, []);
+
+  const loadConsolas = useCallback(async () => {
+    try {
+      setConsolasLoading(true);
+      setConsolasError(null);
+
+      const response = await getConsolas();
+      const lista = Array.isArray(response)
+        ? response
+        : (response as { data?: unknown } | null | undefined)?.data;
+
+      if (!Array.isArray(lista)) {
+        throw new Error('Respuesta inválida al cargar consolas');
+      }
+
+      const normalized = lista
+        .map((item) => {
+          if (!item || typeof item !== 'object') {
+            return null;
+          }
+
+          const candidate = item as { id?: unknown; nombre?: unknown };
+          const parsedId = parseNumericIdValue(candidate.id);
+
+          if (parsedId === null) {
+            return null;
+          }
+
+          const nombre =
+            typeof candidate.nombre === 'string' && candidate.nombre.trim()
+              ? candidate.nombre.trim()
+              : `Consola ${parsedId}`;
+
+          return { id: String(parsedId), nombre };
+        })
+        .filter((item): item is ComboItem => item !== null)
+        .sort((a, b) =>
+          a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }),
+        );
+
+      setConsolas(normalized);
+    } catch (error) {
+      console.error('Error al cargar consolas:', error);
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'No se pudieron cargar las consolas';
+      setConsolasError(message);
+      setConsolas([]);
+    } finally {
+      setConsolasLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadSitios();
   }, []);
@@ -358,8 +654,14 @@ const Sitios: React.FC = () => {
     loadClientes();
   }, [loadClientes]);
 
-  const clienteItems = useMemo((): Array<{ id: string; nombre: string }> => {
-    const unique = new Map<string, { id: string; nombre: string }>();
+  useEffect(() => {
+    loadHaciendas();
+    loadTipoAreas();
+    loadConsolas();
+  }, [loadHaciendas, loadTipoAreas, loadConsolas]);
+
+  const clienteItems = useMemo<ComboItem[]>(() => {
+    const unique = new Map<string, ComboItem>();
 
     for (const cliente of clientes) {
       const key = String(cliente.id);
@@ -370,16 +672,16 @@ const Sitios: React.FC = () => {
       unique.set(key, { id: key, nombre });
     }
 
-    const selectedId = selectedSitio?.cliente_id;
+    const selectedClienteId = getSitioClienteId(selectedSitio);
 
-    if (selectedId !== null && selectedId !== undefined) {
-      const key = String(selectedId);
+    if (selectedClienteId !== null) {
+      const key = String(selectedClienteId);
 
       if (!unique.has(key)) {
-        const selectedNombre =
-          selectedSitio?.cliente_nombre && selectedSitio.cliente_nombre.trim()
-            ? selectedSitio.cliente_nombre.trim()
-            : `Cliente ${key}`;
+        const selectedNombre = formatRelationLabel(
+          getSitioClienteNombre(selectedSitio),
+          `Cliente ${key}`,
+        );
 
         unique.set(key, { id: key, nombre: selectedNombre });
       }
@@ -391,6 +693,33 @@ const Sitios: React.FC = () => {
 
     return [{ id: '', nombre: 'Sin cliente asignado' }, ...sorted];
   }, [clientes, selectedSitio]);
+
+  const haciendaItems = useMemo<ComboItem[]>(() => {
+    const base = appendSelectedOption(
+      [...haciendas],
+      haciendaSeleccionada,
+      getSitioHaciendaNombre(selectedSitio),
+    );
+    return [{ id: '', nombre: 'Sin hacienda asociada' }, ...base];
+  }, [haciendas, haciendaSeleccionada, selectedSitio]);
+
+  const tipoAreaItems = useMemo<ComboItem[]>(() => {
+    const base = appendSelectedOption(
+      [...tipoAreas],
+      tipoAreaSeleccionada,
+      getSitioTipoAreaNombre(selectedSitio),
+    );
+    return [{ id: '', nombre: 'Sin tipo de área' }, ...base];
+  }, [tipoAreas, tipoAreaSeleccionada, selectedSitio]);
+
+  const consolaItems = useMemo<ComboItem[]>(() => {
+    const base = appendSelectedOption(
+      [...consolas],
+      consolaSeleccionada,
+      getSitioConsolaNombre(selectedSitio),
+    );
+    return [{ id: '', nombre: 'Sin consola asociada' }, ...base];
+  }, [consolas, consolaSeleccionada, selectedSitio]);
 
   const resetForm = () => {
     setNombre('');
@@ -405,6 +734,9 @@ const Sitios: React.FC = () => {
     setMapError('');
     setMapStatus('idle');
     setClienteSeleccionado('');
+    setHaciendaSeleccionada('');
+    setTipoAreaSeleccionada('');
+    setConsolaSeleccionada('');
   };
 
   const handleOpenCreateModal = () => {
@@ -413,6 +745,15 @@ const Sitios: React.FC = () => {
     setSelectedSitio(null);
     if (!clientesLoading && clientes.length === 0) {
       loadClientes();
+    }
+    if (!haciendasLoading && haciendas.length === 0) {
+      loadHaciendas();
+    }
+    if (!tipoAreasLoading && tipoAreas.length === 0) {
+      loadTipoAreas();
+    }
+    if (!consolasLoading && consolas.length === 0) {
+      loadConsolas();
     }
     setIsModalOpen(true);
   };
@@ -424,11 +765,14 @@ const Sitios: React.FC = () => {
     setDescripcion(sitio.descripcion ?? '');
     setUbicacion(sitio.ubicacion ?? '');
     setActivo(Boolean(sitio.activo));
-    setClienteSeleccionado(
-      sitio.cliente_id !== null && sitio.cliente_id !== undefined
-        ? String(sitio.cliente_id)
-        : ''
-    );
+    const clienteIdValue = getSitioClienteId(sitio);
+    setClienteSeleccionado(clienteIdValue === null ? '' : String(clienteIdValue));
+    const haciendaIdValue = getSitioHaciendaId(sitio);
+    setHaciendaSeleccionada(haciendaIdValue === null ? '' : String(haciendaIdValue));
+    const tipoAreaIdValue = getSitioTipoAreaId(sitio);
+    setTipoAreaSeleccionada(tipoAreaIdValue === null ? '' : String(tipoAreaIdValue));
+    const consolaIdValue = getSitioConsolaId(sitio);
+    setConsolaSeleccionada(consolaIdValue === null ? '' : String(consolaIdValue));
     setFormError('');
     const latValue =
       typeof sitio.latitud === 'number'
@@ -450,6 +794,15 @@ const Sitios: React.FC = () => {
     setMapStatus(latValue !== null && lngValue !== null ? 'loading' : 'idle');
     if (!clientesLoading && clientes.length === 0) {
       loadClientes();
+    }
+    if (!haciendasLoading && haciendas.length === 0) {
+      loadHaciendas();
+    }
+    if (!tipoAreasLoading && tipoAreas.length === 0) {
+      loadTipoAreas();
+    }
+    if (!consolasLoading && consolas.length === 0) {
+      loadConsolas();
     }
     setIsModalOpen(true);
   };
@@ -553,7 +906,10 @@ const Sitios: React.FC = () => {
       return;
     }
 
-    const clienteId = parseClienteIdValue(clienteSeleccionado);
+    const clienteId = parseNumericIdValue(clienteSeleccionado);
+    const haciendaId = parseNumericIdValue(haciendaSeleccionada);
+    const tipoAreaId = parseNumericIdValue(tipoAreaSeleccionada);
+    const consolaId = parseNumericIdValue(consolaSeleccionada);
 
     const payload: SitioPayload = {
       nombre: trimmedName,
@@ -563,7 +919,10 @@ const Sitios: React.FC = () => {
       link_mapa: trimmedLinkMapa,
       latitud,
       longitud,
-      cliente_id: clienteId,
+      clienteId,
+      haciendaId,
+      tipoAreaId,
+      consolaId,
     };
 
     try {
@@ -643,6 +1002,15 @@ const Sitios: React.FC = () => {
                     Cliente
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                    Hacienda
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                    Tipo de área
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                    Consola
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
                     Activo
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
@@ -662,9 +1030,28 @@ const Sitios: React.FC = () => {
                       {sitio.ubicacion && sitio.ubicacion.trim() ? sitio.ubicacion : '—'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
-                      {sitio.cliente_nombre && sitio.cliente_nombre.trim()
-                        ? sitio.cliente_nombre.trim()
-                        : 'Sin asignar'}
+                      {formatRelationLabel(
+                        getSitioClienteNombre(sitio),
+                        'Sin asignar',
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {formatRelationLabel(
+                        getSitioHaciendaNombre(sitio),
+                        'Sin hacienda',
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {formatRelationLabel(
+                        getSitioTipoAreaDescripcion(sitio) ?? getSitioTipoAreaNombre(sitio),
+                        'Sin tipo de área',
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {formatRelationLabel(
+                        getSitioConsolaNombre(sitio),
+                        'Sin consola',
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">{sitio.activo ? 'Sí' : 'No'}</td>
                     <td className="px-4 py-3 text-sm text-gray-700 space-x-2">
@@ -760,6 +1147,63 @@ const Sitios: React.FC = () => {
                     clientesLoading ? 'Cargando clientes...' : 'No se encontraron clientes activos'
                   }
                   error={clientesError ?? undefined}
+                />
+              </div>
+              <div className="space-y-2">
+                <AutocompleteComboBox
+                  label="Hacienda"
+                  items={haciendaItems}
+                  value={haciendaSeleccionada}
+                  onChange={(value) => {
+                    setHaciendaSeleccionada(value ?? '');
+                    setFormError('');
+                  }}
+                  placeholder="Buscar hacienda..."
+                  displayField="nombre"
+                  valueField="id"
+                  disabled={haciendasLoading}
+                  emptyMessage={
+                    haciendasLoading ? 'Cargando haciendas...' : 'No se encontraron haciendas activas'
+                  }
+                  error={haciendasError ?? undefined}
+                />
+              </div>
+              <div className="space-y-2">
+                <AutocompleteComboBox
+                  label="Tipo de área"
+                  items={tipoAreaItems}
+                  value={tipoAreaSeleccionada}
+                  onChange={(value) => {
+                    setTipoAreaSeleccionada(value ?? '');
+                    setFormError('');
+                  }}
+                  placeholder="Buscar tipo de área..."
+                  displayField="nombre"
+                  valueField="id"
+                  disabled={tipoAreasLoading}
+                  emptyMessage={
+                    tipoAreasLoading ? 'Cargando tipos de área...' : 'No se encontraron tipos de área activos'
+                  }
+                  error={tipoAreasError ?? undefined}
+                />
+              </div>
+              <div className="space-y-2">
+                <AutocompleteComboBox
+                  label="Consola"
+                  items={consolaItems}
+                  value={consolaSeleccionada}
+                  onChange={(value) => {
+                    setConsolaSeleccionada(value ?? '');
+                    setFormError('');
+                  }}
+                  placeholder="Buscar consola..."
+                  displayField="nombre"
+                  valueField="id"
+                  disabled={consolasLoading}
+                  emptyMessage={
+                    consolasLoading ? 'Cargando consolas...' : 'No se encontraron consolas activas'
+                  }
+                  error={consolasError ?? undefined}
                 />
               </div>
               <div className="space-y-2">
