@@ -482,6 +482,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
     verificacionApertura,
     verificacionCierre,
     novedadDetectada,
+    ultimoUsuarioEditoId,
   } = req.body || {};
 
   if (!id) {
@@ -491,7 +492,10 @@ export const actualizarFalloSupervisor = async (req, res) => {
   }
 
   const client = await pool.connect();
-  const usuarioAutenticadoId = null; // Este endpoint no usa autenticación, por lo que el último editor se deja en NULL.
+  const usuarioAutenticadoId = (() => {
+    const parsed = Number(ultimoUsuarioEditoId);
+    return Number.isFinite(parsed) ? parsed : null;
+  })();
 
   try {
     await client.query("BEGIN");

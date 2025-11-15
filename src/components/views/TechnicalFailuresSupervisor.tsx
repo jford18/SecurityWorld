@@ -585,6 +585,10 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       verificacionCierreId,
       novedadDetectada: updatedFailure.novedadDetectada,
       fechaHoraFallo: failureDateTimeValue,
+      ultimoUsuarioEditoId:
+        session.userId != null && !Number.isNaN(Number(session.userId))
+          ? Number(session.userId)
+          : undefined,
     };
 
     try {
