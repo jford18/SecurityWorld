@@ -183,6 +183,8 @@ const mapFalloRowToDto = (row) => ({
   verificacionApertura: row.verificacion_apertura || undefined,
   verificacionCierre: row.verificacion_cierre || undefined,
   novedadDetectada: row.novedad_detectada || undefined,
+  ultimo_usuario_edito_id: row.ultimo_usuario_edito_id ?? null,
+  ultimo_usuario_edito_nombre: row.ultimo_usuario_edito_nombre || null,
 });
 
 const fetchFalloById = async (client, id) => {
@@ -201,7 +203,9 @@ const fetchFalloById = async (client, id) => {
         ft.hora_resolucion,
         seguimiento.novedad_detectada,
         COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
-        COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre
+        COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre,
+        seguimiento.ultimo_usuario_edito_id,
+        COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario) AS ultimo_usuario_edito_nombre
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
@@ -210,6 +214,7 @@ const fetchFalloById = async (client, id) => {
       LEFT JOIN seguimiento_fallos seguimiento ON seguimiento.fallo_id = ft.id
       LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
       LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
+      LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = seguimiento.ultimo_usuario_edito_id
       WHERE ft.id = $1`,
     [id]
   );
@@ -468,7 +473,7 @@ export const createFallo = async (req, res) => {
   }
 };
 
-export const updateFallo = async (req, res) => {
+export const actualizarFalloSupervisor = async (req, res) => {
   const { id } = req.params;
   const {
     deptResponsable,
@@ -484,6 +489,10 @@ export const updateFallo = async (req, res) => {
   }
 
   const client = await pool.connect();
+  const usuarioAutenticadoId =
+    (req.user && typeof req.user === "object"
+      ? req.user.usuario_id ?? req.user.user_id ?? req.user.id
+      : null) ?? null;
 
   try {
     await client.query("BEGIN");
@@ -541,33 +550,35 @@ export const updateFallo = async (req, res) => {
         `UPDATE seguimiento_fallos
            SET verificacion_apertura_id = $1,
                verificacion_cierre_id = $2,
-               novedad_detectada = $3
-         WHERE fallo_id = $4`,
+               novedad_detectada = $3,
+               ultimo_usuario_edito_id = $4,
+               fecha_actualizacion = NOW()
+         WHERE fallo_id = $5`,
         [
           verificacionAperturaId || null,
           verificacionCierreId || null,
           novedadDetectada || null,
+          usuarioAutenticadoId,
           id,
         ]
       );
-    } else if (
-      verificacionAperturaId ||
-      verificacionCierreId ||
-      novedadDetectada
-    ) {
+    } else {
       await client.query(
         `INSERT INTO seguimiento_fallos (
           fallo_id,
           verificacion_apertura_id,
           verificacion_cierre_id,
           novedad_detectada,
-          fecha_creacion
-        ) VALUES ($1, $2, $3, $4, NOW())`,
+          fecha_creacion,
+          fecha_actualizacion,
+          ultimo_usuario_edito_id
+        ) VALUES ($1, $2, $3, $4, NOW(), NOW(), $5)`,
         [
           id,
           verificacionAperturaId || null,
           verificacionCierreId || null,
           novedadDetectada || null,
+          usuarioAutenticadoId,
         ]
       );
     }
