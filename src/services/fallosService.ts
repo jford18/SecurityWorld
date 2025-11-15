@@ -36,6 +36,7 @@ export interface TechnicalFailurePayload {
   camara?: string;
   cliente?: string | null;
   sitio_id?: number | string | null;
+  ultimo_usuario_edito_id?: number | null;
 }
 
 export type SitioAsociado = {
