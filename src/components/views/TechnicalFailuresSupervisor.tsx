@@ -267,6 +267,17 @@ const EditFailureModal: React.FC<{
   }, [editData.fechaHoraFallo, editData.fecha, editData.horaFallo]);
 
   const handleSave = () => {
+    const novedad = editData.novedadDetectada?.trim() || '';
+    const departamentoId =
+      editData.departamentoResponsableId?.trim() || editData.deptResponsable?.trim() || '';
+
+    if (novedad.length > 0 && !departamentoId) {
+      alert(
+        'Debe seleccionar un Departamento Responsable cuando ingresa una Novedad Detectada.',
+      );
+      return;
+    }
+
     onSave(editData);
   };
 
