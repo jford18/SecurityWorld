@@ -1,4 +1,4 @@
-import apiClient from '../apiClient';
+import api from '../apiClient';
 import {
   CatalogoDepartamento,
   CatalogoNodo,
@@ -96,7 +96,7 @@ const mapNodo = (item: unknown): CatalogoNodo | null => {
 };
 
 export const getFallos = async (): Promise<TechnicalFailure[]> => {
-  const { data } = await apiClient.get<TechnicalFailure[] | { data?: TechnicalFailure[] }>('/fallos');
+  const { data } = await api.get<TechnicalFailure[] | { data?: TechnicalFailure[] }>('/api/fallos');
   return normalizeFallosResponse(data);
 };
 
@@ -105,7 +105,7 @@ export const fetchFallos = getFallos;
 export const createFallo = async (
   payload: TechnicalFailurePayload
 ): Promise<TechnicalFailure> => {
-  const { data } = await apiClient.post<TechnicalFailure>('/fallos', payload);
+  const { data } = await api.post<TechnicalFailure>('/api/fallos', payload);
   return data;
 };
 
@@ -113,19 +113,19 @@ export const updateFallo = async (
   id: string,
   payload: TechnicalFailurePayload
 ): Promise<TechnicalFailure> => {
-  const { data } = await apiClient.put<TechnicalFailure>(`/fallos/${id}`, payload);
+  const { data } = await api.put<TechnicalFailure>(`/api/fallos/${id}`, payload);
   return data;
 };
 
 export const getCatalogos = async (): Promise<TechnicalFailureCatalogs> => {
-  const { data } = await apiClient.get<TechnicalFailureCatalogs>('/catalogos');
+  const { data } = await api.get<TechnicalFailureCatalogs>('/api/catalogos');
   return data;
 };
 
 export const fetchCatalogos = getCatalogos;
 
 export const getNodos = async (): Promise<CatalogoNodo[]> => {
-  const { data } = await apiClient.get<MaybeArrayResponse<CatalogoNodo>>('/nodos');
+  const { data } = await api.get<MaybeArrayResponse<CatalogoNodo>>('/api/nodos');
   const nodos = normalizeArrayResponse<CatalogoNodo>(data)
     .map(mapNodo)
     .filter((nodo): nodo is CatalogoNodo => nodo !== null);
@@ -134,7 +134,7 @@ export const getNodos = async (): Promise<CatalogoNodo[]> => {
 };
 
 export const getNodoSitio = async (nodoId: string | number): Promise<SitioAsociado> => {
-  const { data } = await apiClient.get<SitioAsociado>(`/nodos/${nodoId}/sitio`);
+  const { data } = await api.get<SitioAsociado>(`/api/nodos/${nodoId}/sitio`);
   return data;
 };
 
@@ -144,11 +144,11 @@ export const getDepartamentos = async (): Promise<CatalogoDepartamento[]> => {
 };
 
 export const getUsuarios = async () => {
-  const { data } = await apiClient.get('/usuarios');
+  const { data } = await api.get('/api/usuarios');
   return Array.isArray(data) ? data : [];
 };
 
 export const getConsolas = async () => {
-  const { data } = await apiClient.get('/api/consolas');
+  const { data } = await api.get('/api/consolas');
   return Array.isArray(data) ? data : [];
 };
