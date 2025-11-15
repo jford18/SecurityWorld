@@ -413,26 +413,20 @@ const EditFailureModal: React.FC<{
               />
             </div>
             <div className="md:col-span-2">
-              <AutocompleteComboBox
-                label="Responsable Verificación Apertura"
-                value={editData.verificacionAperturaId ?? ''}
-                onChange={(value: string) =>
-                  setEditData((prev) => ({ ...prev, verificacionAperturaId: value }))
+              <label className="block text-sm font-medium text-gray-700">
+                Último usuario que editó
+              </label>
+              <input
+                type="text"
+                value={
+                  editData.ultimo_usuario_edito_nombre &&
+                  editData.ultimo_usuario_edito_nombre.trim()
+                    ? editData.ultimo_usuario_edito_nombre
+                    : 'Sin información'
                 }
-                onItemSelect={(item) =>
-                  applyResponsableSelection('verificacionAperturaId', 'verificacionApertura', item)
-                }
-                items={responsableItems}
-                displayField="label"
-                valueField="value"
-                placeholder="Seleccione..."
-                searchPlaceholder="Escriba para filtrar"
+                readOnly
                 disabled
-                emptyMessage={
-                  responsables.length === 0
-                    ? 'No hay responsables disponibles'
-                    : 'No se encontraron responsables'
-                }
+                className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
               />
             </div>
             <div className="md:col-span-2">
