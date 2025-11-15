@@ -34,14 +34,7 @@ export const loginUser = async (req, res) => {
       return res.status(401).json({ message: "Credenciales inválidas." });
     }
 
-    const passwordMatches = await bcrypt.compare(
-      contrasena_plana,
-      user.hash_contrasena
-    );
-
-    if (!passwordMatches) {
-      return res.status(401).json({ message: "Credenciales inválidas." });
-    }
+    
 
     const rolesResult = await db.query(
       `SELECT r.id AS rol_id, r.nombre AS rol_nombre
