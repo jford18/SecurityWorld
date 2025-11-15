@@ -193,6 +193,10 @@ const EditFailureModal: React.FC<{
         verificacionAperturaId: aperturaId ?? '',
         verificacionCierreId: cierreId ?? '',
         verificacionCierre: cierreNombre,
+        responsable_verificacion_cierre_id:
+          failureToNormalize.responsable_verificacion_cierre_id ?? null,
+        responsable_verificacion_cierre_nombre:
+          failureToNormalize.responsable_verificacion_cierre_nombre ?? null,
       };
     },
     [departamentos, responsables, currentUserName],
@@ -228,6 +232,8 @@ const EditFailureModal: React.FC<{
       fechaHoraResolucion: value,
       fechaResolucion: date,
       horaResolucion: time,
+      responsable_verificacion_cierre_nombre:
+        value && currentUserName ? currentUserName : prev.responsable_verificacion_cierre_nombre,
     }));
   };
 
@@ -241,35 +247,12 @@ const EditFailureModal: React.FC<{
     [departamentos],
   );
 
-  const responsableItems = useMemo(
-    () =>
-      responsables.map((responsable) => ({
-        id: String(responsable.id),
-        label: responsable.nombre,
-        value: String(responsable.id),
-      })),
-    [responsables],
-  );
-
   const handleDepartamentoSelect = (item?: { label?: string; value?: string }) => {
     setEditData((prev) => ({
       ...prev,
       departamentoResponsableId: item?.value ?? '',
       deptResponsable: item?.label ?? '',
     }));
-  };
-
-  const applyResponsableSelection = (
-    idKey: 'verificacionAperturaId' | 'verificacionCierreId',
-    nameKey: 'verificacionApertura' | 'verificacionCierre',
-    item?: { label?: string; value?: string },
-  ) => {
-    setEditData((prev) => {
-      const next: TechnicalFailure = { ...prev };
-      next[idKey] = item?.value ?? '';
-      next[nameKey] = item?.label ?? '';
-      return next;
-    });
   };
 
   const fechaHoraFalloDisplay = useMemo(() => {
@@ -436,25 +419,19 @@ const EditFailureModal: React.FC<{
               />
             </div>
             <div className="md:col-span-2">
-              <AutocompleteComboBox
-                label="Responsable Verificación Cierre"
-                value={editData.verificacionCierreId ?? ''}
-                onChange={(value: string) =>
-                  setEditData((prev) => ({ ...prev, verificacionCierreId: value }))
-                }
-                onItemSelect={(item) =>
-                  applyResponsableSelection('verificacionCierreId', 'verificacionCierre', item)
-                }
-                items={responsableItems}
-                displayField="label"
-                valueField="value"
-                placeholder="Seleccione..."
-                searchPlaceholder="Escriba para filtrar"
-                disabled={responsables.length === 0}
-                emptyMessage={
-                  responsables.length === 0
-                    ? 'No hay responsables disponibles'
-                    : 'No se encontraron responsables'
+              <label className="block text-sm font-medium text-gray-700">
+                Responsable Verificación Cierre
+              </label>
+              <input
+                type="text"
+                readOnly
+                disabled
+                className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
+                value={
+                  editData.responsable_verificacion_cierre_nombre &&
+                  editData.responsable_verificacion_cierre_nombre.trim()
+                    ? editData.responsable_verificacion_cierre_nombre
+                    : 'Sin información'
                 }
               />
             </div>
@@ -575,6 +552,22 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       }
     }
 
+    const loggedUserId =
+      session.userId != null && !Number.isNaN(Number(session.userId))
+        ? Number(session.userId)
+        : null;
+
+    const existingResponsableCierreId =
+      updatedFailure.responsable_verificacion_cierre_id != null &&
+      !Number.isNaN(Number(updatedFailure.responsable_verificacion_cierre_id))
+        ? Number(updatedFailure.responsable_verificacion_cierre_id)
+        : null;
+
+    const hasResolutionInfo = Boolean(resolutionDate || updatedFailure.fechaResolucion);
+    const responsableVerificacionCierreId = hasResolutionInfo
+      ? existingResponsableCierreId ?? loggedUserId ?? null
+      : null;
+
     const payload: TechnicalFailurePayload = {
       fecha: updatedFailure.fecha,
       equipo_afectado: updatedFailure.equipo_afectado,
@@ -595,6 +588,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         session.userId != null && !Number.isNaN(Number(session.userId))
           ? Number(session.userId)
           : undefined,
+      responsable_verificacion_cierre_id: responsableVerificacionCierreId,
     };
 
     try {

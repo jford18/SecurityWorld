@@ -185,6 +185,10 @@ const mapFalloRowToDto = (row) => ({
   novedadDetectada: row.novedad_detectada || undefined,
   ultimo_usuario_edito_id: row.ultimo_usuario_edito_id ?? null,
   ultimo_usuario_edito_nombre: row.ultimo_usuario_edito_nombre || null,
+  responsable_verificacion_cierre_id:
+    row.responsable_verificacion_cierre_id ?? null,
+  responsable_verificacion_cierre_nombre:
+    row.responsable_verificacion_cierre_nombre || null,
 });
 
 const fetchFalloById = async (client, id) => {
@@ -205,7 +209,9 @@ const fetchFalloById = async (client, id) => {
         COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
         COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre,
         seguimiento.ultimo_usuario_edito_id,
-        COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario) AS ultimo_usuario_edito_nombre
+        COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario) AS ultimo_usuario_edito_nombre,
+        seguimiento.responsable_verificacion_cierre_id,
+        COALESCE(responsable_cierre.nombre_completo, responsable_cierre.nombre_usuario) AS responsable_verificacion_cierre_nombre
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
@@ -215,6 +221,7 @@ const fetchFalloById = async (client, id) => {
       LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
       LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
       LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = seguimiento.ultimo_usuario_edito_id
+      LEFT JOIN usuarios responsable_cierre ON responsable_cierre.id = seguimiento.responsable_verificacion_cierre_id
       WHERE ft.id = $1`,
     [id]
   );
@@ -483,6 +490,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
     verificacionCierre,
     novedadDetectada,
     ultimoUsuarioEditoId,
+    responsable_verificacion_cierre_id,
   } = req.body || {};
 
   if (!id) {
@@ -494,6 +502,10 @@ export const actualizarFalloSupervisor = async (req, res) => {
   const client = await pool.connect();
   const usuarioAutenticadoId = (() => {
     const parsed = Number(ultimoUsuarioEditoId);
+    return Number.isFinite(parsed) ? parsed : null;
+  })();
+  const responsableVerificacionCierreId = (() => {
+    const parsed = Number(responsable_verificacion_cierre_id);
     return Number.isFinite(parsed) ? parsed : null;
   })();
 
@@ -557,13 +569,15 @@ export const actualizarFalloSupervisor = async (req, res) => {
                verificacion_cierre_id = $2,
                novedad_detectada = $3,
                ultimo_usuario_edito_id = $4,
+               responsable_verificacion_cierre_id = $5,
                fecha_actualizacion = NOW()
-         WHERE fallo_id = $5`,
+         WHERE fallo_id = $6`,
         [
           verificacionAperturaId || null,
           verificacionCierreId || null,
           novedadDetectada || null,
           usuarioAutenticadoId,
+          responsableVerificacionCierreId,
           id,
         ]
       );
@@ -576,14 +590,16 @@ export const actualizarFalloSupervisor = async (req, res) => {
           novedad_detectada,
           fecha_creacion,
           fecha_actualizacion,
-          ultimo_usuario_edito_id
-        ) VALUES ($1, $2, $3, $4, NOW(), NOW(), $5)`,
+          ultimo_usuario_edito_id,
+          responsable_verificacion_cierre_id
+        ) VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, $6)`,
         [
           id,
           verificacionAperturaId || null,
           verificacionCierreId || null,
           novedadDetectada || null,
           usuarioAutenticadoId,
+          responsableVerificacionCierreId,
         ]
       );
     }
