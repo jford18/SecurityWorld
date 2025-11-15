@@ -485,14 +485,13 @@ export const actualizarFalloSupervisor = async (req, res) => {
   } = req.body || {};
 
   if (!id) {
-    return res.status(400).json({ mensaje: "El identificador del fallo es obligatorio." });
+    return res
+      .status(400)
+      .json({ mensaje: "El identificador del fallo es obligatorio." });
   }
 
   const client = await pool.connect();
-  const usuarioAutenticadoId =
-    (req.user && typeof req.user === "object"
-      ? req.user.usuario_id ?? req.user.user_id ?? req.user.id
-      : null) ?? null;
+  const usuarioAutenticadoId = null; // Este endpoint no usa autenticación, por lo que el último editor se deja en NULL.
 
   try {
     await client.query("BEGIN");
@@ -513,8 +512,10 @@ export const actualizarFalloSupervisor = async (req, res) => {
     const dept = deptResult.rows;
 
     const departamentoId = dept.find((d) => {
-      return String(d.nombre).trim().toLowerCase() ===
-        String(deptResponsable || "").trim().toLowerCase();
+      return (
+        String(d.nombre).trim().toLowerCase() ===
+        String(deptResponsable || "").trim().toLowerCase()
+      );
     })?.id ?? null;
 
     await client.query(
@@ -589,10 +590,10 @@ export const actualizarFalloSupervisor = async (req, res) => {
     return res.json(fallo);
   } catch (error) {
     await client.query("ROLLBACK");
-    console.error("Error al actualizar el fallo técnico:", error);
+    console.error("Error al actualizar fallo supervisor:", error);
     return res
       .status(500)
-      .json({ mensaje: "Ocurrió un error al actualizar el fallo técnico." });
+      .json({ message: "Error interno del servidor" });
   } finally {
     client.release();
   }
