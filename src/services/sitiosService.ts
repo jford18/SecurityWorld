@@ -12,8 +12,24 @@ export interface Sitio {
   longitud: number | null;
   activo: boolean;
   fecha_creacion?: string;
-  cliente_id: number | null;
-  cliente_nombre: string | null;
+  cliente_id?: number | null;
+  cliente_nombre?: string | null;
+  clienteId?: number | null;
+  clienteNombre?: string | null;
+  hacienda_id?: number | null;
+  hacienda_nombre?: string | null;
+  haciendaId?: number | null;
+  haciendaNombre?: string | null;
+  tipo_area_id?: number | null;
+  tipo_area_nombre?: string | null;
+  tipo_area_descripcion?: string | null;
+  tipoAreaId?: number | null;
+  tipoAreaNombre?: string | null;
+  tipoAreaDescripcion?: string | null;
+  consola_id?: number | null;
+  consola_nombre?: string | null;
+  consolaId?: number | null;
+  consolaNombre?: string | null;
 }
 
 export interface SitioPayload {
@@ -24,7 +40,10 @@ export interface SitioPayload {
   link_mapa: string;
   latitud: number;
   longitud: number;
-  cliente_id?: number | null;
+  clienteId?: number | null;
+  haciendaId?: number | null;
+  tipoAreaId?: number | null;
+  consolaId?: number | null;
 }
 
 export interface GetSitiosParams extends Record<string, string | number | boolean | number[] | undefined> {

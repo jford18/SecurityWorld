@@ -58,6 +58,9 @@ const emptyCatalogos: TechnicalFailureCatalogs = {
   sitiosPorConsola: [],
 };
 
+const resolveSitioClienteNombre = (sitio: Sitio | null | undefined): string | null =>
+  sitio?.clienteNombre ?? sitio?.cliente_nombre ?? null;
+
 const hasHttpStatusResponse = (
   error: unknown
 ): error is { response?: { status?: number } } => {
@@ -363,7 +366,7 @@ const TechnicalFailuresOperador: React.FC = () => {
     const sitioSeleccionado = sitios.find(
       (sitioItem) => String(sitioItem.id) === selected
     );
-    setClienteFromConsole(sitioSeleccionado?.cliente_nombre ?? null);
+    setClienteFromConsole(resolveSitioClienteNombre(sitioSeleccionado));
   };
 
   useEffect(() => {
@@ -391,7 +394,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       return;
     }
 
-    setClienteFromConsole(selectedSitio.cliente_nombre ?? null);
+    setClienteFromConsole(resolveSitioClienteNombre(selectedSitio));
   }, [formData.affectationType, selectedSitio]);
 
   const handleSubmit = async (e: React.FormEvent) => {
