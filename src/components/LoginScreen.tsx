@@ -27,11 +27,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [usuarioAutenticado, setUsuarioAutenticado] = useState<UsuarioAutenticado | null>(null);
-  const [availableRoles, setAvailableRoles] = useState<RoleOption[]>([]);
-  const [roleTokens, setRoleTokens] = useState<RoleToken[]>([]);
+  const [assignedRole, setAssignedRole] = useState<RoleOption | null>(null);
   const [consoleOptions, setConsoleOptions] = useState<string[]>([]);
   const [selectedConsole, setSelectedConsole] = useState('');
-  const [selectedRoleId, setSelectedRoleId] = useState<number | ''>('');
 
   useEffect(() => {
     const fetchConsolas = async () => {
@@ -69,46 +67,53 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
         const data = response.data ?? {};
 
+        const roleId = Number(data.rol_id);
+        const roleName =
+          typeof data.rol_nombre === 'string' && data.rol_nombre.trim().length > 0
+            ? data.rol_nombre.trim()
+            : '';
+
+        const userId = Number(data.usuario_id);
+        const usernameFromResponse =
+          typeof data.nombre_usuario === 'string' && data.nombre_usuario.trim().length > 0
+            ? data.nombre_usuario.trim()
+            : username;
+
+        if (!Number.isFinite(roleId) || roleId <= 0 || !roleName || !Number.isFinite(userId) || userId <= 0) {
+          throw new Error('Respuesta inválida del servidor.');
+        }
+
         const primaryRole: RoleOption = {
-          id:
-            typeof data.rol_id === 'number'
-              ? data.rol_id
-              : typeof data.id === 'number'
-              ? data.id
-              : 1,
-          nombre:
-            typeof data.rol === 'string' && data.rol.trim().length > 0
-              ? data.rol
-              : 'Administrador',
+          id: roleId,
+          nombre: roleName,
         };
 
         const usuario: UsuarioAutenticado = {
-          id: Number(data.id) || 0,
-          nombre_usuario: typeof data.usuario === 'string' ? data.usuario : username,
+          id: userId,
+          nombre_usuario: usernameFromResponse,
           roles: [primaryRole],
           rol_activo: primaryRole,
         };
 
-        setUsuarioAutenticado(usuario); // FIX: Conservar al usuario autenticado para la segunda fase.
-        setAvailableRoles([primaryRole]);
+        setUsuarioAutenticado(usuario);
+        setAssignedRole(primaryRole);
+      } catch (caughtError: unknown) {
+        console.error('Error al iniciar sesión:', caughtError);
+        const possibleResponse = caughtError as {
+          response?: {
+            data?: {
+              message?: unknown;
+            };
+          };
+        };
 
-        const tokenFromResponse =
-          typeof data.token === 'string' && data.token.trim().length > 0
-            ? data.token
-            : 'fake-jwt-token';
+        const serverMessage = possibleResponse?.response?.data?.message;
+        const messageToShow =
+          typeof serverMessage === 'string' && serverMessage.trim().length > 0
+            ? serverMessage
+            : 'Error de autenticación';
 
-        const tokensToUse: RoleToken[] = [
-          {
-            roleId: primaryRole.id,
-            token: tokenFromResponse,
-          },
-        ];
-
-        setRoleTokens(tokensToUse);
-        setSelectedRoleId(primaryRole.id);
-      } catch (error) {
-        console.error('Error al iniciar sesión:', error);
-        setError('Error de autenticación'); // FIX: Unificar mensaje de error en fallos de red o servidor durante autenticación.
+        setError(messageToShow);
       } finally {
         setIsLoading(false); // FIX: Finalizar indicador de carga al concluir la fase de autenticación.
       }
@@ -121,31 +126,27 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       return;
     }
 
-    if (selectedRoleId === '' || typeof selectedRoleId !== 'number') {
-      setError('Seleccione un rol válido.');
-      return;
-    }
-
-    const selectedRole = availableRoles.find((role) => role.id === selectedRoleId);
-    if (!selectedRole) {
+    if (!assignedRole) {
       setError('No se encontró un rol asignado.');
-      return;
-    }
-
-    const roleToken = roleTokens.find((entry) => entry.roleId === selectedRole.id);
-    if (!roleToken) {
-      setError('No se encontró un token para el rol seleccionado.');
       return;
     }
 
     setIsLoading(true); // FIX: Mostrar carga durante el envío de la selección de consola.
     try {
+      const sessionToken = `session-${usuarioAutenticado.id}-${assignedRole.id}`;
+      const roleTokens: RoleToken[] = [
+        {
+          roleId: assignedRole.id,
+          token: sessionToken,
+        },
+      ];
+
       onLogin({
         user: usuarioAutenticado,
-        selectedRole,
+        selectedRole: assignedRole,
         consoleName: selectedConsole,
-        token: roleToken.token,
-        roles: availableRoles,
+        token: sessionToken,
+        roles: [assignedRole],
         roleTokens,
       }); // FIX: Completar la fase de selección de consola y navegar.
     } finally {
@@ -216,29 +217,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                 <label htmlFor="role" className="block text-sm font-medium text-[#1C2E4A]">
                   Rol
                 </label>
-                <select
+                <input
                   id="role"
                   name="role"
-                  value={selectedRoleId === '' ? '' : selectedRoleId}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setSelectedRoleId(value ? Number(value) : '');
-                    if (error) {
-                      setError('');
-                    }
-                  }}
-                  className="block w-full px-3 py-3 border border-gray-300 bg-white text-gray-900 rounded-md focus:outline-none focus:ring-[#F9C300] focus:border-[#F9C300]"
-                >
-                  {availableRoles.length === 0 ? (
-                    <option value="">Sin rol asignado</option>
-                  ) : (
-                    availableRoles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.nombre}
-                      </option>
-                    ))
-                  )}
-                </select>
+                  type="text"
+                  value={assignedRole ? assignedRole.nombre : 'Sin rol asignado'}
+                  readOnly
+                  disabled
+                  className="block w-full px-3 py-3 border border-gray-300 bg-gray-100 text-gray-900 rounded-md cursor-not-allowed"
+                />
               </div>
               <div>
                 <label htmlFor="console" className="block text-sm font-medium text-[#1C2E4A]">
