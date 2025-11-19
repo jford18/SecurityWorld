@@ -19,6 +19,40 @@ const CLIENTES_BASE_QUERY = `
   ORDER BY id
 `;
 
+const parsePositiveInteger = (value) => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+};
+
+const ensureClienteExists = async (clienteId) => {
+  const result = await pool.query(
+    "SELECT id, nombre FROM public.clientes WHERE id = $1",
+    [clienteId]
+  );
+  if (result.rowCount === 0) {
+    return null;
+  }
+  return result.rows[0];
+};
+
+const fetchPersonaForAssignment = async (personaId) => {
+  const result = await pool.query(
+    `SELECT id, nombre, apellido, cargo_id, estado
+     FROM persona
+     WHERE id = $1`,
+    [personaId]
+  );
+
+  if (result.rowCount === 0) {
+    return null;
+  }
+
+  return result.rows[0];
+};
+
 export const getClientes = async (_req, res) => {
   try {
     const result = await pool.query(CLIENTES_BASE_QUERY);
@@ -219,5 +253,165 @@ export const deleteCliente = async (req, res) => {
     res
       .status(500)
       .json(formatError("Ocurrió un error al eliminar el cliente"));
+  }
+};
+
+export const getPersonasByCliente = async (req, res) => {
+  const parsedClienteId = parsePositiveInteger(req.params?.clienteId);
+  if (!parsedClienteId) {
+    return res
+      .status(400)
+      .json(formatError("El identificador del cliente no es válido"));
+  }
+
+  try {
+    const cliente = await ensureClienteExists(parsedClienteId);
+    if (!cliente) {
+      return res
+        .status(404)
+        .json(formatError("El cliente solicitado no existe"));
+    }
+
+    const result = await pool.query(
+      `SELECT cp.id, cp.cliente_id, cp.persona_id, cp.fecha_asignacion,
+              p.nombre, p.apellido, p.cargo_id, p.estado,
+              c.descripcion AS cargo_descripcion
+         FROM public.cliente_persona cp
+         INNER JOIN persona p ON p.id = cp.persona_id
+         LEFT JOIN catalogo_cargo c ON c.id = p.cargo_id
+        WHERE cp.cliente_id = $1
+        ORDER BY cp.fecha_asignacion DESC, p.apellido ASC, p.nombre ASC`,
+      [parsedClienteId]
+    );
+
+    res.status(200).json(
+      formatSuccess("Personas asociadas al cliente", result.rows ?? [])
+    );
+  } catch (error) {
+    console.error("[CLIENTES] Error al obtener personas por cliente:", error);
+    res
+      .status(500)
+      .json(
+        formatError(
+          "Ocurrió un error al obtener las personas asociadas al cliente"
+        )
+      );
+  }
+};
+
+export const addPersonaToCliente = async (req, res) => {
+  const parsedClienteId = parsePositiveInteger(req.params?.clienteId);
+  const parsedPersonaId = parsePositiveInteger(req.body?.persona_id);
+
+  if (!parsedClienteId || !parsedPersonaId) {
+    return res
+      .status(400)
+      .json(formatError("Los identificadores proporcionados no son válidos"));
+  }
+
+  try {
+    const cliente = await ensureClienteExists(parsedClienteId);
+    if (!cliente) {
+      return res
+        .status(404)
+        .json(formatError("El cliente solicitado no existe"));
+    }
+
+    const persona = await fetchPersonaForAssignment(parsedPersonaId);
+    if (!persona) {
+      return res
+        .status(404)
+        .json(formatError("La persona seleccionada no existe"));
+    }
+
+    if (!Boolean(persona.estado)) {
+      return res
+        .status(400)
+        .json(formatError("Solo se pueden asignar personas activas"));
+    }
+
+    try {
+      const assignmentResult = await pool.query(
+        `WITH inserted AS (
+           INSERT INTO public.cliente_persona (cliente_id, persona_id)
+           VALUES ($1, $2)
+           RETURNING id, cliente_id, persona_id, fecha_asignacion
+         )
+         SELECT i.id, i.cliente_id, i.persona_id, i.fecha_asignacion,
+                p.nombre, p.apellido, p.cargo_id, p.estado,
+                c.descripcion AS cargo_descripcion
+           FROM inserted i
+           INNER JOIN persona p ON p.id = i.persona_id
+           LEFT JOIN catalogo_cargo c ON c.id = p.cargo_id`,
+        [parsedClienteId, parsedPersonaId]
+      );
+
+      res.status(201).json(
+        formatSuccess(
+          "Persona asignada al cliente correctamente",
+          assignmentResult.rows[0]
+        )
+      );
+    } catch (error) {
+      if (error?.code === "23505") {
+        return res
+          .status(400)
+          .json(
+            formatError("La persona ya se encuentra asignada a otro cliente")
+          );
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.error("[CLIENTES] Error al asignar persona a cliente:", error);
+    res
+      .status(500)
+      .json(formatError("Ocurrió un error al asignar la persona"));
+  }
+};
+
+export const removePersonaFromCliente = async (req, res) => {
+  const parsedClienteId = parsePositiveInteger(req.params?.clienteId);
+  const parsedPersonaId = parsePositiveInteger(req.params?.personaId);
+
+  if (!parsedClienteId || !parsedPersonaId) {
+    return res
+      .status(400)
+      .json(formatError("Los identificadores proporcionados no son válidos"));
+  }
+
+  try {
+    const cliente = await ensureClienteExists(parsedClienteId);
+    if (!cliente) {
+      return res
+        .status(404)
+        .json(formatError("El cliente solicitado no existe"));
+    }
+
+    const deleteResult = await pool.query(
+      `DELETE FROM public.cliente_persona
+        WHERE cliente_id = $1 AND persona_id = $2
+        RETURNING id, persona_id`,
+      [parsedClienteId, parsedPersonaId]
+    );
+
+    if (deleteResult.rowCount === 0) {
+      return res
+        .status(404)
+        .json(
+          formatError(
+            "La relación solicitada no existe o ya fue eliminada"
+          )
+        );
+    }
+
+    res.status(200).json(
+      formatSuccess("Persona desvinculada del cliente", deleteResult.rows[0])
+    );
+  } catch (error) {
+    console.error("[CLIENTES] Error al eliminar relación cliente-persona:", error);
+    res
+      .status(500)
+      .json(formatError("Ocurrió un error al eliminar la relación"));
   }
 };
