@@ -18,6 +18,7 @@ import asignarClienteSitioRoutes from "./routes/asignar_cliente_sitio.routes.js"
 import catalogosRoutes from "./catalogos.routes.js";
 import catalogoTipoProblemaRoutes from "./routes/catalogoTipoProblema.routes.js";
 import tipoIntrusionRoutes from "./routes/tipoIntrusion.routes.js";
+import intrusionesRoutes from "./routes/intrusiones.routes.js";
 import rolesRoutes from "./roles.routes.js";
 import usuariosRoutes from "./routes/usuarios.routes.js";
 import usuarioRolesRoutes from "./routes/usuarioRoles.routes.js";
@@ -43,6 +44,7 @@ app.use(
 const knownApiPrefixes = [
   "/api/v1/catalogo-tipo-problema",
   "/api/tipo-intrusion",
+  "/api/intrusiones",
   "/api/catalogos",
   "/api/asignar-cliente-sitio",
   "/api/fallos",
@@ -105,6 +107,7 @@ app.use("/api/fallos", fallosRoutes);
 app.use("/api/catalogos", catalogosRoutes);
 app.use("/api/v1/catalogo-tipo-problema", catalogoTipoProblemaRoutes);
 app.use("/api/tipo-intrusion", tipoIntrusionRoutes);
+app.use("/api/intrusiones", intrusionesRoutes);
 app.use("/api/usuarios", usuariosRoutes);
 app.use("/api/roles", rolesRoutes);
 app.use("/api/usuario-roles", usuarioRolesRoutes);
