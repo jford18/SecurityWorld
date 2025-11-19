@@ -34,6 +34,7 @@ import MedioComunicacionScreen from './pages/administracion/MedioComunicacionScr
 import CargoScreen from './pages/administracion/CargoScreen';
 import PersonaScreen from './pages/administracion/PersonaScreen';
 import ConclusionEventoScreen from './pages/administracion/ConclusionEventoScreen';
+import FuerzaReaccionScreen from './pages/administracion/FuerzaReaccionScreen';
 
 import HaciendaPage from './pages/administracion/HaciendaPage.tsx';
 
@@ -107,6 +108,10 @@ const routeConfig: RouteDefinition[] = [
     path: '/administracion/nodos',
     element: <Nodos />,
     aliases: ['/admin/nodos'],
+  },
+  {
+    path: '/administracion/fuerza-reaccion',
+    element: <FuerzaReaccionScreen />,
   },
   { path: '/administracion/cargo', element: <CargoScreen /> },
   { path: '/administracion/persona', element: <PersonaScreen /> },
