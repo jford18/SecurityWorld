@@ -26,6 +26,7 @@ import sitiosRoutes from "./routes/sitios.routes.js";
 import haciendasRoutes from "./routes/haciendas.routes.js";
 import tipoAreaRoutes from "./routes/tipoArea.routes.js";
 import departamentosResponsablesRoutes from "./routes/departamentosResponsables.routes.js";
+import conclusionEventoRoutes from "./routes/conclusionEvento.routes.js";
 
 const app = express();
 app.use(express.json());
@@ -47,6 +48,7 @@ const knownApiPrefixes = [
   "/api/fallos",
   "/api/consolas",
   "/api/nodos",
+  "/api/conclusion-evento",
   "/api/fuerza-reaccion",
   "/api/cargo",
   "/api/persona",
@@ -93,6 +95,7 @@ app.use("/", authRoutes);
 app.use("/api/consolas", consolasRoutes);
 app.use("/", menusRoutes);
 app.use("/api/nodos", nodosRoutes);
+app.use("/api/conclusion-evento", conclusionEventoRoutes);
 app.use("/api/fuerza-reaccion", fuerzaReaccionRoutes);
 app.use("/api/cargo", cargoRoutes);
 app.use("/api/persona", personaRoutes);
