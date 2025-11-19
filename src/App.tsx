@@ -35,6 +35,7 @@ import CargoScreen from './pages/administracion/CargoScreen';
 import PersonaScreen from './pages/administracion/PersonaScreen';
 import ConclusionEventoScreen from './pages/administracion/ConclusionEventoScreen';
 import FuerzaReaccionScreen from './pages/administracion/FuerzaReaccionScreen';
+import InformeEventosScreen from './screens/reportes/InformeEventosScreen';
 
 import HaciendaPage from './pages/administracion/HaciendaPage.tsx';
 
@@ -97,6 +98,7 @@ const routeConfig: RouteDefinition[] = [
   },
   { path: '/intrusiones', element: <Intrusions /> },
   { path: '/reportes/alertas-turno', element: <AlertsReportByShift /> },
+  { path: '/reportes/informe-eventos', element: <InformeEventosScreen /> },
   { path: '/administracion/sitios', element: <Sitios /> },
   {
     path: '/administracion/asignacion-nodos-sitios',
