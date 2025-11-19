@@ -536,170 +536,196 @@ const Intrusions: React.FC = () => {
 
       <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
         <h4 className="text-[#1C2E4A] text-lg font-semibold mb-4">Reportar Nueva Intrusión</h4>
-        <form className="grid grid-cols-1 md:grid-cols-2 gap-6" onSubmit={handleSubmit}>
-          <div className="flex flex-col">
-            <FechaHoraFalloPicker
-              id="fecha_evento"
-              name="fecha_evento"
-              label="Fecha y hora del evento"
-              value={formData.fecha_evento}
-              onChange={handleFechaEventoChange}
-              required
-            />
-          </div>
-            <div className="flex flex-col">
-              <FechaHoraFalloPicker
-                id="fecha_reaccion"
-                name="fecha_reaccion"
-                label="Fecha hora reacción"
-                value={formData.fecha_reaccion}
-                onChange={handleFechaReaccionChange}
-              />
-            </div>
-            {requiereProtocolo && (
-              <div className="flex flex-col">
+        <form className="space-y-6" onSubmit={handleSubmit}>
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <h3 className="text-[#1C2E4A] text-base font-semibold mb-4">
+              Datos de la intrusión
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4">
                 <FechaHoraFalloPicker
-                  id="fecha_reaccion_fuera"
-                  name="fecha_reaccion_fuera"
-                  label="Fecha y hora de reacción de fuera"
-                  value={formData.fecha_reaccion_fuera}
-                  onChange={handleFechaReaccionFueraChange}
+                  id="fecha_evento"
+                  name="fecha_evento"
+                  label="Fecha y hora del evento"
+                  value={formData.fecha_evento}
+                  onChange={handleFechaEventoChange}
+                  required
                 />
+                <FechaHoraFalloPicker
+                  id="fecha_reaccion"
+                  name="fecha_reaccion"
+                  label="Fecha hora reacción"
+                  value={formData.fecha_reaccion}
+                  onChange={handleFechaReaccionChange}
+                />
+                <div>
+                  <label htmlFor="medio_comunicacion_id" className="block text-sm font-medium text-gray-700">
+                    Medio de comunicación
+                  </label>
+                  <select
+                    id="medio_comunicacion_id"
+                    name="medio_comunicacion_id"
+                    value={formData.medio_comunicacion_id}
+                    onChange={handleMedioComunicacionChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="">Seleccione...</option>
+                    {mediosComunicacion.map((medio) => (
+                      <option key={medio.id} value={medio.id}>
+                        {medio.descripcion}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            )}
-          <div>
-            <label htmlFor="ubicacion" className="block text-sm font-medium text-gray-700">
-              Ubicación
-            </label>
-            <input
-              type="text"
-              name="ubicacion"
-              id="ubicacion"
-              value={formData.ubicacion}
-              onChange={handleInputChange}
-              placeholder="Ej: Bodega 3"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            />
-          </div>
-          <div>
-            <label htmlFor="medio_comunicacion_id" className="block text-sm font-medium text-gray-700">
-              Medio de comunicación
-            </label>
-            <select
-              id="medio_comunicacion_id"
-              name="medio_comunicacion_id"
-              value={formData.medio_comunicacion_id}
-              onChange={handleMedioComunicacionChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            >
-              <option value="">Seleccione...</option>
-              {mediosComunicacion.map((medio) => (
-                <option key={medio.id} value={medio.id}>
-                  {medio.descripcion}
-                </option>
-              ))}
-            </select>
-          </div>
-            <div>
-              <label htmlFor="tipo" className="block text-sm font-medium text-gray-700">
-                Tipo de Intrusión
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="tipo" className="block text-sm font-medium text-gray-700">
+                    Tipo de Intrusión
+                  </label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <select
+                      name="tipo"
+                      id="tipo"
+                      value={tipoIntrusionId === '' ? '' : String(tipoIntrusionId)}
+                      onChange={handleTipoIntrusionChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    >
+                      <option value="">Seleccione...</option>
+                      {tiposIntrusion.map((tipoIntrusion) => (
+                        <option key={tipoIntrusion.id} value={tipoIntrusion.id}>
+                          {tipoIntrusion.descripcion}
+                        </option>
+                      ))}
+                    </select>
+                    {requiereProtocolo && (
+                      <span className="inline-flex items-center text-[10px] font-semibold px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 uppercase tracking-wide">
+                        Con protocolo
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="ubicacion" className="block text-sm font-medium text-gray-700">
+                    Ubicación
+                  </label>
+                  <input
+                    type="text"
+                    name="ubicacion"
+                    id="ubicacion"
+                    value={formData.ubicacion}
+                    onChange={handleInputChange}
+                    placeholder="Ej: Bodega 3"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="llego_alerta"
+                    name="llego_alerta"
+                    checked={formData.llego_alerta}
+                    onChange={handleLlegoAlertaChange}
+                    className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
+                  />
+                  <label htmlFor="llego_alerta" className="text-sm font-medium text-gray-700">
+                    Llegó alerta
+                  </label>
+                </div>
+                <div>
+                  <AutocompleteComboBox
+                    label="Estado"
+                    value={formData.estado}
+                    onChange={handleEstadoChange}
+                    items={estadoItems}
+                    displayField="label"
+                    valueField="value"
+                    placeholder="Seleccione el estado"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="mt-4">
+              <label htmlFor="descripcion" className="block text-sm font-medium text-gray-700">
+                Descripción
               </label>
-              <select
-                name="tipo"
-                id="tipo"
-                value={tipoIntrusionId === '' ? '' : String(tipoIntrusionId)}
-                onChange={handleTipoIntrusionChange}
+              <textarea
+                name="descripcion"
+                id="descripcion"
+                rows={3}
+                value={formData.descripcion}
+                onChange={handleInputChange}
+                placeholder="Ej: Detectado por sensor PIR"
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              >
-                <option value="">Seleccione...</option>
-                {tiposIntrusion.map((tipoIntrusion) => (
-                  <option key={tipoIntrusion.id} value={tipoIntrusion.id}>
-                    {tipoIntrusion.descripcion}
-                  </option>
-                ))}
-              </select>
+              ></textarea>
             </div>
-            <div>
-              <AutocompleteComboBox
-                label="Estado"
-                value={formData.estado}
-                onChange={handleEstadoChange}
-                items={estadoItems}
-                displayField="label"
-                valueField="value"
-                placeholder="Seleccione el estado"
-              />
-            </div>
+
             {requiereProtocolo && (
-              <div>
-                <label
-                  htmlFor="conclusion_evento_id"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Conclusión del evento
-                </label>
-                <select
-                  id="conclusion_evento_id"
-                  name="conclusion_evento_id"
-                  value={formData.conclusion_evento_id}
-                  onChange={handleConclusionEventoChange}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                >
-                  <option value="">Seleccione...</option>
-                  {conclusionesEvento.map((conclusion) => (
-                    <option key={conclusion.id} value={conclusion.id}>
-                      {conclusion.descripcion}
-                    </option>
-                  ))}
-                </select>
+              <div className="mt-6 border-l-4 border-yellow-400 bg-yellow-50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-[#1C2E4A] text-base font-semibold">Protocolo de reacción</h3>
+                    <p className="text-xs text-gray-600">
+                      Campos requeridos para tipos de intrusión que activan protocolo.
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center text-[10px] font-semibold px-2 py-1 rounded-full bg-yellow-200 text-yellow-800 uppercase tracking-wide">
+                    Requiere protocolo
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    <FechaHoraFalloPicker
+                      id="fecha_reaccion_fuera"
+                      name="fecha_reaccion_fuera"
+                      label="Fecha y hora de reacción de fuera"
+                      value={formData.fecha_reaccion_fuera}
+                      onChange={handleFechaReaccionFueraChange}
+                    />
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        id="sustraccion_material"
+                        name="sustraccion_material"
+                        checked={formData.sustraccion_material}
+                        onChange={handleSustraccionMaterialChange}
+                        className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
+                      />
+                      <label htmlFor="sustraccion_material" className="text-sm font-medium text-gray-700">
+                        Sustracción de material
+                      </label>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label
+                        htmlFor="conclusion_evento_id"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Conclusión del evento
+                      </label>
+                      <select
+                        id="conclusion_evento_id"
+                        name="conclusion_evento_id"
+                        value={formData.conclusion_evento_id}
+                        onChange={handleConclusionEventoChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      >
+                        <option value="">Seleccione...</option>
+                        {conclusionesEvento.map((conclusion) => (
+                          <option key={conclusion.id} value={conclusion.id}>
+                            {conclusion.descripcion}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="llego_alerta"
-                name="llego_alerta"
-                checked={formData.llego_alerta}
-                onChange={handleLlegoAlertaChange}
-                className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
-              />
-              <label htmlFor="llego_alerta" className="text-sm font-medium text-gray-700">
-                Llegó alerta
-              </label>
-            </div>
-            {requiereProtocolo && (
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="sustraccion_material"
-                  name="sustraccion_material"
-                  checked={formData.sustraccion_material}
-                  onChange={handleSustraccionMaterialChange}
-                  className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
-                />
-                <label
-                  htmlFor="sustraccion_material"
-                  className="text-sm font-medium text-gray-700"
-                >
-                  Sustracción de material
-                </label>
-              </div>
-            )}
-          <div className="md:col-span-2">
-            <label htmlFor="descripcion" className="block text-sm font-medium text-gray-700">
-              Descripción
-            </label>
-            <textarea
-              name="descripcion"
-              id="descripcion"
-              rows={3}
-              value={formData.descripcion}
-              onChange={handleInputChange}
-              placeholder="Ej: Detectado por sensor PIR"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            ></textarea>
           </div>
-          <div className="md:col-span-2 flex flex-col items-end space-y-2">
+
+          <div className="flex flex-col items-end space-y-2">
             {error && (
               <p className="w-full text-right text-sm text-red-600">{error}</p>
             )}
