@@ -9,6 +9,7 @@ import nodosRoutes from "./routes/nodos.routes.js";
 import cargoRoutes from "./routes/cargo.routes.js";
 import nodosSitiosRoutes from "./routes/nodosSitios.routes.js";
 import medioComunicacionRoutes from "./routes/medioComunicacion.routes.js";
+import personaRoutes from "./routes/persona.routes.js";
 import menusRoutes from "./menus.routes.js";
 import fallosRoutes from "./fallos.routes.js";
 import clientesRoutes from "./routes/clientes.routes.js";
@@ -46,6 +47,7 @@ const knownApiPrefixes = [
   "/api/consolas",
   "/api/nodos",
   "/api/cargo",
+  "/api/persona",
   "/api/medio-comunicacion",
   "/api/clientes",
   "/api/nodos-sitios",
@@ -90,6 +92,7 @@ app.use("/api/consolas", consolasRoutes);
 app.use("/", menusRoutes);
 app.use("/api/nodos", nodosRoutes);
 app.use("/api/cargo", cargoRoutes);
+app.use("/api/persona", personaRoutes);
 app.use("/api/nodos-sitios", nodosSitiosRoutes);
 app.use("/api/medio-comunicacion", medioComunicacionRoutes);
 app.use("/api/fallos", fallosRoutes);
