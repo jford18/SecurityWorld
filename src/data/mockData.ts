@@ -43,6 +43,8 @@ export const intrusionsData: Intrusion[] = [
     estado: "Pendiente",
     descripcion: "Detectado por sensor PIR",
     llego_alerta: true,
+    medio_comunicacion_id: null,
+    medio_comunicacion_descripcion: null,
   },
   {
     id: 2,
@@ -53,6 +55,8 @@ export const intrusionsData: Intrusion[] = [
     estado: "Atendido",
     descripcion: "Cámara PTZ-04 capturó el evento",
     llego_alerta: false,
+    medio_comunicacion_id: null,
+    medio_comunicacion_descripcion: null,
   },
 ];
 

@@ -8,6 +8,10 @@ import {
   fetchIntrusiones,
   IntrusionPayload,
 } from '../../services/intrusionesService';
+import {
+  getAllMediosComunicacion,
+  type MedioComunicacionDTO,
+} from '../../services/medioComunicacionService';
 
 const estadoItems = [
   { id: 'empty', label: 'Seleccione...', value: '' },
@@ -23,6 +27,7 @@ type IntrusionFormData = {
   estado: string;
   descripcion: string;
   llego_alerta: boolean;
+  medio_comunicacion_id: string;
 };
 
 const getInitialDateTimeValue = () => {
@@ -39,6 +44,7 @@ const buildInitialFormData = (): IntrusionFormData => ({
   estado: '',
   descripcion: '',
   llego_alerta: false,
+  medio_comunicacion_id: '',
 });
 
 const formatFechaEvento = (value: string) => {
@@ -58,6 +64,7 @@ const formatFechaEvento = (value: string) => {
 const Intrusions: React.FC = () => {
   const [formData, setFormData] = useState<IntrusionFormData>(buildInitialFormData());
   const [intrusions, setIntrusions] = useState<Intrusion[]>([]);
+  const [mediosComunicacion, setMediosComunicacion] = useState<MedioComunicacionDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -84,6 +91,26 @@ const Intrusions: React.FC = () => {
     };
 
     loadIntrusiones();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchMedios = async () => {
+      try {
+        const data = await getAllMediosComunicacion();
+        if (!isMounted) return;
+        setMediosComunicacion(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Error al cargar medios de comunicación:', err);
+      }
+    };
+
+    fetchMedios();
 
     return () => {
       isMounted = false;
@@ -130,6 +157,26 @@ const Intrusions: React.FC = () => {
       llego_alerta: checked,
     }));
   };
+
+  const handleMedioComunicacionChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const { value } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      medio_comunicacion_id: value,
+    }));
+  };
+
+  const medioDescripcionMap = useMemo(() => {
+    const map = new Map<number, string>();
+    mediosComunicacion.forEach((medio) => {
+      if (typeof medio?.id === 'number') {
+        map.set(medio.id, medio.descripcion ?? '');
+      }
+    });
+    return map;
+  }, [mediosComunicacion]);
 
   const isSubmitDisabled = useMemo(() => {
     return (
@@ -181,6 +228,9 @@ const Intrusions: React.FC = () => {
       estado: formData.estado,
       descripcion: descripcionValue ? descripcionValue : undefined,
       llego_alerta: formData.llego_alerta,
+      medio_comunicacion_id: formData.medio_comunicacion_id
+        ? Number(formData.medio_comunicacion_id)
+        : null,
     };
 
     try {
@@ -234,6 +284,25 @@ const Intrusions: React.FC = () => {
               placeholder="Ej: Bodega 3"
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
+          </div>
+          <div>
+            <label htmlFor="medio_comunicacion_id" className="block text-sm font-medium text-gray-700">
+              Medio de comunicación
+            </label>
+            <select
+              id="medio_comunicacion_id"
+              name="medio_comunicacion_id"
+              value={formData.medio_comunicacion_id}
+              onChange={handleMedioComunicacionChange}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="">Seleccione...</option>
+              {mediosComunicacion.map((medio) => (
+                <option key={medio.id} value={medio.id}>
+                  {medio.descripcion}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label htmlFor="tipo" className="block text-sm font-medium text-gray-700">
@@ -318,6 +387,7 @@ const Intrusions: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha y hora</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ubicación</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Medio de comunicación</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Llegó alerta</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
@@ -326,7 +396,7 @@ const Intrusions: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {intrusions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
                     No hay intrusiones registradas.
                   </td>
                 </tr>
@@ -341,6 +411,14 @@ const Intrusions: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {intrusion.tipo || 'Sin tipo'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {(
+                        intrusion.medio_comunicacion_descripcion ??
+                        (intrusion.medio_comunicacion_id != null
+                          ? medioDescripcionMap.get(intrusion.medio_comunicacion_id) || 'No especificado'
+                          : 'No especificado')
+                      ) || 'No especificado'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <span
