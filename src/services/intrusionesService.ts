@@ -13,6 +13,7 @@ export interface IntrusionPayload {
   medio_comunicacion_id?: number | null;
   conclusion_evento_id?: number | null;
   sustraccion_material?: boolean;
+  sitio_id?: number | null;
 }
 
 const normalizeFechaValue = (value: unknown): string | null => {
@@ -44,6 +45,8 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     fecha_reaccion?: unknown;
     fecha_reaccion_fuera?: unknown;
     ubicacion?: unknown;
+    sitio_id?: unknown;
+    sitio_nombre?: unknown;
     tipo?: unknown;
     estado?: unknown;
     descripcion?: unknown;
@@ -77,6 +80,12 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
       : Number(base.conclusion_evento_id);
   const conclusionEventoId =
     conclusionIdValue === null || Number.isNaN(conclusionIdValue) ? null : conclusionIdValue;
+  const sitioIdValue =
+    base.sitio_id === null || base.sitio_id === undefined || base.sitio_id === ''
+      ? null
+      : Number(base.sitio_id);
+  const sitioId =
+    sitioIdValue === null || Number.isNaN(sitioIdValue) ? null : sitioIdValue;
 
   return {
     id,
@@ -84,6 +93,9 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     fecha_reaccion: fechaReaccion,
     fecha_reaccion_fuera: fechaReaccionFuera,
     ubicacion: base.ubicacion == null ? '' : String(base.ubicacion),
+    sitio_id: sitioId,
+    sitio_nombre:
+      base.sitio_nombre == null ? null : String(base.sitio_nombre),
     tipo: base.tipo == null ? '' : String(base.tipo),
     estado: base.estado == null ? '' : String(base.estado),
     descripcion: base.descripcion == null ? null : String(base.descripcion),

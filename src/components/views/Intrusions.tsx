@@ -17,12 +17,21 @@ import {
   ConclusionEventoDTO,
   getAll as getAllConclusionesEvento,
 } from '../../services/conclusionEventoService';
+import { Sitio, getSitios } from '../../services/sitiosService';
+import { useSession } from '../context/SessionContext';
 
 const estadoItems = [
   { id: 'empty', label: 'Seleccione...', value: '' },
   { id: 'pendiente', label: 'Pendiente', value: 'Pendiente' },
   { id: 'atendido', label: 'Atendido', value: 'Atendido' },
 ];
+
+const normalizeConsoleName = (value: string | null | undefined): string => {
+  if (!value) {
+    return '';
+  }
+  return value.trim().toLowerCase();
+};
 
 const toBoolean = (value: unknown, defaultValue = false): boolean => {
   if (typeof value === 'boolean') {
@@ -103,7 +112,7 @@ type IntrusionFormData = {
   fecha_evento: string;
   fecha_reaccion: string;
   fecha_reaccion_fuera: string;
-  ubicacion: string;
+  sitioId: string;
   estado: string;
   descripcion: string;
   llego_alerta: boolean;
@@ -122,7 +131,7 @@ const buildInitialFormData = (): IntrusionFormData => ({
   fecha_evento: getInitialDateTimeValue(),
   fecha_reaccion: '',
   fecha_reaccion_fuera: '',
-  ubicacion: '',
+  sitioId: '',
   estado: '',
   descripcion: '',
   llego_alerta: false,
@@ -157,6 +166,8 @@ const Intrusions: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { session } = useSession();
+  const [sitios, setSitios] = useState<Sitio[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -185,6 +196,57 @@ const Intrusions: React.FC = () => {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchSitiosPorConsola = async () => {
+      const consoleName = session.console;
+      if (!consoleName) {
+        if (isMounted) {
+          setSitios([]);
+          setFormData((prev) => (prev.sitioId ? { ...prev, sitioId: '' } : prev));
+        }
+        return;
+      }
+
+      try {
+        const data = await getSitios();
+        if (!isMounted) return;
+
+        const lista = Array.isArray(data)
+          ? data
+          : ((data as { data?: Sitio[] } | null | undefined)?.data ?? []);
+        const normalizedConsole = normalizeConsoleName(consoleName);
+        const filtered = lista.filter((sitio) => {
+          const consolaNombre =
+            sitio?.consolaNombre ?? sitio?.consola_nombre ?? null;
+          return normalizeConsoleName(consolaNombre) === normalizedConsole;
+        });
+
+        setSitios(filtered);
+        setFormData((prev) => {
+          if (!prev.sitioId) {
+            return prev;
+          }
+          const exists = filtered.some((sitio) => String(sitio.id) === prev.sitioId);
+          return exists ? prev : { ...prev, sitioId: '' };
+        });
+      } catch (err) {
+        console.error('Error cargando sitios por consola', err);
+        if (isMounted) {
+          setSitios([]);
+          setFormData((prev) => (prev.sitioId ? { ...prev, sitioId: '' } : prev));
+        }
+      }
+    };
+
+    fetchSitiosPorConsola();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session.console]);
 
   useEffect(() => {
     let isMounted = true;
@@ -386,7 +448,7 @@ const Intrusions: React.FC = () => {
     const tipoValue = tipoDescripcion.trim();
     const baseDisabled =
       !formData.fecha_evento ||
-      !formData.ubicacion.trim() ||
+      !formData.sitioId ||
       !tipoValue ||
       !formData.estado ||
       isSubmitting;
@@ -407,7 +469,7 @@ const Intrusions: React.FC = () => {
     formData.fecha_evento,
     formData.fecha_reaccion,
     formData.fecha_reaccion_fuera,
-    formData.ubicacion,
+    formData.sitioId,
     isSubmitting,
     requiereProtocolo,
     tipoDescripcion,
@@ -423,6 +485,20 @@ const Intrusions: React.FC = () => {
       setError('Debe seleccionar un tipo de intrusión.');
       return;
     }
+
+    if (!formData.sitioId) {
+      alert('Debe seleccionar un sitio.');
+      return;
+    }
+
+    const sitioIdNumber = Number(formData.sitioId);
+    if (Number.isNaN(sitioIdNumber)) {
+      alert('El sitio seleccionado no es válido.');
+      return;
+    }
+
+    const sitioSeleccionado =
+      sitios.find((sitio) => String(sitio.id) === formData.sitioId) ?? null;
 
     const descripcionValue = formData.descripcion?.trim();
 
@@ -505,7 +581,7 @@ const Intrusions: React.FC = () => {
         requiereProtocolo && formData.fecha_reaccion_fuera
           ? formData.fecha_reaccion_fuera
           : null,
-      ubicacion: formData.ubicacion.trim() || '',
+      ubicacion: '',
       tipo: tipoValue,
       estado: formData.estado,
       descripcion: descripcionValue ? descripcionValue : undefined,
@@ -513,11 +589,16 @@ const Intrusions: React.FC = () => {
       medio_comunicacion_id: medioComunicacionValue,
       conclusion_evento_id: requiereProtocolo ? conclusionEventoValue : null,
       sustraccion_material: requiereProtocolo ? formData.sustraccion_material : false,
+      sitio_id: sitioIdNumber,
     };
 
     try {
       const created = await createIntrusion(payload);
-      setIntrusions((prev) => [created, ...prev]);
+      const enriched =
+        created.sitio_nombre || !sitioSeleccionado
+          ? created
+          : { ...created, sitio_nombre: sitioSeleccionado.nombre };
+      setIntrusions((prev) => [enriched, ...prev]);
       setFormData(buildInitialFormData());
       setTipoIntrusionId('');
       setTipoDescripcion('');
@@ -604,6 +685,25 @@ const Intrusions: React.FC = () => {
                       </span>
                     )}
                   </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Sitio
+                  </label>
+                  <select
+                    value={formData.sitioId}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, sitioId: event.target.value }))
+                    }
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="">Seleccione...</option>
+                    {sitios.map((sitio) => (
+                      <option key={sitio.id} value={sitio.id}>
+                        {sitio.nombre}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flex items-center gap-3">
                   <input
@@ -740,7 +840,7 @@ const Intrusions: React.FC = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha y hora</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ubicación</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sitio</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Medio de comunicación</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
@@ -762,7 +862,7 @@ const Intrusions: React.FC = () => {
                       {formatFechaEvento(intrusion.fecha_evento)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {intrusion.ubicacion || 'Sin ubicación'}
+                      {intrusion.sitio_nombre || intrusion.ubicacion || 'Sin sitio'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {intrusion.tipo || 'Sin tipo'}

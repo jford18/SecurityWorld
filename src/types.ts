@@ -85,6 +85,8 @@ export interface Intrusion {
   fecha_reaccion: string | null;
   fecha_reaccion_fuera: string | null;
   ubicacion: string;
+  sitio_id: number | null;
+  sitio_nombre?: string | null;
   tipo: string;
   estado: string;
   descripcion?: string | null;

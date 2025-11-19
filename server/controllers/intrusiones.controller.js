@@ -11,9 +11,16 @@ const mapIntrusionRow = (row) => {
       ? null
       : Number(row.conclusion_evento_id);
 
+  const sitioId =
+    row?.sitio_id === null || row?.sitio_id === undefined
+      ? null
+      : Number(row.sitio_id);
+
   return {
     id: row?.id,
     ubicacion: row?.ubicacion ?? "",
+    sitio_id: sitioId === null || Number.isNaN(sitioId) ? null : sitioId,
+    sitio_nombre: row?.sitio_nombre ?? null,
     tipo: row?.tipo ?? "",
     estado: row?.estado ?? "",
     descripcion: row?.descripcion ?? "",
@@ -61,6 +68,7 @@ export const listIntrusiones = async (_req, res) => {
       `SELECT
          i.id,
          i.ubicacion,
+         i.sitio_id,
          i.tipo,
          i.estado,
          i.descripcion,
@@ -71,9 +79,11 @@ export const listIntrusiones = async (_req, res) => {
          i.medio_comunicacion_id,
          i.conclusion_evento_id,
          i.sustraccion_material,
+         s.nombre AS sitio_nombre,
          m.descripcion AS medio_comunicacion_descripcion,
          ce.descripcion AS conclusion_evento_descripcion
        FROM public.intrusiones i
+       LEFT JOIN public.sitios s ON i.sitio_id = s.id
        LEFT JOIN public.catalogo_medio_comunicacion m ON i.medio_comunicacion_id = m.id
        LEFT JOIN public.catalogo_conclusion_evento ce ON i.conclusion_evento_id = ce.id
        ORDER BY i.fecha_evento DESC NULLS LAST, i.id DESC`
@@ -99,6 +109,7 @@ export const createIntrusion = async (req, res) => {
     medio_comunicacion_id,
     conclusion_evento_id,
     sustraccion_material,
+    sitio_id,
   } = req.body || {};
 
   const fechaEventoValue = fecha_evento ? parseFechaValue(fecha_evento) : new Date();
@@ -115,6 +126,13 @@ export const createIntrusion = async (req, res) => {
   const conclusionEventoValue = parseIntegerOrNull(conclusion_evento_id);
   const sustraccionMaterialValue =
     typeof sustraccion_material === "boolean" ? sustraccion_material : false;
+  const sitioIdValue = parseIntegerOrNull(sitio_id);
+
+  if (sitioIdValue === undefined) {
+    return res
+      .status(400)
+      .json({ mensaje: "El identificador del sitio no es válido." });
+  }
 
   if (fecha_evento && !fechaEventoValue) {
     return res
@@ -155,11 +173,12 @@ export const createIntrusion = async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO public.intrusiones (ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion, fecha_reaccion_fuera, llego_alerta, medio_comunicacion_id, conclusion_evento_id, sustraccion_material)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       RETURNING id, ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion, fecha_reaccion_fuera, llego_alerta, medio_comunicacion_id, conclusion_evento_id, sustraccion_material`,
+      `INSERT INTO public.intrusiones (ubicacion, sitio_id, tipo, estado, descripcion, fecha_evento, fecha_reaccion, fecha_reaccion_fuera, llego_alerta, medio_comunicacion_id, conclusion_evento_id, sustraccion_material)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       RETURNING id, ubicacion, sitio_id, tipo, estado, descripcion, fecha_evento, fecha_reaccion, fecha_reaccion_fuera, llego_alerta, medio_comunicacion_id, conclusion_evento_id, sustraccion_material, (SELECT nombre FROM public.sitios WHERE id = sitio_id) AS sitio_nombre`,
       [
         ubicacion ?? null,
+        sitioIdValue,
         tipo ?? null,
         estado ?? null,
         descripcion ?? null,
@@ -195,6 +214,7 @@ export const updateIntrusion = async (req, res) => {
     fecha_reaccion_fuera,
     conclusion_evento_id,
     sustraccion_material,
+    sitio_id,
   } = req.body || {};
 
   if (!id) {
@@ -212,6 +232,15 @@ export const updateIntrusion = async (req, res) => {
   };
 
   if (ubicacion !== undefined) pushUpdate("ubicacion", ubicacion);
+  if (sitio_id !== undefined) {
+    const parsedSitio = parseIntegerOrNull(sitio_id);
+    if (parsedSitio === undefined) {
+      return res
+        .status(400)
+        .json({ mensaje: "El identificador del sitio no es válido." });
+    }
+    pushUpdate("sitio_id", parsedSitio);
+  }
   if (tipo !== undefined) pushUpdate("tipo", tipo);
   if (estado !== undefined) pushUpdate("estado", estado);
   if (descripcion !== undefined) pushUpdate("descripcion", descripcion);
@@ -298,7 +327,7 @@ export const updateIntrusion = async (req, res) => {
 
   try {
     const result = await pool.query(
-      `UPDATE public.intrusiones SET ${updates.join(", ")} WHERE id = $${idParamIndex} RETURNING id, ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion, fecha_reaccion_fuera, llego_alerta, medio_comunicacion_id, conclusion_evento_id, sustraccion_material`,
+      `UPDATE public.intrusiones SET ${updates.join(", ")} WHERE id = $${idParamIndex} RETURNING id, ubicacion, sitio_id, tipo, estado, descripcion, fecha_evento, fecha_reaccion, fecha_reaccion_fuera, llego_alerta, medio_comunicacion_id, conclusion_evento_id, sustraccion_material, (SELECT nombre FROM public.sitios WHERE id = sitio_id) AS sitio_nombre`,
       values
     );
 
