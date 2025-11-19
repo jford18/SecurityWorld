@@ -12,12 +12,52 @@ import {
   getAllMediosComunicacion,
   type MedioComunicacionDTO,
 } from '../../services/medioComunicacionService';
+import { getAll as getAllTiposIntrusion } from '../../services/tipoIntrusion.service.js';
 
 const estadoItems = [
   { id: 'empty', label: 'Seleccione...', value: '' },
   { id: 'pendiente', label: 'Pendiente', value: 'Pendiente' },
   { id: 'atendido', label: 'Atendido', value: 'Atendido' },
 ];
+
+type TipoIntrusionCatalogItem = {
+  id: number;
+  descripcion: string;
+};
+
+const normalizeTiposIntrusion = (
+  payload: unknown
+): TipoIntrusionCatalogItem[] => {
+  if (Array.isArray(payload)) {
+    return payload
+      .map((item) => {
+        if (!item || typeof item !== 'object') {
+          return null;
+        }
+
+        const base = item as { id?: unknown; descripcion?: unknown };
+        const id = Number(base.id);
+        const descripcion =
+          base.descripcion == null ? '' : String(base.descripcion).trim();
+
+        if (!Number.isFinite(id) || !descripcion) {
+          return null;
+        }
+
+        return { id, descripcion };
+      })
+      .filter((item): item is TipoIntrusionCatalogItem => item !== null);
+  }
+
+  if (payload && typeof payload === 'object') {
+    const maybeData = (payload as { data?: unknown }).data;
+    if (Array.isArray(maybeData)) {
+      return normalizeTiposIntrusion(maybeData);
+    }
+  }
+
+  return [];
+};
 
 type IntrusionFormData = {
   fecha_evento: string;
@@ -65,6 +105,7 @@ const Intrusions: React.FC = () => {
   const [formData, setFormData] = useState<IntrusionFormData>(buildInitialFormData());
   const [intrusions, setIntrusions] = useState<Intrusion[]>([]);
   const [mediosComunicacion, setMediosComunicacion] = useState<MedioComunicacionDTO[]>([]);
+  const [tiposIntrusion, setTiposIntrusion] = useState<TipoIntrusionCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -91,6 +132,29 @@ const Intrusions: React.FC = () => {
     };
 
     loadIntrusiones();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchTiposIntrusion = async () => {
+      try {
+        const data = await getAllTiposIntrusion();
+        if (!isMounted) return;
+        setTiposIntrusion(normalizeTiposIntrusion(data));
+      } catch (err) {
+        console.error('Error al cargar tipos de intrusión:', err);
+        if (isMounted) {
+          setTiposIntrusion([]);
+        }
+      }
+    };
+
+    fetchTiposIntrusion();
 
     return () => {
       isMounted = false;
@@ -165,6 +229,16 @@ const Intrusions: React.FC = () => {
     setFormData((prev) => ({
       ...prev,
       medio_comunicacion_id: value,
+    }));
+  };
+
+  const handleTipoIntrusionChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const { value } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      tipo: value,
     }));
   };
 
@@ -308,15 +382,20 @@ const Intrusions: React.FC = () => {
             <label htmlFor="tipo" className="block text-sm font-medium text-gray-700">
               Tipo de Intrusión
             </label>
-            <input
-              type="text"
+            <select
               name="tipo"
               id="tipo"
               value={formData.tipo}
-              onChange={handleInputChange}
-              placeholder="Ej: Movimiento no autorizado"
+              onChange={handleTipoIntrusionChange}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            />
+            >
+              <option value="">Seleccione...</option>
+              {tiposIntrusion.map((tipoIntrusion) => (
+                <option key={tipoIntrusion.id} value={tipoIntrusion.descripcion}>
+                  {tipoIntrusion.descripcion}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <AutocompleteComboBox
