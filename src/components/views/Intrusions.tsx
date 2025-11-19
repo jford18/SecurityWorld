@@ -22,6 +22,7 @@ type IntrusionFormData = {
   tipo: string;
   estado: string;
   descripcion: string;
+  llego_alerta: boolean;
 };
 
 const getInitialDateTimeValue = () => {
@@ -37,6 +38,7 @@ const buildInitialFormData = (): IntrusionFormData => ({
   tipo: '',
   estado: '',
   descripcion: '',
+  llego_alerta: false,
 });
 
 const formatFechaEvento = (value: string) => {
@@ -119,6 +121,16 @@ const Intrusions: React.FC = () => {
     }));
   };
 
+  const handleLlegoAlertaChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { checked } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      llego_alerta: checked,
+    }));
+  };
+
   const isSubmitDisabled = useMemo(() => {
     return (
       !formData.fecha_evento ||
@@ -168,6 +180,7 @@ const Intrusions: React.FC = () => {
       tipo: formData.tipo.trim(),
       estado: formData.estado,
       descripcion: descripcionValue ? descripcionValue : undefined,
+      llego_alerta: formData.llego_alerta,
     };
 
     try {
@@ -247,6 +260,19 @@ const Intrusions: React.FC = () => {
               placeholder="Seleccione el estado"
             />
           </div>
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="llego_alerta"
+              name="llego_alerta"
+              checked={formData.llego_alerta}
+              onChange={handleLlegoAlertaChange}
+              className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
+            />
+            <label htmlFor="llego_alerta" className="text-sm font-medium text-gray-700">
+              Llegó alerta
+            </label>
+          </div>
           <div className="md:col-span-2">
             <label htmlFor="descripcion" className="block text-sm font-medium text-gray-700">
               Descripción
@@ -293,13 +319,14 @@ const Intrusions: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ubicación</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Llegó alerta</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {intrusions.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
                     No hay intrusiones registradas.
                   </td>
                 </tr>
@@ -324,6 +351,17 @@ const Intrusions: React.FC = () => {
                         }`}
                       >
                         {intrusion.estado || 'Sin estado'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          intrusion.llego_alerta
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {intrusion.llego_alerta ? 'Sí' : 'No'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">

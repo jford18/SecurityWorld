@@ -8,6 +8,7 @@ const mapIntrusionRow = (row) => ({
   descripcion: row?.descripcion ?? "",
   fecha_evento: row?.fecha_evento ? new Date(row.fecha_evento).toISOString() : null,
   fecha_reaccion: row?.fecha_reaccion ? new Date(row.fecha_reaccion).toISOString() : null,
+  llego_alerta: Boolean(row?.llego_alerta),
 });
 
 const parseFechaValue = (value) => {
@@ -26,7 +27,7 @@ const parseFechaValue = (value) => {
 export const listIntrusiones = async (_req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion FROM public.intrusiones ORDER BY fecha_evento DESC NULLS LAST, id DESC"
+      "SELECT id, ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion, llego_alerta FROM public.intrusiones ORDER BY fecha_evento DESC NULLS LAST, id DESC"
     );
     const intrusiones = result.rows.map(mapIntrusionRow);
     return res.json(intrusiones);
@@ -37,10 +38,20 @@ export const listIntrusiones = async (_req, res) => {
 };
 
 export const createIntrusion = async (req, res) => {
-  const { ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion } = req.body || {};
+  const {
+    ubicacion,
+    tipo,
+    estado,
+    descripcion,
+    fecha_evento,
+    fecha_reaccion,
+    llego_alerta,
+  } = req.body || {};
 
   const fechaEventoValue = fecha_evento ? parseFechaValue(fecha_evento) : new Date();
   const fechaReaccionValue = fecha_reaccion ? parseFechaValue(fecha_reaccion) : null;
+  const llegoAlertaValue =
+    typeof llego_alerta === "boolean" ? llego_alerta : false;
 
   if (fecha_evento && !fechaEventoValue) {
     return res
@@ -56,9 +67,9 @@ export const createIntrusion = async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO public.intrusiones (ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion`,
+      `INSERT INTO public.intrusiones (ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion, llego_alerta)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion, llego_alerta`,
       [
         ubicacion ?? null,
         tipo ?? null,
@@ -66,6 +77,7 @@ export const createIntrusion = async (req, res) => {
         descripcion ?? null,
         fechaEventoValue,
         fechaReaccionValue,
+        llegoAlertaValue,
       ]
     );
 
@@ -79,7 +91,15 @@ export const createIntrusion = async (req, res) => {
 
 export const updateIntrusion = async (req, res) => {
   const { id } = req.params;
-  const { ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion } = req.body || {};
+  const {
+    ubicacion,
+    tipo,
+    estado,
+    descripcion,
+    fecha_evento,
+    fecha_reaccion,
+    llego_alerta,
+  } = req.body || {};
 
   if (!id) {
     return res
@@ -99,6 +119,8 @@ export const updateIntrusion = async (req, res) => {
   if (tipo !== undefined) pushUpdate("tipo", tipo);
   if (estado !== undefined) pushUpdate("estado", estado);
   if (descripcion !== undefined) pushUpdate("descripcion", descripcion);
+  if (llego_alerta !== undefined)
+    pushUpdate("llego_alerta", typeof llego_alerta === "boolean" ? llego_alerta : false);
 
   if (fecha_evento !== undefined) {
     const parsedDate = parseFechaValue(fecha_evento);
@@ -131,7 +153,7 @@ export const updateIntrusion = async (req, res) => {
 
   try {
     const result = await pool.query(
-      `UPDATE public.intrusiones SET ${updates.join(", ")} WHERE id = $${idParamIndex} RETURNING id, ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion`,
+      `UPDATE public.intrusiones SET ${updates.join(", ")} WHERE id = $${idParamIndex} RETURNING id, ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion, llego_alerta`,
       values
     );
 

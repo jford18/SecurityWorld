@@ -8,6 +8,7 @@ export interface IntrusionPayload {
   tipo?: string;
   estado?: string;
   descripcion?: string;
+  llego_alerta?: boolean;
 }
 
 const normalizeFechaValue = (value: unknown): string | null => {
@@ -41,6 +42,7 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     tipo?: unknown;
     estado?: unknown;
     descripcion?: unknown;
+    llego_alerta?: unknown;
   };
 
   const id = Number(base.id);
@@ -59,6 +61,8 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     tipo: base.tipo == null ? '' : String(base.tipo),
     estado: base.estado == null ? '' : String(base.estado),
     descripcion: base.descripcion == null ? null : String(base.descripcion),
+    llego_alerta:
+      typeof base.llego_alerta === 'boolean' ? base.llego_alerta : Boolean(base.llego_alerta),
   };
 };
 

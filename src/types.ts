@@ -87,6 +87,7 @@ export interface Intrusion {
   tipo: string;
   estado: string;
   descripcion?: string | null;
+  llego_alerta: boolean;
 }
 
 export interface Device {
