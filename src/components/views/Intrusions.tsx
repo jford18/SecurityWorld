@@ -19,6 +19,7 @@ import {
 } from '../../services/conclusionEventoService';
 import { Sitio, getSitios } from '../../services/sitiosService';
 import { useSession } from '../context/SessionContext';
+import { getAll as getFuerzasReaccion } from '../../services/fuerzaReaccion.service';
 
 const estadoItems = [
   { id: 'empty', label: 'Seleccione...', value: '' },
@@ -59,6 +60,12 @@ type TipoIntrusionCatalogItem = {
   id: number;
   descripcion: string;
   necesita_protocolo: boolean;
+};
+
+type FuerzaReaccionCatalogItem = {
+  id: number;
+  descripcion: string;
+  activo?: boolean | null;
 };
 
 const normalizeTiposIntrusion = (
@@ -119,6 +126,7 @@ type IntrusionFormData = {
   medio_comunicacion_id: string;
   conclusion_evento_id: string;
   sustraccion_material: boolean;
+  fuerza_reaccion_id: string;
 };
 
 const getInitialDateTimeValue = () => {
@@ -138,6 +146,7 @@ const buildInitialFormData = (): IntrusionFormData => ({
   medio_comunicacion_id: '',
   conclusion_evento_id: '',
   sustraccion_material: false,
+  fuerza_reaccion_id: '',
 });
 
 const formatFechaEvento = (value: string) => {
@@ -168,6 +177,7 @@ const Intrusions: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { session } = useSession();
   const [sitios, setSitios] = useState<Sitio[]>([]);
+  const [fuerzasReaccion, setFuerzasReaccion] = useState<FuerzaReaccionCatalogItem[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -191,6 +201,27 @@ const Intrusions: React.FC = () => {
     };
 
     loadIntrusiones();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchFuerzas = async () => {
+      try {
+        const data = await getFuerzasReaccion();
+        if (!isMounted) return;
+        const lista = Array.isArray(data) ? data : [];
+        setFuerzasReaccion(lista.filter((item) => item?.activo !== false));
+      } catch (err) {
+        console.error('Error al cargar fuerzas de reacción:', err);
+      }
+    };
+
+    fetchFuerzas();
 
     return () => {
       isMounted = false;
@@ -379,6 +410,7 @@ const Intrusions: React.FC = () => {
       fecha_reaccion_fuera: '',
       conclusion_evento_id: '',
       sustraccion_material: false,
+      fuerza_reaccion_id: '',
     }));
   };
 
@@ -434,6 +466,16 @@ const Intrusions: React.FC = () => {
     }));
   };
 
+  const handleFuerzaReaccionChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const { value } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      fuerza_reaccion_id: value,
+    }));
+  };
+
   const medioDescripcionMap = useMemo(() => {
     const map = new Map<number, string>();
     mediosComunicacion.forEach((medio) => {
@@ -461,7 +503,8 @@ const Intrusions: React.FC = () => {
       baseDisabled ||
       !formData.fecha_reaccion ||
       !formData.fecha_reaccion_fuera ||
-      !formData.conclusion_evento_id
+      !formData.conclusion_evento_id ||
+      !formData.fuerza_reaccion_id
     );
   }, [
     formData.conclusion_evento_id,
@@ -469,6 +512,7 @@ const Intrusions: React.FC = () => {
     formData.fecha_evento,
     formData.fecha_reaccion,
     formData.fecha_reaccion_fuera,
+    formData.fuerza_reaccion_id,
     formData.sitioId,
     isSubmitting,
     requiereProtocolo,
@@ -558,6 +602,11 @@ const Intrusions: React.FC = () => {
         alert('Debe seleccionar la conclusión del evento.');
         return;
       }
+
+      if (!formData.fuerza_reaccion_id) {
+        alert('Debe seleccionar la fuerza de reacción enviada.');
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -573,6 +622,13 @@ const Intrusions: React.FC = () => {
       : null;
     const conclusionEventoValue =
       conclusionId !== null && Number.isNaN(conclusionId) ? null : conclusionId;
+    const fuerzaReaccionId = formData.fuerza_reaccion_id
+      ? Number(formData.fuerza_reaccion_id)
+      : null;
+    const fuerzaReaccionValue =
+      fuerzaReaccionId !== null && Number.isNaN(fuerzaReaccionId)
+        ? null
+        : fuerzaReaccionId;
 
     const payload: IntrusionPayload = {
       fecha_evento: formData.fecha_evento,
@@ -590,6 +646,10 @@ const Intrusions: React.FC = () => {
       conclusion_evento_id: requiereProtocolo ? conclusionEventoValue : null,
       sustraccion_material: requiereProtocolo ? formData.sustraccion_material : false,
       sitio_id: sitioIdNumber,
+      fuerza_reaccion_id:
+        requiereProtocolo && fuerzaReaccionValue !== null
+          ? fuerzaReaccionValue
+          : null,
     };
 
     try {
@@ -801,6 +861,23 @@ const Intrusions: React.FC = () => {
                         {conclusionesEvento.map((conclusion) => (
                           <option key={conclusion.id} value={conclusion.id}>
                             {conclusion.descripcion}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Fuerza de reacción enviada
+                      </label>
+                      <select
+                        value={formData.fuerza_reaccion_id}
+                        onChange={handleFuerzaReaccionChange}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                      >
+                        <option value="">Seleccione...</option>
+                        {fuerzasReaccion.map((fuerza) => (
+                          <option key={fuerza.id} value={fuerza.id}>
+                            {fuerza.descripcion}
                           </option>
                         ))}
                       </select>
