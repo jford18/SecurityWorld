@@ -505,7 +505,7 @@ const Intrusions: React.FC = () => {
         requiereProtocolo && formData.fecha_reaccion_fuera
           ? formData.fecha_reaccion_fuera
           : null,
-      ubicacion: formData.ubicacion.trim(),
+      ubicacion: formData.ubicacion.trim() || '',
       tipo: tipoValue,
       estado: formData.estado,
       descripcion: descripcionValue ? descripcionValue : undefined,
@@ -604,20 +604,6 @@ const Intrusions: React.FC = () => {
                       </span>
                     )}
                   </div>
-                </div>
-                <div>
-                  <label htmlFor="ubicacion" className="block text-sm font-medium text-gray-700">
-                    Ubicación
-                  </label>
-                  <input
-                    type="text"
-                    name="ubicacion"
-                    id="ubicacion"
-                    value={formData.ubicacion}
-                    onChange={handleInputChange}
-                    placeholder="Ej: Bodega 3"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
                 </div>
                 <div className="flex items-center gap-3">
                   <input
