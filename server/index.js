@@ -7,6 +7,7 @@ import authRoutes from "./auth.routes.js";
 import consolasRoutes from "./consolas.routes.js";
 import nodosRoutes from "./routes/nodos.routes.js";
 import nodosSitiosRoutes from "./routes/nodosSitios.routes.js";
+import medioComunicacionRoutes from "./routes/medioComunicacion.routes.js";
 import menusRoutes from "./menus.routes.js";
 import fallosRoutes from "./fallos.routes.js";
 import clientesRoutes from "./routes/clientes.routes.js";
@@ -43,6 +44,7 @@ const knownApiPrefixes = [
   "/api/fallos",
   "/api/consolas",
   "/api/nodos",
+  "/api/medio-comunicacion",
   "/api/clientes",
   "/api/nodos-sitios",
   "/api/rol-menu",
@@ -86,6 +88,7 @@ app.use("/api/consolas", consolasRoutes);
 app.use("/", menusRoutes);
 app.use("/api/nodos", nodosRoutes);
 app.use("/api/nodos-sitios", nodosSitiosRoutes);
+app.use("/api/medio-comunicacion", medioComunicacionRoutes);
 app.use("/api/fallos", fallosRoutes);
 app.use("/api/catalogos", catalogosRoutes);
 app.use("/api/v1/catalogo-tipo-problema", catalogoTipoProblemaRoutes);
