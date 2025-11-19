@@ -82,6 +82,7 @@ export interface TechnicalFailureCatalogs {
 export interface Intrusion {
   id: number;
   fecha_evento: string;
+  fecha_reaccion: string | null;
   ubicacion: string;
   tipo: string;
   estado: string;
