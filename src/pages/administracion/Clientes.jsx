@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
+import { getAllClientes } from "@/services/clientes.service";
 import {
   addPersonaToCliente,
   getPersonasByCliente,
@@ -64,11 +65,11 @@ const Clientes = () => {
 
   const fetchClientes = useCallback(async () => {
     try {
-      const { data } = await api.get("/api/clientes", {
-        params: { q: search || undefined },
-      });
-      // Garantiza que siempre sea array
-      setClientes(Array.isArray(data) ? data : data?.rows || []);
+      const searchTerm = search.trim();
+      const data = await getAllClientes(
+        searchTerm ? { q: searchTerm } : undefined
+      );
+      setClientes(data);
     } catch (error) {
       console.error("[ERROR] No se pudieron cargar los clientes:", error);
       const message = resolveErrorMessage(
