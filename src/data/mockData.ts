@@ -35,21 +35,21 @@ export const technicalFailuresData: Omit<TechnicalFailure, 'id'>[] = [
 
 export const intrusionsData: Intrusion[] = [
   {
-    fecha: "2025-10-09",
+    id: 1,
+    fecha_evento: "2025-10-09T08:10:00.000Z",
     ubicacion: "Bodega 3",
-    tipo_intrusion: "Movimiento no autorizado",
-    nivel_alerta: "Alta",
-    observacion: "Detectado por sensor PIR",
-    estado: "Pendiente"
+    tipo: "Movimiento no autorizado",
+    estado: "Pendiente",
+    descripcion: "Detectado por sensor PIR",
   },
   {
-    fecha: "2025-10-07",
+    id: 2,
+    fecha_evento: "2025-10-07T17:45:00.000Z",
     ubicacion: "Perímetro Norte",
-    tipo_intrusion: "Cruce de línea virtual",
-    nivel_alerta: "Media",
-    observacion: "Cámara PTZ-04 capturó el evento",
-    estado: "Atendido"
-  }
+    tipo: "Cruce de línea virtual",
+    estado: "Atendido",
+    descripcion: "Cámara PTZ-04 capturó el evento",
+  },
 ];
 
 export const deviceInventoryData: Device[] = [

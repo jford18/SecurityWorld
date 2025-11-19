@@ -80,12 +80,12 @@ export interface TechnicalFailureCatalogs {
 }
 
 export interface Intrusion {
-  fecha: string;
+  id: number;
+  fecha_evento: string;
   ubicacion: string;
-  tipo_intrusion: string;
-  nivel_alerta: "Alta" | "Media" | "Baja";
-  observacion: string;
-  estado: "Pendiente" | "Atendido";
+  tipo: string;
+  estado: string;
+  descripcion?: string | null;
 }
 
 export interface Device {
