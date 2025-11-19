@@ -51,6 +51,8 @@ export const intrusionsData: Intrusion[] = [
     conclusion_evento_id: null,
     conclusion_evento_descripcion: null,
     sustraccion_material: false,
+    fuerza_reaccion_id: null,
+    fuerza_reaccion_descripcion: null,
   },
   {
     id: 2,
@@ -69,6 +71,8 @@ export const intrusionsData: Intrusion[] = [
     conclusion_evento_id: null,
     conclusion_evento_descripcion: null,
     sustraccion_material: false,
+    fuerza_reaccion_id: null,
+    fuerza_reaccion_descripcion: null,
   },
 ];
 

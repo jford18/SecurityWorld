@@ -96,6 +96,8 @@ export interface Intrusion {
   conclusion_evento_id: number | null;
   conclusion_evento_descripcion?: string | null;
   sustraccion_material: boolean;
+  fuerza_reaccion_id: number | null;
+  fuerza_reaccion_descripcion?: string | null;
 }
 
 export interface Device {

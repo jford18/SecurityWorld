@@ -14,6 +14,7 @@ export interface IntrusionPayload {
   conclusion_evento_id?: number | null;
   sustraccion_material?: boolean;
   sitio_id?: number | null;
+  fuerza_reaccion_id?: number | null;
 }
 
 const normalizeFechaValue = (value: unknown): string | null => {
@@ -56,6 +57,8 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     conclusion_evento_id?: unknown;
     conclusion_evento_descripcion?: unknown;
     sustraccion_material?: unknown;
+    fuerza_reaccion_id?: unknown;
+    fuerza_reaccion_descripcion?: unknown;
   };
 
   const id = Number(base.id);
@@ -86,6 +89,14 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
       : Number(base.sitio_id);
   const sitioId =
     sitioIdValue === null || Number.isNaN(sitioIdValue) ? null : sitioIdValue;
+  const fuerzaReaccionValue =
+    base.fuerza_reaccion_id === null || base.fuerza_reaccion_id === undefined
+      ? null
+      : Number(base.fuerza_reaccion_id);
+  const fuerzaReaccionId =
+    fuerzaReaccionValue === null || Number.isNaN(fuerzaReaccionValue)
+      ? null
+      : fuerzaReaccionValue;
 
   return {
     id,
@@ -115,6 +126,11 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
       typeof base.sustraccion_material === 'boolean'
         ? base.sustraccion_material
         : Boolean(base.sustraccion_material),
+    fuerza_reaccion_id: fuerzaReaccionId,
+    fuerza_reaccion_descripcion:
+      base.fuerza_reaccion_descripcion == null
+        ? null
+        : String(base.fuerza_reaccion_descripcion),
   };
 };
 
