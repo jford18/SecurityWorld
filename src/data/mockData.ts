@@ -38,6 +38,7 @@ export const intrusionsData: Intrusion[] = [
     id: 1,
     fecha_evento: "2025-10-09T08:10:00.000Z",
     fecha_reaccion: "2025-10-09T08:13:00.000Z",
+    fecha_reaccion_fuera: null,
     ubicacion: "Bodega 3",
     tipo: "Movimiento no autorizado",
     estado: "Pendiente",
@@ -45,11 +46,15 @@ export const intrusionsData: Intrusion[] = [
     llego_alerta: true,
     medio_comunicacion_id: null,
     medio_comunicacion_descripcion: null,
+    conclusion_evento_id: null,
+    conclusion_evento_descripcion: null,
+    sustraccion_material: false,
   },
   {
     id: 2,
     fecha_evento: "2025-10-07T17:45:00.000Z",
     fecha_reaccion: null,
+    fecha_reaccion_fuera: null,
     ubicacion: "Perímetro Norte",
     tipo: "Cruce de línea virtual",
     estado: "Atendido",
@@ -57,6 +62,9 @@ export const intrusionsData: Intrusion[] = [
     llego_alerta: false,
     medio_comunicacion_id: null,
     medio_comunicacion_descripcion: null,
+    conclusion_evento_id: null,
+    conclusion_evento_descripcion: null,
+    sustraccion_material: false,
   },
 ];
 

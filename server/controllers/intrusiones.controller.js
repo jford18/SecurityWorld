@@ -6,6 +6,11 @@ const mapIntrusionRow = (row) => {
       ? null
       : Number(row.medio_comunicacion_id);
 
+  const conclusionId =
+    row?.conclusion_evento_id === null || row?.conclusion_evento_id === undefined
+      ? null
+      : Number(row.conclusion_evento_id);
+
   return {
     id: row?.id,
     ubicacion: row?.ubicacion ?? "",
@@ -14,10 +19,17 @@ const mapIntrusionRow = (row) => {
     descripcion: row?.descripcion ?? "",
     fecha_evento: row?.fecha_evento ? new Date(row.fecha_evento).toISOString() : null,
     fecha_reaccion: row?.fecha_reaccion ? new Date(row.fecha_reaccion).toISOString() : null,
+    fecha_reaccion_fuera: row?.fecha_reaccion_fuera
+      ? new Date(row.fecha_reaccion_fuera).toISOString()
+      : null,
     llego_alerta: Boolean(row?.llego_alerta),
     medio_comunicacion_id:
       medioId === null || Number.isNaN(medioId) ? null : Number(medioId),
     medio_comunicacion_descripcion: row?.medio_comunicacion_descripcion ?? null,
+    conclusion_evento_id:
+      conclusionId === null || Number.isNaN(conclusionId) ? null : Number(conclusionId),
+    conclusion_evento_descripcion: row?.conclusion_evento_descripcion ?? null,
+    sustraccion_material: Boolean(row?.sustraccion_material),
   };
 };
 
@@ -34,6 +46,15 @@ const parseFechaValue = (value) => {
   return Number.isNaN(candidate.getTime()) ? null : candidate;
 };
 
+const parseIntegerOrNull = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? undefined : parsed;
+};
+
 export const listIntrusiones = async (_req, res) => {
   try {
     const result = await pool.query(
@@ -45,11 +66,16 @@ export const listIntrusiones = async (_req, res) => {
          i.descripcion,
          i.fecha_evento,
          i.fecha_reaccion,
+         i.fecha_reaccion_fuera,
          i.llego_alerta,
          i.medio_comunicacion_id,
-         m.descripcion AS medio_comunicacion_descripcion
+         i.conclusion_evento_id,
+         i.sustraccion_material,
+         m.descripcion AS medio_comunicacion_descripcion,
+         ce.descripcion AS conclusion_evento_descripcion
        FROM public.intrusiones i
        LEFT JOIN public.catalogo_medio_comunicacion m ON i.medio_comunicacion_id = m.id
+       LEFT JOIN public.catalogo_conclusion_evento ce ON i.conclusion_evento_id = ce.id
        ORDER BY i.fecha_evento DESC NULLS LAST, i.id DESC`
     );
     const intrusiones = result.rows.map(mapIntrusionRow);
@@ -68,18 +94,27 @@ export const createIntrusion = async (req, res) => {
     descripcion,
     fecha_evento,
     fecha_reaccion,
+    fecha_reaccion_fuera,
     llego_alerta,
     medio_comunicacion_id,
+    conclusion_evento_id,
+    sustraccion_material,
   } = req.body || {};
 
   const fechaEventoValue = fecha_evento ? parseFechaValue(fecha_evento) : new Date();
   const fechaReaccionValue = fecha_reaccion ? parseFechaValue(fecha_reaccion) : null;
+  const fechaReaccionFueraValue = fecha_reaccion_fuera
+    ? parseFechaValue(fecha_reaccion_fuera)
+    : null;
   const llegoAlertaValue =
     typeof llego_alerta === "boolean" ? llego_alerta : false;
   const medioComValue =
     medio_comunicacion_id === null || medio_comunicacion_id === undefined || medio_comunicacion_id === ""
       ? null
       : Number(medio_comunicacion_id);
+  const conclusionEventoValue = parseIntegerOrNull(conclusion_evento_id);
+  const sustraccionMaterialValue =
+    typeof sustraccion_material === "boolean" ? sustraccion_material : false;
 
   if (fecha_evento && !fechaEventoValue) {
     return res
@@ -93,11 +128,36 @@ export const createIntrusion = async (req, res) => {
       .json({ mensaje: "La fecha y hora de reacción no es válida." });
   }
 
+  if (fecha_reaccion_fuera && !fechaReaccionFueraValue) {
+    return res
+      .status(400)
+      .json({ mensaje: "La fecha y hora de reacción de fuera no es válida." });
+  }
+
+  if (
+    fechaReaccionFueraValue &&
+    fechaReaccionValue &&
+    fechaReaccionFueraValue.getTime() <= fechaReaccionValue.getTime()
+  ) {
+    return res
+      .status(400)
+      .json({
+        mensaje:
+          "La fecha de reacción de fuera debe ser posterior a la fecha de reacción.",
+      });
+  }
+
+  if (conclusionEventoValue === undefined) {
+    return res
+      .status(400)
+      .json({ mensaje: "El identificador de la conclusión del evento no es válido." });
+  }
+
   try {
     const result = await pool.query(
-      `INSERT INTO public.intrusiones (ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion, llego_alerta, medio_comunicacion_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion, llego_alerta, medio_comunicacion_id`,
+      `INSERT INTO public.intrusiones (ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion, fecha_reaccion_fuera, llego_alerta, medio_comunicacion_id, conclusion_evento_id, sustraccion_material)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING id, ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion, fecha_reaccion_fuera, llego_alerta, medio_comunicacion_id, conclusion_evento_id, sustraccion_material`,
       [
         ubicacion ?? null,
         tipo ?? null,
@@ -105,8 +165,11 @@ export const createIntrusion = async (req, res) => {
         descripcion ?? null,
         fechaEventoValue,
         fechaReaccionValue,
+        fechaReaccionFueraValue,
         llegoAlertaValue,
         medioComValue,
+        conclusionEventoValue,
+        sustraccionMaterialValue,
       ]
     );
 
@@ -129,6 +192,9 @@ export const updateIntrusion = async (req, res) => {
     fecha_reaccion,
     llego_alerta,
     medio_comunicacion_id,
+    fecha_reaccion_fuera,
+    conclusion_evento_id,
+    sustraccion_material,
   } = req.body || {};
 
   if (!id) {
@@ -159,6 +225,9 @@ export const updateIntrusion = async (req, res) => {
     pushUpdate("medio_comunicacion_id", medioValue);
   }
 
+  let parsedFechaReaccion = null;
+  let parsedFechaReaccionFuera = null;
+
   if (fecha_evento !== undefined) {
     const parsedDate = parseFechaValue(fecha_evento);
     if (!parsedDate) {
@@ -176,7 +245,46 @@ export const updateIntrusion = async (req, res) => {
         .status(400)
         .json({ mensaje: "La fecha y hora de reacción no es válida." });
     }
+    parsedFechaReaccion = parsedDate;
     pushUpdate("fecha_reaccion", parsedDate);
+  }
+
+  if (fecha_reaccion_fuera !== undefined) {
+    const parsedDate = parseFechaValue(fecha_reaccion_fuera);
+    if (!parsedDate && fecha_reaccion_fuera !== null && fecha_reaccion_fuera !== "") {
+      return res
+        .status(400)
+        .json({ mensaje: "La fecha y hora de reacción de fuera no es válida." });
+    }
+    parsedFechaReaccionFuera = parsedDate;
+    pushUpdate("fecha_reaccion_fuera", parsedDate);
+  }
+
+  if (
+    parsedFechaReaccionFuera &&
+    parsedFechaReaccion &&
+    parsedFechaReaccionFuera.getTime() <= parsedFechaReaccion.getTime()
+  ) {
+    return res
+      .status(400)
+      .json({ mensaje: "La fecha de reacción de fuera debe ser posterior a la fecha de reacción." });
+  }
+
+  if (conclusion_evento_id !== undefined) {
+    const parsedConclusion = parseIntegerOrNull(conclusion_evento_id);
+    if (parsedConclusion === undefined) {
+      return res
+        .status(400)
+        .json({ mensaje: "El identificador de la conclusión del evento no es válido." });
+    }
+    pushUpdate("conclusion_evento_id", parsedConclusion);
+  }
+
+  if (sustraccion_material !== undefined) {
+    pushUpdate(
+      "sustraccion_material",
+      typeof sustraccion_material === "boolean" ? sustraccion_material : false,
+    );
   }
 
   if (updates.length === 0) {
@@ -190,7 +298,7 @@ export const updateIntrusion = async (req, res) => {
 
   try {
     const result = await pool.query(
-      `UPDATE public.intrusiones SET ${updates.join(", ")} WHERE id = $${idParamIndex} RETURNING id, ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion, llego_alerta, medio_comunicacion_id`,
+      `UPDATE public.intrusiones SET ${updates.join(", ")} WHERE id = $${idParamIndex} RETURNING id, ubicacion, tipo, estado, descripcion, fecha_evento, fecha_reaccion, fecha_reaccion_fuera, llego_alerta, medio_comunicacion_id, conclusion_evento_id, sustraccion_material`,
       values
     );
 

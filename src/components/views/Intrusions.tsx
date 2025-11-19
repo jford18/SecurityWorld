@@ -13,6 +13,10 @@ import {
   type MedioComunicacionDTO,
 } from '../../services/medioComunicacionService';
 import { getAll as getAllTiposIntrusion } from '../../services/tipoIntrusion.service.js';
+import {
+  ConclusionEventoDTO,
+  getAll as getAllConclusionesEvento,
+} from '../../services/conclusionEventoService';
 
 const estadoItems = [
   { id: 'empty', label: 'Seleccione...', value: '' },
@@ -20,9 +24,32 @@ const estadoItems = [
   { id: 'atendido', label: 'Atendido', value: 'Atendido' },
 ];
 
+const toBoolean = (value: unknown, defaultValue = false): boolean => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') {
+      return true;
+    }
+    if (normalized === 'false') {
+      return false;
+    }
+  }
+  if (typeof value === 'number') {
+    return value !== 0;
+  }
+  if (value == null) {
+    return defaultValue;
+  }
+  return Boolean(value);
+};
+
 type TipoIntrusionCatalogItem = {
   id: number;
   descripcion: string;
+  necesita_protocolo: boolean;
 };
 
 const normalizeTiposIntrusion = (
@@ -35,16 +62,29 @@ const normalizeTiposIntrusion = (
           return null;
         }
 
-        const base = item as { id?: unknown; descripcion?: unknown };
+        const base = item as {
+          id?: unknown;
+          descripcion?: unknown;
+          activo?: unknown;
+          necesita_protocolo?: unknown;
+        };
         const id = Number(base.id);
         const descripcion =
           base.descripcion == null ? '' : String(base.descripcion).trim();
+        const activo =
+          base.activo === undefined ? true : toBoolean(base.activo, true);
 
-        if (!Number.isFinite(id) || !descripcion) {
+        if (!Number.isFinite(id) || !descripcion || !activo) {
           return null;
         }
 
-        return { id, descripcion };
+        const necesitaProtocolo = toBoolean(base.necesita_protocolo, false);
+
+        return {
+          id,
+          descripcion,
+          necesita_protocolo: necesitaProtocolo,
+        };
       })
       .filter((item): item is TipoIntrusionCatalogItem => item !== null);
   }
@@ -62,12 +102,14 @@ const normalizeTiposIntrusion = (
 type IntrusionFormData = {
   fecha_evento: string;
   fecha_reaccion: string;
+  fecha_reaccion_fuera: string;
   ubicacion: string;
-  tipo: string;
   estado: string;
   descripcion: string;
   llego_alerta: boolean;
   medio_comunicacion_id: string;
+  conclusion_evento_id: string;
+  sustraccion_material: boolean;
 };
 
 const getInitialDateTimeValue = () => {
@@ -79,12 +121,14 @@ const getInitialDateTimeValue = () => {
 const buildInitialFormData = (): IntrusionFormData => ({
   fecha_evento: getInitialDateTimeValue(),
   fecha_reaccion: '',
+  fecha_reaccion_fuera: '',
   ubicacion: '',
-  tipo: '',
   estado: '',
   descripcion: '',
   llego_alerta: false,
   medio_comunicacion_id: '',
+  conclusion_evento_id: '',
+  sustraccion_material: false,
 });
 
 const formatFechaEvento = (value: string) => {
@@ -106,6 +150,10 @@ const Intrusions: React.FC = () => {
   const [intrusions, setIntrusions] = useState<Intrusion[]>([]);
   const [mediosComunicacion, setMediosComunicacion] = useState<MedioComunicacionDTO[]>([]);
   const [tiposIntrusion, setTiposIntrusion] = useState<TipoIntrusionCatalogItem[]>([]);
+  const [conclusionesEvento, setConclusionesEvento] = useState<ConclusionEventoDTO[]>([]);
+  const [tipoIntrusionId, setTipoIntrusionId] = useState<number | ''>('');
+  const [tipoDescripcion, setTipoDescripcion] = useState('');
+  const [requiereProtocolo, setRequiereProtocolo] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -181,6 +229,30 @@ const Intrusions: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchConclusiones = async () => {
+      try {
+        const data = await getAllConclusionesEvento();
+        if (!isMounted) return;
+        const lista = Array.isArray(data) ? data : [];
+        setConclusionesEvento(lista.filter((item) => item?.activo !== false));
+      } catch (err) {
+        console.error('Error al cargar conclusiones de evento:', err);
+        if (isMounted) {
+          setConclusionesEvento([]);
+        }
+      }
+    };
+
+    fetchConclusiones();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleInputChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -212,6 +284,13 @@ const Intrusions: React.FC = () => {
     }));
   };
 
+  const handleFechaReaccionFueraChange = (isoValue: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      fecha_reaccion_fuera: isoValue,
+    }));
+  };
+
   const handleLlegoAlertaChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -232,13 +311,64 @@ const Intrusions: React.FC = () => {
     }));
   };
 
+  const resetProtocoloFields = () => {
+    setFormData((prev) => ({
+      ...prev,
+      fecha_reaccion_fuera: '',
+      conclusion_evento_id: '',
+      sustraccion_material: false,
+    }));
+  };
+
   const handleTipoIntrusionChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const { value } = event.target;
+    if (!value) {
+      setTipoIntrusionId('');
+      setTipoDescripcion('');
+      setRequiereProtocolo(false);
+      resetProtocoloFields();
+      return;
+    }
+
+    const parsedId = Number(value);
+    setTipoIntrusionId(Number.isNaN(parsedId) ? '' : parsedId);
+
+    const selected = tiposIntrusion.find((tipo) => tipo.id === parsedId);
+    if (!selected) {
+      setTipoDescripcion('');
+      setRequiereProtocolo(false);
+      resetProtocoloFields();
+      return;
+    }
+
+    setTipoDescripcion(selected.descripcion);
+    const requiresProtocol = selected.necesita_protocolo === true;
+    setRequiereProtocolo(requiresProtocol);
+
+    if (!requiresProtocol) {
+      resetProtocoloFields();
+    }
+  };
+
+  const handleConclusionEventoChange = (
     event: React.ChangeEvent<HTMLSelectElement>
   ) => {
     const { value } = event.target;
     setFormData((prev) => ({
       ...prev,
-      tipo: value,
+      conclusion_evento_id: value,
+    }));
+  };
+
+  const handleSustraccionMaterialChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { checked } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      sustraccion_material: checked,
     }));
   };
 
@@ -253,19 +383,46 @@ const Intrusions: React.FC = () => {
   }, [mediosComunicacion]);
 
   const isSubmitDisabled = useMemo(() => {
-    return (
+    const tipoValue = tipoDescripcion.trim();
+    const baseDisabled =
       !formData.fecha_evento ||
       !formData.ubicacion.trim() ||
-      !formData.tipo.trim() ||
+      !tipoValue ||
       !formData.estado ||
-      isSubmitting
+      isSubmitting;
+
+    if (!requiereProtocolo) {
+      return baseDisabled;
+    }
+
+    return (
+      baseDisabled ||
+      !formData.fecha_reaccion ||
+      !formData.fecha_reaccion_fuera ||
+      !formData.conclusion_evento_id
     );
-  }, [formData, isSubmitting]);
+  }, [
+    formData.conclusion_evento_id,
+    formData.estado,
+    formData.fecha_evento,
+    formData.fecha_reaccion,
+    formData.fecha_reaccion_fuera,
+    formData.ubicacion,
+    isSubmitting,
+    requiereProtocolo,
+    tipoDescripcion,
+  ]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
     setError(null);
+
+    const tipoValue = tipoDescripcion.trim();
+    if (!tipoValue) {
+      setError('Debe seleccionar un tipo de intrusión.');
+      return;
+    }
 
     const descripcionValue = formData.descripcion?.trim();
 
@@ -292,25 +449,79 @@ const Intrusions: React.FC = () => {
       }
     }
 
+    if (requiereProtocolo) {
+      if (!formData.fecha_reaccion) {
+        alert('Debe ingresar la fecha y hora de reacción antes de la reacción de fuera.');
+        return;
+      }
+
+      if (!formData.fecha_reaccion_fuera) {
+        alert('Debe ingresar la fecha y hora de reacción de fuera.');
+        return;
+      }
+
+      const fechaReaccionDate = new Date(formData.fecha_reaccion);
+      const fechaReaccionFueraDate = new Date(formData.fecha_reaccion_fuera);
+
+      if (Number.isNaN(fechaReaccionDate.getTime())) {
+        alert('La fecha y hora de reacción no es válida.');
+        return;
+      }
+
+      if (Number.isNaN(fechaReaccionFueraDate.getTime())) {
+        alert('La fecha y hora de reacción de fuera no es válida.');
+        return;
+      }
+
+      if (fechaReaccionFueraDate <= fechaReaccionDate) {
+        alert('La fecha y hora de reacción de fuera debe ser posterior a la fecha y hora de reacción.');
+        return;
+      }
+
+      if (!formData.conclusion_evento_id) {
+        alert('Debe seleccionar la conclusión del evento.');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
+
+    const medioId = formData.medio_comunicacion_id
+      ? Number(formData.medio_comunicacion_id)
+      : null;
+    const medioComunicacionValue =
+      medioId !== null && Number.isNaN(medioId) ? null : medioId;
+
+    const conclusionId = formData.conclusion_evento_id
+      ? Number(formData.conclusion_evento_id)
+      : null;
+    const conclusionEventoValue =
+      conclusionId !== null && Number.isNaN(conclusionId) ? null : conclusionId;
 
     const payload: IntrusionPayload = {
       fecha_evento: formData.fecha_evento,
       fecha_reaccion: formData.fecha_reaccion || null,
+      fecha_reaccion_fuera:
+        requiereProtocolo && formData.fecha_reaccion_fuera
+          ? formData.fecha_reaccion_fuera
+          : null,
       ubicacion: formData.ubicacion.trim(),
-      tipo: formData.tipo.trim(),
+      tipo: tipoValue,
       estado: formData.estado,
       descripcion: descripcionValue ? descripcionValue : undefined,
       llego_alerta: formData.llego_alerta,
-      medio_comunicacion_id: formData.medio_comunicacion_id
-        ? Number(formData.medio_comunicacion_id)
-        : null,
+      medio_comunicacion_id: medioComunicacionValue,
+      conclusion_evento_id: requiereProtocolo ? conclusionEventoValue : null,
+      sustraccion_material: requiereProtocolo ? formData.sustraccion_material : false,
     };
 
     try {
       const created = await createIntrusion(payload);
       setIntrusions((prev) => [created, ...prev]);
       setFormData(buildInitialFormData());
+      setTipoIntrusionId('');
+      setTipoDescripcion('');
+      setRequiereProtocolo(false);
     } catch (err) {
       console.error('Error al registrar intrusión:', err);
       setError('No se pudo registrar la intrusión. Intente nuevamente.');
@@ -336,15 +547,26 @@ const Intrusions: React.FC = () => {
               required
             />
           </div>
-          <div className="flex flex-col">
-            <FechaHoraFalloPicker
-              id="fecha_reaccion"
-              name="fecha_reaccion"
-              label="Fecha hora reacción"
-              value={formData.fecha_reaccion}
-              onChange={handleFechaReaccionChange}
-            />
-          </div>
+            <div className="flex flex-col">
+              <FechaHoraFalloPicker
+                id="fecha_reaccion"
+                name="fecha_reaccion"
+                label="Fecha hora reacción"
+                value={formData.fecha_reaccion}
+                onChange={handleFechaReaccionChange}
+              />
+            </div>
+            {requiereProtocolo && (
+              <div className="flex flex-col">
+                <FechaHoraFalloPicker
+                  id="fecha_reaccion_fuera"
+                  name="fecha_reaccion_fuera"
+                  label="Fecha y hora de reacción de fuera"
+                  value={formData.fecha_reaccion_fuera}
+                  onChange={handleFechaReaccionFueraChange}
+                />
+              </div>
+            )}
           <div>
             <label htmlFor="ubicacion" className="block text-sm font-medium text-gray-700">
               Ubicación
@@ -378,49 +600,91 @@ const Intrusions: React.FC = () => {
               ))}
             </select>
           </div>
-          <div>
-            <label htmlFor="tipo" className="block text-sm font-medium text-gray-700">
-              Tipo de Intrusión
-            </label>
-            <select
-              name="tipo"
-              id="tipo"
-              value={formData.tipo}
-              onChange={handleTipoIntrusionChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            >
-              <option value="">Seleccione...</option>
-              {tiposIntrusion.map((tipoIntrusion) => (
-                <option key={tipoIntrusion.id} value={tipoIntrusion.descripcion}>
-                  {tipoIntrusion.descripcion}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <AutocompleteComboBox
-              label="Estado"
-              value={formData.estado}
-              onChange={handleEstadoChange}
-              items={estadoItems}
-              displayField="label"
-              valueField="value"
-              placeholder="Seleccione el estado"
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="llego_alerta"
-              name="llego_alerta"
-              checked={formData.llego_alerta}
-              onChange={handleLlegoAlertaChange}
-              className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
-            />
-            <label htmlFor="llego_alerta" className="text-sm font-medium text-gray-700">
-              Llegó alerta
-            </label>
-          </div>
+            <div>
+              <label htmlFor="tipo" className="block text-sm font-medium text-gray-700">
+                Tipo de Intrusión
+              </label>
+              <select
+                name="tipo"
+                id="tipo"
+                value={tipoIntrusionId === '' ? '' : String(tipoIntrusionId)}
+                onChange={handleTipoIntrusionChange}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              >
+                <option value="">Seleccione...</option>
+                {tiposIntrusion.map((tipoIntrusion) => (
+                  <option key={tipoIntrusion.id} value={tipoIntrusion.id}>
+                    {tipoIntrusion.descripcion}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <AutocompleteComboBox
+                label="Estado"
+                value={formData.estado}
+                onChange={handleEstadoChange}
+                items={estadoItems}
+                displayField="label"
+                valueField="value"
+                placeholder="Seleccione el estado"
+              />
+            </div>
+            {requiereProtocolo && (
+              <div>
+                <label
+                  htmlFor="conclusion_evento_id"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Conclusión del evento
+                </label>
+                <select
+                  id="conclusion_evento_id"
+                  name="conclusion_evento_id"
+                  value={formData.conclusion_evento_id}
+                  onChange={handleConclusionEventoChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                >
+                  <option value="">Seleccione...</option>
+                  {conclusionesEvento.map((conclusion) => (
+                    <option key={conclusion.id} value={conclusion.id}>
+                      {conclusion.descripcion}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="llego_alerta"
+                name="llego_alerta"
+                checked={formData.llego_alerta}
+                onChange={handleLlegoAlertaChange}
+                className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
+              />
+              <label htmlFor="llego_alerta" className="text-sm font-medium text-gray-700">
+                Llegó alerta
+              </label>
+            </div>
+            {requiereProtocolo && (
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="sustraccion_material"
+                  name="sustraccion_material"
+                  checked={formData.sustraccion_material}
+                  onChange={handleSustraccionMaterialChange}
+                  className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
+                />
+                <label
+                  htmlFor="sustraccion_material"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  Sustracción de material
+                </label>
+              </div>
+            )}
           <div className="md:col-span-2">
             <label htmlFor="descripcion" className="block text-sm font-medium text-gray-700">
               Descripción
