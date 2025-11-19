@@ -88,6 +88,8 @@ export interface Intrusion {
   estado: string;
   descripcion?: string | null;
   llego_alerta: boolean;
+  medio_comunicacion_id: number | null;
+  medio_comunicacion_descripcion?: string | null;
 }
 
 export interface Device {

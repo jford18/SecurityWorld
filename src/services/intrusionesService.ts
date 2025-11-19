@@ -9,6 +9,7 @@ export interface IntrusionPayload {
   estado?: string;
   descripcion?: string;
   llego_alerta?: boolean;
+  medio_comunicacion_id?: number | null;
 }
 
 const normalizeFechaValue = (value: unknown): string | null => {
@@ -43,6 +44,8 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     estado?: unknown;
     descripcion?: unknown;
     llego_alerta?: unknown;
+    medio_comunicacion_id?: unknown;
+    medio_comunicacion_descripcion?: unknown;
   };
 
   const id = Number(base.id);
@@ -63,6 +66,14 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     descripcion: base.descripcion == null ? null : String(base.descripcion),
     llego_alerta:
       typeof base.llego_alerta === 'boolean' ? base.llego_alerta : Boolean(base.llego_alerta),
+    medio_comunicacion_id:
+      base.medio_comunicacion_id === null || base.medio_comunicacion_id === undefined
+        ? null
+        : Number(base.medio_comunicacion_id),
+    medio_comunicacion_descripcion:
+      base.medio_comunicacion_descripcion == null
+        ? null
+        : String(base.medio_comunicacion_descripcion),
   };
 };
 
