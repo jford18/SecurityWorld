@@ -31,6 +31,7 @@ import TipoAreaList from './pages/administracion/TipoAreaList';
 import TipoAreaForm from './pages/administracion/TipoAreaForm';
 import DepartamentosResponsablesPage from './pages/administracion/DepartamentosResponsablesPage';
 import MedioComunicacionScreen from './pages/administracion/MedioComunicacionScreen';
+import CargoScreen from './pages/administracion/CargoScreen';
 
 import HaciendaPage from './pages/administracion/HaciendaPage.tsx';
 
@@ -105,6 +106,7 @@ const routeConfig: RouteDefinition[] = [
     element: <Nodos />,
     aliases: ['/admin/nodos'],
   },
+  { path: '/administracion/cargo', element: <CargoScreen /> },
   { path: '/administracion/medio-comunicacion', element: <MedioComunicacionScreen /> },
   {
     path: '/administracion/tipo-intrusion',

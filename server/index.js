@@ -6,6 +6,7 @@ import { existsSync } from "fs";
 import authRoutes from "./auth.routes.js";
 import consolasRoutes from "./consolas.routes.js";
 import nodosRoutes from "./routes/nodos.routes.js";
+import cargoRoutes from "./routes/cargo.routes.js";
 import nodosSitiosRoutes from "./routes/nodosSitios.routes.js";
 import medioComunicacionRoutes from "./routes/medioComunicacion.routes.js";
 import menusRoutes from "./menus.routes.js";
@@ -44,6 +45,7 @@ const knownApiPrefixes = [
   "/api/fallos",
   "/api/consolas",
   "/api/nodos",
+  "/api/cargo",
   "/api/medio-comunicacion",
   "/api/clientes",
   "/api/nodos-sitios",
@@ -87,6 +89,7 @@ app.use("/", authRoutes);
 app.use("/api/consolas", consolasRoutes);
 app.use("/", menusRoutes);
 app.use("/api/nodos", nodosRoutes);
+app.use("/api/cargo", cargoRoutes);
 app.use("/api/nodos-sitios", nodosSitiosRoutes);
 app.use("/api/medio-comunicacion", medioComunicacionRoutes);
 app.use("/api/fallos", fallosRoutes);
