@@ -33,6 +33,7 @@ import DepartamentosResponsablesPage from './pages/administracion/DepartamentosR
 import MedioComunicacionScreen from './pages/administracion/MedioComunicacionScreen';
 import CargoScreen from './pages/administracion/CargoScreen';
 import PersonaScreen from './pages/administracion/PersonaScreen';
+import ConclusionEventoScreen from './pages/administracion/ConclusionEventoScreen';
 
 import HaciendaPage from './pages/administracion/HaciendaPage.tsx';
 
@@ -110,6 +111,7 @@ const routeConfig: RouteDefinition[] = [
   { path: '/administracion/cargo', element: <CargoScreen /> },
   { path: '/administracion/persona', element: <PersonaScreen /> },
   { path: '/administracion/medio-comunicacion', element: <MedioComunicacionScreen /> },
+  { path: '/administracion/conclusion-evento', element: <ConclusionEventoScreen /> },
   {
     path: '/administracion/tipo-intrusion',
     element: <TipoIntrusion />,
