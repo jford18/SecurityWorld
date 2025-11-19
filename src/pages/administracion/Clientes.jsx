@@ -1,5 +1,11 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
+import {
+  addPersonaToCliente,
+  getPersonasByCliente,
+  getPersonasDisponiblesParaCliente,
+  removePersonaFromCliente,
+} from "@/services/clientePersona.service";
 
 const toast = {
   success: (message) => {
@@ -47,6 +53,14 @@ const Clientes = () => {
 
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const [personasAsignadas, setPersonasAsignadas] = useState([]);
+  const [personasDisponibles, setPersonasDisponibles] = useState([]);
+  const [personaSeleccionada, setPersonaSeleccionada] = useState("");
+  const [personaSearch, setPersonaSearch] = useState("");
+  const [personasLoading, setPersonasLoading] = useState(false);
+  const [personasError, setPersonasError] = useState("");
+  const [personaActionLoading, setPersonaActionLoading] = useState(false);
 
   const fetchClientes = useCallback(async () => {
     try {
@@ -144,6 +158,133 @@ const Clientes = () => {
     }
   };
 
+  const loadPersonasRelacionadas = useCallback(
+    async (id) => {
+      if (!id) {
+        setPersonasAsignadas([]);
+        setPersonasDisponibles([]);
+        setPersonaSeleccionada("");
+        setPersonaSearch("");
+        setPersonasError("");
+        return;
+      }
+
+      setPersonasLoading(true);
+      setPersonasError("");
+      try {
+        const [asignadas, disponibles] = await Promise.all([
+          getPersonasByCliente(id),
+          getPersonasDisponiblesParaCliente(id),
+        ]);
+        setPersonasAsignadas(Array.isArray(asignadas) ? asignadas : []);
+        setPersonasDisponibles(Array.isArray(disponibles) ? disponibles : []);
+        setPersonaSeleccionada("");
+      } catch (error) {
+        const message = resolveErrorMessage(
+          error,
+          "No se pudieron cargar las personas relacionadas"
+        );
+        setPersonasAsignadas([]);
+        setPersonasDisponibles([]);
+        setPersonasError(message);
+        toast.error(message);
+      } finally {
+        setPersonasLoading(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (clienteId) {
+      loadPersonasRelacionadas(clienteId);
+    } else {
+      loadPersonasRelacionadas(null);
+    }
+  }, [clienteId, loadPersonasRelacionadas]);
+
+  const handleAgregarPersona = async () => {
+    if (!clienteId || !personaSeleccionada) {
+      return;
+    }
+
+    try {
+      setPersonaActionLoading(true);
+      await addPersonaToCliente(clienteId, Number(personaSeleccionada));
+      toast.success("Persona asignada correctamente");
+      setPersonaSeleccionada("");
+      await loadPersonasRelacionadas(clienteId);
+    } catch (error) {
+      const message = resolveErrorMessage(
+        error,
+        "No se pudo asignar la persona al cliente"
+      );
+      toast.error(message);
+    } finally {
+      setPersonaActionLoading(false);
+    }
+  };
+
+  const handleQuitarPersona = async (personaId, nombreCompleto) => {
+    if (!clienteId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      nombreCompleto
+        ? `¿Deseas quitar a ${nombreCompleto} del cliente seleccionado?`
+        : "¿Deseas quitar esta persona del cliente?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setPersonaActionLoading(true);
+      await removePersonaFromCliente(clienteId, personaId);
+      toast.success("Persona retirada del cliente");
+      await loadPersonasRelacionadas(clienteId);
+    } catch (error) {
+      const message = resolveErrorMessage(
+        error,
+        "No se pudo quitar la persona del cliente"
+      );
+      toast.error(message);
+    } finally {
+      setPersonaActionLoading(false);
+    }
+  };
+
+  const filteredPersonasDisponibles = useMemo(() => {
+    const term = personaSearch.trim().toLowerCase();
+    if (!term) {
+      return personasDisponibles;
+    }
+
+    return personasDisponibles.filter((persona) => {
+      const texto = `${persona.nombre ?? ""} ${persona.apellido ?? ""} ${
+        persona.cargo_descripcion ?? ""
+      }`;
+      return texto.toLowerCase().includes(term);
+    });
+  }, [personaSearch, personasDisponibles]);
+
+  const formatFechaAsignacion = (value) => {
+    if (!value) {
+      return "—";
+    }
+    try {
+      return new Intl.DateTimeFormat("es-EC", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(value));
+    } catch (error) {
+      console.warn("[CLIENTES] No se pudo formatear la fecha", error);
+      return value;
+    }
+  };
+
   return (
     <div className="space-y-8">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -226,6 +367,168 @@ const Clientes = () => {
             </button>
           </div>
         </form>
+      </section>
+
+      <section className="bg-white rounded-lg shadow p-6 space-y-4">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-[#1C2E4A]">
+              Personas asociadas al cliente
+            </h2>
+            <p className="text-sm text-gray-500">
+              {clienteId
+                ? "Gestiona las personas asignadas al cliente seleccionado"
+                : "Selecciona un cliente existente para administrar sus personas"}
+            </p>
+          </div>
+          {clienteId && (
+            <div className="flex flex-col gap-2 md:flex-row md:items-end">
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="font-medium text-gray-700">Buscar persona</span>
+                <input
+                  type="search"
+                  value={personaSearch}
+                  onChange={(event) => setPersonaSearch(event.target.value)}
+                  className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+                  placeholder="Filtrar por nombre o cargo"
+                  disabled={personasLoading}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm md:w-64">
+                <span className="font-medium text-gray-700">
+                  Personas disponibles
+                </span>
+                <select
+                  value={personaSeleccionada}
+                  onChange={(event) => setPersonaSeleccionada(event.target.value)}
+                  className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+                  disabled={personasLoading || personaActionLoading}
+                >
+                  <option value="">Seleccione una persona</option>
+                  {filteredPersonasDisponibles.map((persona) => (
+                    <option key={persona.id} value={persona.id}>
+                      {`${persona.nombre ?? ""} ${persona.apellido ?? ""} ${
+                        persona.cargo_descripcion
+                          ? `- ${persona.cargo_descripcion}`
+                          : ""
+                      }`.trim()}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className={primaryButtonClasses}
+                disabled={
+                  !clienteId ||
+                  !personaSeleccionada ||
+                  personasLoading ||
+                  personaActionLoading
+                }
+                onClick={handleAgregarPersona}
+              >
+                {personaActionLoading ? "Procesando..." : "Agregar"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {!clienteId && (
+          <p className="text-sm text-gray-500">
+            Debes seleccionar un cliente existente para poder asignar personas.
+          </p>
+        )}
+
+        {personasError && (
+          <p className="text-sm text-red-600">{personasError}</p>
+        )}
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Nombre
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Apellido
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Cargo
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Estado
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Fecha asignación
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 sticky right-0 bg-gray-50">
+                  Acciones
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {personasLoading ? (
+                <tr>
+                  <td colSpan="6" className="px-4 py-4 text-center text-sm text-gray-500">
+                    Cargando personas...
+                  </td>
+                </tr>
+              ) : clienteId && personasAsignadas.length > 0 ? (
+                personasAsignadas.map((persona) => (
+                  <tr key={persona.persona_id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm text-gray-800">
+                      {persona.nombre ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-800">
+                      {persona.apellido ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {persona.cargo_descripcion ?? persona.cargo_id ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <span
+                        className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                          Boolean(persona.estado)
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-200 text-gray-600"
+                        }`}
+                      >
+                        {Boolean(persona.estado) ? "Activo" : "Inactivo"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {formatFechaAsignacion(persona.fecha_asignacion)}
+                    </td>
+                    <td className="px-4 py-3 text-sm sticky right-0 bg-white">
+                      <button
+                        type="button"
+                        className={dangerButtonClasses}
+                        disabled={personaActionLoading}
+                        onClick={() =>
+                          handleQuitarPersona(
+                            persona.persona_id,
+                            `${persona.nombre ?? ""} ${persona.apellido ?? ""}`.trim()
+                          )
+                        }
+                      >
+                        Quitar
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="px-4 py-4 text-center text-sm text-gray-500">
+                    {clienteId
+                      ? "No hay personas asignadas a este cliente"
+                      : "Selecciona un cliente para ver sus personas"}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="bg-white rounded-lg shadow p-6 space-y-4">

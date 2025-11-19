@@ -283,3 +283,54 @@ export const deletePersona = async (req, res) => {
     res.status(500).json(formatError("Error al eliminar la persona"));
   }
 };
+
+export const getPersonasDisponiblesParaCliente = async (req, res) => {
+  const { clienteId } = req.params;
+  const parsedClienteId = Number(clienteId);
+
+  if (!Number.isInteger(parsedClienteId) || parsedClienteId < 0) {
+    return res
+      .status(400)
+      .json(
+        formatError("El identificador del cliente proporcionado no es válido")
+      );
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT p.id, p.nombre, p.apellido, p.cargo_id, c.descripcion AS cargo_descripcion
+         FROM persona p
+         INNER JOIN catalogo_cargo c ON c.id = p.cargo_id
+        WHERE p.estado = TRUE
+          AND NOT EXISTS (
+            SELECT 1
+              FROM public.cliente_persona cp
+             WHERE cp.persona_id = p.id
+               AND cp.cliente_id <> $1
+          )
+        ORDER BY p.apellido ASC, p.nombre ASC, p.id ASC`,
+      [parsedClienteId]
+    );
+
+    res
+      .status(200)
+      .json(
+        formatSuccess(
+          "Personas disponibles para asignar",
+          result.rows ?? []
+        )
+      );
+  } catch (error) {
+    console.error(
+      "[PERSONA] Error al obtener personas disponibles para cliente:",
+      error
+    );
+    res
+      .status(500)
+      .json(
+        formatError(
+          "Ocurrió un error al obtener las personas disponibles para asignar"
+        )
+      );
+  }
+};
