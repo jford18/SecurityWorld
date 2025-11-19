@@ -53,17 +53,44 @@ const fetchPersonaForAssignment = async (personaId) => {
   return result.rows[0];
 };
 
-export const getClientes = async (_req, res) => {
+const sanitizeSearch = (value) =>
+  typeof value === "string" ? value.trim() : "";
+
+const buildSearchQuery = (term) => ({
+  query: `
+    SELECT id, nombre, identificacion, direccion, telefono, activo, fecha_creacion
+    FROM public.clientes
+    WHERE (
+      nombre ILIKE $1 OR
+      identificacion ILIKE $1 OR
+      direccion ILIKE $1 OR
+      telefono ILIKE $1
+    )
+    ORDER BY id
+  `,
+  values: [`%${term}%`],
+});
+
+export const getClientes = async (req, res) => {
   try {
-    const result = await pool.query(CLIENTES_BASE_QUERY);
-    res.status(200).json(
-      formatSuccess("Listado de clientes", result.rows ?? [])
-    );
+    const rawSearch = sanitizeSearch(req?.query?.q ?? req?.query?.search ?? "");
+    const shouldFilter = rawSearch.length > 0;
+
+    const { query, values } = shouldFilter
+      ? buildSearchQuery(rawSearch)
+      : { query: CLIENTES_BASE_QUERY, values: [] };
+
+    const result = await pool.query(query, values);
+
+    console.log("CLIENTES - registros encontrados:", result.rowCount ?? 0);
+
+    res.json(result.rows ?? []);
   } catch (error) {
     console.error("[CLIENTES] Error al listar clientes:", error);
-    res
-      .status(500)
-      .json(formatError("Ocurrió un error al obtener los clientes"));
+    res.status(500).json({
+      message: "Error obteniendo clientes",
+      error,
+    });
   }
 };
 
