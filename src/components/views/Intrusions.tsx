@@ -15,9 +15,14 @@ const estadoItems = [
   { id: 'atendido', label: 'Atendido', value: 'Atendido' },
 ];
 
-type IntrusionFormData = Required<Pick<IntrusionPayload, 'fecha_evento'>> &
-  Required<Pick<IntrusionPayload, 'ubicacion' | 'tipo' | 'estado'>> &
-  Pick<IntrusionPayload, 'descripcion'>;
+type IntrusionFormData = {
+  fecha_evento: string;
+  fecha_reaccion: string;
+  ubicacion: string;
+  tipo: string;
+  estado: string;
+  descripcion: string;
+};
 
 const getInitialDateTimeValue = () => {
   const now = new Date();
@@ -27,6 +32,7 @@ const getInitialDateTimeValue = () => {
 
 const buildInitialFormData = (): IntrusionFormData => ({
   fecha_evento: getInitialDateTimeValue(),
+  fecha_reaccion: '',
   ubicacion: '',
   tipo: '',
   estado: '',
@@ -106,6 +112,13 @@ const Intrusions: React.FC = () => {
     }));
   };
 
+  const handleFechaReaccionChange = (isoValue: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      fecha_reaccion: isoValue,
+    }));
+  };
+
   const isSubmitDisabled = useMemo(() => {
     return (
       !formData.fecha_evento ||
@@ -119,13 +132,38 @@ const Intrusions: React.FC = () => {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    setIsSubmitting(true);
     setError(null);
 
     const descripcionValue = formData.descripcion?.trim();
 
+    if (formData.fecha_evento && formData.fecha_reaccion) {
+      const fechaEventoDate = new Date(formData.fecha_evento);
+      const fechaReaccionDate = new Date(formData.fecha_reaccion);
+
+      if (
+        !Number.isNaN(fechaEventoDate.getTime()) &&
+        !Number.isNaN(fechaReaccionDate.getTime())
+      ) {
+        const diffMs = fechaReaccionDate.getTime() - fechaEventoDate.getTime();
+        const diffMinutes = diffMs / (1000 * 60);
+
+        if (diffMinutes > 5) {
+          const confirmationMessage =
+            'La diferencia entre la fecha/hora de intrusión y la fecha/hora de reacción es mayor a 5 minutos. ¿Confirma que los datos son correctos?';
+          const continuar =
+            typeof window === 'undefined' ? true : window.confirm(confirmationMessage);
+          if (!continuar) {
+            return;
+          }
+        }
+      }
+    }
+
+    setIsSubmitting(true);
+
     const payload: IntrusionPayload = {
       fecha_evento: formData.fecha_evento,
+      fecha_reaccion: formData.fecha_reaccion || null,
       ubicacion: formData.ubicacion.trim(),
       tipo: formData.tipo.trim(),
       estado: formData.estado,
@@ -159,6 +197,15 @@ const Intrusions: React.FC = () => {
               value={formData.fecha_evento}
               onChange={handleFechaEventoChange}
               required
+            />
+          </div>
+          <div className="flex flex-col">
+            <FechaHoraFalloPicker
+              id="fecha_reaccion"
+              name="fecha_reaccion"
+              label="Fecha hora reacción"
+              value={formData.fecha_reaccion}
+              onChange={handleFechaReaccionChange}
             />
           </div>
           <div>

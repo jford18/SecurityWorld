@@ -3,13 +3,14 @@ import { Intrusion } from '../types';
 
 export interface IntrusionPayload {
   fecha_evento?: string;
+  fecha_reaccion?: string | null;
   ubicacion?: string;
   tipo?: string;
   estado?: string;
   descripcion?: string;
 }
 
-const normalizeFechaEvento = (value: unknown): string | null => {
+const normalizeFechaValue = (value: unknown): string | null => {
   if (!value && value !== 0) {
     return null;
   }
@@ -35,6 +36,7 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
   const base = payload as {
     id?: unknown;
     fecha_evento?: unknown;
+    fecha_reaccion?: unknown;
     ubicacion?: unknown;
     tipo?: unknown;
     estado?: unknown;
@@ -42,7 +44,8 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
   };
 
   const id = Number(base.id);
-  const fechaEvento = normalizeFechaEvento(base.fecha_evento);
+  const fechaEvento = normalizeFechaValue(base.fecha_evento);
+  const fechaReaccion = normalizeFechaValue(base.fecha_reaccion);
 
   if (!Number.isFinite(id) || !fechaEvento) {
     return null;
@@ -51,6 +54,7 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
   return {
     id,
     fecha_evento: fechaEvento,
+    fecha_reaccion: fechaReaccion,
     ubicacion: base.ubicacion == null ? '' : String(base.ubicacion),
     tipo: base.tipo == null ? '' : String(base.tipo),
     estado: base.estado == null ? '' : String(base.estado),
