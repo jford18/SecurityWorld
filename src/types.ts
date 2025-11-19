@@ -83,6 +83,7 @@ export interface Intrusion {
   id: number;
   fecha_evento: string;
   fecha_reaccion: string | null;
+  fecha_reaccion_fuera: string | null;
   ubicacion: string;
   tipo: string;
   estado: string;
@@ -90,6 +91,9 @@ export interface Intrusion {
   llego_alerta: boolean;
   medio_comunicacion_id: number | null;
   medio_comunicacion_descripcion?: string | null;
+  conclusion_evento_id: number | null;
+  conclusion_evento_descripcion?: string | null;
+  sustraccion_material: boolean;
 }
 
 export interface Device {

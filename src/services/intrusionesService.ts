@@ -4,12 +4,15 @@ import { Intrusion } from '../types';
 export interface IntrusionPayload {
   fecha_evento?: string;
   fecha_reaccion?: string | null;
+  fecha_reaccion_fuera?: string | null;
   ubicacion?: string;
   tipo?: string;
   estado?: string;
   descripcion?: string;
   llego_alerta?: boolean;
   medio_comunicacion_id?: number | null;
+  conclusion_evento_id?: number | null;
+  sustraccion_material?: boolean;
 }
 
 const normalizeFechaValue = (value: unknown): string | null => {
@@ -39,6 +42,7 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     id?: unknown;
     fecha_evento?: unknown;
     fecha_reaccion?: unknown;
+    fecha_reaccion_fuera?: unknown;
     ubicacion?: unknown;
     tipo?: unknown;
     estado?: unknown;
@@ -46,34 +50,59 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     llego_alerta?: unknown;
     medio_comunicacion_id?: unknown;
     medio_comunicacion_descripcion?: unknown;
+    conclusion_evento_id?: unknown;
+    conclusion_evento_descripcion?: unknown;
+    sustraccion_material?: unknown;
   };
 
   const id = Number(base.id);
   const fechaEvento = normalizeFechaValue(base.fecha_evento);
   const fechaReaccion = normalizeFechaValue(base.fecha_reaccion);
+  const fechaReaccionFuera = normalizeFechaValue(base.fecha_reaccion_fuera);
 
   if (!Number.isFinite(id) || !fechaEvento) {
     return null;
   }
 
+  const medioIdValue =
+    base.medio_comunicacion_id === null || base.medio_comunicacion_id === undefined
+      ? null
+      : Number(base.medio_comunicacion_id);
+  const medioComunicacionId =
+    medioIdValue === null || Number.isNaN(medioIdValue) ? null : medioIdValue;
+
+  const conclusionIdValue =
+    base.conclusion_evento_id === null || base.conclusion_evento_id === undefined
+      ? null
+      : Number(base.conclusion_evento_id);
+  const conclusionEventoId =
+    conclusionIdValue === null || Number.isNaN(conclusionIdValue) ? null : conclusionIdValue;
+
   return {
     id,
     fecha_evento: fechaEvento,
     fecha_reaccion: fechaReaccion,
+    fecha_reaccion_fuera: fechaReaccionFuera,
     ubicacion: base.ubicacion == null ? '' : String(base.ubicacion),
     tipo: base.tipo == null ? '' : String(base.tipo),
     estado: base.estado == null ? '' : String(base.estado),
     descripcion: base.descripcion == null ? null : String(base.descripcion),
     llego_alerta:
       typeof base.llego_alerta === 'boolean' ? base.llego_alerta : Boolean(base.llego_alerta),
-    medio_comunicacion_id:
-      base.medio_comunicacion_id === null || base.medio_comunicacion_id === undefined
-        ? null
-        : Number(base.medio_comunicacion_id),
+    medio_comunicacion_id: medioComunicacionId,
     medio_comunicacion_descripcion:
       base.medio_comunicacion_descripcion == null
         ? null
         : String(base.medio_comunicacion_descripcion),
+    conclusion_evento_id: conclusionEventoId,
+    conclusion_evento_descripcion:
+      base.conclusion_evento_descripcion == null
+        ? null
+        : String(base.conclusion_evento_descripcion),
+    sustraccion_material:
+      typeof base.sustraccion_material === 'boolean'
+        ? base.sustraccion_material
+        : Boolean(base.sustraccion_material),
   };
 };
 
