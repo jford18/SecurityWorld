@@ -24,6 +24,7 @@ import AsignacionRolesScreen from './pages/admin/AsignacionRolesScreen';
 import MenuScreen from './pages/admin/MenuScreen';
 import RolMenuScreen from './pages/admin/RolMenuScreen';
 import Nodos from './components/views/Nodos.jsx';
+import TipoIntrusion from './components/views/TipoIntrusion.jsx';
 import Clientes from './pages/administracion/Clientes';
 import AsignarClienteSitio from './pages/administracion/AsignarClienteSitio';
 import TipoAreaList from './pages/administracion/TipoAreaList';
@@ -102,6 +103,10 @@ const routeConfig: RouteDefinition[] = [
     path: '/administracion/nodos',
     element: <Nodos />,
     aliases: ['/admin/nodos'],
+  },
+  {
+    path: '/administracion/tipo-intrusion',
+    element: <TipoIntrusion />,
   },
   { path: '/administracion/clientes', element: <Clientes /> },
   { path: '/administracion/asignar-cliente-sitio', element: <AsignarClienteSitio /> },
