@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import FechaHoraFalloPicker from '../ui/FechaHoraFalloPicker';
-import AutocompleteComboBox from '../ui/AutocompleteComboBox';
 import { intrusionsData as mockIntrusions } from '../../data/mockData';
 import { Intrusion } from '../../types';
 import {
@@ -20,12 +19,6 @@ import {
 import { Sitio, getSitios } from '../../services/sitiosService';
 import { useSession } from '../context/SessionContext';
 import { getAll as getFuerzasReaccion } from '../../services/fuerzaReaccion.service';
-
-const estadoItems = [
-  { id: 'empty', label: 'Seleccione...', value: '' },
-  { id: 'pendiente', label: 'Pendiente', value: 'Pendiente' },
-  { id: 'atendido', label: 'Atendido', value: 'Atendido' },
-];
 
 const normalizeConsoleName = (value: string | null | undefined): string => {
   if (!value) {
@@ -346,23 +339,6 @@ const Intrusions: React.FC = () => {
     };
   }, []);
 
-  const handleInputChange = (
-    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = event.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleEstadoChange = (value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      estado: value,
-    }));
-  };
-
   const handleFechaEventoChange = (isoValue: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -492,7 +468,6 @@ const Intrusions: React.FC = () => {
       !formData.fecha_evento ||
       !formData.sitioId ||
       !tipoValue ||
-      !formData.estado ||
       isSubmitting;
 
     if (!requiereProtocolo) {
@@ -508,7 +483,6 @@ const Intrusions: React.FC = () => {
     );
   }, [
     formData.conclusion_evento_id,
-    formData.estado,
     formData.fecha_evento,
     formData.fecha_reaccion,
     formData.fecha_reaccion_fuera,
@@ -543,8 +517,6 @@ const Intrusions: React.FC = () => {
 
     const sitioSeleccionado =
       sitios.find((sitio) => String(sitio.id) === formData.sitioId) ?? null;
-
-    const descripcionValue = formData.descripcion?.trim();
 
     if (formData.fecha_evento && formData.fecha_reaccion) {
       const fechaEventoDate = new Date(formData.fecha_evento);
@@ -639,8 +611,8 @@ const Intrusions: React.FC = () => {
           : null,
       ubicacion: '',
       tipo: tipoValue,
-      estado: formData.estado,
-      descripcion: descripcionValue ? descripcionValue : undefined,
+      estado: formData.estado || '',
+      descripcion: formData.descripcion?.trim() || '',
       llego_alerta: formData.llego_alerta,
       medio_comunicacion_id: medioComunicacionValue,
       conclusion_evento_id: requiereProtocolo ? conclusionEventoValue : null,
@@ -778,32 +750,7 @@ const Intrusions: React.FC = () => {
                     Llegó alerta
                   </label>
                 </div>
-                <div>
-                  <AutocompleteComboBox
-                    label="Estado"
-                    value={formData.estado}
-                    onChange={handleEstadoChange}
-                    items={estadoItems}
-                    displayField="label"
-                    valueField="value"
-                    placeholder="Seleccione el estado"
-                  />
-                </div>
               </div>
-            </div>
-            <div className="mt-4">
-              <label htmlFor="descripcion" className="block text-sm font-medium text-gray-700">
-                Descripción
-              </label>
-              <textarea
-                name="descripcion"
-                id="descripcion"
-                rows={3}
-                value={formData.descripcion}
-                onChange={handleInputChange}
-                placeholder="Ej: Detectado por sensor PIR"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              ></textarea>
             </div>
 
             {requiereProtocolo && (
