@@ -20,6 +20,8 @@ const normalizeActiveValue = (value) => {
     : Boolean(value);
 };
 
+const normalizeNecesitaProtocoloValue = (value) => normalizeActiveValue(value);
+
 export const listTiposIntrusion = async (req, res) => {
   const { search = "", page, limit } = req.query ?? {};
 
@@ -46,7 +48,7 @@ export const listTiposIntrusion = async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT id, descripcion, activo, fecha_creacion FROM catalogo_tipo_intrusion ${whereClause} ${orderClause}${paginationClause}`.trim(),
+      `SELECT id, descripcion, activo, necesita_protocolo, fecha_creacion FROM catalogo_tipo_intrusion ${whereClause} ${orderClause}${paginationClause}`.trim(),
       values
     );
 
@@ -66,7 +68,7 @@ export const getTipoIntrusionById = async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT id, descripcion, activo, fecha_creacion FROM catalogo_tipo_intrusion WHERE id = $1",
+      "SELECT id, descripcion, activo, necesita_protocolo, fecha_creacion FROM catalogo_tipo_intrusion WHERE id = $1",
       [id]
     );
 
@@ -89,7 +91,7 @@ export const getTipoIntrusionById = async (req, res) => {
 };
 
 export const createTipoIntrusion = async (req, res) => {
-  const { descripcion, activo } = req.body ?? {};
+  const { descripcion, activo, necesita_protocolo } = req.body ?? {};
   const trimmedDescripcion =
     typeof descripcion === "string" ? descripcion.trim() : "";
 
@@ -112,9 +114,10 @@ export const createTipoIntrusion = async (req, res) => {
     }
 
     const normalizedActive = normalizeActiveValue(activo);
+    const normalizedNecesitaProtocolo = normalizeNecesitaProtocoloValue(necesita_protocolo);
     const insertResult = await pool.query(
-      "INSERT INTO catalogo_tipo_intrusion (descripcion, activo) VALUES ($1, COALESCE($2, true)) RETURNING id, descripcion, activo, fecha_creacion",
-      [trimmedDescripcion, normalizedActive]
+      "INSERT INTO catalogo_tipo_intrusion (descripcion, activo, necesita_protocolo) VALUES ($1, COALESCE($2, true), COALESCE($3, false)) RETURNING id, descripcion, activo, necesita_protocolo, fecha_creacion",
+      [trimmedDescripcion, normalizedActive, normalizedNecesitaProtocolo]
     );
 
     res
@@ -135,7 +138,7 @@ export const createTipoIntrusion = async (req, res) => {
 
 export const updateTipoIntrusion = async (req, res) => {
   const { id } = req.params;
-  const { descripcion, activo } = req.body ?? {};
+  const { descripcion, activo, necesita_protocolo } = req.body ?? {};
 
   const updates = [];
   const values = [];
@@ -181,6 +184,15 @@ export const updateTipoIntrusion = async (req, res) => {
     index += 1;
   }
 
+  if (necesita_protocolo !== undefined) {
+    const normalizedNecesitaProtocolo = normalizeNecesitaProtocoloValue(
+      necesita_protocolo
+    );
+    updates.push(`necesita_protocolo = $${index}`);
+    values.push(normalizedNecesitaProtocolo);
+    index += 1;
+  }
+
   if (updates.length === 0) {
     return res
       .status(400)
@@ -191,7 +203,7 @@ export const updateTipoIntrusion = async (req, res) => {
 
   try {
     const result = await pool.query(
-      `UPDATE catalogo_tipo_intrusion SET ${updates.join(", ")} WHERE id = $${index} RETURNING id, descripcion, activo, fecha_creacion`,
+      `UPDATE catalogo_tipo_intrusion SET ${updates.join(", ")} WHERE id = $${index} RETURNING id, descripcion, activo, necesita_protocolo, fecha_creacion`,
       values
     );
 

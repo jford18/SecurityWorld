@@ -19,6 +19,7 @@ const successButtonClasses = `${baseButtonClasses} bg-emerald-500 text-white hov
 const initialFormState = {
   descripcion: '',
   activo: true,
+  necesita_protocolo: false,
 };
 
 const TipoIntrusion = () => {
@@ -95,6 +96,7 @@ const TipoIntrusion = () => {
     setFormState({
       descripcion: tipo.descripcion ?? '',
       activo: Boolean(tipo.activo),
+      necesita_protocolo: Boolean(tipo.necesita_protocolo),
     });
     setFormError('');
     setIsModalOpen(true);
@@ -107,6 +109,7 @@ const TipoIntrusion = () => {
   const handleSubmit = async () => {
     const descripcion = formState.descripcion.trim();
     const activo = Boolean(formState.activo);
+    const necesitaProtocolo = Boolean(formState.necesita_protocolo);
 
     if (!descripcion) {
       setFormError('La descripción es obligatoria');
@@ -126,10 +129,18 @@ const TipoIntrusion = () => {
 
     try {
       if (isEditing && selectedTipoIntrusion) {
-        await update(selectedTipoIntrusion.id, { descripcion, activo });
+        await update(selectedTipoIntrusion.id, {
+          descripcion,
+          activo,
+          necesita_protocolo: necesitaProtocolo,
+        });
         alert('Tipo de intrusión actualizado correctamente');
       } else {
-        await create({ descripcion, activo });
+        await create({
+          descripcion,
+          activo,
+          necesita_protocolo: necesitaProtocolo,
+        });
         alert('Tipo de intrusión creado correctamente');
       }
       await fetchTiposIntrusion();
@@ -186,6 +197,16 @@ const TipoIntrusion = () => {
     </span>
   );
 
+  const renderNecesitaProtocolo = (needsProtocol) => (
+    <span
+      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+        needsProtocol ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-600'
+      }`}
+    >
+      {needsProtocol ? 'Sí' : 'No'}
+    </span>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -236,6 +257,9 @@ const TipoIntrusion = () => {
                       Activo
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
+                      Necesita Protocolo
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
                       Fecha Creación
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
@@ -249,6 +273,9 @@ const TipoIntrusion = () => {
                       <td className="px-4 py-3 text-sm text-gray-700">{tipo.id}</td>
                       <td className="px-4 py-3 text-sm text-gray-700">{tipo.descripcion}</td>
                       <td className="px-4 py-3 text-sm text-gray-700">{renderStatus(tipo.activo)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700">
+                        {renderNecesitaProtocolo(tipo.necesita_protocolo)}
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-700">
                         {tipo.fecha_creacion
                           ? new Date(tipo.fecha_creacion).toLocaleString()
@@ -343,20 +370,43 @@ const TipoIntrusion = () => {
                 />
               </div>
 
-              <div className="flex items-center justify-between rounded-md border border-gray-200 px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-800">Activo</p>
-                  <p className="text-xs text-gray-500">Determina si el tipo de intrusión está disponible.</p>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between rounded-md border border-gray-200 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">Activo</p>
+                    <p className="text-xs text-gray-500">Determina si el tipo de intrusión está disponible.</p>
+                  </div>
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      className="peer sr-only"
+                      checked={formState.activo}
+                      onChange={(e) => setFormState({ ...formState, activo: e.target.checked })}
+                    />
+                    <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[4px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all peer-checked:bg-emerald-500 peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                  </label>
                 </div>
-                <label className="relative inline-flex cursor-pointer items-center">
-                  <input
-                    type="checkbox"
-                    className="peer sr-only"
-                    checked={formState.activo}
-                    onChange={(e) => setFormState({ ...formState, activo: e.target.checked })}
-                  />
-                  <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[4px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all peer-checked:bg-emerald-500 peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                </label>
+
+                <div className="flex items-center justify-between rounded-md border border-gray-200 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">Necesita protocolo</p>
+                    <p className="text-xs text-gray-500">Indica si este tipo de intrusión requiere protocolo.</p>
+                  </div>
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      className="peer sr-only"
+                      checked={formState.necesita_protocolo}
+                      onChange={(e) =>
+                        setFormState({
+                          ...formState,
+                          necesita_protocolo: e.target.checked,
+                        })
+                      }
+                    />
+                    <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[4px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all peer-checked:bg-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                  </label>
+                </div>
               </div>
             </div>
 
