@@ -35,7 +35,26 @@ app.use(express.json());
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: (origin, callback) => {
+      const defaultAllowedOrigins = [
+        "http://localhost:5173",
+        "http://172.16.9.253:5173",
+      ];
+
+      const extraOrigins =
+        process.env.ALLOWED_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean) ?? [];
+
+      const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...extraOrigins])];
+
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      console.warn("[CORS] Origen no permitido:", origin);
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
