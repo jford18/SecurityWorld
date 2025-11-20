@@ -1,6 +1,11 @@
+const explicitBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+const isViteDev = window.location.port === "5173";
+
 const rawBaseUrl =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ||
-  `${window.location.protocol}//${window.location.host}/api`;
+  explicitBaseUrl ||
+  (isViteDev
+    ? `http://${window.location.hostname}:3000/api`
+    : `${window.location.protocol}//${window.location.host}/api`);
 
 const normalizeBaseUrl = (value: string) => {
   const trimmed = value.replace(/\/+$/, "");

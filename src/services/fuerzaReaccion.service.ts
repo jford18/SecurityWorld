@@ -1,4 +1,5 @@
 import api from './api';
+import { apiFetch } from '../apiClient';
 
 const JSON_HEADERS: HeadersInit = {
   'Content-Type': 'application/json',
@@ -38,11 +39,10 @@ export const getById = async (id: number | string) => {
 };
 
 export const create = async (payload: { descripcion: string; activo?: boolean }) => {
-  const response = await fetch(API_URL, {
+  const response = await apiFetch(API_URL, {
     method: 'POST',
     headers: JSON_HEADERS,
     body: JSON.stringify(payload ?? {}),
-    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -58,11 +58,10 @@ export const update = async (
   id: number | string,
   payload: { descripcion?: string; activo?: boolean }
 ) => {
-  const response = await fetch(`${API_URL}/${id}`, {
+  const response = await apiFetch(`${API_URL}/${id}`, {
     method: 'PUT',
     headers: JSON_HEADERS,
     body: JSON.stringify(payload ?? {}),
-    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -77,10 +76,9 @@ export const update = async (
 };
 
 export const remove = async (id: number | string) => {
-  const response = await fetch(`${API_URL}/${id}`, {
+  const response = await apiFetch(`${API_URL}/${id}`, {
     method: 'DELETE',
     headers: { Accept: 'application/json' },
-    credentials: 'include',
   });
 
   if (!response.ok) {

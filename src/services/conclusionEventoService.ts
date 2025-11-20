@@ -1,4 +1,5 @@
 import api from './api';
+import { apiFetch } from '../apiClient';
 
 const JSON_HEADERS: HeadersInit = {
   'Content-Type': 'application/json',
@@ -57,12 +58,11 @@ const performJsonRequest = async <T>(
   options: RequestInit,
   fallbackMessage: string
 ) => {
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     ...options,
     headers: {
       ...(options.headers ?? {}),
     },
-    credentials: 'include',
   });
 
   if (!response.ok) {

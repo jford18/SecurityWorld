@@ -1,4 +1,5 @@
 import api from './api';
+import { apiFetch } from '../apiClient';
 
 const jsonContentType = 'application/json';
 const ENDPOINT = '/api/consolas';
@@ -30,7 +31,7 @@ export const getConsolas = getAll;
 
 // NEW: Servicio para crear una consola garantizando cuerpo JSON y validaciones del backend.
 export const createConsola = async (payload: ConsolaPayload) => {
-  const response = await fetch(ENDPOINT, {
+  const response = await apiFetch(ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': jsonContentType,
@@ -46,7 +47,7 @@ export const createConsola = async (payload: ConsolaPayload) => {
 
 // NEW: Servicio para actualizar solo el nombre de la consola especificada por id.
 export const updateConsola = async (id: number, payload: ConsolaPayload) => {
-  const response = await fetch(`${ENDPOINT}/${id}`, {
+  const response = await apiFetch(`${ENDPOINT}/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': jsonContentType,
@@ -62,7 +63,7 @@ export const updateConsola = async (id: number, payload: ConsolaPayload) => {
 
 // NEW: Servicio para eliminar una consola y devolver respuestas de error si ocurren conflictos.
 export const deleteConsola = async (id: number) => {
-  const response = await fetch(`${ENDPOINT}/${id}`, {
+  const response = await apiFetch(`${ENDPOINT}/${id}`, {
     method: 'DELETE',
     headers: { Accept: jsonContentType },
   });
