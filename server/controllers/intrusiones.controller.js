@@ -87,18 +87,18 @@ export const listIntrusiones = async (_req, res) => {
          i.fecha_reaccion_fuera,
          i.llego_alerta,
          i.medio_comunicacion_id,
-        i.conclusion_evento_id,
-        i.sustraccion_material,
-        i.fuerza_reaccion_id,
-        s.nombre AS sitio_nombre,
-        m.descripcion AS medio_comunicacion_descripcion,
-        ce.descripcion AS conclusion_evento_descripcion,
-        fr.descripcion AS fuerza_reaccion_descripcion
-       FROM public.intrusiones i
-       LEFT JOIN public.sitios s ON i.sitio_id = s.id
-       LEFT JOIN public.catalogo_medio_comunicacion m ON i.medio_comunicacion_id = m.id
-       LEFT JOIN public.catalogo_conclusion_evento ce ON i.conclusion_evento_id = ce.id
-       LEFT JOIN public."catalogo_fuerza_reaccion" fr ON i.fuerza_reaccion_id = fr.id
+         i.conclusion_evento_id,
+         i.sustraccion_material,
+         i.fuerza_reaccion_id,
+         s.nombre AS sitio_nombre,
+         m.descripcion AS medio_comunicacion_descripcion,
+         ce.descripcion AS conclusion_evento_descripcion,
+         fr.descripcion AS fuerza_reaccion_descripcion
+       FROM public.intrusiones AS i
+       LEFT JOIN public.sitios AS s ON s.id = i.sitio_id
+       LEFT JOIN public.catalogo_medio_comunicacion AS m ON m.id = i.medio_comunicacion_id
+       LEFT JOIN public.catalogo_conclusion_evento AS ce ON ce.id = i.conclusion_evento_id
+       LEFT JOIN public."catalogo_fuerza_reaccion" AS fr ON fr.id = i.fuerza_reaccion_id
        ORDER BY i.fecha_evento DESC NULLS LAST, i.id DESC`
     );
     const intrusiones = result.rows.map(mapIntrusionRow);
