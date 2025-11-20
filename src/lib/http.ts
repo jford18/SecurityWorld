@@ -1,9 +1,9 @@
-export async function apiFetch(path: string, init: RequestInit = {}) {
-  const base = "http://localhost:3000";
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = path.startsWith("http") ? path : `${base}${normalizedPath}`;
+import { buildApiUrl } from "./apiConfig";
 
-  if (url.includes("/api/")) {
+export async function apiFetch(path: string, init: RequestInit = {}) {
+  const url = buildApiUrl(path);
+
+  if (!url.includes("/api/")) {
     console.warn("[Frontend][ALERTA] Ruta incorrecta detectada:", url, new Error().stack);
   }
 

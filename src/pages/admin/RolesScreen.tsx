@@ -1,5 +1,6 @@
 // NEW: Pantalla de mantenimiento para la gestión de roles del portal administrativo.
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { buildApiUrl } from '../../lib/apiConfig';
 
 type Role = {
   id: number;
@@ -15,10 +16,6 @@ const baseButtonClasses =
   'px-4 py-2 rounded-md font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2';
 const primaryButtonClasses = `${baseButtonClasses} bg-[#1C2E4A] text-white hover:bg-[#243b55] focus:ring-[#1C2E4A]`;
 const secondaryButtonClasses = `${baseButtonClasses} bg-gray-200 text-gray-700 hover:bg-gray-300 focus:ring-gray-300`;
-
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
-// FIX: Se define la URL base del backend (puerto 3000) para no volver a apuntar al servidor del frontend (5173),
-//      que era el causante del error 404 al guardar roles.
 
 const RolesScreen: React.FC = () => {
   // NEW: Estados para gestionar la lista de roles y la interacción del usuario.
@@ -36,8 +33,7 @@ const RolesScreen: React.FC = () => {
   const fetchRoles = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/roles`);
-      // FIX: Se apunta explícitamente al backend en el puerto 3000 para evitar el 404 del servidor de Vite.
+      const response = await fetch(buildApiUrl('/api/roles'));
 
       if (!response.ok) {
         throw new Error('No se pudo obtener la lista de roles');
@@ -120,8 +116,8 @@ const RolesScreen: React.FC = () => {
 
     try {
       const endpoint = selectedRole
-        ? `${API_BASE_URL}/api/roles/${selectedRole.id}`
-        : `${API_BASE_URL}/api/roles`;
+        ? buildApiUrl(`/api/roles/${selectedRole.id}`)
+        : buildApiUrl('/api/roles');
       const method = selectedRole ? 'PUT' : 'POST';
 
       const response = await fetch(endpoint, {
@@ -155,7 +151,7 @@ const RolesScreen: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/roles/${role.id}`, {
+      const response = await fetch(buildApiUrl(`/api/roles/${role.id}`), {
         method: 'DELETE',
       });
 

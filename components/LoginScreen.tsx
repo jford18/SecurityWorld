@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'; // FIX: Se agregan hooks necesarios para manejar efectos y callbacks
+import { buildApiUrl } from '@/lib/apiConfig';
 
 type Role = string;
 
@@ -54,7 +55,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       setIsLoading(true);
 
       try {
-        const response = await fetch('http://localhost:3000/api/auth/login', {
+        const response = await fetch(buildApiUrl('/api/auth/login'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -89,7 +90,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
         try {
           const consolesResponse = await fetch(
-            `http://localhost:3000/api/auth/consolas/${usuario.id}`
+            buildApiUrl(`/api/auth/consolas/${usuario.id}`)
           );
 
           if (!consolesResponse.ok) {

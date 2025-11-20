@@ -1,11 +1,16 @@
 import axios from "axios";
+import { API_BASE_URL, buildApiUrl } from "../lib/apiConfig";
 
 const api = axios.create({
-  baseURL: "http://localhost:3000", // Backend corriendo en el puerto 3000
+  baseURL: API_BASE_URL,
   withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
+  if (config.url) {
+    config.url = buildApiUrl(config.url);
+  }
+
   const token = localStorage.getItem('token');
 
   if (token) {
