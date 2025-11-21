@@ -70,6 +70,7 @@ app.use(
 );
 
 const knownApiPrefixes = [
+  "/api/menus",
   "/api/v1/catalogo-tipo-problema",
   "/api/tipo-intrusion",
   "/api/intrusiones",
@@ -124,7 +125,7 @@ app.use((req, _res, next) => {
 // Rutas principales
 app.use("/", authRoutes);
 app.use("/api/consolas", consolasRoutes);
-app.use("/", menusRoutes);
+app.use("/api", menusRoutes);
 app.use("/api/nodos", nodosRoutes);
 app.use("/api/conclusion-evento", conclusionEventoRoutes);
 app.use("/api/fuerza-reaccion", fuerzaReaccionRoutes);
