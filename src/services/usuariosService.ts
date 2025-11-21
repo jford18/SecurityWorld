@@ -1,6 +1,6 @@
 import api from './api';
 
-const USUARIOS_ENDPOINT = '/api/usuarios';
+const USUARIOS_ENDPOINT = '/usuarios';
 const DEFAULT_ERROR_MESSAGE = 'Error al comunicarse con el servidor';
 
 export type UsuarioPayload = {

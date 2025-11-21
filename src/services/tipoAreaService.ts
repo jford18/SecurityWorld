@@ -1,6 +1,6 @@
 import api from './api';
 
-const API_URL = '/api/tipo-area';
+const API_URL = '/tipo-area';
 
 type TipoArea = {
   id: number;

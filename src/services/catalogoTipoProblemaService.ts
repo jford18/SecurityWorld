@@ -2,7 +2,7 @@
 import type { CatalogoTipoProblema } from '../types';
 import api from './api';
 
-const BASE_PATH = '/api/v1/catalogo-tipo-problema';
+const BASE_PATH = '/v1/catalogo-tipo-problema';
 
 export type CatalogoTipoProblemaPayload = {
   descripcion: string;

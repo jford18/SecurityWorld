@@ -44,7 +44,7 @@ export interface PersonaDisponible {
 export const getPersonasByCliente = async (
   clienteId: number | string
 ): Promise<ClientePersonaRelation[]> => {
-  const { data } = await api.get(`/api/clientes/${clienteId}/personas`);
+  const { data } = await api.get(`/clientes/${clienteId}/personas`);
   return buildCollectionResponse<ClientePersonaRelation>(data);
 };
 
@@ -52,7 +52,7 @@ export const addPersonaToCliente = async (
   clienteId: number | string,
   personaId: number | string
 ): Promise<ClientePersonaRelation | null> => {
-  const { data } = await api.post(`/api/clientes/${clienteId}/personas`, {
+  const { data } = await api.post(`/clientes/${clienteId}/personas`, {
     persona_id: personaId,
   });
   return extractData<ClientePersonaRelation>(data);
@@ -63,7 +63,7 @@ export const removePersonaFromCliente = async (
   personaId: number | string
 ): Promise<ClientePersonaRelation | null> => {
   const { data } = await api.delete(
-    `/api/clientes/${clienteId}/personas/${personaId}`
+    `/clientes/${clienteId}/personas/${personaId}`
   );
   return extractData<ClientePersonaRelation>(data);
 };
@@ -72,7 +72,7 @@ export const getPersonasDisponiblesParaCliente = async (
   clienteId: number | string
 ): Promise<PersonaDisponible[]> => {
   const { data } = await api.get(
-    `/api/persona/disponibles-para-cliente/${clienteId}`
+    `/persona/disponibles-para-cliente/${clienteId}`
   );
   return buildCollectionResponse<PersonaDisponible>(data);
 };

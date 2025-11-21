@@ -33,7 +33,7 @@ export const getInformeMensualEventos = async (
   fechaInicio: string,
   fechaFin: string
 ): Promise<InformeEventosResponse> => {
-  const response = await api.get('/api/reportes/eventos-mensual', {
+  const response = await api.get('/reportes/eventos-mensual', {
     params: { fechaInicio, fechaFin },
   });
   return response.data;

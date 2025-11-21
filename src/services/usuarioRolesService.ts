@@ -1,8 +1,8 @@
 import type { AxiosResponse } from 'axios';
 import api from './api';
 
-const ROLES_ENDPOINT = '/api/roles';
-const USUARIO_ROLES_ENDPOINT = '/api/usuario-roles';
+const ROLES_ENDPOINT = '/roles';
+const USUARIO_ROLES_ENDPOINT = '/usuario-roles';
 const DEFAULT_ERROR_MESSAGE = 'Error al comunicarse con el servidor';
 
 type ApiEnvelope<T> = T | { data: T };

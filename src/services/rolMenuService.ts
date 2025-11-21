@@ -1,6 +1,6 @@
 import api from './api';
 
-const ROL_MENU_ENDPOINT = '/api/rol-menu';
+const ROL_MENU_ENDPOINT = '/rol-menu';
 
 type ApiErrorResponse = {
   message?: string;
