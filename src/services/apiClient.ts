@@ -18,7 +18,12 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
   assertValidEndpoint(path);
 
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = `${API_BASE_URL}${normalizedPath}`;
+  const sanitizedPath = normalizedPath.startsWith("/api/")
+    ? normalizedPath.substring(4)
+    : normalizedPath === "/api"
+    ? "/"
+    : normalizedPath;
+  const url = `${API_BASE_URL}${sanitizedPath}`;
 
   const response = await fetch(url, {
     credentials: "include",
