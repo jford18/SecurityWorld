@@ -9,7 +9,7 @@ export type DepartamentoResponsablePayload = {
   nombre: string;
 };
 
-const API_URL = '/api/v1/departamentos-responsables';
+const API_URL = '/v1/departamentos-responsables';
 
 type ApiEnvelope<T> = T | { data: T } | { status?: string; message?: string; data?: T };
 

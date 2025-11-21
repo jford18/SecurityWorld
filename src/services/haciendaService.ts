@@ -8,12 +8,12 @@ export type HaciendaPayload = {
 };
 
 export const fetchHaciendas = async (): Promise<Hacienda[]> => {
-  const { data } = await api.get('/api/haciendas');
+  const { data } = await api.get('/haciendas');
   return data;
 };
 
 export const createHacienda = async (payload: HaciendaPayload) => {
-  const { data } = await api.post('/api/haciendas', payload);
+  const { data } = await api.post('/haciendas', payload);
   return data;
 };
 
@@ -21,11 +21,11 @@ export const updateHacienda = async (
   id: number,
   payload: HaciendaPayload,
 ) => {
-  const { data } = await api.put(`/api/haciendas/${id}`, payload);
+  const { data } = await api.put(`/haciendas/${id}`, payload);
   return data;
 };
 
 export const deleteHacienda = async (id: number) => {
-  const { data } = await api.delete(`/api/haciendas/${id}`);
+  const { data } = await api.delete(`/haciendas/${id}`);
   return data;
 };

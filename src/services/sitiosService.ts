@@ -1,6 +1,6 @@
 import api from './api';
 
-const BASE_PATH = '/api/sitios';
+const BASE_PATH = '/sitios';
 
 export interface Sitio {
   id: number;

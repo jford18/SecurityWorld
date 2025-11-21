@@ -1,6 +1,6 @@
 import api from "./api";
 
-const CLIENTES_ENDPOINT = "/api/clientes";
+const CLIENTES_ENDPOINT = "/clientes";
 
 type ClienteQueryParams = Record<string, string | number | boolean>;
 type ClienteQueryParamsInput = Record<
