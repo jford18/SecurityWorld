@@ -27,6 +27,13 @@ const AutocompleteComboBox = ({
   const containerRef = useRef(null);
   const inputRef = useRef(null);
 
+  const isValidEndpoint = (value) => {
+    if (typeof value !== "string") return true;
+    const candidate = value.trim();
+    const FRONTEND_SOURCE_REGEX = /(\/(?:src)\/|\\src\\|\.(?:ts|tsx|js|jsx)$)/i;
+    return !FRONTEND_SOURCE_REGEX.test(candidate);
+  };
+
   const items = useMemo(() => {
     if (Array.isArray(providedItems) && providedItems.length > 0) {
       return providedItems;
@@ -68,6 +75,16 @@ const AutocompleteComboBox = ({
 
   useEffect(() => {
     if (!endpoint) {
+      return;
+    }
+
+    if (!isValidEndpoint(endpoint)) {
+      console.error(
+        `[AutocompleteComboBox] ${label ?? "Combo"}:`,
+        `Se bloqueó una solicitud inválida hacia "${endpoint}" para evitar leer archivos de frontend.`,
+      );
+      setFetchError("Endpoint inválido");
+      setFetchedItems([]);
       return;
     }
 
