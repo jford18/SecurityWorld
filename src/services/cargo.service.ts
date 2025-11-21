@@ -1,11 +1,12 @@
 import api from './api';
+import { apiFetch } from './apiClient';
 
 const JSON_HEADERS: HeadersInit = {
   'Content-Type': 'application/json',
   Accept: 'application/json',
 };
 
-const BASE_PATH = '/api/cargo';
+const BASE_PATH = '/cargo';
 const API_URL = BASE_PATH;
 
 const extractData = <T>(response: unknown): T | null => {
@@ -48,11 +49,10 @@ export interface CargoPayload {
 }
 
 export const create = async (payload: CargoPayload) => {
-  const response = await fetch(API_URL, {
+  const response = await apiFetch(API_URL, {
     method: 'POST',
     headers: JSON_HEADERS,
     body: JSON.stringify(payload ?? {}),
-    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -67,11 +67,10 @@ export const create = async (payload: CargoPayload) => {
 };
 
 export const update = async (id: number | string, payload: CargoPayload) => {
-  const response = await fetch(`${API_URL}/${id}`, {
+  const response = await apiFetch(`${API_URL}/${id}`, {
     method: 'PUT',
     headers: JSON_HEADERS,
     body: JSON.stringify(payload ?? {}),
-    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -86,10 +85,9 @@ export const update = async (id: number | string, payload: CargoPayload) => {
 };
 
 export const remove = async (id: number | string) => {
-  const response = await fetch(`${API_URL}/${id}`, {
+  const response = await apiFetch(`${API_URL}/${id}`, {
     method: 'DELETE',
     headers: { Accept: 'application/json' },
-    credentials: 'include',
   });
 
   if (!response.ok) {

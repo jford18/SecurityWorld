@@ -1,11 +1,12 @@
 import api from './api';
+import { apiFetch } from './apiClient';
 
 const JSON_HEADERS: HeadersInit = {
   'Content-Type': 'application/json',
   Accept: 'application/json',
 };
 
-const BASE_PATH = '/api/conclusion-evento';
+const BASE_PATH = '/conclusion-evento';
 
 const extractData = <T>(payload: unknown): T | null => {
   if (!payload || typeof payload !== 'object') {
@@ -57,12 +58,11 @@ const performJsonRequest = async <T>(
   options: RequestInit,
   fallbackMessage: string
 ) => {
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     ...options,
     headers: {
       ...(options.headers ?? {}),
     },
-    credentials: 'include',
   });
 
   if (!response.ok) {

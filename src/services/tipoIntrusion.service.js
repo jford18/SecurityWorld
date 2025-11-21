@@ -1,11 +1,12 @@
 import api from './api';
+import { apiFetch } from './apiClient';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
   Accept: 'application/json',
 };
 
-const BASE_PATH = '/api/tipo-intrusion';
+const BASE_PATH = '/tipo-intrusion';
 const API_URL = BASE_PATH;
 
 const extractData = (response) => {
@@ -44,11 +45,10 @@ export const getById = async (id) => {
 };
 
 export const create = async (payload) => {
-  const response = await fetch(API_URL, {
+  const response = await apiFetch(API_URL, {
     method: 'POST',
     headers: JSON_HEADERS,
     body: JSON.stringify(payload ?? {}),
-    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -61,11 +61,10 @@ export const create = async (payload) => {
 };
 
 export const update = async (id, payload) => {
-  const response = await fetch(`${API_URL}/${id}`, {
+  const response = await apiFetch(`${API_URL}/${id}`, {
     method: 'PUT',
     headers: JSON_HEADERS,
     body: JSON.stringify(payload ?? {}),
-    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -78,10 +77,9 @@ export const update = async (id, payload) => {
 };
 
 export const remove = async (id) => {
-  const response = await fetch(`${API_URL}/${id}`, {
+  const response = await apiFetch(`${API_URL}/${id}`, {
     method: 'DELETE',
     headers: { Accept: 'application/json' },
-    credentials: 'include',
   });
 
   if (!response.ok) {

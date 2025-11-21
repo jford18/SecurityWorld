@@ -1,11 +1,12 @@
 import api from './api';
+import { apiFetch } from './apiClient';
 
 const JSON_HEADERS: HeadersInit = {
   'Content-Type': 'application/json',
   Accept: 'application/json',
 };
 
-const BASE_PATH = '/api/medio-comunicacion';
+const BASE_PATH = '/medio-comunicacion';
 
 const extractData = (payload: unknown) => {
   if (!payload || typeof payload !== 'object') {
@@ -42,9 +43,8 @@ const performJsonRequest = async (
   options: RequestInit,
   fallbackMessage: string
 ) => {
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     ...options,
-    credentials: 'include',
     headers: options.headers,
   });
 
