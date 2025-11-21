@@ -1,7 +1,8 @@
 import axios from "axios";
+import { API_BASE_URL } from "./apiClient";
 
 const api = axios.create({
-  baseURL: "http://localhost:3000", // Backend corriendo en el puerto 3000
+  baseURL: API_BASE_URL,
   withCredentials: true,
 });
 
