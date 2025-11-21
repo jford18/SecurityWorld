@@ -1,6 +1,7 @@
 import api from './api';
+import { apiFetch } from './apiClient';
 
-const BASE_PATH = '/api/nodos-sitios';
+const BASE_PATH = '/nodos-sitios';
 const API_URL = BASE_PATH;
 
 const JSON_HEADERS = {
@@ -31,10 +32,9 @@ export const getByNodo = async (nodoId) => {
 };
 
 const executeMutation = async (url, options, fallbackMessage) => {
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     ...options,
     headers: { ...JSON_HEADERS, ...(options.headers ?? {}) },
-    credentials: 'include',
   });
 
   if (!response.ok) {
