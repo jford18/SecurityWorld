@@ -60,7 +60,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       setIsLoading(true); // FIX: Activar indicador de carga durante la fase de autenticación.
 
       try {
-        const response = await api.post('/login', {
+        const response = await api.post('/auth/login', {
           nombre_usuario: username,
           contrasena_plana: password,
         });
