@@ -1,9 +1,6 @@
 import axios from "axios";
 
-const envBase = import.meta.env.VITE_API_URL?.trim();
-
-// Si no hay VITE_API_URL, usamos '/api' como ruta relativa (pensando en proxy/reverse proxy)
-export const API_BASE_URL = envBase || "/api";
+export const API_BASE_URL = "/api";
 
 const FRONTEND_SOURCE_REGEX = /(\/(?:src)\/|\\src\\|\.(?:ts|tsx|js|jsx)$)/i;
 
