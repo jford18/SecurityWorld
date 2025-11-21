@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'; // FIX: Se agregan hooks necesarios para manejar efectos y callbacks
+import { apiFetch } from '@/services/apiClient';
 
 type Role = string;
 
@@ -54,11 +55,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       setIsLoading(true);
 
       try {
-        const response = await fetch('http://localhost:3000/api/auth/login', {
+        const response = await apiFetch('/auth/login', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify({
             nombre_usuario: username,
             contrasena_plana: password,
@@ -88,9 +86,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         setSelectedRole(primaryRole);
 
         try {
-          const consolesResponse = await fetch(
-            `http://localhost:3000/api/auth/consolas/${usuario.id}`
-          );
+          const consolesResponse = await apiFetch(`/auth/consolas/${usuario.id}`);
 
           if (!consolesResponse.ok) {
             throw new Error('No se pudieron cargar las consolas del usuario.');

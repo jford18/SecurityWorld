@@ -3,6 +3,7 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { existsSync } from "fs";
+import dotenv from "dotenv";
 import authRoutes from "./auth.routes.js";
 import consolasRoutes from "./consolas.routes.js";
 import nodosRoutes from "./routes/nodos.routes.js";
@@ -30,12 +31,38 @@ import departamentosResponsablesRoutes from "./routes/departamentosResponsables.
 import conclusionEventoRoutes from "./routes/conclusionEvento.routes.js";
 import reportesEventosRoutes from "./routes/reportesEventos.routes.js";
 
+dotenv.config();
+
+const env = process.env;
+
+const defaultAllowedOrigins = [];
+
+if (env.CLIENT_URL) {
+  defaultAllowedOrigins.push(env.CLIENT_URL);
+}
+
+const extraOrigins =
+  env.ALLOWED_ORIGINS?.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean) ?? [];
+
+const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...extraOrigins])];
+
 const app = express();
 app.use(express.json());
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      console.warn("[CORS] Origen no permitido:", origin);
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],

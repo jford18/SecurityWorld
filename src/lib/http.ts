@@ -1,15 +1,17 @@
-export async function apiFetch(path: string, init: RequestInit = {}) {
-  const base = "http://localhost:3000";
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = path.startsWith("http") ? path : `${base}${normalizedPath}`;
+import { API_BASE_URL } from "../services/apiClient";
 
-  if (url.includes("/api/")) {
-    console.warn("[Frontend][ALERTA] Ruta incorrecta detectada:", url, new Error().stack);
-  }
+export async function apiFetch(path: string, init: RequestInit = {}) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const url = path.startsWith("http") ? path : `${API_BASE_URL}${normalizedPath}`;
 
   const method = init.method ?? "GET";
   console.info("[Frontend][HTTP]", method, url);
-  const res = await fetch(url, init);
+
+  const res = await fetch(url, {
+    credentials: init.credentials ?? "include",
+    ...init,
+  });
+
   console.info("[Frontend][RESPUESTA]", res.status, url);
   return res;
 }
