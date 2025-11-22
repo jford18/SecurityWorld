@@ -113,10 +113,10 @@ const Clientes = () => {
     try {
       setSubmitting(true);
       if (clienteId) {
-        await api.put(`/api/clientes/${clienteId}`, payload);
+        await api.put(`/clientes/${clienteId}`, payload);
         toast.success("Cliente actualizado correctamente");
       } else {
-        await api.post(`/api/clientes`, payload);
+        await api.post(`/clientes`, payload);
         toast.success("Cliente guardado correctamente");
       }
       await fetchClientes();
@@ -150,7 +150,7 @@ const Clientes = () => {
     }
 
     try {
-      await api.delete(`/api/clientes/${id}`);
+      await api.delete(`/clientes/${id}`);
       toast.success("Cliente eliminado correctamente");
       await fetchClientes();
     } catch (error) {
