@@ -38,12 +38,7 @@ const env = process.env;
 const app = express();
 app.use(express.json());
 
-app.use(
-  cors({
-    origin: true,
-    credentials: true,
-  })
-);
+app.use(cors());
 
 const knownApiPrefixes = [
   "/api/menus",
@@ -54,6 +49,7 @@ const knownApiPrefixes = [
   "/api/asignar-cliente-sitio",
   "/api/fallos",
   "/api/consolas",
+  "/api/login",
   "/api/nodos",
   "/api/conclusion-evento",
   "/api/fuerza-reaccion",
@@ -99,7 +95,7 @@ app.use((req, _res, next) => {
 });
 
 // Rutas principales
-app.use("/", authRoutes);
+app.use("/api/login", authRoutes);
 app.use("/api/consolas", consolasRoutes);
 app.use("/api", menusRoutes);
 app.use("/api/nodos", nodosRoutes);
