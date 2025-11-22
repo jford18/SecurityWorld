@@ -81,7 +81,7 @@ interface ClienteOption {
 
 type ComboItem = { id: string; nombre: string };
 
-const CLIENTES_ENDPOINT = '/api/clientes';
+const CLIENTES_ENDPOINT = '/clientes';
 
 const parseNumericIdValue = (value: unknown): number | null => {
   if (value === null || value === undefined) {

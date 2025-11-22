@@ -88,8 +88,8 @@ const AsignarClienteSitio = () => {
       setErrorMessage("");
 
       const [sitiosResponse, clientesResponse] = await Promise.all([
-        api.get("/api/asignar-cliente-sitio"),
-        api.get("/api/clientes"),
+        api.get("/asignar-cliente-sitio"),
+        api.get("/clientes"),
       ]);
 
       const sitiosData = ensureArray(sitiosResponse?.data ?? sitiosResponse);
@@ -151,7 +151,7 @@ const AsignarClienteSitio = () => {
     setSavingState((prev) => ({ ...prev, [sitioId]: true }));
 
     try {
-      await api.post("/api/asignar-cliente-sitio", {
+      await api.post("/asignar-cliente-sitio", {
         sitio_id: sitioId,
         cliente_id: clienteId,
       });
