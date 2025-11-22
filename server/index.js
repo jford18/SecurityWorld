@@ -35,37 +35,13 @@ dotenv.config();
 
 const env = process.env;
 
-const defaultAllowedOrigins = [];
-
-if (env.CLIENT_URL) {
-  defaultAllowedOrigins.push(env.CLIENT_URL);
-}
-
-const extraOrigins =
-  env.ALLOWED_ORIGINS?.split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean) ?? [];
-
-const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...extraOrigins])];
-
 const app = express();
 app.use(express.json());
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      console.warn("[CORS] Origen no permitido:", origin);
-      return callback(new Error("Not allowed by CORS"));
-    },
+    origin: true,
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
