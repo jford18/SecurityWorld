@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
+import { Save, ChevronDown, Loader2 } from "lucide-react";
 
 // Simple toast replacement since we don't have an external library
 // and we want to avoid errors.
@@ -73,7 +74,6 @@ const baseButtonClasses =
   "inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2";
 const primaryButtonClasses = `${baseButtonClasses} bg-yellow-400 text-[#1C2E4A] shadow-sm hover:bg-yellow-500 focus:ring-yellow-400`;
 const secondaryButtonClasses = `${baseButtonClasses} border border-yellow-400 text-[#1C2E4A] hover:bg-yellow-100 focus:ring-yellow-400`;
-const actionButtonClasses = `${baseButtonClasses} bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 rounded-lg`;
 
 const AsignarClienteSitio = () => {
   const [sitios, setSitios] = useState([]);
@@ -219,13 +219,6 @@ const AsignarClienteSitio = () => {
             Gestione la asignación de clientes a los sitios registrados.
           </p>
         </div>
-        <button
-            type="button"
-            className={primaryButtonClasses}
-            onClick={() => window.alert("Funcionalidad no implementada")}
-        >
-          Nueva Asignación
-        </button>
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
@@ -279,30 +272,36 @@ const AsignarClienteSitio = () => {
 
                     return (
                       <tr key={sitio.sitio_id}>
-                        <td className="px-4 py-3 text-sm text-gray-700">{sitio.sitio_nombre}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{sitio.cliente_nombre || "Sin asignar"}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">
-                          <select
-                            value={selectedValue}
-                            onChange={(event) => handleSelectionChange(sitio.sitio_id, event.target.value)}
-                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-                          >
-                            <option value="">Seleccione cliente</option>
-                            {clientesActivos.map((cliente) => (
-                              <option key={cliente.id} value={cliente.id}>
-                                {cliente.nombre}
-                              </option>
-                            ))}
-                          </select>
+                        <td className="px-4 py-5 text-sm text-gray-700">{sitio.sitio_nombre}</td>
+                        <td className="px-4 py-5 text-sm text-gray-700">{sitio.cliente_nombre || "Sin asignar"}</td>
+                        <td className="px-4 py-5 text-sm text-gray-700">
+                          <div className="relative">
+                            <select
+                                value={selectedValue}
+                                onChange={(event) => handleSelectionChange(sitio.sitio_id, event.target.value)}
+                                className="w-full appearance-none rounded-md border border-gray-300 bg-white px-3 py-2 pr-10 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 hover:border-blue-500 transition-colors"
+                            >
+                                <option value="">Seleccione cliente</option>
+                                {clientesActivos.map((cliente) => (
+                                <option key={cliente.id} value={cliente.id}>
+                                    {cliente.nombre}
+                                </option>
+                                ))}
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                                <ChevronDown size={16} />
+                            </div>
+                          </div>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-700">
+                        <td className="px-4 py-5 text-sm text-gray-700">
                             <button
                                 type="button"
-                                className={actionButtonClasses}
                                 onClick={() => guardar(sitio.sitio_id)}
                                 disabled={isSaving}
+                                className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-2 rounded-full transition-colors disabled:opacity-50"
+                                title="Guardar asignación"
                             >
-                                {isSaving ? "Guardando..." : "Guardar"}
+                                {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
                             </button>
                         </td>
                       </tr>
