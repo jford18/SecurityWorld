@@ -11,7 +11,6 @@ import {
   fetchCatalogos,
   TechnicalFailurePayload,
 } from '../../services/fallosService';
-import AutocompleteComboBox from '../ui/AutocompleteComboBox';
 import { useSession } from '../context/SessionContext';
 import { getAllDepartamentosResponsables } from '../../services/departamentosResponsablesService';
 import TechnicalFailuresHistory from './TechnicalFailuresHistory';
@@ -218,7 +217,9 @@ const EditFailureModal: React.FC<{
   };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
   ) => {
     const { name, value } = e.target;
     updateField(name as keyof TechnicalFailure, value);
@@ -240,24 +241,6 @@ const EditFailureModal: React.FC<{
     () => new Date().toISOString().slice(0, 16),
     [],
   );
-
-  const departamentoItems = useMemo(
-    () =>
-      departamentos.map((departamento) => ({
-        id: String(departamento.id),
-        label: departamento.nombre,
-        value: String(departamento.id),
-      })),
-    [departamentos],
-  );
-
-  const handleDepartamentoSelect = (item?: { label?: string; value?: string }) => {
-    setEditData((prev) => ({
-      ...prev,
-      departamentoResponsableId: item?.value ?? '',
-      deptResponsable: item?.label ?? '',
-    }));
-  };
 
   const fechaHoraReporte = useMemo(() => {
     const combined = buildFailureDateTimeValue(editData);
@@ -461,73 +444,45 @@ const EditFailureModal: React.FC<{
       )}
 
       {activeTab === 'supervisor' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-4 mt-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Fecha hora de fallo</label>
-            <input
-              type="text"
-              value={fechaHoraFalloDisplay}
-              readOnly
-              disabled
-              className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <AutocompleteComboBox
-              label="Departamento Responsable"
-              value={editData.departamentoResponsableId ?? ''}
-              onChange={(value: string) =>
-                setEditData((prev) => ({ ...prev, departamentoResponsableId: value }))
-              }
-              onItemSelect={handleDepartamentoSelect}
-              items={departamentoItems}
-              displayField="label"
-              valueField="value"
-              placeholder="Seleccione..."
-              searchPlaceholder="Escriba para filtrar"
-              disabled={departamentos.length === 0}
-              emptyMessage={
-                departamentos.length === 0
-                  ? 'No hay departamentos disponibles'
-                  : 'No se encontraron departamentos'
-              }
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">Descripción</label>
-            <textarea
-              value={editData.descripcion_fallo || ''}
-              readOnly
-              disabled
-              className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Último usuario que editó
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Departamento responsable
             </label>
-            <input
-              type="text"
-              value={
-                editData.ultimo_usuario_edito_nombre &&
-                editData.ultimo_usuario_edito_nombre.trim()
-                  ? editData.ultimo_usuario_edito_nombre
-                  : 'Sin información'
-              }
-              readOnly
-              disabled
-              className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
-            />
+            <select
+              name="departamentoResponsableId"
+              value={editData.departamentoResponsableId ?? ''}
+              onChange={(e) => {
+                const { value, options, selectedIndex } = e.target;
+                const selectedLabel = options[selectedIndex]?.text ?? '';
+                setEditData((prev) => ({
+                  ...prev,
+                  departamentoResponsableId: value,
+                  deptResponsable: selectedLabel,
+                }));
+              }}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="">Seleccione...</option>
+              {departamentos.map((dep) => (
+                <option key={dep.id} value={dep.id}>
+                  {dep.nombre}
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">Novedad Detectada</label>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Novedad detectada
+            </label>
             <textarea
               name="novedadDetectada"
               value={editData.novedadDetectada || ''}
               onChange={handleChange}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
               rows={4}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-            ></textarea>
+            />
           </div>
         </div>
       )}
