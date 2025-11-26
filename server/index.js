@@ -30,6 +30,7 @@ import tipoAreaRoutes from "./routes/tipoArea.routes.js";
 import departamentosResponsablesRoutes from "./routes/departamentosResponsables.routes.js";
 import conclusionEventoRoutes from "./routes/conclusionEvento.routes.js";
 import reportesEventosRoutes from "./routes/reportesEventos.routes.js";
+import tipoServicioRoutes from "./routes/tipoServicio.routes.js";
 
 dotenv.config();
 
@@ -66,6 +67,7 @@ const knownApiPrefixes = [
   "/api/haciendas",
   "/api/tipo-area",
   "/api/reportes",
+  "/api/tipos-servicio",
   "/api/v1/departamentos-responsables",
 ];
 
@@ -121,6 +123,7 @@ app.use("/api/reportes", reportesEventosRoutes);
 app.use("/api", haciendasRoutes);
 app.use("/api", tipoAreaRoutes);
 app.use("/api/v1/departamentos-responsables", departamentosResponsablesRoutes);
+app.use("/api/tipos-servicio", tipoServicioRoutes);
 
 const logRoutes = (stack) => {
   stack
