@@ -254,16 +254,16 @@ const EditFailureModal: React.FC<{
     }));
   };
 
-  const fechaHoraFalloDisplay = useMemo(() => {
+  const fechaHoraReporte = useMemo(() => {
     const combined = buildFailureDateTimeValue(editData);
-    return (
-      formatFechaHoraDisplay(
-        combined,
-        editData.fecha,
-        editData.hora ?? editData.horaFallo,
-      ) || 'Sin información'
+    return formatFechaHoraDisplay(
+      combined,
+      editData.fecha,
+      editData.hora ?? editData.horaFallo,
     );
   }, [editData.fechaHoraFallo, editData.fecha, editData.hora, editData.horaFallo]);
+
+  const fechaHoraFalloDisplay = fechaHoraReporte || 'Sin información';
 
   const handleSave = () => {
     const novedad = editData.novedadDetectada?.trim() || '';
@@ -328,7 +328,7 @@ const EditFailureModal: React.FC<{
 
       {activeTab === 'general' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {renderReadOnlyInfo('Fecha de reporte', editData.fecha)}
+          {renderReadOnlyInfo('Fecha de reporte', fechaHoraReporte)}
           {renderReadOnlyInfo('Sitio', editData.sitio_nombre)}
           {renderReadOnlyInfo('Tipo de afectación', editData.tipo_afectacion)}
           {renderReadOnlyInfo('Equipo afectado', editData.equipo_afectado)}
