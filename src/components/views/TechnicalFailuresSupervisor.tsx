@@ -236,6 +236,11 @@ const EditFailureModal: React.FC<{
     }));
   };
 
+  const nowForInput = useMemo(
+    () => new Date().toISOString().slice(0, 16),
+    [],
+  );
+
   const departamentoItems = useMemo(
     () =>
       departamentos.map((departamento) => ({
@@ -266,6 +271,20 @@ const EditFailureModal: React.FC<{
   const fechaHoraFalloDisplay = fechaHoraReporte || 'Sin información';
 
   const handleSave = () => {
+    const resolutionDateTime =
+      editData.fechaHoraResolucion ||
+      (editData.fechaResolucion && editData.horaResolucion
+        ? `${editData.fechaResolucion}T${editData.horaResolucion}`
+        : undefined);
+
+    if (resolutionDateTime) {
+      const cierre = new Date(resolutionDateTime);
+      if (!Number.isNaN(cierre.getTime()) && cierre.getTime() > Date.now()) {
+        alert('La fecha y hora de resolución no puede ser futura.');
+        return;
+      }
+    }
+
     const novedad = editData.novedadDetectada?.trim() || '';
     const departamentoId =
       editData.departamentoResponsableId?.trim() || editData.deptResponsable?.trim() || '';
@@ -424,6 +443,7 @@ const EditFailureModal: React.FC<{
               name="fechaHoraResolucion"
               value={editData.fechaHoraResolucion || ''}
               onChange={(e) => handleResolutionChange(e.target.value)}
+              max={nowForInput}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
             />
           </div>
