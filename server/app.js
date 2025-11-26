@@ -11,23 +11,14 @@ import conclusionEventoRoutes from "./routes/conclusionEvento.routes.js";
 
 const app = express();
 
-const env = process.env;
-
-const CLIENT_URL = env.CLIENT_URL;
-
-// ✅ Configuración CORS para permitir el frontend de Vite durante el desarrollo.
-const allowedOrigin = CLIENT_URL;
-
+// Configuración CORS abierta para permitir todas las solicitudes desde el frontend.
 app.use(
   cors({
-    origin: allowedOrigin,
-    credentials: true,
+    origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-
-app.options("*", cors({ origin: allowedOrigin, credentials: true }));
 
 app.use(express.json());
 
