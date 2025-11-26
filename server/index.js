@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { existsSync } from "fs";
 import dotenv from "dotenv";
 import authRoutes from "./auth.routes.js";
-import consolasRoutes from "./consolas.routes.js";
+import consolasRoutes from "./routes/consolas.routes.js";
 import nodosRoutes from "./routes/nodos.routes.js";
 import fuerzaReaccionRoutes from "./routes/fuerzaReaccion.routes.js";
 import cargoRoutes from "./routes/cargo.routes.js";
