@@ -193,8 +193,14 @@ const PersonaScreen: React.FC = () => {
       }
       await fetchPersonas(searchTerm);
       closeModal();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+
+      if (err?.status === 400 && err?.code === 'PERSONA_DUPLICADA') {
+        setFormError('Ya existe una persona con el mismo nombre, apellido y cargo.');
+        return;
+      }
+
       setFormError(err instanceof Error ? err.message : 'Error al guardar la persona');
     }
   };

@@ -61,7 +61,13 @@ export const create = async (payload: PersonaPayload) => {
     const errorData = await response
       .json()
       .catch(() => ({ message: 'Error al crear la persona' }));
-    throw new Error(errorData.message || 'Error al crear la persona');
+
+    const error: any = new Error(
+      errorData.message || 'Error al crear la persona'
+    );
+    error.status = response.status;
+    error.code = errorData.code;
+    throw error;
   }
 
   const data = await response.json();
@@ -79,7 +85,13 @@ export const update = async (id: number | string, payload: Partial<PersonaPayloa
     const errorData = await response
       .json()
       .catch(() => ({ message: 'Error al actualizar la persona' }));
-    throw new Error(errorData.message || 'Error al actualizar la persona');
+
+    const error: any = new Error(
+      errorData.message || 'Error al actualizar la persona'
+    );
+    error.status = response.status;
+    error.code = errorData.code;
+    throw error;
   }
 
   const data = await response.json();

@@ -44,6 +44,30 @@ const ensureCargoExists = async (cargoId) => {
   return cargoResult.rowCount > 0;
 };
 
+const personaDuplicadaError = {
+  message: "Ya existe una persona con el mismo nombre, apellido y cargo.",
+  code: "PERSONA_DUPLICADA",
+};
+
+const existePersonaDuplicada = async (nombre, apellido, cargoId, idActual) => {
+  const query = `
+    SELECT id
+      FROM public.persona
+     WHERE LOWER(nombre) = LOWER($1)
+       AND LOWER(apellido) = LOWER($2)
+       AND cargo_id = $3
+       ${idActual ? "AND id <> $4" : ""}
+     LIMIT 1;
+  `;
+
+  const params = idActual
+    ? [nombre, apellido, cargoId, idActual]
+    : [nombre, apellido, cargoId];
+
+  const result = await pool.query(query, params);
+  return result.rows.length > 0;
+};
+
 export const listPersonas = async (req, res) => {
   const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
 
@@ -125,6 +149,19 @@ export const createPersona = async (req, res) => {
         .json(formatError("El cargo seleccionado no existe"));
     }
 
+    const duplicada = await existePersonaDuplicada(
+      trimmedNombre,
+      trimmedApellido,
+      parsedCargoId
+    );
+
+    if (duplicada) {
+      return res.status(400).json({
+        ...formatError(personaDuplicadaError.message),
+        code: personaDuplicadaError.code,
+      });
+    }
+
     const normalizedEstado = normalizeBoolean(estado, true);
 
     const insertResult = await pool.query(
@@ -149,6 +186,13 @@ export const createPersona = async (req, res) => {
       );
   } catch (error) {
     console.error("Error al crear persona:", error);
+    if (error?.code === "23505") {
+      return res.status(400).json({
+        ...formatError(personaDuplicadaError.message),
+        code: personaDuplicadaError.code,
+      });
+    }
+
     res.status(500).json(formatError("Error al crear la persona"));
   }
 };
@@ -160,6 +204,8 @@ export const updatePersona = async (req, res) => {
   const updates = [];
   const values = [];
   let index = 1;
+
+  const parsedId = Number(id);
 
   if (nombre !== undefined) {
     const trimmedNombre = typeof nombre === "string" ? nombre.trim() : "";
@@ -229,9 +275,51 @@ export const updatePersona = async (req, res) => {
       .json(formatError("No se enviaron campos para actualizar"));
   }
 
-  values.push(id);
-
   try {
+    const personaActualResult = await pool.query(
+      "SELECT id, nombre, apellido, cargo_id FROM persona WHERE id = $1",
+      [parsedId]
+    );
+
+    if (personaActualResult.rowCount === 0) {
+      return res
+        .status(404)
+        .json(formatError("La persona solicitada no existe"));
+    }
+
+    const personaActual = personaActualResult.rows[0];
+
+    const trimmedNombre =
+      nombre !== undefined
+        ? typeof nombre === "string"
+          ? nombre.trim()
+          : ""
+        : personaActual.nombre;
+    const trimmedApellido =
+      apellido !== undefined
+        ? typeof apellido === "string"
+          ? apellido.trim()
+          : ""
+        : personaActual.apellido;
+    const finalCargoId =
+      cargo_id !== undefined ? Number(cargo_id) : personaActual.cargo_id;
+
+    const duplicada = await existePersonaDuplicada(
+      trimmedNombre,
+      trimmedApellido,
+      finalCargoId,
+      parsedId
+    );
+
+    if (duplicada) {
+      return res.status(400).json({
+        ...formatError(personaDuplicadaError.message),
+        code: personaDuplicadaError.code,
+      });
+    }
+
+    values.push(id);
+
     const result = await pool.query(
       `WITH updated AS (
         UPDATE persona
@@ -256,6 +344,13 @@ export const updatePersona = async (req, res) => {
       .json(formatSuccess("Persona actualizada correctamente", result.rows[0]));
   } catch (error) {
     console.error("Error al actualizar persona:", error);
+    if (error?.code === "23505") {
+      return res.status(400).json({
+        ...formatError(personaDuplicadaError.message),
+        code: personaDuplicadaError.code,
+      });
+    }
+
     res.status(500).json(formatError("Error al actualizar la persona"));
   }
 };
