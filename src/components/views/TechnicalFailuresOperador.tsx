@@ -67,6 +67,34 @@ const hasHttpStatusResponse = (
   return typeof error === 'object' && error !== null && 'response' in error;
 };
 
+const isDeviceFromHC = (dispositivo: unknown): boolean => {
+  if (!dispositivo || typeof dispositivo !== 'object') return false;
+
+  const device = dispositivo as {
+    origen_equipo?: unknown;
+    origen?: unknown;
+    origenEquipo?: unknown;
+    esHc?: unknown;
+    esHC?: unknown;
+    provieneDeHc?: unknown;
+    provieneDeHC?: unknown;
+  };
+
+  const flag =
+    device.esHc ?? device.esHC ?? device.provieneDeHc ?? device.provieneDeHC;
+
+  if (typeof flag === 'boolean') {
+    return flag;
+  }
+
+  const origen = device.origen_equipo ?? device.origen ?? device.origenEquipo;
+  if (typeof origen === 'string') {
+    return origen.trim().toUpperCase() === 'HC';
+  }
+
+  return true;
+};
+
 const TechnicalFailuresOperador: React.FC = () => {
   const { session } = useSession();
   const [, setFailures] = useState<TechnicalFailure[]>([]);
@@ -82,6 +110,23 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [nodos, setNodos] = useState<CatalogoNodo[]>([]);
   const [nodosError, setNodosError] = useState<string | null>(null);
   const [isLoadingNodos, setIsLoadingNodos] = useState(false);
+
+  const getSelectedDispositivo = (camaraValue: string) => {
+    if (!camaraValue) return null;
+
+    return (
+      catalogos.dispositivos.find(
+        (dispositivo) => String(dispositivo.id ?? '') === String(camaraValue)
+      ) || catalogos.dispositivos.find((dispositivo) => dispositivo.nombre === camaraValue) || null
+    );
+  };
+
+  const selectedDispositivo = useMemo(
+    () => getSelectedDispositivo(formData.camara),
+    [catalogos.dispositivos, formData.camara]
+  );
+
+  const equipoEsHC = useMemo(() => isDeviceFromHC(selectedDispositivo), [selectedDispositivo]);
 
   const sitioItems = useMemo(
     () => [
@@ -254,20 +299,26 @@ const TechnicalFailuresOperador: React.FC = () => {
         delete tempErrors.tipoEquipo;
       }
 
+      const equipoHcActual = isDeviceFromHC(getSelectedDispositivo(fieldValues.camara));
+
       if (fieldValues.tipoEquipo === 'Cámara') {
         if (!fieldValues.camara) {
           tempErrors.camara = 'La cámara es obligatoria.';
         } else {
           delete tempErrors.camara;
         }
-        delete tempErrors.tipoProblemaEquipo;
-      } else if (fieldValues.tipoEquipo && fieldValues.tipoEquipo !== 'Cámara') {
+      } else {
+        delete tempErrors.camara;
+      }
+
+      if (equipoHcActual) {
         if (!fieldValues.tipoProblemaEquipo) {
           tempErrors.tipoProblemaEquipo = 'El tipo de problema es obligatorio.';
         } else {
           delete tempErrors.tipoProblemaEquipo;
         }
-        delete tempErrors.camara;
+      } else {
+        delete tempErrors.tipoProblemaEquipo;
       }
     } else {
       delete tempErrors.tipoEquipo;
@@ -397,6 +448,22 @@ const TechnicalFailuresOperador: React.FC = () => {
     setClienteFromConsole(resolveSitioClienteNombre(selectedSitio));
   }, [formData.affectationType, selectedSitio]);
 
+  useEffect(() => {
+    if (formData.affectationType === 'Equipo' && equipoEsHC) {
+      return;
+    }
+
+    if (formData.tipoProblemaEquipo) {
+      setFormData((prev) => ({ ...prev, tipoProblemaEquipo: '' }));
+    }
+
+    setErrors((prev) => {
+      if (!prev.tipoProblemaEquipo) return prev;
+      const { tipoProblemaEquipo, ...rest } = prev;
+      return rest;
+    });
+  }, [equipoEsHC, formData.affectationType, formData.tipoProblemaEquipo]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -425,11 +492,13 @@ const TechnicalFailuresOperador: React.FC = () => {
       equipo_afectado = `Punto en ${sitioNombre}`;
     }
 
+    const equipoDesdeHC = formData.affectationType === 'Equipo' && equipoEsHC;
+
     let descripcion_fallo = 'N/A';
     if (formData.affectationType === 'Nodo' || formData.affectationType === 'Punto') {
       descripcion_fallo = formData.tipoProblema;
     } else if (formData.affectationType === 'Equipo') {
-      descripcion_fallo = formData.tipoProblemaEquipo;
+      descripcion_fallo = equipoDesdeHC ? formData.tipoProblemaEquipo : formData.tipoProblema;
     } else if (formData.affectationType === 'Masivo') {
       descripcion_fallo = 'Fallo masivo reportado.';
     }
@@ -453,6 +522,9 @@ const TechnicalFailuresOperador: React.FC = () => {
       }
     }
 
+    const tipoProblemaPayload = equipoDesdeHC ? formData.tipoProblemaEquipo : formData.tipoProblema;
+    const tipoProblemaEquipoPayload = equipoDesdeHC ? formData.tipoProblemaEquipo : undefined;
+
     const payload: TechnicalFailurePayload = {
       fecha: fechaFalloPayload,
       horaFallo: horaFalloPayload,
@@ -461,8 +533,9 @@ const TechnicalFailuresOperador: React.FC = () => {
       equipo_afectado: equipo_afectado || 'No especificado',
       descripcion_fallo: descripcion_fallo || 'Sin descripción',
       responsable: session.user,
-      tipoProblema: formData.tipoProblema || formData.tipoProblemaEquipo,
+      tipoProblema: tipoProblemaPayload,
       tipoEquipo: formData.tipoEquipo,
+      tipoProblemaEquipo: tipoProblemaEquipoPayload,
       nodo: formData.nodo,
       sitio: sitioNombre,
       sitio_id: selectedSitio ? selectedSitio.id : undefined,
@@ -674,7 +747,7 @@ const TechnicalFailuresOperador: React.FC = () => {
               />
             </div>
             {sitioSelectField}
-            {formData.tipoEquipo && formData.tipoEquipo !== 'Cámara' && (
+            {equipoEsHC && (
               <div className="md:col-span-2">
                 <AutocompleteComboBox
                   label="Tipo de problema en equipo *"

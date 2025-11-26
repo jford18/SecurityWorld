@@ -55,6 +55,13 @@ export interface CatalogoDispositivo {
   id: number;
   nombre: string;
   estado?: string;
+  origen_equipo?: string | null;
+  origen?: string | null;
+  origenEquipo?: string | null;
+  esHc?: boolean;
+  esHC?: boolean;
+  provieneDeHc?: boolean;
+  provieneDeHC?: boolean;
 }
 
 export interface Menu {
