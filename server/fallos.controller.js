@@ -558,6 +558,15 @@ export const actualizarFalloSupervisor = async (req, res) => {
       .json({ mensaje: "El identificador del fallo es obligatorio." });
   }
 
+  if (fechaResolucion && horaResolucion) {
+    const cierre = new Date(`${fechaResolucion}T${horaResolucion}`);
+    if (!Number.isNaN(cierre.getTime()) && cierre.getTime() > Date.now()) {
+      return res.status(400).json({
+        message: "La fecha y hora de resolución no puede ser futura.",
+      });
+    }
+  }
+
   const client = await pool.connect();
   const usuarioAutenticadoId = (() => {
     const parsed = Number(ultimoUsuarioEditoId);
