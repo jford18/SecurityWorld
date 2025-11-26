@@ -285,6 +285,16 @@ const TechnicalFailuresOperador: React.FC = () => {
       else delete tempErrors.nodo;
     }
 
+    if (fieldValues.affectationType === 'Equipo' || fieldValues.affectationType === 'Masivo') {
+      if (!fieldValues.tipoProblema) {
+        tempErrors.tipoProblema = 'El tipo de problema es obligatorio.';
+      } else {
+        delete tempErrors.tipoProblema;
+      }
+    } else {
+      delete tempErrors.tipoProblema;
+    }
+
     if (fieldValues.affectationType === 'Punto' || fieldValues.affectationType === 'Equipo') {
       if (!fieldValues.sitioId) tempErrors.sitioId = 'El sitio es obligatorio.';
       else delete tempErrors.sitioId;
@@ -744,6 +754,7 @@ const TechnicalFailuresOperador: React.FC = () => {
                 displayField="descripcion"
                 valueField="value"
                 placeholder="Buscar tipo de problema..."
+                error={errors.tipoProblema}
               />
             </div>
             {sitioSelectField}
@@ -775,6 +786,44 @@ const TechnicalFailuresOperador: React.FC = () => {
                 />
               </div>
             )}
+          </>
+        );
+      case 'Masivo':
+        return (
+          <>
+            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <AutocompleteComboBox
+                  label="Tipo de Problema *"
+                  value={formData.tipoProblema}
+                  onChange={(selected: string) => applyFieldUpdate('tipoProblema', selected)}
+                  items={tipoProblemaItems}
+                  displayField="descripcion"
+                  valueField="value"
+                  placeholder="Buscar tipo de problema..."
+                  error={errors.tipoProblema}
+                />
+              </div>
+              <div className="flex items-end">
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      id="reportadoCliente"
+                      name="reportadoCliente"
+                      type="checkbox"
+                      checked={formData.reportadoCliente}
+                      onChange={handleInputChange}
+                      className="focus:ring-[#F9C300] h-4 w-4 text-[#F9C300] border-gray-300 rounded"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="reportadoCliente" className="font-medium text-gray-700">
+                      Reportado al cliente
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
           </>
         );
       default:
