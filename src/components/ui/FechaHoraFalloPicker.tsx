@@ -26,6 +26,7 @@ interface FechaHoraFalloPickerProps {
   placeholder?: string;
   required?: boolean;
   error?: string;
+  timeIntervalMinutes?: number;
 }
 
 const toast = {
@@ -56,6 +57,7 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
   placeholder = 'Seleccione fecha y hora',
   required,
   error,
+  timeIntervalMinutes = 5,
 }) => {
   const parsedValue = useMemo(() => {
     if (!value) {
@@ -182,7 +184,7 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
           selected={selectedDate}
           onChange={handleDateChange}
           showTimeSelect
-          timeIntervals={5}
+          timeIntervals={timeIntervalMinutes}
           timeFormat="HH:mm"
           dateFormat="dd/MM/yyyy, HH:mm"
           locale="es"
