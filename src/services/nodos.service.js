@@ -63,15 +63,15 @@ export const update = async (id, payload) => {
   return extractData(data);
 };
 
-export const remove = async (id) => {
+export const deleteNodo = async (id) => {
   const response = await apiFetch(`${API_URL}/${id}`, {
     method: 'DELETE',
     headers: { Accept: 'application/json' },
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ message: 'Error al desactivar el nodo' }));
-    throw new Error(errorData.message || 'Error al desactivar el nodo');
+    const errorData = await response.json().catch(() => ({ message: 'Error al eliminar el nodo' }));
+    throw new Error(errorData.message || 'Error al eliminar el nodo');
   }
 
   const data = await response.json();

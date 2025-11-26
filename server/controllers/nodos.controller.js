@@ -194,23 +194,18 @@ export const deleteNodo = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const result = await pool.query(
-      "UPDATE nodos SET activo = false WHERE id = $1 AND activo = true RETURNING id",
-      [id]
-    );
+    const result = await pool.query("DELETE FROM nodos WHERE id = $1", [id]);
 
     if (result.rowCount === 0) {
-      return res
-        .status(404)
-        .json(formatError("El nodo ya estaba inactivo o no existe"));
+      return res.status(404).json(formatError("El nodo solicitado no existe"));
     }
 
     res
       .status(200)
-      .json(formatSuccess("Nodo desactivado correctamente"));
+      .json(formatSuccess("Nodo eliminado correctamente"));
   } catch (error) {
-    console.error("Error al desactivar nodo:", error);
-    res.status(500).json(formatError("Error al desactivar el nodo"));
+    console.error("Error al eliminar nodo:", error);
+    res.status(500).json(formatError("Error al eliminar el nodo"));
   }
 };
 
