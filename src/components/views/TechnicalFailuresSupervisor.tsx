@@ -524,6 +524,11 @@ const TechnicalFailuresSupervisor: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setCurrentFailure(null);
+  };
+
   const handleUpdateFailure = async (updatedFailure: TechnicalFailure) => {
     const { date: resolutionDate, time: resolutionTime } = splitDateTimeLocalValue(
       updatedFailure.fechaHoraResolucion,
@@ -614,136 +619,154 @@ const TechnicalFailuresSupervisor: React.FC = () => {
     }
   };
 
-  const hasActiveEdit = isModalOpen && currentFailure;
 
   return (
     <div className="space-y-6">
       <h3 className="text-3xl font-medium text-[#1C2E4A]">Gestión de Fallos Técnicos</h3>
 
-      <div className="mt-2 flex flex-col lg:flex-row gap-4">
-        <div className="w-full lg:w-1/3 lg:order-2 lg:sticky lg:top-4">
-          <div className="bg-white p-4 rounded-lg shadow-md max-h-[80vh] overflow-y-auto">
-            {hasActiveEdit && currentFailure ? (
-              <EditFailureModal
-                failure={currentFailure}
-                departamentos={catalogos.departamentos}
-                responsables={responsables}
-                onSave={handleUpdateFailure}
-                onClose={() => {
-                  setIsModalOpen(false);
-                  setCurrentFailure(null);
-                }}
-                isSaving={isSubmitting}
-                currentUserName={session.user}
-              />
-            ) : (
-              <div className="text-sm text-gray-500">
-                Selecciona un fallo del historial para editarlo.
-              </div>
-            )}
-          </div>
+      <div className="bg-white p-6 rounded-lg shadow-md">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-[#1C2E4A] text-lg font-semibold">Historial de Fallos Recientes</h4>
+          {isLoading && <span className="text-sm text-gray-500">Cargando información...</span>}
         </div>
-
-        <div className="w-full lg:w-2/3 lg:order-1">
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-[#1C2E4A] text-lg font-semibold">Historial de Fallos Recientes</h4>
-              {isLoading && <span className="text-sm text-gray-500">Cargando información...</span>}
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Fecha
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Descripción
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Sitio
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tipo afectación
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Equipo
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Responsable
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Estado
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Acciones
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {failures.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
-                        {isLoading ? 'Cargando fallos técnicos...' : 'No hay registros disponibles.'}
-                      </td>
-                    </tr>
-                  ) : (
-                    failures.map((fallo) => (
-                      <tr key={fallo.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.fecha}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {fallo.descripcion_fallo}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {fallo.sitio_nombre || 'Sin sitio asignado'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {fallo.tipo_afectacion || 'Sin tipo'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {fallo.equipo_afectado || 'Sin equipo'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {fallo.responsable}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {(() => {
-                            const estado = calcularEstado(fallo);
-                            return (
-                              <span
-                                style={{
-                                  backgroundColor: estado.color,
-                                  color: 'white',
-                                  padding: '4px 8px',
-                                  borderRadius: '4px',
-                                  fontSize: '0.9em',
-                                  fontWeight: 'bold',
-                                  display: 'inline-block',
-                                  minWidth: '110px',
-                                  textAlign: 'center',
-                                }}
-                              >
-                                {estado.texto}
-                              </span>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button
-                            onClick={() => handleEdit(fallo)}
-                            className="text-indigo-600 hover:text-indigo-900"
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Fecha
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Descripción
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Sitio
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Tipo afectación
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Equipo
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Responsable
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Estado
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Acciones
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {failures.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
+                    {isLoading ? 'Cargando fallos técnicos...' : 'No hay registros disponibles.'}
+                  </td>
+                </tr>
+              ) : (
+                failures.map((fallo) => (
+                  <tr key={fallo.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.fecha}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {fallo.descripcion_fallo}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {fallo.sitio_nombre || 'Sin sitio asignado'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {fallo.tipo_afectacion || 'Sin tipo'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {fallo.equipo_afectado || 'Sin equipo'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {fallo.responsable}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {(() => {
+                        const estado = calcularEstado(fallo);
+                        return (
+                          <span
+                            style={{
+                              backgroundColor: estado.color,
+                              color: 'white',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              fontSize: '0.9em',
+                              fontWeight: 'bold',
+                              display: 'inline-block',
+                              minWidth: '110px',
+                              textAlign: 'center',
+                            }}
                           >
-                            Editar
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                            {estado.texto}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button
+                        onClick={() => handleEdit(fallo)}
+                        className="text-indigo-600 hover:text-indigo-900"
+                      >
+                        Editar
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
+      </div>
+
+      {isModalOpen && currentFailure && (
+        <EditTechnicalFailureSupervisorModal
+          failure={currentFailure}
+          departamentos={catalogos.departamentos}
+          responsables={responsables}
+          onSave={handleUpdateFailure}
+          onClose={handleCloseModal}
+          isSaving={isSubmitting}
+          currentUserName={session.user}
+        />
+      )}
+    </div>
+  );
+};
+
+const EditTechnicalFailureSupervisorModal: React.FC<{
+  failure: TechnicalFailure;
+  departamentos: CatalogoDepartamento[];
+  responsables: CatalogoResponsable[];
+  onSave: (updatedFailure: TechnicalFailure) => void;
+  onClose: () => void;
+  isSaving: boolean;
+  currentUserName?: string | null;
+}> = ({
+  failure,
+  departamentos,
+  responsables,
+  onSave,
+  onClose,
+  isSaving,
+  currentUserName,
+}) => {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto p-6">
+        <EditFailureModal
+          failure={failure}
+          departamentos={departamentos}
+          responsables={responsables}
+          onSave={onSave}
+          onClose={onClose}
+          isSaving={isSaving}
+          currentUserName={currentUserName}
+        />
       </div>
     </div>
   );
