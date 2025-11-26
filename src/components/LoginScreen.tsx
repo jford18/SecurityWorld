@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { RoleOption, RoleToken } from './context/SessionContext';
-import { getConsolas } from '../services/consolasService';
+import { Consola, getConsolas } from '../services/consolasService';
 import api from '../services/api';
 
 interface LoginScreenProps {
@@ -28,23 +28,28 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [usuarioAutenticado, setUsuarioAutenticado] = useState<UsuarioAutenticado | null>(null);
   const [assignedRole, setAssignedRole] = useState<RoleOption | null>(null);
-  const [consoleOptions, setConsoleOptions] = useState<string[]>([]);
-  const [selectedConsole, setSelectedConsole] = useState('');
+  const [consolas, setConsolas] = useState<Consola[]>([]);
+  const [selectedConsolaId, setSelectedConsolaId] = useState<number | null>(null);
+  const [consolasError, setConsolasError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchConsolas = async () => {
       try {
-        const data = await getConsolas();
-        const consoleNames = data.map((c: { nombre: string }) => c.nombre);
-        setConsoleOptions(consoleNames);
-        if (consoleNames.length > 0) {
-          setSelectedConsole(consoleNames[0]);
+        const lista = await getConsolas();
+        setConsolas(lista);
+        setConsolasError(null);
+
+        if (lista.length > 0) {
+          setSelectedConsolaId((prev) => (prev !== null ? prev : lista[0].id));
         }
       } catch (error) {
-        console.error("Error fetching consoles:", error);
-        setError("Error al cargar la lista de consolas.");
+        console.error('Error cargando consolas:', error);
+        setConsolasError('Error al cargar la lista de consolas.');
+        setConsolas([]);
+        setSelectedConsolaId(null);
       }
     };
+
     fetchConsolas();
   }, []);
 
@@ -121,7 +126,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       return;
     }
 
-    if (!selectedConsole) {
+    const selectedConsoleName = consolas.find((consola) => consola.id === selectedConsolaId)?.nombre;
+
+    if (!selectedConsolaId || !selectedConsoleName) {
       setError('Seleccione una consola para continuar.'); // FIX: Validar que el usuario elija una consola antes de continuar.
       return;
     }
@@ -144,7 +151,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       onLogin({
         user: usuarioAutenticado,
         selectedRole: assignedRole,
-        consoleName: selectedConsole,
+        consoleName: selectedConsoleName || '',
         token: sessionToken,
         roles: [assignedRole],
         roleTokens,
@@ -235,9 +242,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                   id="console"
                   name="console"
                   required
-                  value={selectedConsole}
+                  value={selectedConsolaId ?? ''}
                   onChange={(event) => {
-                    setSelectedConsole(event.target.value);
+                    const newValue = event.target.value === '' ? null : Number(event.target.value);
+                    setSelectedConsolaId(newValue);
                     if (error) {
                       setError('');
                     }
@@ -247,12 +255,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                   <option value="" disabled>
                     Seleccione una consola
                   </option>
-                  {consoleOptions.map((consoleName) => (
-                    <option key={consoleName} value={consoleName}>
-                      {consoleName}
+                  {consolas.map((consola) => (
+                    <option key={consola.id} value={consola.id}>
+                      {consola.nombre}
                     </option>
                   ))}
                 </select>
+                {consolasError && (
+                  <p className="text-red-500 text-xs mt-1">{consolasError}</p>
+                )}
               </div>
             </div>
           )}

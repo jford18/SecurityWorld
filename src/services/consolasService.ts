@@ -1,5 +1,4 @@
-import api from './api';
-import { apiFetch } from './apiClient';
+import apiClient, { apiFetch } from './apiClient';
 
 const jsonContentType = 'application/json';
 const ENDPOINT = '/consolas';
@@ -22,9 +21,27 @@ export type ConsolaPayload = {
   nombre: string;
 };
 
-const getAll = async () => {
-  const { data } = await api.get(ENDPOINT);
-  return data;
+export interface Consola {
+  id: number;
+  nombre: string;
+  fecha_creacion: string;
+}
+
+const getAll = async (): Promise<Consola[]> => {
+  const { data } = await apiClient.get(ENDPOINT);
+  const payload = data;
+
+  const rawData = Array.isArray(payload) ? payload : payload?.data;
+
+  if (!Array.isArray(rawData)) {
+    throw new Error('Formato de respuesta inválido al obtener consolas');
+  }
+
+  return rawData.map((item: any) => ({
+    id: item.id,
+    nombre: item.nombre,
+    fecha_creacion: item.fecha_creacion ?? '',
+  }));
 };
 
 export const getConsolas = getAll;
