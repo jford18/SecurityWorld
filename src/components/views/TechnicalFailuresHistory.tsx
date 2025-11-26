@@ -55,6 +55,14 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              {activeRole === 'supervisor' && (
+                <th
+                  scope="col"
+                  className="sticky left-0 bg-white z-20 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  ACCIONES
+                </th>
+              )}
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Fecha
               </th>
@@ -70,14 +78,6 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Estado
               </th>
-              {activeRole === 'supervisor' && (
-                <th
-                  scope="col"
-                  className="sticky right-0 bg-white z-20 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  ACCIONES
-                </th>
-              )}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -90,6 +90,16 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
             ) : (
               failures.map((fallo) => (
                 <tr key={fallo.id} className="hover:bg-gray-50">
+                  {activeRole === 'supervisor' && (
+                    <td className="sticky left-0 bg-white z-10 px-6 py-3 text-left whitespace-nowrap">
+                      <button
+                        onClick={() => handleEdit(fallo)}
+                        className="text-blue-600 hover:underline text-sm font-semibold"
+                      >
+                        Editar
+                      </button>
+                    </td>
+                  )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatFechaHoraFallo(fallo) || 'Sin información'}
                   </td>
@@ -124,16 +134,6 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                       );
                     })()}
                   </td>
-                  {activeRole === 'supervisor' && (
-                    <td className="sticky right-0 bg-white z-10 px-6 py-3 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => handleEdit(fallo)}
-                        className="text-blue-600 hover:underline text-sm font-semibold"
-                      >
-                        Editar
-                      </button>
-                    </td>
-                  )}
                 </tr>
               ))
             )}
