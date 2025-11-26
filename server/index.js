@@ -24,6 +24,7 @@ import rolesRoutes from "./roles.routes.js";
 import usuariosRoutes from "./routes/usuarios.routes.js";
 import usuarioRolesRoutes from "./routes/usuarioRoles.routes.js";
 import rolMenuRoutes from "./routes/rolMenu.js";
+import proveedoresRoutes from "./routes/proveedores.routes.js";
 import sitiosRoutes from "./routes/sitios.routes.js";
 import haciendasRoutes from "./routes/haciendas.routes.js";
 import tipoAreaRoutes from "./routes/tipoArea.routes.js";
@@ -58,6 +59,7 @@ const knownApiPrefixes = [
   "/api/persona",
   "/api/medio-comunicacion",
   "/api/clientes",
+  "/api/proveedores",
   "/api/nodos-sitios",
   "/api/rol-menu",
   "/api/roles",
@@ -118,6 +120,7 @@ app.use("/api/usuario-roles", usuarioRolesRoutes);
 app.use("/api/rol-menu", rolMenuRoutes);
 app.use("/api/sitios", sitiosRoutes);
 app.use("/api/clientes", clientesRoutes);
+app.use("/api/proveedores", proveedoresRoutes);
 app.use("/api/asignar-cliente-sitio", asignarClienteSitioRoutes);
 app.use("/api/reportes", reportesEventosRoutes);
 app.use("/api", haciendasRoutes);

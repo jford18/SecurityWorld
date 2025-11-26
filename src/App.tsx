@@ -26,6 +26,7 @@ import RolMenuScreen from './pages/admin/RolMenuScreen';
 import Nodos from './components/views/Nodos.jsx';
 import TipoIntrusion from './components/views/TipoIntrusion.jsx';
 import Clientes from './pages/administracion/Clientes';
+import ProveedoresPage from './pages/administracion/ProveedoresPage';
 import AsignarClienteSitio from './pages/administracion/AsignarClienteSitio';
 import TipoAreaList from './pages/administracion/TipoAreaList';
 import TipoAreaForm from './pages/administracion/TipoAreaForm';
@@ -131,6 +132,7 @@ const routeConfig: RouteDefinition[] = [
   },
   { path: '/administracion/tipo-servicio', element: <TiposServicioPage /> },
   { path: '/administracion/clientes', element: <Clientes /> },
+  { path: '/administracion/proveedores', element: <ProveedoresPage /> },
   { path: '/administracion/asignar-cliente-sitio', element: <AsignarClienteSitio /> },
   { path: '/administracion/departamento-responsable', element: <DepartamentosResponsablesPage /> },
   { path: '/administracion/roles', element: <RolesScreen /> },
