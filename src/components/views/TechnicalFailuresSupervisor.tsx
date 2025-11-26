@@ -294,181 +294,178 @@ const EditFailureModal: React.FC<{
   );
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
-      <div className="bg-white rounded-lg shadow-xl p-8 max-w-4xl w-full">
-        <h4 className="text-[#1C2E4A] text-xl font-semibold mb-6">
+    <div className="flex flex-col h-full">
+      <div className="flex flex-col gap-2 mb-4">
+        <h4 className="text-[#1C2E4A] text-xl font-semibold">
           Editar Reporte de Fallo (Supervisor)
         </h4>
+        <p className="text-sm text-gray-500">
+          Actualiza la información del reporte seleccionado sin perder de vista el historial.
+        </p>
+      </div>
 
-        <div className="mb-6 border-b border-gray-200">
-          <nav className="-mb-px flex space-x-6" aria-label="Tabs">
-            {[
-              { id: 'general' as const, label: 'Datos generales' },
-              { id: 'supervisor' as const, label: 'Verificación Supervisor' },
-              { id: 'cierre' as const, label: 'Verificación de cierre' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-[#F9C300] text-[#1C2E4A]'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
+      <div className="mb-6 border-b border-gray-200">
+        <nav className="-mb-px flex flex-wrap gap-2" aria-label="Tabs">
+          {[
+            { id: 'general' as const, label: 'Datos generales' },
+            { id: 'supervisor' as const, label: 'Verificación Supervisor' },
+            { id: 'cierre' as const, label: 'Verificación de cierre' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${
+                activeTab === tab.id
+                  ? 'border-[#F9C300] text-[#1C2E4A]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {activeTab === 'general' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {renderReadOnlyInfo('Fecha de reporte', editData.fecha)}
+          {renderReadOnlyInfo('Sitio', editData.sitio_nombre)}
+          {renderReadOnlyInfo('Tipo de afectación', editData.tipo_afectacion)}
+          {renderReadOnlyInfo('Equipo afectado', editData.equipo_afectado)}
+          {renderReadOnlyInfo('Responsable inicial', editData.responsable)}
+          {renderReadOnlyInfo(
+            'Departamento asignado',
+            editData.deptResponsable ||
+              departamentos.find(
+                (departamento) => String(departamento.id) === editData.departamentoResponsableId,
+              )?.nombre,
+          )}
         </div>
+      )}
 
-        {activeTab === 'general' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {renderReadOnlyInfo('Fecha de reporte', editData.fecha)}
-            {renderReadOnlyInfo('Sitio', editData.sitio_nombre)}
-            {renderReadOnlyInfo('Tipo de afectación', editData.tipo_afectacion)}
-            {renderReadOnlyInfo('Equipo afectado', editData.equipo_afectado)}
-            {renderReadOnlyInfo('Responsable inicial', editData.responsable)}
-            {renderReadOnlyInfo(
-              'Departamento asignado',
-              editData.deptResponsable ||
-                departamentos.find(
-                  (departamento) =>
-                    String(departamento.id) === editData.departamentoResponsableId,
-                )?.nombre,
-            )}
+      {activeTab === 'supervisor' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Fecha hora de fallo</label>
+            <input
+              type="text"
+              value={fechaHoraFalloDisplay}
+              readOnly
+              disabled
+              className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
+            />
           </div>
-        )}
+          <div className="md:col-span-2">
+            <AutocompleteComboBox
+              label="Departamento Responsable"
+              value={editData.departamentoResponsableId ?? ''}
+              onChange={(value: string) =>
+                setEditData((prev) => ({ ...prev, departamentoResponsableId: value }))
+              }
+              onItemSelect={handleDepartamentoSelect}
+              items={departamentoItems}
+              displayField="label"
+              valueField="value"
+              placeholder="Seleccione..."
+              searchPlaceholder="Escriba para filtrar"
+              disabled={departamentos.length === 0}
+              emptyMessage={
+                departamentos.length === 0
+                  ? 'No hay departamentos disponibles'
+                  : 'No se encontraron departamentos'
+              }
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700">Descripción</label>
+            <textarea
+              value={editData.descripcion_fallo || ''}
+              readOnly
+              disabled
+              className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Último usuario que editó
+            </label>
+            <input
+              type="text"
+              value={
+                editData.ultimo_usuario_edito_nombre &&
+                editData.ultimo_usuario_edito_nombre.trim()
+                  ? editData.ultimo_usuario_edito_nombre
+                  : 'Sin información'
+              }
+              readOnly
+              disabled
+              className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700">Novedad Detectada</label>
+            <textarea
+              name="novedadDetectada"
+              value={editData.novedadDetectada || ''}
+              onChange={handleChange}
+              rows={4}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
+            ></textarea>
+          </div>
+        </div>
+      )}
 
-        {activeTab === 'supervisor' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Fecha hora de fallo
-              </label>
-              <input
-                type="text"
-                value={fechaHoraFalloDisplay}
-                readOnly
-                disabled
-                className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <AutocompleteComboBox
-                label="Departamento Responsable"
-                value={editData.departamentoResponsableId ?? ''}
-                onChange={(value: string) =>
-                  setEditData((prev) => ({ ...prev, departamentoResponsableId: value }))
-                }
-                onItemSelect={handleDepartamentoSelect}
-                items={departamentoItems}
-                displayField="label"
-                valueField="value"
-                placeholder="Seleccione..."
-                searchPlaceholder="Escriba para filtrar"
-                disabled={departamentos.length === 0}
-                emptyMessage={
-                  departamentos.length === 0
-                    ? 'No hay departamentos disponibles'
-                    : 'No se encontraron departamentos'
-                }
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700">Descripción</label>
-              <textarea
-                value={editData.descripcion_fallo || ''}
-                readOnly
-                rows={3}
-                className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Último usuario que editó
-              </label>
-              <input
-                type="text"
-                value={
-                  editData.ultimo_usuario_edito_nombre &&
-                  editData.ultimo_usuario_edito_nombre.trim()
-                    ? editData.ultimo_usuario_edito_nombre
-                    : 'Sin información'
-                }
-                readOnly
-                disabled
-                className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700">Novedad Detectada</label>
-              <textarea
-                name="novedadDetectada"
-                value={editData.novedadDetectada || ''}
-                onChange={handleChange}
-                rows={4}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-              ></textarea>
-            </div>
+      {activeTab === 'cierre' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Fecha y Hora Resolución</label>
+            <input
+              type="datetime-local"
+              name="fechaHoraResolucion"
+              value={editData.fechaHoraResolucion || ''}
+              onChange={(e) => handleResolutionChange(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
+            />
           </div>
-        )}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700">Responsable Verificación Cierre</label>
+            <input
+              type="text"
+              readOnly
+              disabled
+              className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
+              value={
+                editData.responsable_verificacion_cierre_nombre &&
+                editData.responsable_verificacion_cierre_nombre.trim()
+                  ? editData.responsable_verificacion_cierre_nombre
+                  : 'Sin información'
+              }
+            />
+          </div>
+        </div>
+      )}
 
-        {activeTab === 'cierre' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Fecha y Hora Resolución
-              </label>
-              <input
-                type="datetime-local"
-                name="fechaHoraResolucion"
-                value={editData.fechaHoraResolucion || ''}
-                onChange={(e) => handleResolutionChange(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Responsable Verificación Cierre
-              </label>
-              <input
-                type="text"
-                readOnly
-                disabled
-                className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
-                value={
-                  editData.responsable_verificacion_cierre_nombre &&
-                  editData.responsable_verificacion_cierre_nombre.trim()
-                    ? editData.responsable_verificacion_cierre_nombre
-                    : 'Sin información'
-                }
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="mt-8 flex flex-col gap-3 border-t border-gray-100 pt-6 md:flex-row md:justify-end">
-          <div className="flex gap-4 justify-end">
-            <button
-              onClick={onClose}
-              className="px-6 py-2 bg-gray-200 text-gray-800 font-semibold rounded-md hover:bg-gray-300 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="px-6 py-2 bg-[#F9C300] text-[#1C2E4A] font-semibold rounded-md hover:bg-yellow-400 transition-colors disabled:opacity-60"
-            >
-              {isSaving ? 'Guardando...' : 'Guardar Cambios'}
-            </button>
-          </div>
+      <div className="mt-8 flex flex-col gap-3 border-t border-gray-100 pt-6 md:flex-row md:justify-end">
+        <div className="flex gap-4 justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-gray-200 text-gray-800 font-semibold rounded-md hover:bg-gray-300 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="px-6 py-2 bg-[#F9C300] text-[#1C2E4A] font-semibold rounded-md hover:bg-yellow-400 transition-colors disabled:opacity-60"
+          >
+            {isSaving ? 'Guardando...' : 'Guardar Cambios'}
+          </button>
         </div>
       </div>
     </div>
   );
+
 };
 
 const TechnicalFailuresSupervisor: React.FC = () => {
@@ -617,119 +614,137 @@ const TechnicalFailuresSupervisor: React.FC = () => {
     }
   };
 
+  const hasActiveEdit = isModalOpen && currentFailure;
+
   return (
-    <div>
+    <div className="space-y-6">
       <h3 className="text-3xl font-medium text-[#1C2E4A]">Gestión de Fallos Técnicos</h3>
 
-      <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="text-[#1C2E4A] text-lg font-semibold">Historial de Fallos Recientes</h4>
-          {isLoading && <span className="text-sm text-gray-500">Cargando información...</span>}
+      <div className="mt-2 flex flex-col lg:flex-row gap-4">
+        <div className="w-full lg:w-1/3 lg:order-2 lg:sticky lg:top-4">
+          <div className="bg-white p-4 rounded-lg shadow-md max-h-[80vh] overflow-y-auto">
+            {hasActiveEdit && currentFailure ? (
+              <EditFailureModal
+                failure={currentFailure}
+                departamentos={catalogos.departamentos}
+                responsables={responsables}
+                onSave={handleUpdateFailure}
+                onClose={() => {
+                  setIsModalOpen(false);
+                  setCurrentFailure(null);
+                }}
+                isSaving={isSubmitting}
+                currentUserName={session.user}
+              />
+            ) : (
+              <div className="text-sm text-gray-500">
+                Selecciona un fallo del historial para editarlo.
+              </div>
+            )}
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fecha
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Descripción
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Sitio
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tipo afectación
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Equipo
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Responsable
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Estado
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {failures.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
-                    {isLoading ? 'Cargando fallos técnicos...' : 'No hay registros disponibles.'}
-                  </td>
-                </tr>
-              ) : (
-                failures.map((fallo) => (
-                  <tr key={fallo.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.fecha}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {fallo.descripcion_fallo}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {fallo.sitio_nombre || 'Sin sitio asignado'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {fallo.tipo_afectacion || 'Sin tipo'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {fallo.equipo_afectado || 'Sin equipo'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {fallo.responsable}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {(() => {
-                        const estado = calcularEstado(fallo);
-                        return (
-                          <span
-                            style={{
-                              backgroundColor: estado.color,
-                              color: 'white',
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              fontSize: '0.9em',
-                              fontWeight: 'bold',
-                              display: 'inline-block',
-                              minWidth: '110px',
-                              textAlign: 'center',
-                            }}
-                          >
-                            {estado.texto}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => handleEdit(fallo)}
-                        className="text-indigo-600 hover:text-indigo-900"
-                      >
-                        Editar
-                      </button>
-                    </td>
+
+        <div className="w-full lg:w-2/3 lg:order-1">
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-[#1C2E4A] text-lg font-semibold">Historial de Fallos Recientes</h4>
+              {isLoading && <span className="text-sm text-gray-500">Cargando información...</span>}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Fecha
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Descripción
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Sitio
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Tipo afectación
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Equipo
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Responsable
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Estado
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Acciones
+                    </th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {failures.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
+                        {isLoading ? 'Cargando fallos técnicos...' : 'No hay registros disponibles.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    failures.map((fallo) => (
+                      <tr key={fallo.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.fecha}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {fallo.descripcion_fallo}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {fallo.sitio_nombre || 'Sin sitio asignado'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {fallo.tipo_afectacion || 'Sin tipo'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {fallo.equipo_afectado || 'Sin equipo'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {fallo.responsable}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          {(() => {
+                            const estado = calcularEstado(fallo);
+                            return (
+                              <span
+                                style={{
+                                  backgroundColor: estado.color,
+                                  color: 'white',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '0.9em',
+                                  fontWeight: 'bold',
+                                  display: 'inline-block',
+                                  minWidth: '110px',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                {estado.texto}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => handleEdit(fallo)}
+                            className="text-indigo-600 hover:text-indigo-900"
+                          >
+                            Editar
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
-      {isModalOpen && currentFailure && (
-        <EditFailureModal
-          failure={currentFailure}
-          departamentos={catalogos.departamentos}
-          responsables={responsables}
-          onSave={handleUpdateFailure}
-          onClose={() => setIsModalOpen(false)}
-          isSaving={isSubmitting}
-          currentUserName={session.user}
-        />
-      )}
     </div>
   );
 };
