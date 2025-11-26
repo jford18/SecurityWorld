@@ -271,18 +271,37 @@ const EditFailureModal: React.FC<{
   const fechaHoraFalloDisplay = fechaHoraReporte || 'Sin información';
 
   const handleSave = () => {
-    const resolutionDateTime =
-      editData.fechaHoraResolucion ||
-      (editData.fechaResolucion && editData.horaResolucion
-        ? `${editData.fechaResolucion}T${editData.horaResolucion}`
-        : undefined);
+    let cierre: Date | null = null;
 
-    if (resolutionDateTime) {
-      const cierre = new Date(resolutionDateTime);
-      if (!Number.isNaN(cierre.getTime()) && cierre.getTime() > Date.now()) {
-        alert('La fecha y hora de resolución no puede ser futura.');
-        return;
+    // 1) Si el picker devuelve fecha/hora completa en editData.fechaHoraResolucion
+    if (editData.fechaHoraResolucion) {
+      const value = editData.fechaHoraResolucion as any;
+
+      // Si es dayjs/moment, usar toDate()
+      if (value && typeof value === 'object' && typeof value.toDate === 'function') {
+        cierre = value.toDate();
       }
+      // Si ya es un Date nativo
+      else if (value instanceof Date) {
+        cierre = value;
+      }
+      // Si es string (por ejemplo "2025-11-28 07:48")
+      else if (typeof value === 'string') {
+        // Normalizar a formato ISO para el constructor de Date
+        const normalized = value.replace(' ', 'T').slice(0, 16); // "YYYY-MM-DDTHH:mm"
+        cierre = new Date(normalized);
+      }
+    }
+    // 2) Si no hay fechaHoraResolucion, construir con fecha + hora separadas
+    else if (editData.fechaResolucion && editData.horaResolucion) {
+      const isoString = `${editData.fechaResolucion}T${editData.horaResolucion}`;
+      cierre = new Date(isoString);
+    }
+
+    // 3) Validar que no sea futura
+    if (cierre && !Number.isNaN(cierre.getTime()) && cierre.getTime() > Date.now()) {
+      alert('La fecha y hora de resolución no puede ser futura.');
+      return;
     }
 
     const novedad = editData.novedadDetectada?.trim() || '';
