@@ -14,9 +14,17 @@ const formatError = (message) => ({
 });
 
 const CLIENTES_BASE_QUERY = `
-  SELECT id, nombre, identificacion, direccion, telefono, activo, fecha_creacion
-  FROM public.clientes
-  ORDER BY id
+  SELECT c.id,
+         c.nombre,
+         c.identificacion,
+         c.direccion,
+         c."TIPO_SERVICIO_ID" AS tipo_servicio_id,
+         ts."NOMBRE" AS tipo_servicio_nombre,
+         c.activo,
+         c.fecha_creacion
+    FROM public.clientes c
+    LEFT JOIN public."TIPO_SERVICIO" ts ON ts."ID" = c."TIPO_SERVICIO_ID"
+   ORDER BY c.id
 `;
 
 const parsePositiveInteger = (value) => {
@@ -58,15 +66,23 @@ const sanitizeSearch = (value) =>
 
 const buildSearchQuery = (term) => ({
   query: `
-    SELECT id, nombre, identificacion, direccion, telefono, activo, fecha_creacion
-    FROM public.clientes
-    WHERE (
-      nombre ILIKE $1 OR
-      identificacion ILIKE $1 OR
-      direccion ILIKE $1 OR
-      telefono ILIKE $1
-    )
-    ORDER BY id
+    SELECT c.id,
+           c.nombre,
+           c.identificacion,
+           c.direccion,
+           c."TIPO_SERVICIO_ID" AS tipo_servicio_id,
+           ts."NOMBRE" AS tipo_servicio_nombre,
+           c.activo,
+           c.fecha_creacion
+      FROM public.clientes c
+      LEFT JOIN public."TIPO_SERVICIO" ts ON ts."ID" = c."TIPO_SERVICIO_ID"
+     WHERE (
+       c.nombre ILIKE $1 OR
+       c.identificacion ILIKE $1 OR
+       c.direccion ILIKE $1 OR
+       ts."NOMBRE" ILIKE $1
+     )
+     ORDER BY c.id
   `,
   values: [`%${term}%`],
 });
@@ -121,38 +137,44 @@ export const createCliente = async (req, res) => {
     nombre,
     identificacion,
     direccion = "",
-    telefono = "",
+    tipo_servicio_id,
     activo = true,
   } = req.body ?? {};
 
   const nombreLimpio = sanitizeText(nombre);
   const identificacionLimpia = sanitizeText(identificacion);
   const direccionLimpia = sanitizeText(direccion);
-  const telefonoLimpio = sanitizeText(telefono);
+  const tipoServicioId = parsePositiveInteger(tipo_servicio_id);
   const activoNormalizado = normalizeBoolean(activo, true);
 
-  if (!nombreLimpio || !identificacionLimpia) {
+  if (!nombreLimpio || !identificacionLimpia || !tipoServicioId) {
     return res
       .status(422)
       .json(
         formatError(
-          "Los campos nombre e identificación son obligatorios"
+          "Los campos nombre, identificación y tipo de servicio son obligatorios"
         )
       );
   }
 
   try {
     const insertQuery = `
-      INSERT INTO public.clientes (nombre, identificacion, direccion, telefono, activo)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, nombre, identificacion, direccion, telefono, activo, fecha_creacion
+      WITH inserted AS (
+        INSERT INTO public.clientes (nombre, identificacion, direccion, "TIPO_SERVICIO_ID", activo)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, nombre, identificacion, direccion, "TIPO_SERVICIO_ID", activo, fecha_creacion
+      )
+      SELECT i.id, i.nombre, i.identificacion, i.direccion, i."TIPO_SERVICIO_ID" AS tipo_servicio_id,
+             ts."NOMBRE" AS tipo_servicio_nombre, i.activo, i.fecha_creacion
+        FROM inserted i
+        LEFT JOIN public."TIPO_SERVICIO" ts ON ts."ID" = i."TIPO_SERVICIO_ID"
     `;
 
     const values = [
       nombreLimpio,
       identificacionLimpia,
       direccionLimpia,
-      telefonoLimpio,
+      tipoServicioId,
       activoNormalizado,
     ];
 
@@ -171,7 +193,7 @@ export const createCliente = async (req, res) => {
 
 export const updateCliente = async (req, res) => {
   const { id } = req.params;
-  const { nombre, identificacion, direccion, telefono, activo } = req.body ?? {};
+  const { nombre, identificacion, direccion, tipo_servicio_id, activo } = req.body ?? {};
 
   const updates = [];
   const values = [];
@@ -207,11 +229,22 @@ export const updateCliente = async (req, res) => {
     index += 1;
   }
 
-  if (telefono !== undefined) {
-    updates.push(`telefono = $${index}`);
-    values.push(sanitizeText(telefono));
-    index += 1;
+  if (tipo_servicio_id === undefined) {
+    return res
+      .status(422)
+      .json(formatError("El tipo de servicio es obligatorio"));
   }
+
+  const tipoServicioId = parsePositiveInteger(tipo_servicio_id);
+  if (!tipoServicioId) {
+    return res
+      .status(422)
+      .json(formatError("El tipo de servicio proporcionado no es válido"));
+  }
+
+  updates.push(`"TIPO_SERVICIO_ID" = $${index}`);
+  values.push(tipoServicioId);
+  index += 1;
 
   if (activo !== undefined) {
     updates.push(`activo = $${index}`);
@@ -227,10 +260,16 @@ export const updateCliente = async (req, res) => {
 
   try {
     const updateQuery = `
-      UPDATE public.clientes
-      SET ${updates.join(", ")}
-      WHERE id = $${index}
-      RETURNING id, nombre, identificacion, direccion, telefono, activo, fecha_creacion
+      WITH updated AS (
+        UPDATE public.clientes
+           SET ${updates.join(", ")}
+         WHERE id = $${index}
+         RETURNING id, nombre, identificacion, direccion, "TIPO_SERVICIO_ID", activo, fecha_creacion
+      )
+      SELECT u.id, u.nombre, u.identificacion, u.direccion, u."TIPO_SERVICIO_ID" AS tipo_servicio_id,
+             ts."NOMBRE" AS tipo_servicio_nombre, u.activo, u.fecha_creacion
+        FROM updated u
+        LEFT JOIN public."TIPO_SERVICIO" ts ON ts."ID" = u."TIPO_SERVICIO_ID"
     `;
 
     values.push(id);

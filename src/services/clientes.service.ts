@@ -2,6 +2,14 @@ import api from "./api";
 
 const CLIENTES_ENDPOINT = "/clientes";
 
+export type ClientePayload = {
+  nombre: string;
+  identificacion: string;
+  direccion?: string;
+  tipo_servicio_id: number;
+  activo?: boolean;
+};
+
 type ClienteQueryParams = Record<string, string | number | boolean>;
 type ClienteQueryParamsInput = Record<
   string,
@@ -78,4 +86,19 @@ export const getAllClientes = async (
     ? await api.get(CLIENTES_ENDPOINT, config)
     : await api.get(CLIENTES_ENDPOINT);
   return normalizeClientesPayload(response?.data);
+};
+
+export const createCliente = async (
+  payload: ClientePayload
+): Promise<any> => {
+  const response = await api.post(CLIENTES_ENDPOINT, payload);
+  return response?.data;
+};
+
+export const updateCliente = async (
+  id: string | number,
+  payload: ClientePayload
+): Promise<any> => {
+  const response = await api.put(`${CLIENTES_ENDPOINT}/${id}`, payload);
+  return response?.data;
 };
