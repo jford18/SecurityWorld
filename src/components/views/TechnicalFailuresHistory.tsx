@@ -73,7 +73,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               {activeRole === 'supervisor' && (
                 <th
                   scope="col"
-                  className="sticky right-0 bg-white z-20 px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  className="sticky right-0 bg-white z-20 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
                 >
                   ACCIONES
                 </th>
@@ -125,10 +125,10 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                     })()}
                   </td>
                   {activeRole === 'supervisor' && (
-                    <td className="sticky right-0 bg-white z-10 px-4 py-2 text-right">
+                    <td className="sticky right-0 bg-white z-10 px-6 py-3 text-right whitespace-nowrap">
                       <button
                         onClick={() => handleEdit(fallo)}
-                        className="text-indigo-600 hover:text-indigo-900"
+                        className="text-blue-600 hover:underline text-sm font-semibold"
                       >
                         Editar
                       </button>
