@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { getUsuarios } from '../../services/usuariosService';
 import usuarioRolesService from '../../services/usuarioRolesService';
 
@@ -22,6 +22,7 @@ export type UsuarioRolesAgrupado = {
 const baseButtonClasses =
   'px-4 py-2 rounded-md font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors';
 const secondaryButtonClasses = `${baseButtonClasses} bg-gray-200 text-gray-700 hover:bg-gray-300 focus:ring-gray-300`;
+const primaryButtonClasses = `${baseButtonClasses} bg-[#1C2E4A] text-white hover:bg-[#142136] focus:ring-[#1C2E4A]`;
 
 const AsignacionRolesScreen: React.FC = () => {
   // NEW: Estados base para mostrar la información proveniente del backend.
@@ -29,6 +30,7 @@ const AsignacionRolesScreen: React.FC = () => {
   const [roles, setRoles] = useState<RolListado[]>([]);
   const [asignaciones, setAsignaciones] = useState<Record<number, Set<number>>>({});
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [savingMap, setSavingMap] = useState<Record<string, boolean>>({});
@@ -86,60 +88,57 @@ const AsignacionRolesScreen: React.FC = () => {
     loadData();
   }, [loadData]);
 
-  // FIX: Memoizamos la asignación activa del usuario seleccionado para evitar cálculos innecesarios.
-  const rolesAsignadosUsuario = useMemo(() => {
+  useEffect(() => {
     if (!selectedUserId) {
-      return new Set<number>();
+      setSelectedRoleId(null);
+      return;
     }
-    return asignaciones[selectedUserId] ?? new Set<number>();
+
+    const rolesUsuario = asignaciones[selectedUserId];
+    const primerRol = rolesUsuario ? Array.from(rolesUsuario)[0] ?? null : null;
+    setSelectedRoleId(primerRol ?? null);
   }, [asignaciones, selectedUserId]);
 
   const setSavingFlag = (usuarioId: number, rolId: number, value: boolean) => {
     setSavingMap((prev) => ({ ...prev, [`${usuarioId}-${rolId}`]: value }));
   };
 
-  const handleToggleRole = async (usuarioId: number, rolId: number, checked: boolean) => {
-    if (!Number.isInteger(usuarioId) || !Number.isInteger(rolId)) {
-      alert('Datos incompletos para asignar el rol');
+  const handleSelectRole = (rolId: number) => {
+    setFeedbackMessage('');
+    setErrorMessage('');
+    setSelectedRoleId((prev) => (prev === rolId ? null : rolId));
+  };
+
+  const handleGuardarRol = async () => {
+    if (!selectedUserId) {
+      setErrorMessage('Selecciona un usuario para asignar un rol');
+      return;
+    }
+
+    if (selectedRoleId === null) {
+      setErrorMessage('Selecciona un rol para continuar');
+      return;
+    }
+
+    const usuarioId = selectedUserId;
+    const rolId = selectedRoleId;
+    const clave = `${usuarioId}-${rolId}`;
+
+    if (savingMap[clave]) {
       return;
     }
 
     setFeedbackMessage('');
     setErrorMessage('');
 
-    const clave = `${usuarioId}-${rolId}`;
-    if (savingMap[clave]) {
-      return;
-    }
-
     try {
       setSavingFlag(usuarioId, rolId, true);
-
-      if (checked) {
-        await usuarioRolesService.asignarRol({ usuario_id: usuarioId, rol_id: rolId });
-        setAsignaciones((prev) => {
-          const current = new Set(prev[usuarioId] ?? []);
-          current.add(rolId);
-          return { ...prev, [usuarioId]: current };
-        });
-        setFeedbackMessage('Rol asignado correctamente');
-      } else {
-        const confirmed = window.confirm('¿Deseas eliminar este rol del usuario seleccionado?');
-        if (!confirmed) {
-          return;
-        }
-
-        await usuarioRolesService.eliminarAsignacion(usuarioId, rolId);
-        setAsignaciones((prev) => {
-          const current = new Set(prev[usuarioId] ?? []);
-          current.delete(rolId);
-          return { ...prev, [usuarioId]: current };
-        });
-        setFeedbackMessage('Rol eliminado correctamente');
-      }
+      await usuarioRolesService.asignarRol({ usuario_id: usuarioId, rol_id: rolId });
+      setAsignaciones((prev) => ({ ...prev, [usuarioId]: new Set([rolId]) }));
+      setFeedbackMessage('Rol asignado correctamente');
     } catch (error) {
       console.error('Error al actualizar rol de usuario', error); // FIX: Registro controlado para soporte.
-      alert(checked ? 'No se pudo asignar el rol' : 'No se pudo eliminar el rol');
+      alert('No se pudo asignar el rol');
       setErrorMessage((error as Error).message || 'Error al actualizar roles del usuario');
     } finally {
       setSavingFlag(usuarioId, rolId, false);
@@ -191,7 +190,11 @@ const AsignacionRolesScreen: React.FC = () => {
                 <li key={usuario.id}>
                   <button
                     type="button"
-                    onClick={() => setSelectedUserId(usuario.id)}
+                    onClick={() => {
+                      setSelectedUserId(usuario.id);
+                      setFeedbackMessage('');
+                      setErrorMessage('');
+                    }}
                     className={`w-full rounded-md border px-4 py-3 text-left transition-colors ${
                       isActive
                         ? 'border-[#1C2E4A] bg-[#1C2E4A] text-white'
@@ -217,11 +220,21 @@ const AsignacionRolesScreen: React.FC = () => {
         <div className="rounded-lg bg-white p-4 shadow">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-[#1C2E4A]">Roles disponibles</h2>
-            {selectedUserId && (
-              <span className="text-sm text-gray-500">
-                Usuario seleccionado: <strong>{usuarios.find((u) => u.id === selectedUserId)?.nombre_usuario}</strong>
-              </span>
-            )}
+            <div className="flex items-center gap-3">
+              {selectedUserId && (
+                <span className="text-sm text-gray-500">
+                  Usuario seleccionado: <strong>{usuarios.find((u) => u.id === selectedUserId)?.nombre_usuario}</strong>
+                </span>
+              )}
+              <button
+                type="button"
+                className={primaryButtonClasses}
+                onClick={handleGuardarRol}
+                disabled={selectedUserId === null || (selectedUserId !== null && selectedRoleId !== null && savingMap[`${selectedUserId}-${selectedRoleId}`])}
+              >
+                Guardar rol
+              </button>
+            </div>
           </div>
 
           {!selectedUserId ? (
@@ -229,7 +242,7 @@ const AsignacionRolesScreen: React.FC = () => {
           ) : (
             <div className="space-y-3">
               {roles.map((rol) => {
-                const checked = rolesAsignadosUsuario.has(rol.id);
+                const checked = selectedRoleId === rol.id;
                 const clave = `${selectedUserId}-${rol.id}`;
                 const isSaving = Boolean(savingMap[clave]);
 
@@ -250,7 +263,7 @@ const AsignacionRolesScreen: React.FC = () => {
                         className="h-4 w-4 rounded border-gray-300 text-[#F1C40F] focus:ring-[#F1C40F]"
                         checked={checked}
                         disabled={isSaving}
-                        onChange={(event) => handleToggleRole(selectedUserId, rol.id, event.target.checked)}
+                        onChange={() => handleSelectRole(rol.id)}
                       />
                     </div>
                   </label>
