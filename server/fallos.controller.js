@@ -18,6 +18,38 @@ const formatDate = (value) => {
   return date.toISOString().split("T")[0];
 };
 
+const splitDateTimeValue = (value) => {
+  if (!value || typeof value !== "string") {
+    return { fecha: null, hora: null };
+  }
+
+  const [fechaParte, horaParteRaw] = value.split("T");
+  const sanitizedHora = horaParteRaw
+    ? horaParteRaw.replace("Z", "").split(".")[0]
+    : null;
+
+  const hora = sanitizedHora
+    ? sanitizedHora.length === 5
+      ? `${sanitizedHora}:00`
+      : sanitizedHora
+    : null;
+
+  return {
+    fecha: fechaParte?.trim() || null,
+    hora,
+  };
+};
+
+const resolveFechaHoraFallo = (body = {}) => {
+  const fechaHora = body.fechaHoraFallo || body.fecha_hora_fallo;
+  const { fecha: fechaCombinada, hora: horaCombinada } = splitDateTimeValue(fechaHora);
+
+  return {
+    fecha: formatDate(body.fecha) || fechaCombinada,
+    hora: body.hora || body.horaFallo || horaCombinada,
+  };
+};
+
 const findUserId = (users, nameOrUsername) => {
   if (!nameOrUsername) return null;
   const normalized = String(nameOrUsername).trim().toLowerCase();
@@ -95,6 +127,7 @@ const seedFallosIfNeeded = async (client) => {
       const falloInsert = await client.query(
         `INSERT INTO fallos_tecnicos (
           fecha,
+          hora,
           equipo_afectado,
           descripcion_fallo,
           responsable_id,
@@ -106,10 +139,11 @@ const seedFallosIfNeeded = async (client) => {
           fecha_creacion,
           fecha_actualizacion
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
         ) RETURNING id`,
         [
           seed.fecha,
+          seed.hora || null,
           seed.equipo_afectado,
           seed.descripcion_fallo,
           responsableId,
@@ -170,6 +204,8 @@ const seedFallosIfNeeded = async (client) => {
 const mapFalloRowToDto = (row) => ({
   id: String(row.id),
   fecha: formatDate(row.fecha) || "",
+  hora: row.hora || undefined,
+  horaFallo: row.hora || undefined,
   equipo_afectado: row.equipo_afectado ?? "",
   descripcion_fallo: row.descripcion_fallo ?? "",
   responsable: row.responsable || "",
@@ -196,6 +232,7 @@ const fetchFalloById = async (client, id) => {
       `SELECT
         ft.id,
         ft.fecha,
+        ft.hora,
         ft.equipo_afectado,
         ft.descripcion_fallo,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
@@ -243,6 +280,7 @@ export const getFallos = async (req, res) => {
       `SELECT
         ft.id,
         ft.fecha,
+        ft.hora,
         ft.equipo_afectado,
         ft.descripcion_fallo,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
@@ -279,6 +317,7 @@ export const getFallos = async (req, res) => {
 export const createFallo = async (req, res) => {
   const {
     fecha,
+    hora,
     equipo_afectado,
     descripcion_fallo,
     responsable,
@@ -289,6 +328,8 @@ export const createFallo = async (req, res) => {
     consola,
     fechaResolucion,
     horaResolucion,
+    horaFallo,
+    fechaHoraFallo,
     verificacionApertura,
     verificacionCierre,
     novedadDetectada,
@@ -297,7 +338,19 @@ export const createFallo = async (req, res) => {
     sitioId: rawSitioIdCamel,
   } = req.body || {};
 
-  if (!fecha || !equipo_afectado || !descripcion_fallo || !responsable) {
+  const { fecha: fechaFalloValue, hora: horaFalloValue } = resolveFechaHoraFallo({
+    fecha,
+    hora,
+    horaFallo,
+    fechaHoraFallo,
+  });
+
+  if (
+    !fechaFalloValue ||
+    !equipo_afectado ||
+    !descripcion_fallo ||
+    !responsable
+  ) {
     return res.status(400).json({
       mensaje:
         "Los campos fecha, equipo_afectado, descripcion_fallo y responsable son obligatorios.",
@@ -406,6 +459,7 @@ export const createFallo = async (req, res) => {
     const insertResult = await client.query(
       `INSERT INTO fallos_tecnicos (
         fecha,
+        hora,
         equipo_afectado,
         descripcion_fallo,
         responsable_id,
@@ -418,10 +472,11 @@ export const createFallo = async (req, res) => {
         fecha_creacion,
         fecha_actualizacion
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW()
       ) RETURNING id`,
       [
-        fecha,
+        fechaFalloValue,
+        horaFalloValue || null,
         equipo_afectado,
         descripcion_fallo,
         responsableId,
@@ -483,9 +538,13 @@ export const createFallo = async (req, res) => {
 export const actualizarFalloSupervisor = async (req, res) => {
   const { id } = req.params;
   const {
+    fecha,
+    hora,
     deptResponsable,
     fechaResolucion,
     horaResolucion,
+    horaFallo,
+    fechaHoraFallo,
     verificacionApertura,
     verificacionCierre,
     novedadDetectada,
@@ -513,7 +572,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
     await client.query("BEGIN");
 
     const existingResult = await client.query(
-      "SELECT id FROM fallos_tecnicos WHERE id = $1",
+      "SELECT id, fecha, hora FROM fallos_tecnicos WHERE id = $1",
       [id]
     );
 
@@ -534,14 +593,31 @@ export const actualizarFalloSupervisor = async (req, res) => {
       );
     })?.id ?? null;
 
+    const existingFallo = existingResult.rows[0];
+    const { fecha: fechaFalloPayload, hora: horaFalloPayload } =
+      resolveFechaHoraFallo({
+        fecha,
+        hora,
+        horaFallo,
+        fechaHoraFallo,
+      });
+
+    const fechaFalloValue =
+      fechaFalloPayload || formatDate(existingFallo?.fecha) || null;
+    const horaFalloValue = horaFalloPayload || existingFallo?.hora || null;
+
     await client.query(
       `UPDATE fallos_tecnicos
-         SET departamento_id = $1,
-             fecha_resolucion = $2,
-             hora_resolucion = $3,
+         SET fecha = $1,
+             hora = $2,
+             departamento_id = $3,
+             fecha_resolucion = $4,
+             hora_resolucion = $5,
              fecha_actualizacion = NOW()
-        WHERE id = $4`,
+        WHERE id = $6`,
       [
+        fechaFalloValue,
+        horaFalloValue,
         departamentoId,
         fechaResolucion || null,
         horaResolucion || null,

@@ -2,6 +2,7 @@
 export interface TechnicalFailure {
   id: string;
   fecha: string;
+  hora?: string;
   equipo_afectado: string;
   descripcion_fallo: string;
   responsable: string;

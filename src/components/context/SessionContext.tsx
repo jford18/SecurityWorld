@@ -15,6 +15,7 @@ interface SessionData {
   user: string | null;
   console: string | null;
   roleId: number | null;
+  activeRoleId?: number | null;
   roleName: string | null;
   roles: RoleOption[];
   roleTokens: RoleToken[];
@@ -33,6 +34,7 @@ const initialSession: SessionData = {
   user: null,
   console: null,
   roleId: null,
+  activeRoleId: null,
   roleName: null,
   roles: [],
   roleTokens: [],
