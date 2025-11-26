@@ -21,7 +21,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
         <h4 className="text-[#1C2E4A] text-lg font-semibold">Historial de Fallos Recientes</h4>
         {isLoading && <span className="text-sm text-gray-500">Cargando información...</span>}
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto relative">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -41,8 +41,11 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                 Estado
               </th>
               {activeRole === 'supervisor' && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Acciones
+                <th
+                  scope="col"
+                  className="sticky right-0 bg-white z-20 px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  ACCIONES
                 </th>
               )}
             </tr>
@@ -90,7 +93,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                     })()}
                   </td>
                   {activeRole === 'supervisor' && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td className="sticky right-0 bg-white z-10 px-4 py-2 text-right">
                       <button
                         onClick={() => handleEdit(fallo)}
                         className="text-indigo-600 hover:text-indigo-900"
