@@ -161,6 +161,17 @@ export const createIntrusion = async (req, res) => {
       .json({ mensaje: "La fecha y hora de reacción no es válida." });
   }
 
+  if (
+    fechaReaccionValue &&
+    fechaEventoValue &&
+    fechaReaccionValue.getTime() <= fechaEventoValue.getTime()
+  ) {
+    return res.status(400).json({
+      message:
+        "La fecha y hora de reacción debe ser mayor que la fecha y hora de intrusión.",
+    });
+  }
+
   if (fecha_reaccion_fuera && !fechaReaccionFueraValue) {
     return res
       .status(400)
@@ -249,6 +260,10 @@ export const updateIntrusion = async (req, res) => {
   const updates = [];
   const values = [];
 
+  let parsedFechaEvento = null;
+  let parsedFechaReaccion = null;
+  let parsedFechaReaccionFuera = null;
+
   const pushUpdate = (column, value) => {
     values.push(value);
     updates.push(`${column} = $${values.length}`);
@@ -277,9 +292,6 @@ export const updateIntrusion = async (req, res) => {
     pushUpdate("medio_comunicacion_id", medioValue);
   }
 
-  let parsedFechaReaccion = null;
-  let parsedFechaReaccionFuera = null;
-
   if (fecha_evento !== undefined) {
     const parsedDate = parseFechaValue(fecha_evento);
     if (!parsedDate) {
@@ -287,6 +299,7 @@ export const updateIntrusion = async (req, res) => {
         .status(400)
         .json({ mensaje: "La fecha y hora del evento no es válida." });
     }
+    parsedFechaEvento = parsedDate;
     pushUpdate("fecha_evento", parsedDate);
   }
 
@@ -310,6 +323,17 @@ export const updateIntrusion = async (req, res) => {
     }
     parsedFechaReaccionFuera = parsedDate;
     pushUpdate("fecha_reaccion_fuera", parsedDate);
+  }
+
+  if (
+    parsedFechaReaccion &&
+    parsedFechaEvento &&
+    parsedFechaReaccion.getTime() <= parsedFechaEvento.getTime()
+  ) {
+    return res.status(400).json({
+      message:
+        "La fecha y hora de reacción debe ser mayor que la fecha y hora de intrusión.",
+    });
   }
 
   if (
