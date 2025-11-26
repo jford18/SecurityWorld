@@ -87,9 +87,8 @@ const buildFailureDateTimeValue = (failure: TechnicalFailure) => {
     return failure.fechaHoraFallo;
   }
   if (failure.fecha) {
-    return failure.horaFallo
-      ? `${failure.fecha}T${failure.horaFallo}`
-      : failure.fecha;
+    const horaFallo = failure.hora ?? failure.horaFallo;
+    return horaFallo ? `${failure.fecha}T${horaFallo}` : failure.fecha;
   }
   return undefined;
 };
@@ -261,10 +260,10 @@ const EditFailureModal: React.FC<{
       formatFechaHoraDisplay(
         combined,
         editData.fecha,
-        editData.horaFallo,
+        editData.hora ?? editData.horaFallo,
       ) || 'Sin información'
     );
-  }, [editData.fechaHoraFallo, editData.fecha, editData.horaFallo]);
+  }, [editData.fechaHoraFallo, editData.fecha, editData.hora, editData.horaFallo]);
 
   const handleSave = () => {
     const novedad = editData.novedadDetectada?.trim() || '';
@@ -537,6 +536,16 @@ const TechnicalFailuresSupervisor: React.FC = () => {
     const failureDateTimeValue =
       buildFailureDateTimeValue(updatedFailure) ?? updatedFailure.fecha;
 
+    const { date: failureDateFromDateTime, time: failureTimeFromDateTime } =
+      splitDateTimeLocalValue(failureDateTimeValue);
+
+    const fechaFalloPayload = failureDateFromDateTime || updatedFailure.fecha;
+    const horaFalloPayload =
+      failureTimeFromDateTime ||
+      updatedFailure.hora ||
+      updatedFailure.horaFallo ||
+      undefined;
+
     const resolutionComparable = toComparableDate(
       updatedFailure.fechaHoraResolucion ||
         (resolutionDate
@@ -582,7 +591,9 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       : null;
 
     const payload: TechnicalFailurePayload = {
-      fecha: updatedFailure.fecha,
+      fecha: fechaFalloPayload,
+      hora: horaFalloPayload,
+      horaFallo: horaFalloPayload,
       equipo_afectado: updatedFailure.equipo_afectado,
       descripcion_fallo: updatedFailure.descripcion_fallo,
       responsable: updatedFailure.responsable,
@@ -669,7 +680,13 @@ const TechnicalFailuresSupervisor: React.FC = () => {
               ) : (
                 failures.map((fallo) => (
                   <tr key={fallo.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.fecha}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatFechaHoraDisplay(
+                        buildFailureDateTimeValue(fallo),
+                        fallo.fecha,
+                        fallo.hora ?? fallo.horaFallo,
+                      ) || 'Sin información'}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {fallo.descripcion_fallo}
                     </td>

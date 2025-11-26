@@ -9,6 +9,7 @@ import {
 export interface TechnicalFailurePayload {
   id?: string;
   fecha: string;
+  hora?: string;
   equipo_afectado: string;
   descripcion_fallo: string;
   responsable: string;
