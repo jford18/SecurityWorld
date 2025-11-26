@@ -9,7 +9,10 @@ export interface TechnicalFailure {
   deptResponsable?: string;
   departamentoResponsableId?: string;
   sitio_nombre?: string;
+  sitioNombre?: string;
   tipo_afectacion?: string;
+  tipoAfectacion?: string;
+  equipoAfectado?: string;
   horaFallo?: string;
   fechaHoraFallo?: string;
   fechaResolucion?: string;
@@ -20,6 +23,10 @@ export interface TechnicalFailure {
   verificacionCierre?: string;
   verificacionCierreId?: string;
   novedadDetectada?: string;
+  tipoProblemaNombre?: string;
+  tipoProblema?: string;
+  departamentoNombre?: string;
+  estado?: string;
   ultimo_usuario_edito_id?: number | null;
   ultimo_usuario_edito_nombre?: string | null;
   responsable_verificacion_cierre_id?: number | null;
