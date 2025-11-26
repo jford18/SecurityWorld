@@ -6,14 +6,13 @@ import {
   toggleActivoTipoServicio,
   updateTipoServicio,
 } from "../controllers/tipoServicio.controller.js";
-import verifyToken from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-router.get("/", verifyToken, getAllTipoServicio);
-router.get("/:id", verifyToken, getTipoServicioById);
-router.post("/", verifyToken, createTipoServicio);
-router.put("/:id", verifyToken, updateTipoServicio);
-router.patch("/:id/activo", verifyToken, toggleActivoTipoServicio);
+router.get("/", getAllTipoServicio);
+router.get("/:id", getTipoServicioById);
+router.post("/", createTipoServicio);
+router.put("/:id", updateTipoServicio);
+router.patch("/:id/activo", toggleActivoTipoServicio);
 
 export default router;
