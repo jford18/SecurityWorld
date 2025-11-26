@@ -41,7 +41,8 @@ interface TechnicalFailuresHistoryProps {
   failures: TechnicalFailure[];
   isLoading: boolean;
   activeRole: string | undefined;
-  handleEdit: (failure: TechnicalFailure) => void;
+  handleEdit?: (failure: TechnicalFailure) => void;
+  showActions?: boolean;
 }
 
 const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
@@ -49,7 +50,11 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   isLoading,
   activeRole: _activeRole,
   handleEdit,
+  showActions = true,
 }) => {
+  const actionsEnabled = showActions && Boolean(handleEdit);
+  const columnsCount = actionsEnabled ? 7 : 6;
+
   return (
     <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
       <div className="flex items-center justify-between mb-4">
@@ -78,18 +83,20 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Departamento Responsable
               </th>
-              <th
-                scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-              >
-                Acciones
-              </th>
+              {actionsEnabled && (
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  Acciones
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {failures.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
+                <td colSpan={columnsCount} className="px-6 py-4 text-center text-sm text-gray-500">
                   {isLoading ? 'Cargando fallos técnicos...' : 'No hay registros disponibles.'}
                 </td>
               </tr>
@@ -144,14 +151,16 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                       || fallo.deptResponsable
                       || 'Sin información'}
                   </td>
-                  <td className="px-6 py-3 text-left whitespace-nowrap">
-                    <button
-                      onClick={() => handleEdit(fallo)}
-                      className="text-blue-600 hover:underline text-sm font-semibold"
-                    >
-                      Editar
-                    </button>
-                  </td>
+                  {actionsEnabled && handleEdit && (
+                    <td className="px-6 py-3 text-left whitespace-nowrap">
+                      <button
+                        onClick={() => handleEdit(fallo)}
+                        className="text-blue-600 hover:underline text-sm font-semibold"
+                      >
+                        Editar
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))
             )}

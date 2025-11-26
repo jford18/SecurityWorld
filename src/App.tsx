@@ -81,6 +81,7 @@ const RequireAuth: React.FC<{ children: React.ReactElement }> = ({ children }) =
 
 import TechnicalFailuresOperador from './components/views/TechnicalFailuresOperador';
 import TechnicalFailuresSupervisor from './components/views/TechnicalFailuresSupervisor';
+import TechnicalFailuresConsultas from './components/views/TechnicalFailuresConsultas';
 
 interface RouteDefinition {
   path: string;
@@ -96,6 +97,10 @@ const routeConfig: RouteDefinition[] = [
     path: '/fallos/supervisor',
     element: <TechnicalFailuresSupervisor />,
     aliases: ['/fallos-supervisor'],
+  },
+  {
+    path: '/fallos-tecnicos-consultas',
+    element: <TechnicalFailuresConsultas />,
   },
   { path: '/intrusiones', element: <Intrusions /> },
   { path: '/reportes/alertas-turno', element: <AlertsReportByShift /> },
