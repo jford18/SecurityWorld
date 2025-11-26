@@ -131,6 +131,8 @@ const RolMenuScreen: React.FC = () => {
 
   const activeCount = useMemo(() => menus.filter((menu) => menu.activo).length, [menus]);
 
+  const allChecked = useMemo(() => menus.length > 0 && menus.every((menu) => menu.activo), [menus]);
+
   const handleToggleMenu = (menuId: number, checked: boolean) => {
     setMenus((prev) =>
       prev.map((menu) =>
@@ -141,6 +143,17 @@ const RolMenuScreen: React.FC = () => {
             }
           : menu
       )
+    );
+  };
+
+  const handleToggleAll = () => {
+    const nextValue = !(menus.length > 0 && menus.every((menu) => menu.activo));
+
+    setMenus((prev) =>
+      prev.map((menu) => ({
+        ...menu,
+        activo: nextValue,
+      }))
     );
   };
 
@@ -249,7 +262,15 @@ const RolMenuScreen: React.FC = () => {
                   scope="col"
                   className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600"
                 >
-                  Activo
+                  <div className="flex items-center justify-center gap-2">
+                    <span>Activo</span>
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 rounded border-gray-300 accent-green-500"
+                      checked={allChecked}
+                      onChange={handleToggleAll}
+                    />
+                  </div>
                 </th>
               </tr>
             </thead>
