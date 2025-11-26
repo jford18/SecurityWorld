@@ -57,6 +57,11 @@ export interface SitioPorConsola {
 export interface CatalogoNodo {
   id: number;
   nombre: string;
+  ip?: string | null;
+  proveedor_id?: number | null;
+  proveedorId?: number | null;
+  proveedor_nombre?: string | null;
+  proveedorNombre?: string | null;
 }
 
 export interface CatalogoDispositivo {

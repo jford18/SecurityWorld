@@ -2,6 +2,13 @@ import pool from "../db.js";
 
 const SITIO_NOT_FOUND_MESSAGE = "No se encontró sitio";
 
+const sanitizeText = (value) => (typeof value === "string" ? value.trim() : "");
+
+const parsePositiveInteger = (value) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
 const formatSuccess = (message, data = null) => ({
   status: "success",
   message,
@@ -16,7 +23,17 @@ const formatError = (message) => ({
 export const listNodos = async (_req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, nombre, activo, fecha_creacion FROM nodos ORDER BY id"
+      `SELECT
+        N.id,
+        N.nombre,
+        N.ip,
+        N.proveedor_id,
+        P.nombre AS proveedor_nombre,
+        N.activo,
+        N.fecha_creacion
+      FROM nodos N
+      LEFT JOIN proveedores P ON P.id = N.proveedor_id
+      ORDER BY N.id`
     );
     res.status(200).json(formatSuccess("Listado de nodos", result.rows));
   } catch (error) {
@@ -50,7 +67,17 @@ export const getNodoById = async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT id, nombre, activo, fecha_creacion FROM nodos WHERE id = $1",
+      `SELECT
+        N.id,
+        N.nombre,
+        N.ip,
+        N.proveedor_id,
+        P.nombre AS proveedor_nombre,
+        N.activo,
+        N.fecha_creacion
+      FROM nodos N
+      LEFT JOIN proveedores P ON P.id = N.proveedor_id
+      WHERE N.id = $1`,
       [id]
     );
 
@@ -70,13 +97,21 @@ export const getNodoById = async (req, res) => {
 };
 
 export const createNodo = async (req, res) => {
-  const { nombre } = req.body ?? {};
-  const trimmedName = typeof nombre === "string" ? nombre.trim() : "";
+  const { nombre, ip, proveedorId } = req.body ?? {};
+  const trimmedName = sanitizeText(nombre);
+  const sanitizedIp = sanitizeText(ip) || null;
+  const parsedProveedorId = parsePositiveInteger(proveedorId);
 
   if (!trimmedName) {
     return res
       .status(422)
       .json(formatError("El nombre del nodo es obligatorio"));
+  }
+
+  if (proveedorId !== undefined && proveedorId !== null && proveedorId !== "" && parsedProveedorId === null) {
+    return res
+      .status(400)
+      .json(formatError("El proveedor seleccionado no es válido"));
   }
 
   try {
@@ -92,8 +127,10 @@ export const createNodo = async (req, res) => {
     }
 
     const insertResult = await pool.query(
-      "INSERT INTO nodos (nombre, activo) VALUES ($1, true) RETURNING id, nombre, activo, fecha_creacion",
-      [trimmedName]
+      `INSERT INTO nodos (nombre, ip, proveedor_id, activo)
+      VALUES ($1, $2, $3, true)
+      RETURNING id, nombre, ip, proveedor_id, activo, fecha_creacion`,
+      [trimmedName, sanitizedIp, parsedProveedorId]
     );
 
     res
@@ -112,14 +149,14 @@ export const createNodo = async (req, res) => {
 
 export const updateNodo = async (req, res) => {
   const { id } = req.params;
-  const { nombre, activo } = req.body ?? {};
+  const { nombre, activo, ip, proveedorId } = req.body ?? {};
 
   const updates = [];
   const values = [];
   let index = 1;
 
   if (nombre !== undefined) {
-    const trimmedName = typeof nombre === "string" ? nombre.trim() : "";
+    const trimmedName = sanitizeText(nombre);
 
     if (!trimmedName) {
       return res
@@ -150,6 +187,30 @@ export const updateNodo = async (req, res) => {
     index += 1;
   }
 
+  if (ip !== undefined) {
+    const sanitizedIp = sanitizeText(ip) || null;
+    updates.push(`ip = $${index}`);
+    values.push(sanitizedIp);
+    index += 1;
+  }
+
+  if (proveedorId !== undefined) {
+    const parsedProveedorId =
+      proveedorId === null || proveedorId === ""
+        ? null
+        : parsePositiveInteger(proveedorId);
+
+    if (proveedorId !== null && proveedorId !== "" && parsedProveedorId === null) {
+      return res
+        .status(400)
+        .json(formatError("El proveedor seleccionado no es válido"));
+    }
+
+    updates.push(`proveedor_id = $${index}`);
+    values.push(parsedProveedorId);
+    index += 1;
+  }
+
   if (activo !== undefined) {
     const normalizedActive =
       typeof activo === "string"
@@ -171,7 +232,7 @@ export const updateNodo = async (req, res) => {
 
   try {
     const result = await pool.query(
-      `UPDATE nodos SET ${updates.join(", ")} WHERE id = $${index} RETURNING id, nombre, activo, fecha_creacion`,
+      `UPDATE nodos SET ${updates.join(", ")} WHERE id = $${index} RETURNING id, nombre, ip, proveedor_id, activo, fecha_creacion`,
       values
     );
 

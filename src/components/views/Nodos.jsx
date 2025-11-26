@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useMemo, useState } from 'react';
 import { create, deleteNodo, getAll, update } from '../../services/nodos.service';
+import { getProveedores } from '../../services/proveedoresService';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -13,6 +14,8 @@ const successButtonClasses = `${baseButtonClasses} bg-emerald-500 text-white hov
 
 const initialFormState = {
   nombre: '',
+  ip: '',
+  proveedorId: '',
 };
 
 const Nodos = () => {
@@ -25,6 +28,9 @@ const Nodos = () => {
   const [selectedNodo, setSelectedNodo] = useState(null);
   const [formState, setFormState] = useState(initialFormState);
   const [searchTerm, setSearchTerm] = useState('');
+  const [proveedores, setProveedores] = useState([]);
+  const [loadingProveedores, setLoadingProveedores] = useState(false);
+  const [proveedoresError, setProveedoresError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
   const fetchNodos = async () => {
@@ -44,8 +50,26 @@ const Nodos = () => {
     }
   };
 
+  const fetchProveedores = async () => {
+    try {
+      setLoadingProveedores(true);
+      const data = await getProveedores();
+      if (!Array.isArray(data)) {
+        throw new Error('Respuesta inválida del servidor de proveedores');
+      }
+      setProveedores(data);
+      setProveedoresError('');
+    } catch (err) {
+      console.error('Error al cargar proveedores:', err);
+      setProveedoresError(err?.message || 'Error al cargar los proveedores');
+    } finally {
+      setLoadingProveedores(false);
+    }
+  };
+
   useEffect(() => {
     fetchNodos();
+    fetchProveedores();
   }, []);
 
   const filteredNodos = useMemo(() => {
@@ -54,7 +78,13 @@ const Nodos = () => {
       return nodos;
     }
     return nodos.filter((nodo) =>
-      [nodo.nombre, nodo.id].some((value) =>
+      [
+        nodo.nombre,
+        nodo.id,
+        nodo.ip,
+        nodo.proveedor_nombre,
+        nodo.proveedorNombre,
+      ].some((value) =>
         String(value ?? '')
           .toLowerCase()
           .includes(term)
@@ -86,7 +116,11 @@ const Nodos = () => {
   const openEditModal = (nodo) => {
     setIsEditing(true);
     setSelectedNodo(nodo);
-    setFormState({ nombre: nodo.nombre ?? '' });
+    setFormState({
+      nombre: nodo.nombre ?? '',
+      ip: nodo.ip ?? '',
+      proveedorId: nodo.proveedor_id ?? nodo.proveedorId ?? '',
+    });
     setFormError('');
     setIsModalOpen(true);
   };
@@ -97,9 +131,19 @@ const Nodos = () => {
 
   const handleSubmit = async () => {
     const nombre = formState.nombre.trim();
+    const ip = formState.ip.trim();
+    const proveedorIdValue =
+      formState.proveedorId === '' || formState.proveedorId === null
+        ? null
+        : Number(formState.proveedorId);
 
     if (!nombre) {
       setFormError('El nombre del nodo es obligatorio');
+      return;
+    }
+
+    if (formState.proveedorId !== '' && Number.isNaN(proveedorIdValue)) {
+      setFormError('Selecciona un proveedor válido');
       return;
     }
 
@@ -115,11 +159,17 @@ const Nodos = () => {
     }
 
     try {
+      const payload = {
+        nombre,
+        ip: ip || null,
+        proveedorId: proveedorIdValue,
+      };
+
       if (isEditing && selectedNodo) {
-        await update(selectedNodo.id, { nombre });
+        await update(selectedNodo.id, payload);
         alert('Nodo actualizado correctamente');
       } else {
-        await create({ nombre });
+        await create(payload);
         alert('Nodo creado correctamente');
       }
       await fetchNodos();
@@ -213,6 +263,12 @@ const Nodos = () => {
                       Nombre
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
+                      IP
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
+                      Proveedor
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
                       Activo
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
@@ -228,6 +284,10 @@ const Nodos = () => {
                     <tr key={nodo.id}>
                       <td className="px-4 py-3 text-sm text-gray-700">{nodo.id}</td>
                       <td className="px-4 py-3 text-sm text-gray-700">{nodo.nombre}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700">{nodo.ip || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700">
+                        {nodo.proveedor_nombre || nodo.proveedorNombre || '—'}
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-700">{renderStatus(nodo.activo)}</td>
                       <td className="px-4 py-3 text-sm text-gray-700">
                         {nodo.fecha_creacion
@@ -303,6 +363,45 @@ const Nodos = () => {
                   className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
                   placeholder="Ingresa el nombre del nodo"
                 />
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                IP
+                <input
+                  type="text"
+                  value={formState.ip}
+                  onChange={(event) =>
+                    setFormState((prev) => ({ ...prev, ip: event.target.value }))
+                  }
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+                  placeholder="Ingresa la IP del nodo"
+                />
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                Proveedor
+                <select
+                  value={formState.proveedorId ?? ''}
+                  onChange={(event) =>
+                    setFormState((prev) => ({
+                      ...prev,
+                      proveedorId: event.target.value,
+                    }))
+                  }
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+                  disabled={loadingProveedores}
+                >
+                  <option value="">Selecciona un proveedor</option>
+                  {proveedores.map((proveedor) => (
+                    <option key={proveedor.id} value={proveedor.id}>
+                      {proveedor.nombre}
+                    </option>
+                  ))}
+                </select>
+                {loadingProveedores && (
+                  <p className="text-xs text-gray-500 mt-1">Cargando proveedores...</p>
+                )}
+                {proveedoresError && (
+                  <p className="text-xs text-red-600 mt-1">{proveedoresError}</p>
+                )}
               </label>
               {formError && <p className="text-sm text-red-600">{formError}</p>}
             </div>
