@@ -13,6 +13,7 @@ import {
   getNodoSitio,
   SitioAsociado,
 } from '../../services/fallosService';
+import TechnicalFailuresHistory from './TechnicalFailuresHistory';
 
 type AffectationType = 'Nodo' | 'Punto' | 'Equipo' | 'Masivo' | '';
 
@@ -107,7 +108,7 @@ const isDeviceFromHC = (dispositivo: unknown): boolean => {
 
 const TechnicalFailuresOperador: React.FC = () => {
   const { session } = useSession();
-  const [, setFailures] = useState<TechnicalFailure[]>([]);
+  const [failures, setFailures] = useState<TechnicalFailure[]>([]);
   const [catalogos, setCatalogos] = useState<TechnicalFailureCatalogs>(emptyCatalogos);
   const [formData, setFormData] = useState<FailureFormData>(buildInitialFormData());
   const [errors, setErrors] = useState<Partial<FailureFormData>>({});
@@ -115,7 +116,7 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [clienteFromConsole, setClienteFromConsole] = useState<string | null>(null);
   const [sitios, setSitios] = useState<Sitio[]>([]);
   const [sitio, setSitio] = useState<SitioAsociado | null>(null);
-  const [, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [nodos, setNodos] = useState<CatalogoNodo[]>([]);
   const [nodosError, setNodosError] = useState<string | null>(null);
@@ -137,6 +138,8 @@ const TechnicalFailuresOperador: React.FC = () => {
   );
 
   const equipoEsHC = useMemo(() => isDeviceFromHC(selectedDispositivo), [selectedDispositivo]);
+
+  const handleEdit = (_failure: TechnicalFailure) => {};
 
   const sitioItems = useMemo(
     () => [
@@ -921,6 +924,13 @@ const TechnicalFailuresOperador: React.FC = () => {
           </div>
         </form>
       </div>
+
+      <TechnicalFailuresHistory
+        failures={failures}
+        isLoading={isLoading}
+        activeRole={session.roleName ?? undefined}
+        handleEdit={handleEdit}
+      />
     </div>
   );
 };

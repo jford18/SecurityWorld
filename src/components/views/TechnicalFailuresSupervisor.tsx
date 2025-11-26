@@ -11,10 +11,10 @@ import {
   fetchCatalogos,
   TechnicalFailurePayload,
 } from '../../services/fallosService';
-import { calcularEstado } from './TechnicalFailuresUtils';
 import AutocompleteComboBox from '../ui/AutocompleteComboBox';
 import { useSession } from '../context/SessionContext';
 import { getAllDepartamentosResponsables } from '../../services/departamentosResponsablesService';
+import TechnicalFailuresHistory from './TechnicalFailuresHistory';
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
   departamentos: [],
@@ -675,108 +675,12 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       <h3 className="text-3xl font-medium text-[#1C2E4A]">Gestión de Fallos Técnicos</h3>
 
       <div className="bg-white p-6 rounded-lg shadow-md">
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="text-[#1C2E4A] text-lg font-semibold">Historial de Fallos Recientes</h4>
-          {isLoading && <span className="text-sm text-gray-500">Cargando información...</span>}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fecha
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Descripción
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Sitio
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tipo afectación
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Equipo
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Responsable
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Estado
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {failures.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
-                    {isLoading ? 'Cargando fallos técnicos...' : 'No hay registros disponibles.'}
-                  </td>
-                </tr>
-              ) : (
-                failures.map((fallo) => (
-                  <tr key={fallo.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatFechaHoraDisplay(
-                        buildFailureDateTimeValue(fallo),
-                        fallo.fecha,
-                        fallo.hora ?? fallo.horaFallo,
-                      ) || 'Sin información'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {fallo.descripcion_fallo}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {fallo.sitio_nombre || 'Sin sitio asignado'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {fallo.tipo_afectacion || 'Sin tipo'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {fallo.equipo_afectado || 'Sin equipo'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {fallo.responsable}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {(() => {
-                        const estado = calcularEstado(fallo);
-                        return (
-                          <span
-                            style={{
-                              backgroundColor: estado.color,
-                              color: 'white',
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              fontSize: '0.9em',
-                              fontWeight: 'bold',
-                              display: 'inline-block',
-                              minWidth: '110px',
-                              textAlign: 'center',
-                            }}
-                          >
-                            {estado.texto}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => handleEdit(fallo)}
-                        className="text-indigo-600 hover:text-indigo-900"
-                      >
-                        Editar
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <TechnicalFailuresHistory
+          failures={failures}
+          isLoading={isLoading}
+          activeRole={session.roleName ?? undefined}
+          handleEdit={handleEdit}
+        />
       </div>
 
       {isModalOpen && currentFailure && (
