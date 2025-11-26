@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useMemo, useState } from 'react';
-import { create, getAll, remove, update } from '../../services/nodos.service';
+import { create, deleteNodo, getAll, update } from '../../services/nodos.service';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -130,34 +130,22 @@ const Nodos = () => {
     }
   };
 
-  const handleStatusChange = async (nodo) => {
-    if (nodo.activo) {
-      const confirmed = window.confirm(
-        `¿Deseas inactivar el nodo "${nodo.nombre}"?`
-      );
+  const handleDelete = async (nodo) => {
+    const confirmed = window.confirm(
+      '¿Está seguro de eliminar este nodo? Esta acción no se puede deshacer.'
+    );
 
-      if (!confirmed) {
-        return;
-      }
-
-      try {
-        await remove(nodo.id);
-        alert('Nodo inactivado correctamente');
-        await fetchNodos();
-      } catch (err) {
-        console.error(err);
-        alert(err?.message || 'Error al inactivar el nodo');
-      }
+    if (!confirmed) {
       return;
     }
 
     try {
-      await update(nodo.id, { activo: true });
-      alert('Nodo activado correctamente');
-      await fetchNodos();
+      await deleteNodo(nodo.id);
+      alert('Nodo eliminado correctamente');
+      setNodos((prev) => prev.filter((item) => item.id !== nodo.id));
     } catch (err) {
       console.error(err);
-      alert(err?.message || 'Error al activar el nodo');
+      alert(err?.message || 'Error al eliminar el nodo');
     }
   };
 
@@ -257,10 +245,10 @@ const Nodos = () => {
                           </button>
                           <button
                             type="button"
-                            className={nodo.activo ? dangerButtonClasses : successButtonClasses}
-                            onClick={() => handleStatusChange(nodo)}
+                            className={dangerButtonClasses}
+                            onClick={() => handleDelete(nodo)}
                           >
-                            {nodo.activo ? 'Eliminar' : 'Activar'}
+                            Eliminar
                           </button>
                         </div>
                       </td>
