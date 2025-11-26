@@ -662,6 +662,7 @@ const Intrusions: React.FC = () => {
                   label="Fecha y hora del evento"
                   value={formData.fecha_evento}
                   onChange={handleFechaEventoChange}
+                  timeIntervalMinutes={1}
                   required
                 />
                 <FechaHoraFalloPicker
