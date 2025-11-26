@@ -372,7 +372,7 @@ const EditFailureModal: React.FC<{
           {renderReadOnlyInfo('Equipo afectado', editData.equipo_afectado)}
           {renderReadOnlyInfo('Responsable inicial', editData.responsable)}
           {renderReadOnlyInfo(
-            'Departamento asignado',
+            'Departamento Responsable',
             editData.deptResponsable ||
               departamentos.find(
                 (departamento) => String(departamento.id) === editData.departamentoResponsableId,
