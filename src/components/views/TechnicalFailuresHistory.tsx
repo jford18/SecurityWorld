@@ -42,7 +42,7 @@ interface TechnicalFailuresHistoryProps {
 const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   failures,
   isLoading,
-  activeRole,
+  activeRole: _activeRole,
   handleEdit,
 }) => {
   return (
@@ -55,14 +55,12 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              {activeRole === 'supervisor' && (
-                <th
-                  scope="col"
-                  className="sticky left-0 bg-white z-20 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  ACCIONES
-                </th>
-              )}
+              <th
+                scope="col"
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
+                ACCIONES
+              </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Fecha
               </th>
@@ -83,23 +81,21 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
           <tbody className="bg-white divide-y divide-gray-200">
             {failures.length === 0 ? (
               <tr>
-                <td colSpan={activeRole === 'supervisor' ? 6 : 5} className="px-6 py-4 text-center text-sm text-gray-500">
+                <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
                   {isLoading ? 'Cargando fallos técnicos...' : 'No hay registros disponibles.'}
                 </td>
               </tr>
             ) : (
               failures.map((fallo) => (
                 <tr key={fallo.id} className="hover:bg-gray-50">
-                  {activeRole === 'supervisor' && (
-                    <td className="sticky left-0 bg-white z-10 px-6 py-3 text-left whitespace-nowrap">
-                      <button
-                        onClick={() => handleEdit(fallo)}
-                        className="text-blue-600 hover:underline text-sm font-semibold"
-                      >
-                        Editar
-                      </button>
-                    </td>
-                  )}
+                  <td className="px-6 py-3 text-left whitespace-nowrap">
+                    <button
+                      onClick={() => handleEdit(fallo)}
+                      className="text-blue-600 hover:underline text-sm font-semibold"
+                    >
+                      Editar
+                    </button>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatFechaHoraFallo(fallo) || 'Sin información'}
                   </td>
