@@ -28,6 +28,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [usuarioAutenticado, setUsuarioAutenticado] = useState<UsuarioAutenticado | null>(null);
   const [assignedRole, setAssignedRole] = useState<RoleOption | null>(null);
+  const [roleTokens, setRoleTokens] = useState<RoleToken[]>([]);
+  const [authToken, setAuthToken] = useState('');
   const [consolas, setConsolas] = useState<Consola[]>([]);
   const [selectedConsolaId, setSelectedConsolaId] = useState<number | null>(null);
   const [consolasError, setConsolasError] = useState<string | null>(null);
@@ -62,44 +64,81 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     }
 
     if (!usuarioAutenticado) {
+      const trimmedUsername = username.trim();
+      const trimmedPassword = password.trim();
+
+      if (!trimmedUsername || !trimmedPassword) {
+        setError('Usuario y contraseña son obligatorios.');
+        return;
+      }
+
       setIsLoading(true); // FIX: Activar indicador de carga durante la fase de autenticación.
 
       try {
         const response = await api.post('/login', {
-          nombre_usuario: username,
-          contrasena_plana: password,
+          nombre_usuario: trimmedUsername,
+          contrasena_plana: trimmedPassword,
         });
 
         const data = response.data ?? {};
-
-        const roleId = Number(data.rol_id);
-        const roleName =
-          typeof data.rol_nombre === 'string' && data.rol_nombre.trim().length > 0
-            ? data.rol_nombre.trim()
-            : '';
-
-        const userId = Number(data.usuario_id);
+        const token = typeof data.token === 'string' ? data.token : '';
+        const userId = Number(data.usuarioId ?? data.usuario_id ?? data.id);
         const usernameFromResponse =
           typeof data.nombre_usuario === 'string' && data.nombre_usuario.trim().length > 0
             ? data.nombre_usuario.trim()
-            : username;
+            : trimmedUsername;
 
-        if (!Number.isFinite(roleId) || roleId <= 0 || !roleName || !Number.isFinite(userId) || userId <= 0) {
+        const roles = Array.isArray(data.roles)
+          ? data.roles
+              .map((role: any) => ({
+                id: Number(role.id ?? role.rol_id),
+                nombre:
+                  typeof role.nombre === 'string'
+                    ? role.nombre
+                    : typeof role.rol_nombre === 'string'
+                    ? role.rol_nombre
+                    : '',
+              }))
+              .filter((role: RoleOption) => Number.isFinite(role.id) && role.id > 0 && role.nombre)
+          : [];
+
+        if (!token || !Number.isFinite(userId) || userId <= 0 || roles.length === 0) {
           throw new Error('Respuesta inválida del servidor.');
         }
 
-        const primaryRole: RoleOption = {
-          id: roleId,
-          nombre: roleName,
-        };
+        const activeRoleId = Number(data.activeRoleId ?? data.active_role_id ?? data.rol_id ?? roles[0]?.id);
+        const primaryRole = roles.find((role) => role.id === activeRoleId) ?? roles[0];
 
         const usuario: UsuarioAutenticado = {
           id: userId,
           nombre_usuario: usernameFromResponse,
-          roles: [primaryRole],
+          roles,
           rol_activo: primaryRole,
         };
 
+        const roleTokensFromResponse: RoleToken[] = roles.map((role) => ({
+          roleId: role.id,
+          token,
+        }));
+
+        const consolasFromResponse: Consola[] = Array.isArray(data.consolas)
+          ? data.consolas
+              .map((consola: any) => ({
+                id: Number(consola.id ?? consola.consola_id),
+                nombre: typeof consola.nombre === 'string' ? consola.nombre : '',
+                fecha_creacion: consola.fecha_creacion ?? '',
+              }))
+              .filter((consola) => Number.isFinite(consola.id) && consola.id > 0 && consola.nombre)
+          : [];
+
+        if (consolasFromResponse.length > 0) {
+          setConsolas(consolasFromResponse);
+          setConsolasError(null);
+          setSelectedConsolaId((prev) => prev ?? consolasFromResponse[0].id);
+        }
+
+        setAuthToken(token);
+        setRoleTokens(roleTokensFromResponse);
         setUsuarioAutenticado(usuario);
         setAssignedRole(primaryRole);
       } catch (caughtError: unknown) {
@@ -109,14 +148,18 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
             data?: {
               message?: unknown;
             };
+            status?: number;
           };
         };
 
+        const statusCode = possibleResponse?.response?.status;
         const serverMessage = possibleResponse?.response?.data?.message;
-        const messageToShow =
-          typeof serverMessage === 'string' && serverMessage.trim().length > 0
-            ? serverMessage
-            : 'Error de autenticación';
+        const invalidCredentials = statusCode === 400 || statusCode === 401;
+        const messageToShow = invalidCredentials
+          ? 'Usuario o contraseña incorrectos'
+          : typeof serverMessage === 'string' && serverMessage.trim().length > 0
+          ? serverMessage
+          : 'Error de autenticación';
 
         setError(messageToShow);
       } finally {
@@ -140,21 +183,18 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
     setIsLoading(true); // FIX: Mostrar carga durante el envío de la selección de consola.
     try {
-      const sessionToken = `session-${usuarioAutenticado.id}-${assignedRole.id}`;
-      const roleTokens: RoleToken[] = [
-        {
-          roleId: assignedRole.id,
-          token: sessionToken,
-        },
-      ];
+      if (!authToken) {
+        setError('No se pudo generar el token de sesión.');
+        return;
+      }
 
       onLogin({
         user: usuarioAutenticado,
         selectedRole: assignedRole,
         consoleName: selectedConsoleName || '',
-        token: sessionToken,
-        roles: [assignedRole],
-        roleTokens,
+        token: authToken,
+        roles: usuarioAutenticado.roles,
+        roleTokens: roleTokens.length > 0 ? roleTokens : usuarioAutenticado.roles.map((role) => ({ roleId: role.id, token: authToken })),
       }); // FIX: Completar la fase de selección de consola y navegar.
     } finally {
       setIsLoading(false); // FIX: Asegurar que el estado de carga se desactive tras finalizar la fase de consola.
