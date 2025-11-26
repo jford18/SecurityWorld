@@ -1,6 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
-import { getAllClientes } from "@/services/clientes.service";
+import {
+  createCliente,
+  getAllClientes,
+  updateCliente,
+} from "@/services/clientes.service";
+import { getTiposServicio } from "@/services/tipoServicioService";
 import {
   addPersonaToCliente,
   getPersonasByCliente,
@@ -49,7 +54,10 @@ const Clientes = () => {
   const [clienteId, setClienteId] = useState(null);
   const [nombre, setNombre] = useState("");
   const [identificacion, setIdentificacion] = useState("");
-  const [telefono, setTelefono] = useState("");
+  const [tipoServicioId, setTipoServicioId] = useState("");
+  const [tiposServicio, setTiposServicio] = useState([]);
+  const [tiposServicioLoading, setTiposServicioLoading] = useState(false);
+  const [tiposServicioError, setTiposServicioError] = useState("");
   const [activo, setActivo] = useState(true);
 
   const [formError, setFormError] = useState("");
@@ -85,11 +93,34 @@ const Clientes = () => {
     fetchClientes();
   }, [fetchClientes]);
 
+  useEffect(() => {
+    const loadTiposServicio = async () => {
+      try {
+        setTiposServicioLoading(true);
+        setTiposServicioError("");
+        const data = await getTiposServicio();
+        setTiposServicio(Array.isArray(data) ? data : []);
+      } catch (error) {
+        const message = resolveErrorMessage(
+          error,
+          "No se pudieron cargar los tipos de servicio"
+        );
+        setTiposServicio([]);
+        setTiposServicioError(message);
+        toast.error(message);
+      } finally {
+        setTiposServicioLoading(false);
+      }
+    };
+
+    loadTiposServicio();
+  }, []);
+
   const limpiarFormulario = () => {
     setClienteId(null);
     setNombre("");
     setIdentificacion("");
-    setTelefono("");
+    setTipoServicioId("");
     setActivo(true);
     setFormError("");
   };
@@ -98,25 +129,31 @@ const Clientes = () => {
     event.preventDefault();
     setFormError("");
 
-    if (!nombre || !identificacion) {
-      setFormError("Nombre e identificación son obligatorios");
+    if (!nombre || !identificacion || !tipoServicioId) {
+      setFormError("Nombre, identificación y tipo de servicio son obligatorios");
+      return;
+    }
+
+    const tipoServicioIdNumber = Number(tipoServicioId);
+    if (!Number.isInteger(tipoServicioIdNumber) || tipoServicioIdNumber <= 0) {
+      setFormError("Seleccione un tipo de servicio válido");
       return;
     }
 
     const payload = {
       nombre,
       identificacion,
-      telefono,
+      tipo_servicio_id: tipoServicioIdNumber,
       activo,
     };
 
     try {
       setSubmitting(true);
       if (clienteId) {
-        await api.put(`/clientes/${clienteId}`, payload);
+        await updateCliente(clienteId, payload);
         toast.success("Cliente actualizado correctamente");
       } else {
-        await api.post(`/clientes`, payload);
+        await createCliente(payload);
         toast.success("Cliente guardado correctamente");
       }
       await fetchClientes();
@@ -134,7 +171,9 @@ const Clientes = () => {
     setClienteId(c.id);
     setNombre(c.nombre ?? "");
     setIdentificacion(c.identificacion ?? "");
-    setTelefono(c.telefono ?? "");
+    setTipoServicioId(
+      c.tipo_servicio_id != null ? String(c.tipo_servicio_id) : ""
+    );
     setActivo(Boolean(c.activo));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -333,15 +372,24 @@ const Clientes = () => {
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-gray-700">Teléfono</span>
-              <input
-                type="tel"
-                name="telefono"
-                value={telefono}
-                onChange={(e) => setTelefono(e.target.value)}
+              <span className="font-medium text-gray-700">Tipo de servicio *</span>
+              <select
+                name="tipo_servicio_id"
+                value={tipoServicioId}
+                onChange={(event) => setTipoServicioId(event.target.value)}
                 className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-                placeholder="Número de contacto"
-              />
+                disabled={tiposServicioLoading}
+              >
+                <option value="">Seleccione una opción</option>
+                {tiposServicio.map((tipo) => (
+                  <option key={tipo.ID ?? tipo.id} value={tipo.ID ?? tipo.id}>
+                    {tipo.NOMBRE ?? tipo.nombre}
+                  </option>
+                ))}
+              </select>
+              {tiposServicioError && (
+                <span className="text-xs text-red-600">{tiposServicioError}</span>
+              )}
             </label>
             <label className="flex items-center gap-3 text-sm">
               <input
@@ -547,7 +595,7 @@ const Clientes = () => {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="w-full md:w-64 rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-              placeholder="Buscar por nombre, identificación o teléfono"
+              placeholder="Buscar por nombre, identificación o tipo de servicio"
             />
           </label>
         </div>
@@ -566,7 +614,7 @@ const Clientes = () => {
                   Identificación
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Teléfono
+                  Tipo de servicio
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                   Activo
@@ -588,7 +636,7 @@ const Clientes = () => {
                       {cliente.identificacion || "—"}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
-                      {cliente.telefono || "—"}
+                      {cliente.tipo_servicio_nombre || "—"}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <span
