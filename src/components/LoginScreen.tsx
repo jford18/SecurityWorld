@@ -67,7 +67,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       try {
         const response = await api.post('/login', {
           nombre_usuario: username,
-          contrasena_plana: password,
+          contrasena: password,
         });
 
         const data = response.data ?? {};
@@ -106,6 +106,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         console.error('Error al iniciar sesión:', caughtError);
         const possibleResponse = caughtError as {
           response?: {
+            status?: number;
             data?: {
               message?: unknown;
             };
@@ -116,6 +117,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         const messageToShow =
           typeof serverMessage === 'string' && serverMessage.trim().length > 0
             ? serverMessage
+            : possibleResponse?.response?.status === 401
+            ? 'Usuario o contraseña incorrectos'
             : 'Error de autenticación';
 
         setError(messageToShow);

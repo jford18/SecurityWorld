@@ -59,13 +59,18 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
           method: 'POST',
           body: JSON.stringify({
             nombre_usuario: username,
-            contrasena_plana: password,
+            contrasena: password,
           }),
         });
 
         if (!response.ok) {
           if (response.status === 401) {
-            setError('Credenciales incorrectas');
+            const errorData = await response.json().catch(() => null);
+            const message =
+              typeof errorData?.message === 'string' && errorData.message.trim().length > 0
+                ? errorData.message
+                : 'Usuario o contraseña incorrectos';
+            setError(message);
           } else if (response.status === 500) {
             setError('Error del servidor. Inténtelo más tarde.');
           } else {

@@ -1,40 +1,35 @@
 import db from "./db.js";
-import bcrypt from "bcrypt";
 
 export const loginUser = async (req, res) => {
   try {
-    const { nombre_usuario, contrasena_plana } = req.body;
+    const { nombre_usuario, contrasena } = req.body;
 
-    if (!nombre_usuario || !contrasena_plana) {
+    if (!nombre_usuario || !contrasena) {
       return res
         .status(400)
         .json({ message: "Usuario y contraseña son obligatorios." });
     }
 
     const userResult = await db.query(
-      `SELECT id, nombre_usuario, hash_contrasena, activo
+      `SELECT id, nombre_usuario, contrasena, activo
        FROM usuarios
        WHERE nombre_usuario = $1`,
       [nombre_usuario]
     );
 
     if (userResult.rows.length === 0) {
-      return res.status(401).json({ message: "Credenciales inválidas." });
+      return res
+        .status(401)
+        .json({ message: "Usuario o contraseña incorrectos" });
     }
 
     const user = userResult.rows[0];
 
-    if (!user.activo) {
+    if (!user.activo || user.contrasena !== contrasena) {
       return res
-        .status(403)
-        .json({ message: "El usuario está inactivo. Contacte al administrador." });
+        .status(401)
+        .json({ message: "Usuario o contraseña incorrectos" });
     }
-
-    if (!user.hash_contrasena) {
-      return res.status(401).json({ message: "Credenciales inválidas." });
-    }
-
-    
 
     const rolesResult = await db.query(
       `SELECT r.id AS rol_id, r.nombre AS rol_nombre
