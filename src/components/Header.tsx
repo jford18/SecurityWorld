@@ -6,6 +6,11 @@ const Header: React.FC = () => {
   const [time, setTime] = useState(new Date());
   const { session, setSession } = useSession();
 
+  const roles = session?.roles ?? [];
+  const isSingleRole = roles.length === 1;
+  const activeRoleId = session?.roleId ?? session?.activeRoleId ?? '';
+  const roleTokens = session?.roleTokens ?? [];
+
   useEffect(() => {
     const timerId = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timerId);
@@ -32,8 +37,8 @@ const Header: React.FC = () => {
       return;
     }
 
-    const selectedRole = session.roles.find((role) => role.id === roleId);
-    const roleToken = session.roleTokens.find((entry) => entry.roleId === roleId);
+    const selectedRole = roles.find((role) => role.id === roleId);
+    const roleToken = roleTokens.find((entry) => entry.roleId === roleId);
 
     if (!selectedRole || !roleToken) {
       return;
@@ -63,21 +68,21 @@ const Header: React.FC = () => {
 
   const roleItems = useMemo(
     () => [
-      { id: 'empty', label: session.roles.length === 0 ? 'No hay roles disponibles' : 'Seleccione un rol', value: '' },
-      ...session.roles.map((role) => ({
+      { id: 'empty', label: roles.length === 0 ? 'No hay roles disponibles' : 'Seleccione un rol', value: '' },
+      ...roles.map((role) => ({
         id: String(role.id),
         label: role.nombre,
         value: String(role.id),
       })),
     ],
-    [session.roles]
+    [roles]
   );
 
   return (
     <header className="flex items-center justify-between h-20 px-6 bg-white border-b">
       <div className="flex items-baseline gap-4">
         <h1 className="text-2xl font-semibold text-[#1C2E4A]">Bienvenido, {session.user}</h1>
-        {(session.console || session.roleName || session.roles.length > 0) && (
+        {(session.console || session.roleName || roles.length > 0) && (
           <span className="text-lg text-gray-500">
             {session.console && (
               <>
@@ -90,11 +95,11 @@ const Header: React.FC = () => {
                 <span className="font-semibold text-[#1C2E4A] capitalize">{session.roleName}</span>{' '}
               </>
             )}
-            {session.roles.length > 1 && (
+            {roles.length > 1 && (
               <>
                 | Roles asignados:{' '}
                 <span className="font-semibold text-[#1C2E4A]">
-                  {session.roles.map((role) => role.nombre).join(', ')}
+                  {roles.map((role) => role.nombre).join(', ')}
                 </span>
               </>
             )}
@@ -102,16 +107,17 @@ const Header: React.FC = () => {
         )}
       </div>
       <div className="flex items-center gap-4">
-        {session.roles.length > 0 && (
+        {roles.length > 0 && (
           <div className="w-52">
             <AutocompleteComboBox
               label="Rol activo"
-              value={session.roleId != null ? String(session.roleId) : ''}
-              onChange={handleRoleChange}
+              value={activeRoleId != null ? String(activeRoleId) : ''}
+              onChange={isSingleRole ? undefined : handleRoleChange}
               items={roleItems}
               displayField="label"
               valueField="value"
-              placeholder="Buscar rol..."
+              disabled={isSingleRole}
+              placeholder={isSingleRole ? '' : 'Buscar rol...'}
             />
           </div>
         )}
