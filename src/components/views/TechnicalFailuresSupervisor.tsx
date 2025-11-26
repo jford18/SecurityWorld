@@ -270,6 +270,16 @@ const EditFailureModal: React.FC<{
 
   const fechaHoraFalloDisplay = fechaHoraReporte || 'Sin información';
 
+  const departamentoResponsableNombre = useMemo(() => {
+    return (
+      editData.deptResponsable ||
+      departamentos.find(
+        (departamento) => String(departamento.id) === editData.departamentoResponsableId,
+      )?.nombre ||
+      ''
+    );
+  }, [departamentos, editData.deptResponsable, editData.departamentoResponsableId]);
+
   const handleSave = () => {
     let cierre: Date | null = null;
 
@@ -318,18 +328,6 @@ const EditFailureModal: React.FC<{
     onSave(editData);
   };
 
-  const renderReadOnlyInfo = (label: string, value?: string) => (
-    <div>
-      <label className="block text-sm font-medium text-gray-700">{label}</label>
-      <input
-        type="text"
-        value={value && value.trim() ? value : 'Sin información'}
-        readOnly
-        className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
-      />
-    </div>
-  );
-
   return (
     <div className="flex flex-col h-full">
       <div className="flex flex-col gap-2 mb-4">
@@ -365,19 +363,100 @@ const EditFailureModal: React.FC<{
       </div>
 
       {activeTab === 'general' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {renderReadOnlyInfo('Fecha de reporte', fechaHoraReporte)}
-          {renderReadOnlyInfo('Sitio', editData.sitio_nombre)}
-          {renderReadOnlyInfo('Tipo de afectación', editData.tipo_afectacion)}
-          {renderReadOnlyInfo('Equipo afectado', editData.equipo_afectado)}
-          {renderReadOnlyInfo('Responsable inicial', editData.responsable)}
-          {renderReadOnlyInfo(
-            'Departamento asignado',
-            editData.deptResponsable ||
-              departamentos.find(
-                (departamento) => String(departamento.id) === editData.departamentoResponsableId,
-              )?.nombre,
-          )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Fecha y hora de fallo
+            </label>
+            <input
+              type="text"
+              value={fechaHoraFalloDisplay}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100"
+              disabled
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tipo de afectación
+            </label>
+            <input
+              type="text"
+              value={
+                editData.tipo_afectacion || editData.tipoAfectacion || 'Sin información'
+              }
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100"
+              disabled
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Problema</label>
+            <input
+              type="text"
+              value={editData.descripcion_fallo || 'Sin información'}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100"
+              disabled
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Sitio</label>
+            <input
+              type="text"
+              value={editData.sitio_nombre || editData.sitioNombre || 'Sin información'}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100"
+              disabled
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Responsable inicial
+            </label>
+            <input
+              type="text"
+              value={editData.responsable || 'Sin información'}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100"
+              disabled
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Último usuario que editó
+            </label>
+            <input
+              type="text"
+              value={editData.ultimo_usuario_edito_nombre || 'Sin información'}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100"
+              disabled
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Novedad detectada
+            </label>
+            <textarea
+              value={editData.novedadDetectada || 'Sin información'}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100"
+              rows={3}
+              disabled
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Departamento responsable
+            </label>
+            <input
+              type="text"
+              value={departamentoResponsableNombre || 'Sin información'}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100"
+              disabled
+            />
+          </div>
         </div>
       )}
 
