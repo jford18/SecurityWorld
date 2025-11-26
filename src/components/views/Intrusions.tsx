@@ -168,6 +168,8 @@ const Intrusions: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fechaReaccionError, setFechaReaccionError] = useState('');
+  const [disableSave, setDisableSave] = useState(false);
   const { session } = useSession();
   const [sitios, setSitios] = useState<Sitio[]>([]);
   const [fuerzasReaccion, setFuerzasReaccion] = useState<FuerzaReaccionCatalogItem[]>([]);
@@ -493,6 +495,30 @@ const Intrusions: React.FC = () => {
     tipoDescripcion,
   ]);
 
+  useEffect(() => {
+    if (formData.fecha_evento && formData.fecha_reaccion) {
+      const intrusion = new Date(formData.fecha_evento);
+      const reaccion = new Date(formData.fecha_reaccion);
+
+      if (
+        !Number.isNaN(intrusion.getTime()) &&
+        !Number.isNaN(reaccion.getTime()) &&
+        reaccion <= intrusion
+      ) {
+        setFechaReaccionError(
+          'La fecha y hora de reacción debe ser mayor que la fecha y hora de intrusión.'
+        );
+        setDisableSave(true);
+        return;
+      }
+    }
+
+    setFechaReaccionError('');
+    setDisableSave(false);
+  }, [formData.fecha_evento, formData.fecha_reaccion]);
+
+  const isButtonDisabled = isSubmitDisabled || disableSave;
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -672,6 +698,9 @@ const Intrusions: React.FC = () => {
                   value={formData.fecha_reaccion}
                   onChange={handleFechaReaccionChange}
                 />
+                {fechaReaccionError && (
+                  <p className="text-red-500 text-sm">{fechaReaccionError}</p>
+                )}
                 <div>
                   <label htmlFor="medio_comunicacion_id" className="block text-sm font-medium text-gray-700">
                     Medio de comunicación
@@ -842,9 +871,9 @@ const Intrusions: React.FC = () => {
             )}
             <button
               type="submit"
-              disabled={isSubmitDisabled}
+              disabled={isButtonDisabled}
               className={`px-6 py-2 font-semibold rounded-md transition-colors ${
-                isSubmitDisabled
+                isButtonDisabled
                   ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
                   : 'bg-[#F9C300] text-[#1C2E4A] hover:bg-yellow-400'
               }`}
