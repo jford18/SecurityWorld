@@ -5,6 +5,14 @@ import AutocompleteComboBox from './ui/AutocompleteComboBox';
 const Header: React.FC = () => {
   const [time, setTime] = useState(new Date());
   const { session, setSession } = useSession();
+  const roles = session.roles ?? [];
+  const isRoleSelectionDisabled = roles.length === 1;
+  const activeRoleId =
+    session.roleId != null
+      ? session.roleId
+      : isRoleSelectionDisabled && roles[0]
+      ? roles[0].id
+      : null;
 
   useEffect(() => {
     const timerId = setInterval(() => setTime(new Date()), 1000);
@@ -61,17 +69,26 @@ const Header: React.FC = () => {
     }
   };
 
-  const roleItems = useMemo(
-    () => [
-      { id: 'empty', label: session.roles.length === 0 ? 'No hay roles disponibles' : 'Seleccione un rol', value: '' },
-      ...session.roles.map((role) => ({
-        id: String(role.id),
-        label: role.nombre,
-        value: String(role.id),
-      })),
-    ],
-    [session.roles]
-  );
+  const roleItems = useMemo(() => {
+    if (roles.length === 0) {
+      return [{ id: 'empty', label: 'No hay roles disponibles', value: '' }];
+    }
+
+    const baseItems = roles.map((role) => ({
+      id: String(role.id),
+      label: role.nombre,
+      value: String(role.id),
+    }));
+
+    if (isRoleSelectionDisabled) {
+      return baseItems;
+    }
+
+    return [
+      { id: 'empty', label: 'Seleccione un rol', value: '' },
+      ...baseItems,
+    ];
+  }, [isRoleSelectionDisabled, roles]);
 
   return (
     <header className="flex items-center justify-between h-20 px-6 bg-white border-b">
@@ -102,16 +119,17 @@ const Header: React.FC = () => {
         )}
       </div>
       <div className="flex items-center gap-4">
-        {session.roles.length > 0 && (
+        {roles.length > 0 && (
           <div className="w-52">
             <AutocompleteComboBox
               label="Rol activo"
-              value={session.roleId != null ? String(session.roleId) : ''}
-              onChange={handleRoleChange}
+              value={activeRoleId != null ? String(activeRoleId) : ''}
+              onChange={isRoleSelectionDisabled ? undefined : handleRoleChange}
               items={roleItems}
               displayField="label"
               valueField="value"
-              placeholder="Buscar rol..."
+              placeholder={isRoleSelectionDisabled ? '' : 'Buscar rol...'}
+              disabled={isRoleSelectionDisabled}
             />
           </div>
         )}
