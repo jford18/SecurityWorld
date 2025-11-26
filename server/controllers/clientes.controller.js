@@ -18,12 +18,12 @@ const CLIENTES_BASE_QUERY = `
          c.nombre,
          c.identificacion,
          c.direccion,
-         c."TIPO_SERVICIO_ID" AS tipo_servicio_id,
+         c.tipo_servicio_id,
          ts."NOMBRE" AS tipo_servicio_nombre,
          c.activo,
          c.fecha_creacion
     FROM public.clientes c
-    LEFT JOIN public."TIPO_SERVICIO" ts ON ts."ID" = c."TIPO_SERVICIO_ID"
+    LEFT JOIN public."TIPO_SERVICIO" ts ON ts."ID" = c.tipo_servicio_id
    ORDER BY c.id
 `;
 
@@ -70,12 +70,12 @@ const buildSearchQuery = (term) => ({
            c.nombre,
            c.identificacion,
            c.direccion,
-           c."TIPO_SERVICIO_ID" AS tipo_servicio_id,
+           c.tipo_servicio_id,
            ts."NOMBRE" AS tipo_servicio_nombre,
            c.activo,
            c.fecha_creacion
       FROM public.clientes c
-      LEFT JOIN public."TIPO_SERVICIO" ts ON ts."ID" = c."TIPO_SERVICIO_ID"
+      LEFT JOIN public."TIPO_SERVICIO" ts ON ts."ID" = c.tipo_servicio_id
      WHERE (
        c.nombre ILIKE $1 OR
        c.identificacion ILIKE $1 OR
@@ -160,14 +160,14 @@ export const createCliente = async (req, res) => {
   try {
     const insertQuery = `
       WITH inserted AS (
-        INSERT INTO public.clientes (nombre, identificacion, direccion, "TIPO_SERVICIO_ID", activo)
+        INSERT INTO public.clientes (nombre, identificacion, direccion, tipo_servicio_id, activo)
         VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, nombre, identificacion, direccion, "TIPO_SERVICIO_ID", activo, fecha_creacion
+        RETURNING id, nombre, identificacion, direccion, tipo_servicio_id, activo, fecha_creacion
       )
-      SELECT i.id, i.nombre, i.identificacion, i.direccion, i."TIPO_SERVICIO_ID" AS tipo_servicio_id,
+      SELECT i.id, i.nombre, i.identificacion, i.direccion, i.tipo_servicio_id,
              ts."NOMBRE" AS tipo_servicio_nombre, i.activo, i.fecha_creacion
         FROM inserted i
-        LEFT JOIN public."TIPO_SERVICIO" ts ON ts."ID" = i."TIPO_SERVICIO_ID"
+        LEFT JOIN public."TIPO_SERVICIO" ts ON ts."ID" = i.tipo_servicio_id
     `;
 
     const values = [
@@ -242,7 +242,7 @@ export const updateCliente = async (req, res) => {
       .json(formatError("El tipo de servicio proporcionado no es válido"));
   }
 
-  updates.push(`"TIPO_SERVICIO_ID" = $${index}`);
+  updates.push(`tipo_servicio_id = $${index}`);
   values.push(tipoServicioId);
   index += 1;
 
@@ -264,12 +264,12 @@ export const updateCliente = async (req, res) => {
         UPDATE public.clientes
            SET ${updates.join(", ")}
          WHERE id = $${index}
-         RETURNING id, nombre, identificacion, direccion, "TIPO_SERVICIO_ID", activo, fecha_creacion
+         RETURNING id, nombre, identificacion, direccion, tipo_servicio_id, activo, fecha_creacion
       )
-      SELECT u.id, u.nombre, u.identificacion, u.direccion, u."TIPO_SERVICIO_ID" AS tipo_servicio_id,
+      SELECT u.id, u.nombre, u.identificacion, u.direccion, u.tipo_servicio_id,
              ts."NOMBRE" AS tipo_servicio_nombre, u.activo, u.fecha_creacion
         FROM updated u
-        LEFT JOIN public."TIPO_SERVICIO" ts ON ts."ID" = u."TIPO_SERVICIO_ID"
+        LEFT JOIN public."TIPO_SERVICIO" ts ON ts."ID" = u.tipo_servicio_id
     `;
 
     values.push(id);
