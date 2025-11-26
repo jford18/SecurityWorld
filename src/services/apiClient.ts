@@ -25,13 +25,17 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     : normalizedPath;
   const url = `${API_BASE_URL}${sanitizedPath}`;
 
+  const mergedHeaders = new Headers(options.headers ?? undefined);
+  const hasBody = options.body !== undefined;
+
+  if (hasBody && !mergedHeaders.has("Content-Type")) {
+    mergedHeaders.set("Content-Type", "application/json");
+  }
+
   const response = await fetch(url, {
     credentials: "include",
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+    headers: mergedHeaders,
   });
 
   return response;
@@ -39,9 +43,6 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
   withCredentials: true,
 });
 
