@@ -6,6 +6,7 @@ const SITIO_WITH_CLIENT_BASE_QUERY = `
     S.nombre,
     S.descripcion,
     S.ubicacion,
+    S.servidor,
     S.link_mapa,
     S.latitud,
     S.longitud,
@@ -35,6 +36,7 @@ const mapSitioRow = (row) => {
 
   return {
     ...row,
+    servidor: row.servidor ?? null,
     clienteId: row.clienteId ?? row.cliente_id ?? null,
     clienteNombre: row.clienteNombre ?? row.cliente_nombre ?? null,
     haciendaId: row.haciendaId ?? row.hacienda_id ?? null,
@@ -174,6 +176,7 @@ const normalizeSitioPayload = (body) => {
     typeof body.descripcion === "string" ? body.descripcion.trim() : null;
   const ubicacion =
     typeof body.ubicacion === "string" ? body.ubicacion.trim() : null;
+  const servidor = typeof body.servidor === "string" ? body.servidor.trim() : null;
   const link_mapa =
     typeof body.link_mapa === "string" ? body.link_mapa.trim() : "";
   const activoRaw = body.activo;
@@ -208,6 +211,7 @@ const normalizeSitioPayload = (body) => {
     link_mapa,
     latitud,
     longitud,
+    servidor,
     clienteId,
     haciendaId,
     tipoAreaId,
@@ -281,6 +285,7 @@ export const createSitio = async (req, res) => {
       nombre,
       descripcion,
       ubicacion,
+      servidor,
       activo,
       link_mapa,
       latitud,
@@ -324,13 +329,14 @@ export const createSitio = async (req, res) => {
       transactionStarted = true;
 
       const result = await client.query(
-        `INSERT INTO sitios (nombre, descripcion, ubicacion, activo, link_mapa, latitud, longitud, hacienda_id, tipo_area_id, consola_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         RETURNING id, nombre, descripcion, ubicacion, link_mapa, latitud, longitud, activo, fecha_creacion, hacienda_id, tipo_area_id, consola_id`,
+        `INSERT INTO sitios (nombre, descripcion, ubicacion, servidor, activo, link_mapa, latitud, longitud, hacienda_id, tipo_area_id, consola_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING id, nombre, descripcion, ubicacion, servidor, link_mapa, latitud, longitud, activo, fecha_creacion, hacienda_id, tipo_area_id, consola_id`,
         [
           nombre,
           descripcion,
           ubicacion,
+          servidor,
           activo,
           link_mapa,
           latitud,
@@ -382,6 +388,7 @@ export const updateSitio = async (req, res) => {
       nombre,
       descripcion,
       ubicacion,
+      servidor,
       activo,
       link_mapa,
       latitud,
@@ -429,19 +436,21 @@ export const updateSitio = async (req, res) => {
          SET nombre = $1,
              descripcion = $2,
              ubicacion = $3,
-             activo = $4,
-             link_mapa = $5,
-             latitud = $6,
-             longitud = $7,
-             hacienda_id = $8,
-             tipo_area_id = $9,
-             consola_id = $10
-         WHERE id = $11
-         RETURNING id, nombre, descripcion, ubicacion, link_mapa, latitud, longitud, activo, fecha_creacion, hacienda_id, tipo_area_id, consola_id`,
+             servidor = $4,
+             activo = $5,
+             link_mapa = $6,
+             latitud = $7,
+             longitud = $8,
+             hacienda_id = $9,
+             tipo_area_id = $10,
+             consola_id = $11
+         WHERE id = $12
+         RETURNING id, nombre, descripcion, ubicacion, servidor, link_mapa, latitud, longitud, activo, fecha_creacion, hacienda_id, tipo_area_id, consola_id`,
         [
           nombre,
           descripcion,
           ubicacion,
+          servidor,
           activo,
           link_mapa,
           latitud,

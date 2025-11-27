@@ -6,6 +6,7 @@ export interface Sitio {
   id: number;
   nombre: string;
   descripcion: string | null;
+  servidor?: string | null;
   ubicacion: string | null;
   link_mapa: string | null;
   latitud: number | null;
@@ -35,6 +36,7 @@ export interface Sitio {
 export interface SitioPayload {
   nombre: string;
   descripcion?: string | null;
+  servidor?: string | null;
   ubicacion?: string | null;
   activo?: boolean;
   link_mapa: string;
