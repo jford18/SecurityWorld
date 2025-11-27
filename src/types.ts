@@ -120,6 +120,15 @@ export interface Intrusion {
   fuerza_reaccion_descripcion?: string | null;
 }
 
+export interface IntrusionConsolidadoRow {
+  id: number | null;
+  fechaHoraIntrusion: string | null;
+  sitio: string;
+  tipoIntrusion: string;
+  llegoAlerta: boolean;
+  personalIdentificado: string;
+}
+
 export interface Device {
   id: number;
   nombre: string;
