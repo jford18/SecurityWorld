@@ -169,6 +169,7 @@ const Intrusions: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fechaReaccionError, setFechaReaccionError] = useState('');
+  const [fechaReaccionFueraError, setFechaReaccionFueraError] = useState('');
   const [disableSave, setDisableSave] = useState(false);
   const { session } = useSession();
   const [sitios, setSitios] = useState<Sitio[]>([]);
@@ -508,14 +509,63 @@ const Intrusions: React.FC = () => {
         setFechaReaccionError(
           'La fecha y hora de reacción debe ser mayor que la fecha y hora de intrusión.'
         );
-        setDisableSave(true);
         return;
       }
     }
 
     setFechaReaccionError('');
-    setDisableSave(false);
   }, [formData.fecha_evento, formData.fecha_reaccion]);
+
+  useEffect(() => {
+    if (!requiereProtocolo) {
+      setFechaReaccionFueraError('');
+      return;
+    }
+
+    if (!formData.fecha_reaccion_fuera) {
+      setFechaReaccionFueraError('');
+      return;
+    }
+
+    if (!formData.fecha_reaccion) {
+      setFechaReaccionFueraError(
+        'Debe ingresar la fecha y hora de reacción antes de la llegada de la fuerza de reacción.'
+      );
+      return;
+    }
+
+    const fechaReaccionDate = new Date(formData.fecha_reaccion);
+    const fechaReaccionFueraDate = new Date(formData.fecha_reaccion_fuera);
+
+    if (Number.isNaN(fechaReaccionDate.getTime())) {
+      setFechaReaccionFueraError('La fecha y hora de reacción no es válida.');
+      return;
+    }
+
+    if (Number.isNaN(fechaReaccionFueraDate.getTime())) {
+      setFechaReaccionFueraError(
+        'La fecha y hora de llegada de la fuerza de reacción no es válida.'
+      );
+      return;
+    }
+
+    if (fechaReaccionFueraDate <= fechaReaccionDate) {
+      setFechaReaccionFueraError(
+        'La fecha y hora de llegada de la fuerza de reacción debe ser posterior a la fecha y hora de reacción.'
+      );
+      return;
+    }
+
+    setFechaReaccionFueraError('');
+  }, [
+    formData.fecha_reaccion,
+    formData.fecha_reaccion_fuera,
+    requiereProtocolo,
+  ]);
+
+  useEffect(() => {
+    setDisableSave(Boolean(fechaReaccionError || fechaReaccionFueraError));
+  }, [fechaReaccionError, fechaReaccionFueraError]);
 
   const isButtonDisabled = isSubmitDisabled || disableSave;
 
@@ -523,6 +573,10 @@ const Intrusions: React.FC = () => {
     event.preventDefault();
 
     setError(null);
+
+    if (fechaReaccionError || fechaReaccionFueraError) {
+      return;
+    }
 
     const tipoValue = tipoDescripcion.trim();
     if (!tipoValue) {
@@ -569,12 +623,14 @@ const Intrusions: React.FC = () => {
 
     if (requiereProtocolo) {
       if (!formData.fecha_reaccion) {
-        alert('Debe ingresar la fecha y hora de reacción antes de la reacción de fuera.');
+        alert(
+          'Debe ingresar la fecha y hora de reacción antes de la llegada de la fuerza de reacción.'
+        );
         return;
       }
 
       if (!formData.fecha_reaccion_fuera) {
-        alert('Debe ingresar la fecha y hora de reacción de fuera.');
+        alert('Debe ingresar la fecha y hora de llegada de la fuerza de reacción.');
         return;
       }
 
@@ -587,12 +643,14 @@ const Intrusions: React.FC = () => {
       }
 
       if (Number.isNaN(fechaReaccionFueraDate.getTime())) {
-        alert('La fecha y hora de reacción de fuera no es válida.');
+        alert('La fecha y hora de llegada de la fuerza de reacción no es válida.');
         return;
       }
 
       if (fechaReaccionFueraDate <= fechaReaccionDate) {
-        alert('La fecha y hora de reacción de fuera debe ser posterior a la fecha y hora de reacción.');
+        alert(
+          'La fecha y hora de llegada de la fuerza de reacción debe ser posterior a la fecha y hora de reacción.'
+        );
         return;
       }
 
@@ -697,10 +755,8 @@ const Intrusions: React.FC = () => {
                   label="Fecha hora reacción"
                   value={formData.fecha_reaccion}
                   onChange={handleFechaReaccionChange}
+                  error={fechaReaccionError}
                 />
-                {fechaReaccionError && (
-                  <p className="text-red-500 text-sm">{fechaReaccionError}</p>
-                )}
                 <div>
                   <label htmlFor="medio_comunicacion_id" className="block text-sm font-medium text-gray-700">
                     Medio de comunicación
@@ -798,13 +854,14 @@ const Intrusions: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-4">
-                    <FechaHoraFalloPicker
-                      id="fecha_reaccion_fuera"
-                      name="fecha_reaccion_fuera"
-                      label="Fecha y hora de reacción de fuera"
-                      value={formData.fecha_reaccion_fuera}
-                      onChange={handleFechaReaccionFueraChange}
-                    />
+                  <FechaHoraFalloPicker
+                    id="fecha_reaccion_fuera"
+                    name="fecha_reaccion_fuera"
+                    label="FECHA Y HORA DE LLEGADA FUERZA DE REACCION"
+                    value={formData.fecha_reaccion_fuera}
+                    onChange={handleFechaReaccionFueraChange}
+                    error={fechaReaccionFueraError}
+                  />
                     <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
