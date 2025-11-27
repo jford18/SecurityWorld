@@ -124,6 +124,7 @@ const ClienteFormFields = ({
 const Clientes = () => {
   const [clientes, setClientes] = useState([]);
   const [search, setSearch] = useState("");
+  const [sortConfig, setSortConfig] = useState(null);
 
   const [clienteId, setClienteId] = useState(null);
   const [nombre, setNombre] = useState("");
@@ -207,6 +208,49 @@ const Clientes = () => {
     setClienteEnEdicion(null);
     limpiarFormulario();
   };
+
+  const handleSort = (key) => {
+    if (!key) {
+      return;
+    }
+
+    const isSameKey = sortConfig?.key === key;
+    const nextDirection = isSameKey && sortConfig?.direction === "asc" ? "desc" : "asc";
+
+    setSortConfig({ key, direction: nextDirection });
+  };
+
+  const sortedClientes = useMemo(() => {
+    if (!Array.isArray(clientes)) {
+      return [];
+    }
+
+    if (!sortConfig) {
+      return [...clientes];
+    }
+
+    const sorted = [...clientes];
+    const { key, direction } = sortConfig;
+
+    sorted.sort((a, b) => {
+      const aValue = a?.[key];
+      const bValue = b?.[key];
+
+      if (key === "id") {
+        const aNumber = Number(aValue) || 0;
+        const bNumber = Number(bValue) || 0;
+        return direction === "asc" ? aNumber - bNumber : bNumber - aNumber;
+      }
+
+      const aText = (aValue ?? "").toString().toLowerCase();
+      const bText = (bValue ?? "").toString().toLowerCase();
+      const comparison = aText.localeCompare(bText);
+
+      return direction === "asc" ? comparison : -comparison;
+    });
+
+    return sorted;
+  }, [clientes, sortConfig]);
 
   const handleSave = async (event) => {
     event.preventDefault();
@@ -646,20 +690,60 @@ const Clientes = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  ID
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 cursor-pointer select-none"
+                  onClick={() => handleSort("id")}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    ID
+                    {sortConfig?.key === "id" && (
+                      <span aria-hidden>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>
+                    )}
+                  </span>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Nombre
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 cursor-pointer select-none"
+                  onClick={() => handleSort("nombre")}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    Nombre
+                    {sortConfig?.key === "nombre" && (
+                      <span aria-hidden>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>
+                    )}
+                  </span>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Identificación
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 cursor-pointer select-none"
+                  onClick={() => handleSort("identificacion")}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    Identificación
+                    {sortConfig?.key === "identificacion" && (
+                      <span aria-hidden>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>
+                    )}
+                  </span>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Tipo de servicio
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 cursor-pointer select-none"
+                  onClick={() => handleSort("tipo_servicio_nombre")}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    Tipo de servicio
+                    {sortConfig?.key === "tipo_servicio_nombre" && (
+                      <span aria-hidden>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>
+                    )}
+                  </span>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Activo
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 cursor-pointer select-none"
+                  onClick={() => handleSort("activo")}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    Activo
+                    {sortConfig?.key === "activo" && (
+                      <span aria-hidden>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>
+                    )}
+                  </span>
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 sticky right-0 bg-gray-50">
                   Acciones
@@ -667,8 +751,8 @@ const Clientes = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {Array.isArray(clientes) && clientes.length > 0 ? (
-                clientes.map((cliente) => (
+              {Array.isArray(sortedClientes) && sortedClientes.length > 0 ? (
+                sortedClientes.map((cliente) => (
                   <tr key={cliente.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm text-gray-600">{cliente.id}</td>
                     <td className="px-4 py-3 text-sm font-medium text-gray-800">
