@@ -71,6 +71,9 @@ const Clientes = () => {
   const [personasError, setPersonasError] = useState("");
   const [personaActionLoading, setPersonaActionLoading] = useState(false);
 
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [clienteEnEdicion, setClienteEnEdicion] = useState(null);
+
   const fetchClientes = useCallback(async () => {
     try {
       const searchTerm = search.trim();
@@ -125,6 +128,12 @@ const Clientes = () => {
     setFormError("");
   };
 
+  const cerrarModalEdicion = () => {
+    setIsEditModalOpen(false);
+    setClienteEnEdicion(null);
+    limpiarFormulario();
+  };
+
   const handleSave = async (event) => {
     event.preventDefault();
     setFormError("");
@@ -157,6 +166,8 @@ const Clientes = () => {
         toast.success("Cliente guardado correctamente");
       }
       await fetchClientes();
+      setIsEditModalOpen(false);
+      setClienteEnEdicion(null);
       limpiarFormulario();
     } catch (error) {
       const message = resolveErrorMessage(error, "No se pudo guardar el cliente");
@@ -168,6 +179,7 @@ const Clientes = () => {
   };
 
   const handleEdit = (c) => {
+    setClienteEnEdicion(c);
     setClienteId(c.id);
     setNombre(c.nombre ?? "");
     setIdentificacion(c.identificacion ?? "");
@@ -175,7 +187,7 @@ const Clientes = () => {
       c.tipo_servicio_id != null ? String(c.tipo_servicio_id) : ""
     );
     setActivo(Boolean(c.activo));
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setIsEditModalOpen(true);
   };
 
   const handleDelete = async (id) => {
@@ -325,6 +337,69 @@ const Clientes = () => {
     }
   };
 
+  const ClienteFormFields = () => (
+    <>
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium text-gray-700">Nombre *</span>
+          <input
+            type="text"
+            name="nombre"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+            placeholder="Nombre del cliente"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium text-gray-700">Identificación *</span>
+          <input
+            type="text"
+            name="identificacion"
+            value={identificacion}
+            onChange={(e) => setIdentificacion(e.target.value)}
+            className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+            placeholder="RUC / Cédula"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium text-gray-700">Tipo de servicio *</span>
+          <select
+            name="tipo_servicio_id"
+            value={tipoServicioId}
+            onChange={(event) => setTipoServicioId(event.target.value)}
+            className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+            disabled={tiposServicioLoading}
+          >
+            <option value="">Seleccione una opción</option>
+            {tiposServicio.map((tipo) => (
+              <option key={tipo.ID ?? tipo.id} value={tipo.ID ?? tipo.id}>
+                {tipo.NOMBRE ?? tipo.nombre}
+              </option>
+            ))}
+          </select>
+          {tiposServicioError && (
+            <span className="text-xs text-red-600">{tiposServicioError}</span>
+          )}
+        </label>
+        <label className="flex items-center gap-3 text-sm">
+          <input
+            type="checkbox"
+            name="activo"
+            checked={activo}
+            onChange={(e) => setActivo(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
+          />
+          <span className="font-medium text-gray-700">Cliente activo</span>
+        </label>
+      </div>
+
+      {formError && (
+        <p className="text-sm text-red-600">{formError}</p>
+      )}
+    </>
+  );
+
   return (
     <div className="space-y-8">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -337,7 +412,7 @@ const Clientes = () => {
           </p>
         </div>
         {clienteId !== null && (
-          <button type="button" className={secondaryButtonClasses} onClick={limpiarFormulario}>
+          <button type="button" className={secondaryButtonClasses} onClick={cerrarModalEdicion}>
             Cancelar edición
           </button>
         )}
@@ -348,64 +423,7 @@ const Clientes = () => {
           {clienteId !== null ? "Editar cliente" : "Registrar nuevo cliente"}
         </h2>
         <form className="space-y-4" onSubmit={handleSave}>
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-gray-700">Nombre *</span>
-              <input
-                type="text"
-                name="nombre"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-                placeholder="Nombre del cliente"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-gray-700">Identificación *</span>
-              <input
-                type="text"
-                name="identificacion"
-                value={identificacion}
-                onChange={(e) => setIdentificacion(e.target.value)}
-                className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-                placeholder="RUC / Cédula"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-gray-700">Tipo de servicio *</span>
-              <select
-                name="tipo_servicio_id"
-                value={tipoServicioId}
-                onChange={(event) => setTipoServicioId(event.target.value)}
-                className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-                disabled={tiposServicioLoading}
-              >
-                <option value="">Seleccione una opción</option>
-                {tiposServicio.map((tipo) => (
-                  <option key={tipo.ID ?? tipo.id} value={tipo.ID ?? tipo.id}>
-                    {tipo.NOMBRE ?? tipo.nombre}
-                  </option>
-                ))}
-              </select>
-              {tiposServicioError && (
-                <span className="text-xs text-red-600">{tiposServicioError}</span>
-              )}
-            </label>
-            <label className="flex items-center gap-3 text-sm">
-              <input
-                type="checkbox"
-                name="activo"
-                checked={activo}
-                onChange={(e) => setActivo(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
-              />
-              <span className="font-medium text-gray-700">Cliente activo</span>
-            </label>
-          </div>
-
-          {formError && (
-            <p className="text-sm text-red-600">{formError}</p>
-          )}
+          <ClienteFormFields />
 
           <div className="flex flex-wrap gap-3">
             <button type="submit" className={primaryButtonClasses} disabled={submitting}>
@@ -680,6 +698,60 @@ const Clientes = () => {
           </table>
         </div>
       </section>
+
+      {isEditModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={cerrarModalEdicion}
+        >
+          <div
+            className="relative w-full max-w-3xl rounded-lg bg-white shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between border-b px-6 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-[#1C2E4A]">
+                  Editar cliente
+                </h3>
+                {clienteEnEdicion?.nombre && (
+                  <p className="text-sm text-gray-500">{clienteEnEdicion.nombre}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                className="text-gray-500 transition-colors hover:text-gray-700"
+                onClick={cerrarModalEdicion}
+                aria-label="Cerrar"
+              >
+                ×
+              </button>
+            </div>
+            <div className="max-h-[80vh] overflow-y-auto px-6 py-4">
+              <form className="space-y-4" onSubmit={handleSave}>
+                <ClienteFormFields />
+
+                <div className="flex flex-wrap justify-end gap-3">
+                  <button
+                    type="button"
+                    className={secondaryButtonClasses}
+                    onClick={cerrarModalEdicion}
+                    disabled={submitting}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className={primaryButtonClasses}
+                    disabled={submitting}
+                  >
+                    {submitting ? "Guardando..." : "Guardar cambios"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
