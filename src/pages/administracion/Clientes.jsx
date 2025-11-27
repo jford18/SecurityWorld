@@ -47,6 +47,80 @@ const resolveErrorMessage = (error, fallback) => {
   return fallback;
 };
 
+const ClienteFormFields = ({
+  nombre,
+  identificacion,
+  tipoServicioId,
+  activo,
+  tiposServicio,
+  tiposServicioLoading,
+  tiposServicioError,
+  formError,
+  onNombreChange,
+  onIdentificacionChange,
+  onTipoServicioChange,
+  onActivoChange,
+}) => (
+  <>
+    <div className="grid gap-4 md:grid-cols-2">
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="font-medium text-gray-700">Nombre *</span>
+        <input
+          type="text"
+          name="nombre"
+          value={nombre}
+          onChange={(event) => onNombreChange(event.target.value)}
+          className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+          placeholder="Nombre del cliente"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="font-medium text-gray-700">Identificación *</span>
+        <input
+          type="text"
+          name="identificacion"
+          value={identificacion}
+          onChange={(event) => onIdentificacionChange(event.target.value)}
+          className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+          placeholder="RUC / Cédula"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="font-medium text-gray-700">Tipo de servicio *</span>
+        <select
+          name="tipo_servicio_id"
+          value={tipoServicioId}
+          onChange={(event) => onTipoServicioChange(event.target.value)}
+          className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+          disabled={tiposServicioLoading}
+        >
+          <option value="">Seleccione una opción</option>
+          {tiposServicio.map((tipo) => (
+            <option key={tipo.ID ?? tipo.id} value={tipo.ID ?? tipo.id}>
+              {tipo.NOMBRE ?? tipo.nombre}
+            </option>
+          ))}
+        </select>
+        {tiposServicioError && (
+          <span className="text-xs text-red-600">{tiposServicioError}</span>
+        )}
+      </label>
+      <label className="flex items-center gap-3 text-sm">
+        <input
+          type="checkbox"
+          name="activo"
+          checked={activo}
+          onChange={(event) => onActivoChange(event.target.checked)}
+          className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
+        />
+        <span className="font-medium text-gray-700">Cliente activo</span>
+      </label>
+    </div>
+
+    {formError && <p className="text-sm text-red-600">{formError}</p>}
+  </>
+);
+
 const Clientes = () => {
   const [clientes, setClientes] = useState([]);
   const [search, setSearch] = useState("");
@@ -337,69 +411,6 @@ const Clientes = () => {
     }
   };
 
-  const ClienteFormFields = () => (
-    <>
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium text-gray-700">Nombre *</span>
-          <input
-            type="text"
-            name="nombre"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-            placeholder="Nombre del cliente"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium text-gray-700">Identificación *</span>
-          <input
-            type="text"
-            name="identificacion"
-            value={identificacion}
-            onChange={(e) => setIdentificacion(e.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-            placeholder="RUC / Cédula"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium text-gray-700">Tipo de servicio *</span>
-          <select
-            name="tipo_servicio_id"
-            value={tipoServicioId}
-            onChange={(event) => setTipoServicioId(event.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-            disabled={tiposServicioLoading}
-          >
-            <option value="">Seleccione una opción</option>
-            {tiposServicio.map((tipo) => (
-              <option key={tipo.ID ?? tipo.id} value={tipo.ID ?? tipo.id}>
-                {tipo.NOMBRE ?? tipo.nombre}
-              </option>
-            ))}
-          </select>
-          {tiposServicioError && (
-            <span className="text-xs text-red-600">{tiposServicioError}</span>
-          )}
-        </label>
-        <label className="flex items-center gap-3 text-sm">
-          <input
-            type="checkbox"
-            name="activo"
-            checked={activo}
-            onChange={(e) => setActivo(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
-          />
-          <span className="font-medium text-gray-700">Cliente activo</span>
-        </label>
-      </div>
-
-      {formError && (
-        <p className="text-sm text-red-600">{formError}</p>
-      )}
-    </>
-  );
-
   return (
     <div className="space-y-8">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -423,7 +434,20 @@ const Clientes = () => {
           {clienteId !== null ? "Editar cliente" : "Registrar nuevo cliente"}
         </h2>
         <form className="space-y-4" onSubmit={handleSave}>
-          <ClienteFormFields />
+          <ClienteFormFields
+            nombre={nombre}
+            identificacion={identificacion}
+            tipoServicioId={tipoServicioId}
+            activo={activo}
+            tiposServicio={tiposServicio}
+            tiposServicioLoading={tiposServicioLoading}
+            tiposServicioError={tiposServicioError}
+            formError={formError}
+            onNombreChange={setNombre}
+            onIdentificacionChange={setIdentificacion}
+            onTipoServicioChange={setTipoServicioId}
+            onActivoChange={setActivo}
+          />
 
           <div className="flex flex-wrap gap-3">
             <button type="submit" className={primaryButtonClasses} disabled={submitting}>
@@ -728,7 +752,20 @@ const Clientes = () => {
             </div>
             <div className="max-h-[80vh] overflow-y-auto px-6 py-4">
               <form className="space-y-4" onSubmit={handleSave}>
-                <ClienteFormFields />
+                <ClienteFormFields
+                  nombre={nombre}
+                  identificacion={identificacion}
+                  tipoServicioId={tipoServicioId}
+                  activo={activo}
+                  tiposServicio={tiposServicio}
+                  tiposServicioLoading={tiposServicioLoading}
+                  tiposServicioError={tiposServicioError}
+                  formError={formError}
+                  onNombreChange={setNombre}
+                  onIdentificacionChange={setIdentificacion}
+                  onTipoServicioChange={setTipoServicioId}
+                  onActivoChange={setActivo}
+                />
 
                 <div className="flex flex-wrap justify-end gap-3">
                   <button
