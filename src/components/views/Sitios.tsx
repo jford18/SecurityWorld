@@ -395,6 +395,7 @@ const Sitios: React.FC = () => {
 
   const [nombre, setNombre] = useState<string>('');
   const [descripcion, setDescripcion] = useState<string>('');
+  const [servidor, setServidor] = useState<string>('');
   const [ubicacion, setUbicacion] = useState<string>('');
   const [activo, setActivo] = useState<boolean>(true);
   const [linkMapa, setLinkMapa] = useState<string>('');
@@ -724,6 +725,7 @@ const Sitios: React.FC = () => {
   const resetForm = () => {
     setNombre('');
     setDescripcion('');
+    setServidor('');
     setUbicacion('');
     setActivo(true);
     setFormError('');
@@ -763,6 +765,7 @@ const Sitios: React.FC = () => {
     setSelectedSitio(sitio);
     setNombre(sitio.nombre ?? '');
     setDescripcion(sitio.descripcion ?? '');
+    setServidor(sitio.servidor ?? '');
     setUbicacion(sitio.ubicacion ?? '');
     setActivo(Boolean(sitio.activo));
     const clienteIdValue = getSitioClienteId(sitio);
@@ -812,6 +815,11 @@ const Sitios: React.FC = () => {
     setSelectedSitio(null);
     resetForm();
   };
+
+  useEffect(() => {
+    const tipoAreaIdValue = getSitioTipoAreaId(selectedSitio);
+    setTipoAreaSeleccionada(tipoAreaIdValue === null ? '' : String(tipoAreaIdValue));
+  }, [selectedSitio]);
 
   useEffect(() => {
     if (latitud !== null && longitud !== null) {
@@ -865,6 +873,7 @@ const Sitios: React.FC = () => {
     const trimmedName = nombre.trim();
     const trimmedDescripcion = descripcion.trim();
     const trimmedUbicacion = ubicacion.trim();
+    const trimmedServidor = servidor.trim();
     const trimmedLinkMapa = linkMapa.trim();
 
     setFormError('');
@@ -915,6 +924,7 @@ const Sitios: React.FC = () => {
       nombre: trimmedName,
       descripcion: trimmedDescripcion || null,
       ubicacion: trimmedUbicacion || null,
+      servidor: trimmedServidor || null,
       activo,
       link_mapa: trimmedLinkMapa,
       latitud,
@@ -996,19 +1006,19 @@ const Sitios: React.FC = () => {
                     Descripción
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                    Ubicación
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                    Cliente
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
                     Hacienda
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
                     Tipo de área
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                    Cliente
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
                     Consola
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                    Servidor
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
                     Activo
@@ -1027,15 +1037,6 @@ const Sitios: React.FC = () => {
                       {sitio.descripcion && sitio.descripcion.trim() ? sitio.descripcion : '—'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
-                      {sitio.ubicacion && sitio.ubicacion.trim() ? sitio.ubicacion : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      {formatRelationLabel(
-                        getSitioClienteNombre(sitio),
-                        'Sin asignar',
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
                       {formatRelationLabel(
                         getSitioHaciendaNombre(sitio),
                         'Sin hacienda',
@@ -1049,9 +1050,18 @@ const Sitios: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       {formatRelationLabel(
+                        getSitioClienteNombre(sitio),
+                        'Sin asignar',
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {formatRelationLabel(
                         getSitioConsolaNombre(sitio),
                         'Sin consola',
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {sitio.servidor && sitio.servidor.trim() ? sitio.servidor : '—'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">{sitio.activo ? 'Sí' : 'No'}</td>
                     <td className="px-4 py-3 text-sm text-gray-700 space-x-2">
@@ -1118,16 +1128,16 @@ const Sitios: React.FC = () => {
                 />
               </div>
               <div className="space-y-2">
-                <label htmlFor="sitio-ubicacion" className="block text-sm font-medium text-[#1C2E4A]">
-                  Ubicación
+                <label htmlFor="sitio-servidor" className="block text-sm font-medium text-[#1C2E4A]">
+                  Servidor
                 </label>
                 <input
-                  id="sitio-ubicacion"
+                  id="sitio-servidor"
                   type="text"
-                  value={ubicacion}
-                  onChange={(event) => setUbicacion(event.target.value)}
+                  value={servidor}
+                  onChange={(event) => setServidor(event.target.value)}
                   className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
-                  placeholder="Ubicación física o referencia"
+                  placeholder="Nombre o dirección del servidor"
                 />
               </div>
               <div className="space-y-2">
