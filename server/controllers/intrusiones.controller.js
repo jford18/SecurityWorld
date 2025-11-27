@@ -72,6 +72,55 @@ const parseIntegerOrNull = (value) => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
+const normalizeDateParam = (value) => {
+  if (!value) return null;
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const normalizeBooleanParam = (value) => {
+  if (value === undefined) return undefined;
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "t", "1", "si", "sí"].includes(normalized)) return true;
+    if (["false", "f", "0", "no"].includes(normalized)) return false;
+  }
+
+  return Boolean(value);
+};
+
+let intrusionesColumnCache = null;
+
+const getIntrusionesMetadata = async () => {
+  if (intrusionesColumnCache) {
+    return intrusionesColumnCache;
+  }
+
+  const columnsResult = await pool.query(
+    `SELECT column_name
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'intrusiones'`
+  );
+
+  const columnNames = new Set(columnsResult.rows.map((row) => row.column_name));
+  const personaColumn = columnNames.has("persona_id")
+    ? "persona_id"
+    : columnNames.has("personal_id")
+    ? "personal_id"
+    : null;
+
+  intrusionesColumnCache = {
+    hasTipoIntrusionId: columnNames.has("tipo_intrusion_id"),
+    hasTipoText: columnNames.has("tipo"),
+    personaColumn,
+  };
+
+  return intrusionesColumnCache;
+};
+
 export const listIntrusiones = async (_req, res) => {
   try {
     const result = await pool.query(
@@ -398,5 +447,193 @@ export const updateIntrusion = async (req, res) => {
   } catch (error) {
     console.error("Error al actualizar intrusión:", error);
     return res.status(500).json({ mensaje: "Error al actualizar la intrusión" });
+  }
+};
+
+export const getConsolidadoIntrusiones = async (req, res) => {
+  const {
+    fechaDesde,
+    fechaHasta,
+    sitioId,
+    tipoIntrusionId,
+    tipoIntrusion,
+    llegoAlerta,
+    personalId,
+    page = 1,
+    limit = 20,
+  } = req.query ?? {};
+
+  let metadata;
+  try {
+    metadata = await getIntrusionesMetadata();
+  } catch (error) {
+    console.error("No se pudo obtener la metadata de intrusiones:", error);
+    return res
+      .status(500)
+      .json({ mensaje: "No se pudo preparar la consulta de intrusiones." });
+  }
+
+  const filters = [];
+  const values = [];
+
+  const parsedFechaDesde = normalizeDateParam(fechaDesde);
+  if (fechaDesde !== undefined && fechaDesde !== "" && !parsedFechaDesde) {
+    return res
+      .status(400)
+      .json({ mensaje: "El parámetro fechaDesde no es válido." });
+  }
+  if (parsedFechaDesde) {
+    values.push(parsedFechaDesde);
+    filters.push(`i.fecha_evento >= $${values.length}`);
+  }
+
+  const parsedFechaHasta = normalizeDateParam(fechaHasta);
+  if (fechaHasta !== undefined && fechaHasta !== "" && !parsedFechaHasta) {
+    return res
+      .status(400)
+      .json({ mensaje: "El parámetro fechaHasta no es válido." });
+  }
+  if (parsedFechaHasta) {
+    values.push(parsedFechaHasta);
+    filters.push(`i.fecha_evento <= $${values.length}`);
+  }
+
+  if (sitioId !== undefined && sitioId !== "") {
+    const parsedSitioId = Number(sitioId);
+    if (!Number.isInteger(parsedSitioId) || parsedSitioId <= 0) {
+      return res
+        .status(400)
+        .json({ mensaje: "El parámetro sitioId no es válido." });
+    }
+    values.push(parsedSitioId);
+    filters.push(`i.sitio_id = $${values.length}`);
+  }
+
+  if (metadata.hasTipoIntrusionId && tipoIntrusionId !== undefined && tipoIntrusionId !== "") {
+    const parsedTipo = Number(tipoIntrusionId);
+    if (!Number.isInteger(parsedTipo) || parsedTipo <= 0) {
+      return res
+        .status(400)
+        .json({ mensaje: "El parámetro tipoIntrusionId no es válido." });
+    }
+    values.push(parsedTipo);
+    filters.push(`i.tipo_intrusion_id = $${values.length}`);
+  } else if (metadata.hasTipoText && (tipoIntrusionId || tipoIntrusion)) {
+    const tipoValue =
+      typeof tipoIntrusionId === "string" && tipoIntrusionId.trim()
+        ? tipoIntrusionId
+        : tipoIntrusion;
+
+    if (typeof tipoValue === "string" && tipoValue.trim()) {
+      values.push(`%${tipoValue.trim()}%`);
+      filters.push(`i.tipo ILIKE $${values.length}`);
+    }
+  }
+
+  const parsedLlegoAlerta = normalizeBooleanParam(llegoAlerta);
+  if (parsedLlegoAlerta !== undefined) {
+    values.push(parsedLlegoAlerta);
+    filters.push(`i.llego_alerta = $${values.length}`);
+  }
+
+  if (metadata.personaColumn && personalId !== undefined && personalId !== "") {
+    const parsedPersonal = Number(personalId);
+    if (!Number.isInteger(parsedPersonal) || parsedPersonal <= 0) {
+      return res
+        .status(400)
+        .json({ mensaje: "El parámetro personalId no es válido." });
+    }
+    values.push(parsedPersonal);
+    filters.push(`i.${metadata.personaColumn} = $${values.length}`);
+  }
+
+  const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  const pageNumber = Number(page);
+  const pageSize = Number(limit);
+  const hasValidPagination =
+    Number.isInteger(pageNumber) && pageNumber > 0 && Number.isInteger(pageSize) && pageSize > 0;
+
+  const paginationClause = hasValidPagination
+    ? ` LIMIT $${values.length + 1} OFFSET $${values.length + 2}`
+    : "";
+
+  const selectColumns = [
+    "i.id",
+    "i.fecha_evento AS fecha_hora_intrusion",
+    "s.nombre AS sitio",
+    metadata.hasTipoIntrusionId
+      ? "COALESCE(cti.descripcion, CAST(i.tipo_intrusion_id AS TEXT)) AS tipo_intrusion"
+      : "i.tipo AS tipo_intrusion",
+    "i.llego_alerta",
+    "COUNT(*) OVER() AS total_count",
+  ];
+
+  const joins = ["LEFT JOIN public.sitios AS s ON s.id = i.sitio_id"];
+  if (metadata.hasTipoIntrusionId) {
+    joins.push("LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.id = i.tipo_intrusion_id");
+  }
+
+  if (metadata.personaColumn) {
+    selectColumns.push(
+      "p.id AS persona_id",
+      "CONCAT_WS(' ', p.nombre, p.apellido) AS persona_nombre",
+      "c.descripcion AS cargo_descripcion"
+    );
+    joins.push(
+      `LEFT JOIN public.persona AS p ON p.id = i.${metadata.personaColumn}`,
+      "LEFT JOIN public.catalogo_cargo AS c ON c.id = p.cargo_id"
+    );
+  }
+
+  const orderByClause = "ORDER BY i.fecha_evento DESC NULLS LAST, i.id DESC";
+
+  if (hasValidPagination) {
+    values.push(pageSize, (pageNumber - 1) * pageSize);
+  }
+
+  const query = `SELECT ${selectColumns.join(", ")}
+    FROM public.intrusiones AS i
+    ${joins.join("\n    ")}
+    ${whereClause}
+    ${orderByClause}
+    ${paginationClause}`;
+
+  try {
+    const result = await pool.query(query, values);
+    const totalRecords = result.rows[0]?.total_count ?? 0;
+
+    const data = result.rows.map((row) => {
+      const fechaHoraIntrusion = row?.fecha_hora_intrusion
+        ? new Date(row.fecha_hora_intrusion).toISOString()
+        : null;
+
+      const personaNombre = row?.persona_nombre ? String(row.persona_nombre).trim() : "";
+      const cargoDescripcion = row?.cargo_descripcion ? String(row.cargo_descripcion).trim() : "";
+      const personalIdentificado = cargoDescripcion && personaNombre
+        ? `${cargoDescripcion} - ${personaNombre}`
+        : personaNombre || "";
+
+      return {
+        id: row?.id ?? null,
+        fechaHoraIntrusion,
+        sitio: row?.sitio ?? "",
+        tipoIntrusion: row?.tipo_intrusion ?? "",
+        llegoAlerta: Boolean(row?.llego_alerta),
+        personalIdentificado,
+      };
+    });
+
+    return res.json({
+      data,
+      total: Number(totalRecords) || data.length,
+      page: hasValidPagination ? pageNumber : 1,
+      pageSize: hasValidPagination ? pageSize : data.length,
+    });
+  } catch (error) {
+    console.error("Error al obtener el consolidado de intrusiones:", error);
+    return res
+      .status(500)
+      .json({ mensaje: "Ocurrió un error al consultar el consolidado de intrusiones." });
   }
 };
