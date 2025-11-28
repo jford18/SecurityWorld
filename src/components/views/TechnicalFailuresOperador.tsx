@@ -4,6 +4,7 @@ import FechaHoraFalloPicker from '../ui/FechaHoraFalloPicker';
 import AutocompleteComboBox from '../ui/AutocompleteComboBox';
 import { TechnicalFailure, TechnicalFailureCatalogs, CatalogoNodo } from '../../types';
 import { Sitio, getSitios } from '../../services/sitiosService';
+import { resolveConsolaIdByName } from '../../services/consolasService';
 import {
   fetchFallos,
   createFallo,
@@ -154,22 +155,65 @@ const TechnicalFailuresOperador: React.FC = () => {
   );
 
   useEffect(() => {
+    let isMounted = true;
+
     const loadSitios = async () => {
+      const consoleName = session.console ?? localStorage.getItem('selectedConsole');
+
+      if (!consoleName) {
+        if (isMounted) {
+          setSitios([]);
+          setFormData((prev) => (prev.sitioId ? { ...prev, sitioId: '' } : prev));
+        }
+        return;
+      }
+
       try {
-        const data = await getSitios();
+        const consolaId = await resolveConsolaIdByName(consoleName);
+
+        if (!isMounted) return;
+
+        if (consolaId === null) {
+          setSitios([]);
+          setFormData((prev) => (prev.sitioId ? { ...prev, sitioId: '' } : prev));
+          return;
+        }
+
+        const data = await getSitios({ consolaId });
+        if (!isMounted) return;
+
         const lista = Array.isArray(data)
           ? data
           : (data as { data?: Sitio[] } | null | undefined)?.data;
 
-        setSitios(Array.isArray(lista) ? lista : []);
+        const sitiosDisponibles = Array.isArray(lista) ? lista : [];
+        setSitios(sitiosDisponibles);
+        setFormData((prev) => {
+          if (!prev.sitioId) {
+            return prev;
+          }
+
+          const exists = sitiosDisponibles.some(
+            (sitioItem) => String(sitioItem.id) === prev.sitioId
+          );
+
+          return exists ? prev : { ...prev, sitioId: '' };
+        });
       } catch (error) {
         console.error('Error al cargar sitios:', error);
-        setSitios([]);
+        if (isMounted) {
+          setSitios([]);
+          setFormData((prev) => (prev.sitioId ? { ...prev, sitioId: '' } : prev));
+        }
       }
     };
 
     loadSitios();
-  }, []);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session.console]);
 
   const tipoProblemaItems = useMemo(
     () => [
