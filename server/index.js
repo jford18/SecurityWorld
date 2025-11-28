@@ -12,7 +12,7 @@ import cargoRoutes from "./routes/cargo.routes.js";
 import nodosSitiosRoutes from "./routes/nodosSitios.routes.js";
 import medioComunicacionRoutes from "./routes/medioComunicacion.routes.js";
 import personaRoutes from "./routes/persona.routes.js";
-import menusRoutes from "./menus.routes.js";
+import menusRoutes from "./routes/menu.routes.js";
 import fallosRoutes from "./fallos.routes.js";
 import clientesRoutes from "./routes/clientes.routes.js";
 import asignarClienteSitioRoutes from "./routes/asignar_cliente_sitio.routes.js";
@@ -101,7 +101,7 @@ app.use((req, _res, next) => {
 // Rutas principales
 app.use("/api/login", authRoutes);
 app.use("/api/consolas", consolasRoutes);
-app.use("/api", menusRoutes);
+app.use("/api/menus", menusRoutes);
 app.use("/api/nodos", nodosRoutes);
 app.use("/api/conclusion-evento", conclusionEventoRoutes);
 app.use("/api/fuerza-reaccion", fuerzaReaccionRoutes);

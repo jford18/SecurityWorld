@@ -66,19 +66,9 @@ const MenuScreen: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   const loadMenus = async () => {
-    const userId = session.userId;
-    if (!userId) {
-      console.warn('No se encontró usuario_id para cargar menús');
-      setMenus([]);
-      setFetchError('');
-      return;
-    }
     try {
       setLoading(true);
-      const data = await getMenus({ userId });
-      if (!Array.isArray(data)) {
-        throw new Error('Respuesta inválida del servidor');
-      }
+      const data = await getMenus();
       setMenus(data as MenuItem[]);
       setFetchError('');
     } catch (error) {

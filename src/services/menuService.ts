@@ -1,10 +1,12 @@
 import api from './api';
 
 const jsonContentType = 'application/json';
+const ENDPOINT = '/menus';
 
 type ApiErrorResponse = {
   message?: string;
   error?: string;
+  data?: unknown;
 };
 
 type AxiosErrorLike = Error & {
@@ -110,11 +112,18 @@ export const getMenus = async (options: GetMenusOptions = {}) => {
   }
 
   try {
-    const { data } = await api.get('/menus', {
+    const { data } = await api.get(ENDPOINT, {
       params: Object.keys(params).length ? params : undefined,
       headers: buildRequestHeaders(),
     });
-    return data;
+
+    const payload = Array.isArray(data) ? data : data?.data;
+
+    if (!Array.isArray(payload)) {
+      throw new Error('Respuesta inválida del servidor al obtener menús');
+    }
+
+    return payload;
   } catch (error) {
     throw resolveRequestError(error);
   }
@@ -122,10 +131,10 @@ export const getMenus = async (options: GetMenusOptions = {}) => {
 
 export const createMenu = async (payload: MenuPayload) => {
   try {
-    const { data } = await api.post('/menus', payload, {
+    const { data } = await api.post(ENDPOINT, payload, {
       headers: buildRequestHeaders(true),
     });
-    return data;
+    return data?.data ?? data;
   } catch (error) {
     throw resolveRequestError(error);
   }
@@ -133,10 +142,10 @@ export const createMenu = async (payload: MenuPayload) => {
 
 export const updateMenu = async (id: number, payload: MenuPayload) => {
   try {
-    const { data } = await api.put(`/menus/${id}`, payload, {
+    const { data } = await api.put(`${ENDPOINT}/${id}`, payload, {
       headers: buildRequestHeaders(true),
     });
-    return data;
+    return data?.data ?? data;
   } catch (error) {
     throw resolveRequestError(error);
   }
@@ -144,10 +153,10 @@ export const updateMenu = async (id: number, payload: MenuPayload) => {
 
 export const deleteMenu = async (id: number) => {
   try {
-    const { data } = await api.delete(`/menus/${id}`, {
+    const { data } = await api.delete(`${ENDPOINT}/${id}`, {
       headers: buildRequestHeaders(),
     });
-    return data;
+    return data?.data ?? data;
   } catch (error) {
     throw resolveRequestError(error);
   }
