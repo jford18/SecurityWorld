@@ -38,15 +38,36 @@ export const getMenusByRole = async (req, res) => {
   }
 };
 
-export const getMenus = async (_req, res) => {
+export const listMenus = async (_req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, nombre, icono, ruta, seccion, orden, activo
+      `SELECT id, nombre, icono, ruta, seccion, orden, activo, fecha_creacion
        FROM menus
-       WHERE activo = true
-       ORDER BY seccion NULLS LAST, orden ASC`
+       ORDER BY seccion NULLS LAST, orden ASC, id ASC`
     );
     res.status(200).json(result.rows);
+  } catch (error) {
+    console.error("Error en menú:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+export const getMenuById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `SELECT id, nombre, icono, ruta, seccion, orden, activo, fecha_creacion
+       FROM menus
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: "Menú no encontrado" });
+    }
+
+    res.status(200).json(result.rows[0]);
   } catch (error) {
     console.error("Error en menú:", error);
     res.status(500).json({ message: "Error interno del servidor" });
