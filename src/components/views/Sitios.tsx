@@ -920,6 +920,11 @@ const Sitios: React.FC = () => {
     const tipoAreaId = parseNumericIdValue(tipoAreaSeleccionada);
     const consolaId = parseNumericIdValue(consolaSeleccionada);
 
+    if (clienteId === null || clienteId <= 0) {
+      setFormError('El cliente es obligatorio');
+      return;
+    }
+
     const payload: SitioPayload = {
       nombre: trimmedName,
       descripcion: trimmedDescripcion || null,

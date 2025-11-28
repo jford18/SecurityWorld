@@ -23,14 +23,13 @@ const mapRows = (rows) => {
 export const getSitiosClientes = async (_req, res) => {
   try {
     const query = `
-      SELECT 
+      SELECT
         S.ID AS sitio_id,
         S.NOMBRE AS sitio_nombre,
-        C.ID AS cliente_id,
+        S.CLIENTE_ID AS cliente_id,
         C.NOMBRE AS cliente_nombre
       FROM PUBLIC.SITIOS S
-      LEFT JOIN PUBLIC.SITIOS_CLIENTE SC ON (SC.SITIO_ID = S.ID AND SC.ACTIVO = TRUE)
-      LEFT JOIN PUBLIC.CLIENTES C ON (C.ID = SC.CLIENTE_ID)
+      LEFT JOIN PUBLIC.CLIENTES C ON (C.ID = S.CLIENTE_ID)
       ORDER BY S.ID;
     `;
     const result = await db.query(query);
@@ -50,12 +49,10 @@ export const asignarClienteSitio = async (req, res) => {
     return res.status(400).json({ message: "Sitio y cliente son obligatorios" });
   }
 
-  let transactionStarted = false;
-
   try {
     const [sitioResult, clienteResult] = await Promise.all([
       db.query("SELECT ID FROM PUBLIC.SITIOS WHERE ID = $1", [sitioId]),
-      db.query("SELECT ID, ACTIVO FROM PUBLIC.CLIENTES WHERE ID = $1", [clienteId]),
+      db.query("SELECT ID, ACTIVO, NOMBRE FROM PUBLIC.CLIENTES WHERE ID = $1", [clienteId]),
     ]);
 
     if (sitioResult.rowCount === 0) {
@@ -71,35 +68,23 @@ export const asignarClienteSitio = async (req, res) => {
       return res.status(400).json({ message: "El cliente seleccionado está inactivo" });
     }
 
-    await db.query("BEGIN");
-    transactionStarted = true;
-
-    await db.query(
+    const updateResult = await db.query(
       `
-        UPDATE PUBLIC.SITIOS_CLIENTE
-        SET ACTIVO = FALSE
-        WHERE SITIO_ID = $1 AND ACTIVO = TRUE;
+        UPDATE PUBLIC.SITIOS
+        SET CLIENTE_ID = $1
+        WHERE ID = $2
+        RETURNING ID AS sitio_id, NOMBRE AS sitio_nombre, CLIENTE_ID AS cliente_id;
       `,
-      [sitioId]
+      [clienteId, sitioId]
     );
 
-    const result = await db.query(
-      `
-        INSERT INTO PUBLIC.SITIOS_CLIENTE (SITIO_ID, CLIENTE_ID, ACTIVO, FECHA_ASIGNACION)
-        VALUES ($1, $2, TRUE, NOW())
-        RETURNING *;
-      `,
-      [sitioId, clienteId]
-    );
-
-    await db.query("COMMIT");
-    transactionStarted = false;
-
-    res.json(result.rows[0]);
-  } catch (error) {
-    if (transactionStarted) {
-      await db.query("ROLLBACK");
+    if (updateResult.rowCount === 0) {
+      return res.status(404).json({ message: "El sitio especificado no existe" });
     }
+
+    const updated = updateResult.rows[0];
+    res.json({ ...updated, cliente_nombre: clienteResult.rows[0]?.nombre ?? null });
+  } catch (error) {
     console.error("[ASIGNAR_CLIENTE_SITIO] Error al asignar cliente:", error);
     res.status(500).json({ message: "Error al asignar cliente al sitio" });
   }
