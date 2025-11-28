@@ -26,8 +26,11 @@ export const createUsuario = async (req, res) => {
   }
 
   try {
-    const insertQuery =
-      "INSERT INTO usuarios (nombre_usuario, hash_contrasena, nombre_completo, activo) VALUES ($1, $2, $3, $4) RETURNING id, nombre_usuario, nombre_completo, activo, fecha_creacion";
+    const insertQuery = `
+      INSERT INTO public.usuarios (nombre_usuario, contrasena, nombre_completo, activo)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, nombre_usuario, nombre_completo, activo, fecha_creacion;
+    `;
     const values = [trimmedUsername, trimmedPassword, nombre_completo?.trim() || null, true];
 
     const { rows } = await pool.query(insertQuery, values);
@@ -68,15 +71,31 @@ export const updateUsuario = async (req, res) => {
   }
 
   try {
-    const updateQuery =
-      "UPDATE usuarios SET nombre_usuario = $1, nombre_completo = $2, activo = $3, hash_contrasena = COALESCE($4, hash_contrasena) WHERE id = $5 RETURNING id, nombre_usuario, nombre_completo, activo, fecha_creacion";
-    const values = [
-      trimmedUsername,
-      nombre_completo?.trim() || null,
-      Boolean(activo),
-      trimmedPassword ? trimmedPassword : null,
-      id,
-    ];
+    let updateQuery;
+    let values;
+
+    if (trimmedPassword && trimmedPassword !== "") {
+      updateQuery = `
+        UPDATE public.usuarios
+        SET nombre_usuario  = $1,
+            nombre_completo = $2,
+            activo          = $3,
+            contrasena      = $4
+        WHERE id = $5
+        RETURNING id, nombre_usuario, nombre_completo, activo, fecha_creacion;
+      `;
+      values = [trimmedUsername, nombre_completo?.trim() || null, Boolean(activo), trimmedPassword, id];
+    } else {
+      updateQuery = `
+        UPDATE public.usuarios
+        SET nombre_usuario  = $1,
+            nombre_completo = $2,
+            activo          = $3
+        WHERE id = $4
+        RETURNING id, nombre_usuario, nombre_completo, activo, fecha_creacion;
+      `;
+      values = [trimmedUsername, nombre_completo?.trim() || null, Boolean(activo), id];
+    }
 
     const { rows } = await pool.query(updateQuery, values);
 
