@@ -913,6 +913,8 @@ const Sitios: React.FC = () => {
     const trimmedUbicacion = ubicacion.trim();
     const trimmedServidor = servidor.trim();
     const trimmedLinkMapa = linkMapa.trim();
+    const hasLinkData = Boolean(trimmedLinkMapa);
+    const hasCoordinates = latitud !== null && longitud !== null;
 
     setFormError('');
     setLinkError('');
@@ -934,17 +936,12 @@ const Sitios: React.FC = () => {
       return;
     }
 
-    if (!trimmedLinkMapa) {
-      setLinkError('El enlace de Google Maps es obligatorio.');
+    if (hasLinkData && !hasCoordinates) {
+      setLinkError('Debes proporcionar un enlace válido de Google Maps o dejar el campo vacío.');
       return;
     }
 
-    if (latitud === null || longitud === null) {
-      setLinkError('Debes proporcionar un enlace válido de Google Maps.');
-      return;
-    }
-
-    if (mapStatus !== 'ready') {
+    if (hasLinkData && hasCoordinates && mapStatus !== 'ready') {
       if (mapStatus === 'error') {
         setMapError('No se pudo cargar la vista previa del mapa. Verifica el enlace de Google Maps e inténtalo nuevamente.');
       } else {
@@ -969,9 +966,9 @@ const Sitios: React.FC = () => {
       ubicacion: trimmedUbicacion || null,
       servidor: trimmedServidor || null,
       activo,
-      link_mapa: trimmedLinkMapa,
-      latitud,
-      longitud,
+      link_mapa: hasLinkData ? trimmedLinkMapa : null,
+      latitud: hasCoordinates ? latitud : null,
+      longitud: hasCoordinates ? longitud : null,
       clienteId,
       haciendaId,
       tipoAreaId,
@@ -1592,7 +1589,6 @@ const Sitios: React.FC = () => {
                   onChange={handleLinkChange}
                   className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
                   placeholder="Pega aquí el enlace de Google Maps"
-                  required
                 />
                 {linkError && <p className="text-sm text-red-600">{linkError}</p>}
               </div>
