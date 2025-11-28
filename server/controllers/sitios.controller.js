@@ -15,15 +15,14 @@ const SITIO_WITH_CLIENT_BASE_QUERY = `
     S.hacienda_id AS hacienda_id,
     S.tipo_area_id AS tipo_area_id,
     S.consola_id AS consola_id,
-    C.id AS cliente_id,
+    S.cliente_id AS cliente_id,
     C.nombre AS cliente_nombre,
     H.nombre AS hacienda_nombre,
     TA.nombre AS tipo_area_nombre,
     TA.descripcion AS tipo_area_descripcion,
     CO.nombre AS consola_nombre
-  FROM sitios S
-  LEFT JOIN sitios_cliente SC ON SC.sitio_id = S.id AND SC.activo = TRUE
-  LEFT JOIN clientes C ON C.id = SC.cliente_id
+  FROM public.sitios S
+  LEFT JOIN public.clientes C ON C.id = S.cliente_id
   LEFT JOIN hacienda H ON H.id = S.hacienda_id
   LEFT JOIN tipo_area TA ON TA.id = S.tipo_area_id
   LEFT JOIN consolas CO ON CO.id = S.consola_id
@@ -128,7 +127,7 @@ const parseNullableId = (value) => {
 
   const parsed = Number.parseInt(String(value), 10);
 
-  if (!Number.isFinite(parsed)) {
+  if (!Number.isFinite(parsed) || parsed <= 0 || !Number.isInteger(parsed)) {
     return null;
   }
 
@@ -162,15 +161,7 @@ const parseSitioIds = (rawValue) => {
   return Array.from(new Set(parsed));
 };
 
-const hasOwnProperty = (target, property) =>
-  target !== null &&
-  typeof target === "object" &&
-  Object.prototype.hasOwnProperty.call(target, property);
-
 const normalizeSitioPayload = (body) => {
-  const hasClienteId =
-    hasOwnProperty(body, "cliente_id") || hasOwnProperty(body, "clienteId");
-
   const nombre = typeof body.nombre === "string" ? body.nombre.trim() : "";
   const descripcion =
     typeof body.descripcion === "string" ? body.descripcion.trim() : null;
@@ -216,7 +207,6 @@ const normalizeSitioPayload = (body) => {
     haciendaId,
     tipoAreaId,
     consolaId,
-    clienteIdProvided: hasClienteId,
   };
 };
 
@@ -294,7 +284,6 @@ export const createSitio = async (req, res) => {
       haciendaId,
       tipoAreaId,
       consolaId,
-      clienteIdProvided,
     } =
       normalizeSitioPayload(
         req.body ?? {}
@@ -310,6 +299,10 @@ export const createSitio = async (req, res) => {
 
     if (latitud === null || longitud === null) {
       return res.status(422).json({ message: "El enlace proporcionado no contiene coordenadas válidas" });
+    }
+
+    if (clienteId === null) {
+      return res.status(422).json({ message: "El cliente es obligatorio" });
     }
 
     const client = await pool.connect();
@@ -329,9 +322,9 @@ export const createSitio = async (req, res) => {
       transactionStarted = true;
 
       const result = await client.query(
-        `INSERT INTO sitios (nombre, descripcion, ubicacion, servidor, activo, link_mapa, latitud, longitud, hacienda_id, tipo_area_id, consola_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-         RETURNING id, nombre, descripcion, ubicacion, servidor, link_mapa, latitud, longitud, activo, fecha_creacion, hacienda_id, tipo_area_id, consola_id`,
+        `INSERT INTO sitios (nombre, descripcion, ubicacion, servidor, activo, link_mapa, latitud, longitud, hacienda_id, tipo_area_id, consola_id, cliente_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         RETURNING id, nombre, descripcion, ubicacion, servidor, link_mapa, latitud, longitud, activo, fecha_creacion, hacienda_id, tipo_area_id, consola_id, cliente_id`,
         [
           nombre,
           descripcion,
@@ -344,19 +337,12 @@ export const createSitio = async (req, res) => {
           haciendaId,
           tipoAreaId,
           consolaId,
+          clienteId,
         ]
       );
 
       const sitioInsertado = result.rows[0];
       const sitioId = sitioInsertado.id;
-
-      if (clienteIdProvided && clienteId !== null) {
-        await client.query(
-          `INSERT INTO sitios_cliente (sitio_id, cliente_id, activo, fecha_asignacion)
-           VALUES ($1, $2, TRUE, NOW())`,
-          [sitioId, clienteId]
-        );
-      }
 
       const sitioConCliente = await fetchSitioWithClienteById(client, sitioId);
 
@@ -397,7 +383,6 @@ export const updateSitio = async (req, res) => {
       haciendaId,
       tipoAreaId,
       consolaId,
-      clienteIdProvided,
     } =
       normalizeSitioPayload(
         req.body ?? {}
@@ -413,6 +398,10 @@ export const updateSitio = async (req, res) => {
 
     if (latitud === null || longitud === null) {
       return res.status(422).json({ message: "El enlace proporcionado no contiene coordenadas válidas" });
+    }
+
+    if (clienteId === null) {
+      return res.status(422).json({ message: "El cliente es obligatorio" });
     }
 
     const client = await pool.connect();
@@ -443,9 +432,10 @@ export const updateSitio = async (req, res) => {
              longitud = $8,
              hacienda_id = $9,
              tipo_area_id = $10,
-             consola_id = $11
-         WHERE id = $12
-         RETURNING id, nombre, descripcion, ubicacion, servidor, link_mapa, latitud, longitud, activo, fecha_creacion, hacienda_id, tipo_area_id, consola_id`,
+             consola_id = $11,
+             cliente_id = $12
+         WHERE id = $13
+         RETURNING id, nombre, descripcion, ubicacion, servidor, link_mapa, latitud, longitud, activo, fecha_creacion, hacienda_id, tipo_area_id, consola_id, cliente_id`,
         [
           nombre,
           descripcion,
@@ -458,6 +448,7 @@ export const updateSitio = async (req, res) => {
           haciendaId,
           tipoAreaId,
           consolaId,
+          clienteId,
           id,
         ]
       );
@@ -466,21 +457,6 @@ export const updateSitio = async (req, res) => {
         await client.query("ROLLBACK");
         transactionStarted = false;
         return res.status(404).json({ message: "Sitio no encontrado" });
-      }
-
-      if (clienteIdProvided) {
-        await client.query(
-          "UPDATE sitios_cliente SET activo = FALSE WHERE sitio_id = $1 AND activo = TRUE",
-          [id]
-        );
-
-        if (clienteId !== null) {
-          await client.query(
-            `INSERT INTO sitios_cliente (sitio_id, cliente_id, activo, fecha_asignacion)
-             VALUES ($1, $2, TRUE, NOW())`,
-            [id, clienteId]
-          );
-        }
       }
 
       const sitioActualizado = await fetchSitioWithClienteById(client, id);

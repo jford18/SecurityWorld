@@ -42,7 +42,7 @@ export interface SitioPayload {
   link_mapa: string;
   latitud: number;
   longitud: number;
-  clienteId?: number | null;
+  clienteId: number;
   haciendaId?: number | null;
   tipoAreaId?: number | null;
   consolaId?: number | null;
