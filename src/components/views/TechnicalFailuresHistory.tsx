@@ -52,6 +52,15 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   handleEdit,
   showActions = true,
 }) => {
+  const [filters, setFilters] = useState({
+    fechaDesde: '',
+    fechaHasta: '',
+    problema: '',
+    tipoAfectacion: '',
+    sitio: '',
+    estado: '',
+    departamento: '',
+  });
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const actionsEnabled = showActions && Boolean(handleEdit);
   const columnsCount = actionsEnabled ? 7 : 6;
@@ -122,6 +131,54 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     }
   };
 
+  const handleFilterChange = (field: keyof typeof filters, value: string) => {
+    setFilters((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const applyFilters = (items: TechnicalFailure[]) => {
+    const fechaDesdeTs = filters.fechaDesde ? new Date(filters.fechaDesde).getTime() : null;
+    const fechaHastaTs = filters.fechaHasta ? new Date(filters.fechaHasta).getTime() : null;
+
+    return items.filter((item) => {
+      const problemaTexto = getSortableTextValue(item, 'problema');
+      const tipoAfectacionTexto = getSortableTextValue(item, 'tipoAfectacion');
+      const sitioTexto = getSortableTextValue(item, 'sitioNombre');
+      const estadoTexto = getSortableTextValue(item, 'estado');
+      const departamentoTexto = getSortableTextValue(item, 'departamentoResponsable');
+
+      if (filters.problema && !problemaTexto.includes(filters.problema.toLowerCase())) {
+        return false;
+      }
+
+      if (filters.tipoAfectacion && tipoAfectacionTexto !== filters.tipoAfectacion.toLowerCase()) {
+        return false;
+      }
+
+      if (filters.sitio && !sitioTexto.includes(filters.sitio.toLowerCase())) {
+        return false;
+      }
+
+      if (filters.estado && !estadoTexto.includes(filters.estado.toLowerCase())) {
+        return false;
+      }
+
+      if (filters.departamento && !departamentoTexto.includes(filters.departamento.toLowerCase())) {
+        return false;
+      }
+
+      const falloTimestamp = getFechaFalloTimestamp(item);
+      if (fechaDesdeTs && (falloTimestamp === 0 || falloTimestamp < fechaDesdeTs)) {
+        return false;
+      }
+
+      if (fechaHastaTs && (falloTimestamp === 0 || falloTimestamp > fechaHastaTs)) {
+        return false;
+      }
+
+      return true;
+    });
+  };
+
   const applySort = (
     items: TechnicalFailure[],
     config: { key: string; direction: 'asc' | 'desc' } | null,
@@ -156,9 +213,39 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   };
 
   const sortedFailures = useMemo(
-    () => applySort(failures, sortConfig),
-    [failures, sortConfig],
+    () => applySort(applyFilters(failures), sortConfig),
+    [failures, sortConfig, filters],
   );
+
+  const tipoAfectacionOptions = useMemo(() => {
+    const values = new Set<string>();
+    failures.forEach((item) => {
+      const text = getSortableTextValue(item, 'tipoAfectacion');
+      if (text) values.add(text);
+    });
+    return Array.from(values).sort();
+  }, [failures]);
+
+  const departamentoOptions = useMemo(() => {
+    const values = new Set<string>();
+    failures.forEach((item) => {
+      const text = getSortableTextValue(item, 'departamentoResponsable');
+      if (text) values.add(text);
+    });
+    return Array.from(values).sort();
+  }, [failures]);
+
+  const handleClearFilters = () => {
+    setFilters({
+      fechaDesde: '',
+      fechaHasta: '',
+      problema: '',
+      tipoAfectacion: '',
+      sitio: '',
+      estado: '',
+      departamento: '',
+    });
+  };
 
   const renderSortIndicator = (key: string) => {
     if (!sortConfig || sortConfig.key !== key) return null;
@@ -169,7 +256,16 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
       <div className="flex items-center justify-between mb-4">
         <h4 className="text-[#1C2E4A] text-lg font-semibold">Historial de Fallos Recientes</h4>
-        {isLoading && <span className="text-sm text-gray-500">Cargando información...</span>}
+        <div className="flex items-center gap-3">
+          {isLoading && <span className="text-sm text-gray-500">Cargando información...</span>}
+          <button
+            type="button"
+            onClick={handleClearFilters}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Limpiar filtros
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto relative">
         <table className="min-w-full divide-y divide-gray-200">
@@ -220,9 +316,87 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                 </th>
               )}
             </tr>
+            <tr>
+              <th className="px-6 py-2">
+                <div className="flex flex-col gap-1 text-xs text-gray-700">
+                  <input
+                    type="date"
+                    value={filters.fechaDesde}
+                    onChange={(e) => handleFilterChange('fechaDesde', e.target.value)}
+                    className="border rounded px-2 py-1 text-sm"
+                    placeholder="Desde"
+                  />
+                  <input
+                    type="date"
+                    value={filters.fechaHasta}
+                    onChange={(e) => handleFilterChange('fechaHasta', e.target.value)}
+                    className="border rounded px-2 py-1 text-sm"
+                    placeholder="Hasta"
+                  />
+                </div>
+              </th>
+              <th className="px-6 py-2">
+                <input
+                  type="text"
+                  value={filters.problema}
+                  onChange={(e) => handleFilterChange('problema', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                  placeholder="Filtrar problema"
+                />
+              </th>
+              <th className="px-6 py-2">
+                <select
+                  value={filters.tipoAfectacion}
+                  onChange={(e) => handleFilterChange('tipoAfectacion', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                >
+                  <option value="">Todos</option>
+                  {tipoAfectacionOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </th>
+              <th className="px-6 py-2">
+                <input
+                  type="text"
+                  value={filters.sitio}
+                  onChange={(e) => handleFilterChange('sitio', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                  placeholder="Filtrar sitio"
+                />
+              </th>
+              <th className="px-6 py-2">
+                <select
+                  value={filters.estado}
+                  onChange={(e) => handleFilterChange('estado', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                >
+                  <option value="">Todos</option>
+                  <option value="resuelto">Resuelto</option>
+                  <option value="pendiente">Pendiente</option>
+                </select>
+              </th>
+              <th className="px-6 py-2">
+                <select
+                  value={filters.departamento}
+                  onChange={(e) => handleFilterChange('departamento', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                >
+                  <option value="">Todos</option>
+                  {departamentoOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </th>
+              {actionsEnabled && <th className="px-6 py-2" />}
+            </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {failures.length === 0 ? (
+            {sortedFailures.length === 0 ? (
               <tr>
                 <td colSpan={columnsCount} className="px-6 py-4 text-center text-sm text-gray-500">
                   {isLoading ? 'Cargando fallos técnicos...' : 'No hay registros disponibles.'}
