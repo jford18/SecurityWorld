@@ -7,48 +7,6 @@ import * as allIcons from 'lucide-react';
 
 const iconMap = allIcons as unknown as Record<string, React.ComponentType<any>>;
 
-const CLIENTES_ROUTE = '/administracion/clientes';
-const TIPO_AREA_ROUTE = '/administracion/tipo-area';
-
-const CLIENTES_MENU_ENTRY: MenuNode = {
-  id: -1000,
-  nombre: 'Clientes',
-  icono: 'Users',
-  ruta: CLIENTES_ROUTE,
-  seccion: 'MANTENIMIENTO',
-  orden: 999,
-  hijos: [],
-};
-
-const TIPO_AREA_MENU_ENTRY: MenuNode = {
-  id: -1001,
-  nombre: 'Tipo Área',
-  icono: 'Layers',
-  ruta: TIPO_AREA_ROUTE,
-  seccion: 'MANTENIMIENTO',
-  orden: 1000,
-  hijos: [],
-};
-
-
-const hasRoute = (items: MenuNode[], targetRoute: string): boolean => {
-  for (const item of items) {
-    const rawRoute = typeof item.ruta === 'string' ? item.ruta.trim() : '';
-    const normalizedRoute = rawRoute
-      ? (rawRoute.startsWith('/') ? rawRoute : `/${rawRoute}`).replace(/\/+$/, '') || '/'
-      : null;
-
-    if (normalizedRoute === targetRoute) {
-      return true;
-    }
-
-    if (item.hijos?.length && hasRoute(item.hijos, targetRoute)) {
-      return true;
-    }
-  }
-  return false;
-};
-
 interface DynamicIconProps extends allIcons.LucideProps {
   name: string;
 }
@@ -150,19 +108,7 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ menus }) => {
   const location = useLocation();
   const currentPath = location.pathname.replace(/\/+$/, '') || '/';
 
-  const effectiveMenus = useMemo(() => {
-    let baseMenus = menus.length > 0 ? menus : [];
-
-    if (!hasRoute(baseMenus, CLIENTES_ROUTE)) {
-      baseMenus = [...baseMenus, CLIENTES_MENU_ENTRY];
-    }
-
-    if (!hasRoute(baseMenus, TIPO_AREA_ROUTE)) {
-      baseMenus = [...baseMenus, TIPO_AREA_MENU_ENTRY];
-    }
-
-    return baseMenus;
-  }, [menus]);
+  const effectiveMenus = useMemo(() => (menus.length > 0 ? menus : []), [menus]);
 
   const activeAncestors = useMemo(
     () => findAncestorChainByRoute(effectiveMenus, currentPath),
@@ -192,7 +138,9 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ menus }) => {
   };
 
   const groupedAndSortedMenus = useMemo(() => {
-    const topLevelMenus = effectiveMenus.filter(item => !effectiveMenus.some(parent => parent.hijos.some(child => child.id === item.id)));
+    const topLevelMenus = effectiveMenus.filter(
+      (item) => !effectiveMenus.some((parent) => parent.hijos.some((child) => child.id === item.id))
+    );
     const grouped = groupBy(topLevelMenus, 'seccion');
     const sortedSections = Object.entries(grouped).map(([seccion, items]) => ({
       seccion,

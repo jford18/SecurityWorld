@@ -9,8 +9,10 @@ export const getMenusByRole = async (roleId) => {
     SELECT m.id, m.nombre, m.icono, m.ruta, m.seccion, m.orden
     FROM public.menus m
     INNER JOIN public.rol_menu rm ON rm.menu_id = m.id
-    WHERE rm.rol_id = $1 AND rm.activo = true
-    ORDER BY m.seccion, m.orden;
+    WHERE rm.rol_id = $1
+      AND rm.activo = TRUE
+      AND m.activo = TRUE
+    ORDER BY COALESCE(m.seccion, ''), m.orden, m.id;
   `;
 
   const { rows } = await pool.query(query, [roleId]);
