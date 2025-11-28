@@ -24,7 +24,7 @@ const SITIO_WITH_CLIENT_BASE_QUERY = `
   FROM public.sitios S
   LEFT JOIN public.clientes C ON C.id = S.cliente_id
   LEFT JOIN hacienda H ON H.id = S.hacienda_id
-  LEFT JOIN tipo_area TA ON TA.id = S.tipo_area_id
+  LEFT JOIN public.tipo_area TA ON TA.id = S.tipo_area_id
   LEFT JOIN consolas CO ON CO.id = S.consola_id
 `;
 

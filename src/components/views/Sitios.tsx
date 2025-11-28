@@ -1001,14 +1001,13 @@ const Sitios: React.FC = () => {
     [],
   );
 
-  const tipoAreaDisplayName = useCallback(
-    (sitio: Sitio | null) =>
-      formatRelationLabel(
-        getSitioTipoAreaDescripcion(sitio) ?? getSitioTipoAreaNombre(sitio),
-        'Sin tipo de área',
-      ),
-    [],
-  );
+  const tipoAreaDisplayName = useCallback((sitio: Sitio | null) => {
+    const nombre = getSitioTipoAreaNombre(sitio);
+    const descripcion = getSitioTipoAreaDescripcion(sitio);
+    const labelSource = descripcion && descripcion.trim() ? descripcion : nombre;
+
+    return formatRelationLabel(labelSource, 'Sin tipo de área');
+  }, []);
 
   const consolaDisplayName = useCallback(
     (sitio: Sitio | null) => formatRelationLabel(getSitioConsolaNombre(sitio), 'Sin consola'),
