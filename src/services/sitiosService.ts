@@ -39,9 +39,9 @@ export interface SitioPayload {
   servidor?: string | null;
   ubicacion?: string | null;
   activo?: boolean;
-  link_mapa: string;
-  latitud: number;
-  longitud: number;
+  link_mapa?: string | null;
+  latitud?: number | null;
+  longitud?: number | null;
   clienteId: number;
   haciendaId?: number | null;
   tipoAreaId?: number | null;

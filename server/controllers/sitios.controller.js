@@ -168,8 +168,9 @@ const normalizeSitioPayload = (body) => {
   const ubicacion =
     typeof body.ubicacion === "string" ? body.ubicacion.trim() : null;
   const servidor = typeof body.servidor === "string" ? body.servidor.trim() : null;
-  const link_mapa =
-    typeof body.link_mapa === "string" ? body.link_mapa.trim() : "";
+  const rawLinkMapa =
+    typeof body.link_mapa === "string" ? body.link_mapa.trim() : null;
+  const link_mapa = rawLinkMapa && rawLinkMapa.length > 0 ? rawLinkMapa : null;
   const activoRaw = body.activo;
 
   const activo =
@@ -289,15 +290,14 @@ export const createSitio = async (req, res) => {
         req.body ?? {}
       );
 
+    const hasLinkData = Boolean(link_mapa);
+    const hasCoordinates = latitud !== null && longitud !== null;
+
     if (!nombre) {
       return res.status(422).json({ message: "El nombre es obligatorio" });
     }
 
-    if (!link_mapa) {
-      return res.status(422).json({ message: "El link de Google Maps es obligatorio" });
-    }
-
-    if (latitud === null || longitud === null) {
+    if (hasLinkData && !hasCoordinates) {
       return res.status(422).json({ message: "El enlace proporcionado no contiene coordenadas válidas" });
     }
 
@@ -388,15 +388,14 @@ export const updateSitio = async (req, res) => {
         req.body ?? {}
       );
 
+    const hasLinkData = Boolean(link_mapa);
+    const hasCoordinates = latitud !== null && longitud !== null;
+
     if (!nombre) {
       return res.status(422).json({ message: "El nombre es obligatorio" });
     }
 
-    if (!link_mapa) {
-      return res.status(422).json({ message: "El link de Google Maps es obligatorio" });
-    }
-
-    if (latitud === null || longitud === null) {
+    if (hasLinkData && !hasCoordinates) {
       return res.status(422).json({ message: "El enlace proporcionado no contiene coordenadas válidas" });
     }
 
