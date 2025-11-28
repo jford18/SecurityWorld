@@ -222,7 +222,6 @@ export const getSitios = async (req, res) => {
 
     const filters = [];
     const values = [];
-    const joins = [];
     let hasActiveFilter = false;
 
     const ensureActiveFilter = () => {
@@ -233,9 +232,8 @@ export const getSitios = async (req, res) => {
     };
 
     if (consoleId !== null) {
-      joins.push("INNER JOIN sitios_consolas SC ON SC.sitio_id = S.id");
       values.push(consoleId);
-      filters.push(`SC.consola_id = $${values.length}`);
+      filters.push(`S.consola_id = $${values.length}`);
       ensureActiveFilter();
     }
 
@@ -254,13 +252,6 @@ export const getSitios = async (req, res) => {
     }
 
     let query = SITIO_WITH_CLIENT_BASE_QUERY;
-
-    if (joins.length > 0) {
-      query = query.replace(
-        "FROM public.sitios S",
-        `FROM public.sitios S ${joins.join(" ")}`
-      );
-    }
 
     if (filters.length > 0) {
       query += ` WHERE ${filters.join(" AND ")}`;
