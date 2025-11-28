@@ -61,6 +61,7 @@ const MenuScreen: React.FC = () => {
   const [selectedMenu, setSelectedMenu] = useState<MenuItem | null>(null);
   const [formState, setFormState] = useState<MenuFormState>(emptyForm);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   const loadMenus = async () => {
@@ -76,7 +77,6 @@ const MenuScreen: React.FC = () => {
       console.error('Error al cargar menús:', error);
       const message = resolveErrorMessage(error);
       setFetchError(message);
-      alert(message);
     } finally {
       setLoading(false);
     }
@@ -104,6 +104,7 @@ const MenuScreen: React.FC = () => {
     setSelectedMenu(null);
     setFormState(emptyForm);
     setFormErrors({});
+    setFormError('');
     setIsModalOpen(true);
   };
 
@@ -119,6 +120,7 @@ const MenuScreen: React.FC = () => {
       activo: menu.activo,
     });
     setFormErrors({});
+    setFormError('');
     setIsModalOpen(true);
   };
 
@@ -203,7 +205,7 @@ const MenuScreen: React.FC = () => {
       closeModal();
     } catch (error) {
       console.error('Error al guardar menú:', error);
-      alert(resolveErrorMessage(error));
+      setFormError(resolveErrorMessage(error));
     }
   };
 
@@ -219,7 +221,7 @@ const MenuScreen: React.FC = () => {
       await loadMenus();
     } catch (error) {
       console.error('Error al desactivar menú:', error);
-      alert(resolveErrorMessage(error));
+      setFetchError(resolveErrorMessage(error));
     }
   };
 
@@ -436,6 +438,7 @@ const MenuScreen: React.FC = () => {
             </div>
 
             <div className="mt-6 flex justify-end space-x-3">
+              {formError && <p className="text-sm text-red-600 mr-auto">{formError}</p>}
               <button type="button" className={secondaryButtonClasses} onClick={closeModal}>
                 Cancelar
               </button>
