@@ -24,6 +24,7 @@ import rolesRoutes from "./roles.routes.js";
 import usuariosRoutes from "./routes/usuarios.routes.js";
 import usuarioRolesRoutes from "./routes/usuarioRoles.routes.js";
 import rolMenuRoutes from "./routes/rolMenu.js";
+import menuRoutes from "./routes/menu.routes.js";
 import proveedoresRoutes from "./routes/proveedores.routes.js";
 import sitiosRoutes from "./routes/sitios.routes.js";
 import haciendasRoutes from "./routes/haciendas.routes.js";
@@ -102,6 +103,7 @@ app.use((req, _res, next) => {
 app.use("/api/login", authRoutes);
 app.use("/api/consolas", consolasRoutes);
 app.use("/api", menusRoutes);
+app.use("/api/menus", menuRoutes);
 app.use("/api/nodos", nodosRoutes);
 app.use("/api/conclusion-evento", conclusionEventoRoutes);
 app.use("/api/fuerza-reaccion", fuerzaReaccionRoutes);

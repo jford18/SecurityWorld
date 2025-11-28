@@ -95,6 +95,17 @@ export type MenuPayload = {
   activo?: boolean;
 };
 
+export const getMenusForManagement = async () => {
+  try {
+    const { data } = await api.get('/menus', {
+      headers: buildRequestHeaders(),
+    });
+    return data;
+  } catch (error) {
+    throw resolveRequestError(error);
+  }
+};
+
 export const getMenus = async (options: GetMenusOptions = {}) => {
   const { roleId = null, userId = null } = options;
   const resolvedUserId = parseNumber(userId) ?? getStoredUserId();
@@ -112,6 +123,17 @@ export const getMenus = async (options: GetMenusOptions = {}) => {
   try {
     const { data } = await api.get('/menus', {
       params: Object.keys(params).length ? params : undefined,
+      headers: buildRequestHeaders(),
+    });
+    return data;
+  } catch (error) {
+    throw resolveRequestError(error);
+  }
+};
+
+export const getMenuById = async (id: number) => {
+  try {
+    const { data } = await api.get(`/menus/${id}`, {
       headers: buildRequestHeaders(),
     });
     return data;
