@@ -746,7 +746,7 @@ const Intrusions: React.FC = () => {
                   label="Fecha y hora del evento"
                   value={formData.fecha_evento}
                   onChange={handleFechaEventoChange}
-                  timeIntervalMinutes={1}
+                  timeIntervalMinutes={1} /* Intervalo de minutos a 1 para Intrusiones */
                   required
                 />
                 <FechaHoraFalloPicker
@@ -755,6 +755,7 @@ const Intrusions: React.FC = () => {
                   label="Fecha hora reacción"
                   value={formData.fecha_reaccion}
                   onChange={handleFechaReaccionChange}
+                  timeIntervalMinutes={1} /* Intervalo de minutos a 1 para Intrusiones */
                   error={fechaReaccionError}
                 />
                 <div>
