@@ -27,13 +27,15 @@ const dangerButtonClasses = `${baseButtonClasses} bg-red-600 text-white hover:bg
 
 const initialCreateState: UsuarioPayload = {
   nombre_usuario: '',
-  contrasena_plana: '',
+  contrasena: '',
   nombre_completo: '',
 };
 
 const initialUpdateState: UsuarioUpdatePayload = {
+  nombre_usuario: '',
   nombre_completo: '',
   activo: true,
+  contrasena: '',
 };
 
 const statusItems = [
@@ -121,8 +123,10 @@ const UsuariosScreen: React.FC = () => {
     setModalMode('edit');
     setSelectedUsuario(usuario);
     setUpdateForm({
+      nombre_usuario: usuario.nombre_usuario,
       nombre_completo: usuario.nombre_completo ?? '',
       activo: usuario.activo,
+      contrasena: '',
     });
     setErrorMessage('');
     setSuccessMessage('');
@@ -144,7 +148,7 @@ const UsuariosScreen: React.FC = () => {
 
   const handleCreate = async () => {
     const trimmedUsername = createForm.nombre_usuario.trim();
-    const trimmedPassword = createForm.contrasena_plana.trim();
+    const trimmedPassword = createForm.contrasena.trim();
 
     if (!trimmedUsername || !trimmedPassword) {
       setErrorMessage('Nombre de usuario y contraseña son obligatorios');
@@ -154,7 +158,7 @@ const UsuariosScreen: React.FC = () => {
     try {
       await createUsuario({
         nombre_usuario: trimmedUsername,
-        contrasena_plana: trimmedPassword,
+        contrasena: trimmedPassword,
         nombre_completo: createForm.nombre_completo?.trim() || undefined,
       });
       setSuccessMessage('Usuario creado correctamente');
@@ -171,17 +175,32 @@ const UsuariosScreen: React.FC = () => {
       return;
     }
 
+    const trimmedUsername = updateForm.nombre_usuario.trim();
     const trimmedName = updateForm.nombre_completo?.trim() ?? '';
-    if (typeof updateForm.activo !== 'boolean' || trimmedName.length === 0 && updateForm.nombre_completo !== '') {
-      setErrorMessage('Debes indicar un nombre completo (puede quedar vacío) y estado válido');
+
+    if (!trimmedUsername) {
+      setErrorMessage('El nombre de usuario es obligatorio');
+      return;
+    }
+
+    if (typeof updateForm.activo !== 'boolean') {
+      setErrorMessage('Debes indicar un estado válido');
       return;
     }
 
     try {
-      await updateUsuario(selectedUsuario.id, {
+      const payload: UsuarioUpdatePayload = {
+        nombre_usuario: trimmedUsername,
         nombre_completo: trimmedName,
         activo: Boolean(updateForm.activo),
-      });
+      };
+
+      const trimmedPassword = updateForm.contrasena?.trim();
+      if (trimmedPassword) {
+        payload.contrasena = trimmedPassword;
+      }
+
+      await updateUsuario(selectedUsuario.id, payload);
       setSuccessMessage('Usuario actualizado correctamente');
       closeModal();
       fetchUsuarios();
@@ -313,14 +332,14 @@ const UsuariosScreen: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700" htmlFor="contrasena_plana">
+            <label className="block text-sm font-medium text-gray-700" htmlFor="contrasena">
               Contraseña
             </label>
             <input
-              id="contrasena_plana"
+              id="contrasena"
               type="password"
-              value={createForm.contrasena_plana}
-              onChange={(event) => handleCreateChange('contrasena_plana', event.target.value)}
+              value={createForm.contrasena}
+              onChange={(event) => handleCreateChange('contrasena', event.target.value)}
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
             />
           </div>
@@ -342,6 +361,18 @@ const UsuariosScreen: React.FC = () => {
       {isModalOpen && modalMode === 'edit' && selectedUsuario && (
         <Modal title="Editar Usuario" onClose={closeModal} onSubmit={handleUpdate} submitLabel="Guardar cambios">
           <div>
+            <label className="block text-sm font-medium text-gray-700" htmlFor="edit_nombre_usuario">
+              Nombre de usuario
+            </label>
+            <input
+              id="edit_nombre_usuario"
+              type="text"
+              value={updateForm.nombre_usuario}
+              onChange={(event) => handleUpdateChange('nombre_usuario', event.target.value)}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+            />
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700" htmlFor="edit_nombre_completo">
               Nombre completo
             </label>
@@ -350,6 +381,19 @@ const UsuariosScreen: React.FC = () => {
               type="text"
               value={updateForm.nombre_completo}
               onChange={(event) => handleUpdateChange('nombre_completo', event.target.value)}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700" htmlFor="edit_contrasena">
+              Contraseña (opcional)
+            </label>
+            <input
+              id="edit_contrasena"
+              type="password"
+              value={updateForm.contrasena ?? ''}
+              onChange={(event) => handleUpdateChange('contrasena', event.target.value)}
+              placeholder="Deja en blanco para mantener la actual"
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
             />
           </div>
