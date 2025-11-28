@@ -5,13 +5,15 @@ const DEFAULT_ERROR_MESSAGE = 'Error al comunicarse con el servidor';
 
 export type UsuarioPayload = {
   nombre_usuario: string;
-  contrasena_plana: string;
+  contrasena: string;
   nombre_completo?: string;
 };
 
 export type UsuarioUpdatePayload = {
+  nombre_usuario: string;
   nombre_completo: string;
   activo: boolean;
+  contrasena?: string;
 };
 
 type ApiEnvelope<T> = T | { data: T };

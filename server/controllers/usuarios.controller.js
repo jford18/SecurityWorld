@@ -1,4 +1,3 @@
-import bcrypt from "bcrypt";
 import pool from "../db.js";
 
 // NEW: Controlador para obtener la lista de usuarios.
@@ -15,28 +14,27 @@ export const getUsuarios = async (_req, res) => {
   }
 };
 
-// NEW: Controlador para crear un usuario con validaciones y hash de contraseña.
+// NEW: Controlador para crear un usuario sin hashing de contraseña.
 export const createUsuario = async (req, res) => {
-  const { nombre_usuario, contrasena_plana, nombre_completo } = req.body ?? {};
+  const { nombre_usuario, contrasena, nombre_completo } = req.body ?? {};
 
-  if (!nombre_usuario || !contrasena_plana) {
-    // FIX: Validación estricta para evitar registros con datos incompletos.
-    return res.status(422).json({ message: "Validación fallida" });
+  const trimmedUsername = nombre_usuario?.trim();
+  const trimmedPassword = contrasena?.trim();
+
+  if (!trimmedUsername || !trimmedPassword) {
+    return res.status(400).json({ message: "Nombre de usuario y contraseña son obligatorios" });
   }
 
   try {
-    const hashedPassword = await bcrypt.hash(contrasena_plana, 10);
-
     const insertQuery =
-      "INSERT INTO usuarios (nombre_usuario, hash_contrasena, nombre_completo) VALUES ($1, $2, $3) RETURNING id, nombre_usuario, nombre_completo, activo, fecha_creacion";
-    const values = [nombre_usuario, hashedPassword, nombre_completo ?? null];
+      "INSERT INTO usuarios (nombre_usuario, hash_contrasena, nombre_completo, activo) VALUES ($1, $2, $3, $4) RETURNING id, nombre_usuario, nombre_completo, activo, fecha_creacion";
+    const values = [trimmedUsername, trimmedPassword, nombre_completo?.trim() || null, true];
 
     const { rows } = await pool.query(insertQuery, values);
 
-    return res.status(201).json({ message: "Usuario creado", data: rows[0] });
+    return res.status(201).json(rows[0]);
   } catch (error) {
     if (error?.code === "23505") {
-      // FIX: Manejo específico para duplicados según la restricción UNIQUE.
       return res.status(409).json({ message: "Usuario ya existe" });
     }
 
@@ -45,31 +43,40 @@ export const createUsuario = async (req, res) => {
   }
 };
 
-// NEW: Controlador para actualizar el nombre y estado de un usuario existente.
+// NEW: Controlador para actualizar datos de usuario sin alterar el login.
 export const updateUsuario = async (req, res) => {
   const { id } = req.params;
-  let { nombre_completo, activo } = req.body ?? {};
+  let { nombre_usuario, nombre_completo, activo, contrasena } = req.body ?? {};
 
-  if (typeof nombre_completo === "undefined" || typeof activo === "undefined") {
-    // FIX: Validamos que ambos campos se proporcionen para evitar actualizaciones parciales inesperadas.
-    return res.status(422).json({ message: "Validación fallida" });
+  const trimmedUsername = nombre_usuario?.trim();
+  const trimmedPassword = contrasena?.trim();
+
+  if (!trimmedUsername || typeof activo === "undefined") {
+    return res
+      .status(400)
+      .json({ message: "Nombre de usuario y estado activo son obligatorios" });
   }
 
   if (typeof activo !== "boolean") {
-    // FIX: Convertimos valores string "true"/"false" a booleanos reales para evitar errores de tipos.
     if (activo === "true") {
       activo = true;
     } else if (activo === "false") {
       activo = false;
     } else {
-      return res.status(422).json({ message: "Validación fallida" });
+      return res.status(400).json({ message: "El estado activo debe ser booleano" });
     }
   }
 
   try {
     const updateQuery =
-      "UPDATE usuarios SET nombre_completo = $1, activo = $2 WHERE id = $3 RETURNING id, nombre_usuario, nombre_completo, activo, fecha_creacion";
-    const values = [nombre_completo ?? null, activo, id];
+      "UPDATE usuarios SET nombre_usuario = $1, nombre_completo = $2, activo = $3, hash_contrasena = COALESCE($4, hash_contrasena) WHERE id = $5 RETURNING id, nombre_usuario, nombre_completo, activo, fecha_creacion";
+    const values = [
+      trimmedUsername,
+      nombre_completo?.trim() || null,
+      Boolean(activo),
+      trimmedPassword ? trimmedPassword : null,
+      id,
+    ];
 
     const { rows } = await pool.query(updateQuery, values);
 
@@ -77,8 +84,12 @@ export const updateUsuario = async (req, res) => {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
-    return res.json({ message: "Usuario actualizado", data: rows[0] });
+    return res.json(rows[0]);
   } catch (error) {
+    if (error?.code === "23505") {
+      return res.status(409).json({ message: "Usuario ya existe" });
+    }
+
     console.error("Error al actualizar usuario", error); // FIX: Log detallado para soporte.
     return res.status(500).json({ message: "Error interno del servidor" });
   }
