@@ -855,14 +855,15 @@ const Intrusions: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-4">
-                  <FechaHoraFalloPicker
-                    id="fecha_reaccion_fuera"
-                    name="fecha_reaccion_fuera"
-                    label="FECHA Y HORA DE LLEGADA FUERZA DE REACCION"
-                    value={formData.fecha_reaccion_fuera}
-                    onChange={handleFechaReaccionFueraChange}
-                    error={fechaReaccionFueraError}
-                  />
+                    <FechaHoraFalloPicker
+                      id="fecha_reaccion_fuera"
+                      name="fecha_reaccion_fuera"
+                      label="FECHA Y HORA DE LLEGADA FUERZA DE REACCION"
+                      value={formData.fecha_reaccion_fuera}
+                      onChange={handleFechaReaccionFueraChange}
+                      timeIntervalMinutes={1}
+                      error={fechaReaccionFueraError}
+                    />
                     <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
