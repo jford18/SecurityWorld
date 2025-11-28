@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { TechnicalFailure } from '../../types';
 import { calcularEstado } from './TechnicalFailuresUtils';
 
@@ -52,8 +52,118 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   handleEdit,
   showActions = true,
 }) => {
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const actionsEnabled = showActions && Boolean(handleEdit);
   const columnsCount = actionsEnabled ? 7 : 6;
+
+  const getFechaFalloTimestamp = (failure: TechnicalFailure) => {
+    const horaFallo = failure.hora ?? failure.horaFallo;
+
+    if (failure.fecha && horaFallo) {
+      const timestamp = new Date(`${failure.fecha}T${horaFallo}`).getTime();
+      if (!Number.isNaN(timestamp)) return timestamp;
+    }
+
+    if (failure.fecha) {
+      const timestamp = new Date(failure.fecha).getTime();
+      if (!Number.isNaN(timestamp)) return timestamp;
+    }
+
+    const dateTimeCandidate = failure.fechaHoraFallo;
+    if (dateTimeCandidate) {
+      const normalized = dateTimeCandidate.includes('T')
+        ? dateTimeCandidate
+        : dateTimeCandidate.replace(' ', 'T');
+      const timestamp = new Date(normalized).getTime();
+      if (!Number.isNaN(timestamp)) return timestamp;
+    }
+
+    return 0;
+  };
+
+  const getSortableTextValue = (failure: TechnicalFailure, key: string) => {
+    switch (key) {
+      case 'problema':
+        return (
+          failure.tipoProblemaNombre
+            || failure.tipoProblema
+            || failure.descripcion_fallo
+            || ''
+        )
+          .toString()
+          .toLowerCase();
+      case 'tipoAfectacion': {
+        const tipoAfectacion = failure.tipoAfectacion || failure.tipo_afectacion;
+        const equipo = failure.equipoAfectado || failure.equipo_afectado;
+        const value =
+          tipoAfectacion === 'EQUIPO' && equipo
+            ? `EQUIPO-${equipo}`
+            : tipoAfectacion || '';
+        return value.toString().toLowerCase();
+      }
+      case 'sitioNombre':
+        return (failure.sitioNombre || failure.sitio_nombre || '')
+          .toString()
+          .toLowerCase();
+      case 'estado': {
+        const estado = calcularEstado(failure);
+        return estado.texto.toLowerCase();
+      }
+      case 'departamentoResponsable':
+        return (
+          failure.departamentoNombre
+            || failure.deptResponsable
+            || ''
+        )
+          .toString()
+          .toLowerCase();
+      default:
+        return '';
+    }
+  };
+
+  const applySort = (
+    items: TechnicalFailure[],
+    config: { key: string; direction: 'asc' | 'desc' } | null,
+  ) => {
+    if (!config) return items;
+
+    const sorted = [...items].sort((a, b) => {
+      const directionMultiplier = config.direction === 'asc' ? 1 : -1;
+
+      if (config.key === 'fechaFallo') {
+        const aTime = getFechaFalloTimestamp(a);
+        const bTime = getFechaFalloTimestamp(b);
+        if (aTime === bTime) return 0;
+        return aTime > bTime ? directionMultiplier : -directionMultiplier;
+      }
+
+      const aValue = getSortableTextValue(a, config.key);
+      const bValue = getSortableTextValue(b, config.key);
+      return aValue.localeCompare(bValue) * directionMultiplier;
+    });
+
+    return sorted;
+  };
+
+  const handleSort = (key: string) => {
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== key) {
+        return { key, direction: 'asc' };
+      }
+      return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+    });
+  };
+
+  const sortedFailures = useMemo(
+    () => applySort(failures, sortConfig),
+    [failures, sortConfig],
+  );
+
+  const renderSortIndicator = (key: string) => {
+    if (!sortConfig || sortConfig.key !== key) return null;
+    return sortConfig.direction === 'asc' ? ' ▲' : ' ▼';
+  };
 
   return (
     <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
@@ -65,23 +175,41 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Fecha y Hora de Fallo
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => handleSort('fechaFallo')}
+              >
+                Fecha y Hora de Fallo{renderSortIndicator('fechaFallo')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Problema
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => handleSort('problema')}
+              >
+                Problema{renderSortIndicator('problema')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Tipo de Afectación
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => handleSort('tipoAfectacion')}
+              >
+                Tipo de Afectación{renderSortIndicator('tipoAfectacion')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Sitio
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => handleSort('sitioNombre')}
+              >
+                Sitio{renderSortIndicator('sitioNombre')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Estado
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => handleSort('estado')}
+              >
+                Estado{renderSortIndicator('estado')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Departamento Responsable
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => handleSort('departamentoResponsable')}
+              >
+                Departamento Responsable{renderSortIndicator('departamentoResponsable')}
               </th>
               {actionsEnabled && (
                 <th
@@ -101,7 +229,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                 </td>
               </tr>
             ) : (
-              failures.map((fallo) => (
+              sortedFailures.map((fallo) => (
                 <tr key={fallo.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatFechaHoraFallo(fallo) || 'Sin información'}
