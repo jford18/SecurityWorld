@@ -17,15 +17,9 @@ import {
   getAll as getAllConclusionesEvento,
 } from '../../services/conclusionEventoService';
 import { Sitio, getSitios } from '../../services/sitiosService';
+import { resolveConsolaIdByName } from '../../services/consolasService';
 import { useSession } from '../context/SessionContext';
 import { getAll as getFuerzasReaccion } from '../../services/fuerzaReaccion.service';
-
-const normalizeConsoleName = (value: string | null | undefined): string => {
-  if (!value) {
-    return '';
-  }
-  return value.trim().toLowerCase();
-};
 
 const toBoolean = (value: unknown, defaultValue = false): boolean => {
   if (typeof value === 'boolean') {
@@ -228,7 +222,7 @@ const Intrusions: React.FC = () => {
     let isMounted = true;
 
     const fetchSitiosPorConsola = async () => {
-      const consoleName = session.console;
+      const consoleName = session.console ?? localStorage.getItem('selectedConsole');
       if (!consoleName) {
         if (isMounted) {
           setSitios([]);
@@ -238,25 +232,29 @@ const Intrusions: React.FC = () => {
       }
 
       try {
-        const data = await getSitios();
+        const consolaId = await resolveConsolaIdByName(consoleName);
+
+        if (!isMounted) return;
+
+        if (consolaId === null) {
+          setSitios([]);
+          setFormData((prev) => (prev.sitioId ? { ...prev, sitioId: '' } : prev));
+          return;
+        }
+
+        const data = await getSitios({ consolaId });
         if (!isMounted) return;
 
         const lista = Array.isArray(data)
           ? data
           : ((data as { data?: Sitio[] } | null | undefined)?.data ?? []);
-        const normalizedConsole = normalizeConsoleName(consoleName);
-        const filtered = lista.filter((sitio) => {
-          const consolaNombre =
-            sitio?.consolaNombre ?? sitio?.consola_nombre ?? null;
-          return normalizeConsoleName(consolaNombre) === normalizedConsole;
-        });
 
-        setSitios(filtered);
+        setSitios(lista);
         setFormData((prev) => {
           if (!prev.sitioId) {
             return prev;
           }
-          const exists = filtered.some((sitio) => String(sitio.id) === prev.sitioId);
+          const exists = lista.some((sitio) => String(sitio.id) === prev.sitioId);
           return exists ? prev : { ...prev, sitioId: '' };
         });
       } catch (err) {

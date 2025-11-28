@@ -48,15 +48,17 @@ export interface SitioPayload {
   consolaId?: number | null;
 }
 
-export interface GetSitiosParams extends Record<string, string | number | boolean | number[] | undefined> {
+export interface GetSitiosParams
+  extends Record<string, string | number | boolean | number[] | undefined | null> {
   soloDisponibles?: boolean;
   sitioActualId?: number | number[];
+  consolaId?: number | null;
 }
 
 export const getSitios = async (params?: GetSitiosParams) => {
   const normalizedParams = params
     ? Object.entries(params).reduce<Record<string, string | number | boolean>>((acc, [key, value]) => {
-        if (value === undefined) {
+        if (value === undefined || value === null) {
           return acc;
         }
 

@@ -27,6 +27,8 @@ export interface Consola {
   fecha_creacion: string;
 }
 
+let cachedConsolas: Consola[] | null = null;
+
 const getAll = async (): Promise<Consola[]> => {
   const { data } = await apiClient.get(ENDPOINT);
   const payload = data;
@@ -37,14 +39,48 @@ const getAll = async (): Promise<Consola[]> => {
     throw new Error('Formato de respuesta inválido al obtener consolas');
   }
 
-  return rawData.map((item: any) => ({
+  const parsed = rawData.map((item: any) => ({
     id: item.id,
     nombre: item.nombre,
     fecha_creacion: item.fecha_creacion ?? '',
   }));
+
+  cachedConsolas = parsed;
+  return parsed;
 };
 
 export const getConsolas = getAll;
+
+const normalizeName = (value: string | null | undefined) =>
+  (value ?? '')
+    .toString()
+    .trim()
+    .toLowerCase();
+
+export const resolveConsolaIdByName = async (
+  nombre: string | null | undefined
+): Promise<number | null> => {
+  if (!nombre) {
+    return null;
+  }
+
+  const normalizedTarget = normalizeName(nombre);
+
+  if (cachedConsolas === null) {
+    try {
+      cachedConsolas = await getAll();
+    } catch (error) {
+      console.error('No se pudieron cargar las consolas para filtrado:', error);
+      cachedConsolas = [];
+    }
+  }
+
+  const match = cachedConsolas.find(
+    (consola) => normalizeName(consola.nombre) === normalizedTarget
+  );
+
+  return match?.id ?? null;
+};
 
 // NEW: Servicio para crear una consola garantizando cuerpo JSON y validaciones del backend.
 export const createConsola = async (payload: ConsolaPayload) => {

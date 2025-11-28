@@ -213,16 +213,34 @@ const normalizeSitioPayload = (body) => {
 
 export const getSitios = async (req, res) => {
   try {
-    const { soloDisponibles, sitioActualId } = req.query ?? {};
+    const { soloDisponibles, sitioActualId, consolaId, consola_id } =
+      req.query ?? {};
 
     const onlyAvailable = parseBoolean(soloDisponibles);
     const includeIds = parseSitioIds(sitioActualId);
+    const consoleId = parseNullableId(consolaId ?? consola_id);
 
     const filters = [];
     const values = [];
+    const joins = [];
+    let hasActiveFilter = false;
+
+    const ensureActiveFilter = () => {
+      if (!hasActiveFilter) {
+        filters.push("S.activo = TRUE");
+        hasActiveFilter = true;
+      }
+    };
+
+    if (consoleId !== null) {
+      joins.push("INNER JOIN sitios_consolas SC ON SC.sitio_id = S.id");
+      values.push(consoleId);
+      filters.push(`SC.consola_id = $${values.length}`);
+      ensureActiveFilter();
+    }
 
     if (onlyAvailable) {
-      filters.push("S.activo = TRUE");
+      ensureActiveFilter();
 
       if (includeIds.length > 0) {
         values.push(includeIds);
@@ -236,6 +254,13 @@ export const getSitios = async (req, res) => {
     }
 
     let query = SITIO_WITH_CLIENT_BASE_QUERY;
+
+    if (joins.length > 0) {
+      query = query.replace(
+        "FROM public.sitios S",
+        `FROM public.sitios S ${joins.join(" ")}`
+      );
+    }
 
     if (filters.length > 0) {
       query += ` WHERE ${filters.join(" AND ")}`;
