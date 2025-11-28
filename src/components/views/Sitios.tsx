@@ -373,6 +373,17 @@ const Sitios: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string>('');
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [filters, setFilters] = useState({
+    id: '',
+    nombre: '',
+    cliente: '',
+    hacienda: '',
+    tipoArea: '',
+    consola: '',
+    servidor: '',
+    activo: '',
+  });
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<ModalMode>('create');
   const [selectedSitio, setSelectedSitio] = useState<Sitio | null>(null);
@@ -741,6 +752,33 @@ const Sitios: React.FC = () => {
     setConsolaSeleccionada('');
   };
 
+  const handleSort = (columnKey: string) => {
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== columnKey) {
+        return { key: columnKey, direction: 'asc' };
+      }
+
+      return { key: columnKey, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+    });
+  };
+
+  const handleFilterChange = (field: keyof typeof filters, value: string) => {
+    setFilters((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      id: '',
+      nombre: '',
+      cliente: '',
+      hacienda: '',
+      tipoArea: '',
+      consola: '',
+      servidor: '',
+      activo: '',
+    });
+  };
+
   const handleOpenCreateModal = () => {
     resetForm();
     setModalMode('create');
@@ -956,6 +994,189 @@ const Sitios: React.FC = () => {
     }
   };
 
+  const clienteDisplayName = useCallback(
+    (sitio: Sitio | null) => formatRelationLabel(getSitioClienteNombre(sitio), 'Sin asignar'),
+    [],
+  );
+
+  const haciendaDisplayName = useCallback(
+    (sitio: Sitio | null) => formatRelationLabel(getSitioHaciendaNombre(sitio), 'Sin hacienda'),
+    [],
+  );
+
+  const tipoAreaDisplayName = useCallback(
+    (sitio: Sitio | null) =>
+      formatRelationLabel(
+        getSitioTipoAreaDescripcion(sitio) ?? getSitioTipoAreaNombre(sitio),
+        'Sin tipo de área',
+      ),
+    [],
+  );
+
+  const consolaDisplayName = useCallback(
+    (sitio: Sitio | null) => formatRelationLabel(getSitioConsolaNombre(sitio), 'Sin consola'),
+    [],
+  );
+
+  const filterSitios = useCallback(
+    (data: Sitio[]) =>
+      data.filter((sitio) => {
+        if (filters.id && !sitio.id.toString().includes(filters.id.trim())) {
+          return false;
+        }
+
+        if (filters.nombre) {
+          const nombreValue = sitio.nombre ?? '';
+          if (!nombreValue.toLowerCase().includes(filters.nombre.trim().toLowerCase())) {
+            return false;
+          }
+        }
+
+        if (filters.cliente) {
+          if (clienteDisplayName(sitio) !== filters.cliente) {
+            return false;
+          }
+        }
+
+        if (filters.hacienda) {
+          if (haciendaDisplayName(sitio) !== filters.hacienda) {
+            return false;
+          }
+        }
+
+        if (filters.tipoArea) {
+          if (tipoAreaDisplayName(sitio) !== filters.tipoArea) {
+            return false;
+          }
+        }
+
+        if (filters.consola) {
+          if (consolaDisplayName(sitio) !== filters.consola) {
+            return false;
+          }
+        }
+
+        if (filters.servidor) {
+          const servidorValue = sitio.servidor ?? '';
+          if (!servidorValue.toLowerCase().includes(filters.servidor.trim().toLowerCase())) {
+            return false;
+          }
+        }
+
+        if (filters.activo === 'true' && !sitio.activo) {
+          return false;
+        }
+
+        if (filters.activo === 'false' && sitio.activo) {
+          return false;
+        }
+
+        return true;
+      }),
+    [clienteDisplayName, consolaDisplayName, filters, haciendaDisplayName, tipoAreaDisplayName],
+  );
+
+  const getSortableValue = useCallback(
+    (sitio: Sitio, key: string): string | number | boolean | null => {
+      switch (key) {
+        case 'id':
+          return sitio.id ?? null;
+        case 'nombre':
+          return sitio.nombre ?? '';
+        case 'cliente':
+          return clienteDisplayName(sitio);
+        case 'hacienda':
+          return haciendaDisplayName(sitio);
+        case 'tipoArea':
+          return tipoAreaDisplayName(sitio);
+        case 'consola':
+          return consolaDisplayName(sitio);
+        case 'servidor':
+          return sitio.servidor ?? '';
+        case 'activo':
+          return sitio.activo;
+        default:
+          return '';
+      }
+    },
+    [clienteDisplayName, consolaDisplayName, haciendaDisplayName, tipoAreaDisplayName],
+  );
+
+  const sortSitios = useCallback(
+    (data: Sitio[]) => {
+      if (!sortConfig) {
+        return data;
+      }
+
+      const sorted = [...data].sort((a, b) => {
+        const aValue = getSortableValue(a, sortConfig.key);
+        const bValue = getSortableValue(b, sortConfig.key);
+
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+        }
+
+        if (typeof aValue === 'boolean' && typeof bValue === 'boolean') {
+          const aNumeric = aValue ? 1 : 0;
+          const bNumeric = bValue ? 1 : 0;
+          return sortConfig.direction === 'asc' ? aNumeric - bNumeric : bNumeric - aNumeric;
+        }
+
+        const aText = (aValue ?? '').toString().toLowerCase();
+        const bText = (bValue ?? '').toString().toLowerCase();
+        const comparison = aText.localeCompare(bText, 'es', { sensitivity: 'base' });
+
+        return sortConfig.direction === 'asc' ? comparison : -comparison;
+      });
+
+      return sorted;
+    },
+    [getSortableValue, sortConfig],
+  );
+
+  const filteredSitios = useMemo(() => filterSitios(sitios), [filterSitios, sitios]);
+  const sortedSitios = useMemo(() => sortSitios(filteredSitios), [filteredSitios, sortSitios]);
+
+  const uniqueClientes = useMemo(() => {
+    const values = new Set<string>();
+
+    for (const sitio of sitios) {
+      values.add(clienteDisplayName(sitio));
+    }
+
+    return Array.from(values).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  }, [clienteDisplayName, sitios]);
+
+  const uniqueHaciendas = useMemo(() => {
+    const values = new Set<string>();
+
+    for (const sitio of sitios) {
+      values.add(haciendaDisplayName(sitio));
+    }
+
+    return Array.from(values).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  }, [haciendaDisplayName, sitios]);
+
+  const uniqueTipoAreas = useMemo(() => {
+    const values = new Set<string>();
+
+    for (const sitio of sitios) {
+      values.add(tipoAreaDisplayName(sitio));
+    }
+
+    return Array.from(values).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  }, [sitios, tipoAreaDisplayName]);
+
+  const uniqueConsolas = useMemo(() => {
+    const values = new Set<string>();
+
+    for (const sitio of sitios) {
+      values.add(consolaDisplayName(sitio));
+    }
+
+    return Array.from(values).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  }, [consolaDisplayName, sitios]);
+
   const handleDelete = async (sitio: Sitio) => {
     const confirmation = window.confirm(
       `¿Deseas eliminar el sitio "${sitio.nombre}"? Esta acción no se puede deshacer.`
@@ -997,44 +1218,195 @@ const Sitios: React.FC = () => {
         ) : sitios.length === 0 ? (
           <p className="text-sm text-gray-500">No se registran sitios actualmente.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto space-y-3">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="text-sm font-semibold text-[#1C2E4A] hover:underline"
+                onClick={clearFilters}
+              >
+                Limpiar filtros
+              </button>
+            </div>
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-[#1C2E4A]">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                    ID
+              <thead>
+                <tr className="bg-[#1C2E4A]">
+                  <th
+                    className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('id')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>ID</span>
+                      {sortConfig?.key === 'id' && <span>{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                    </div>
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                    Nombre
+                  <th
+                    className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('nombre')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Nombre</span>
+                      {sortConfig?.key === 'nombre' && <span>{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                    </div>
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                    Descripción
+                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Descripción</th>
+                  <th
+                    className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('hacienda')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Hacienda</span>
+                      {sortConfig?.key === 'hacienda' && <span>{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                    </div>
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                    Hacienda
+                  <th
+                    className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('tipoArea')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Tipo de área</span>
+                      {sortConfig?.key === 'tipoArea' && <span>{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                    </div>
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                    Tipo de área
+                  <th
+                    className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('cliente')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Cliente</span>
+                      {sortConfig?.key === 'cliente' && <span>{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                    </div>
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                    Cliente
+                  <th
+                    className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('consola')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Consola</span>
+                      {sortConfig?.key === 'consola' && <span>{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                    </div>
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                    Consola
+                  <th
+                    className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('servidor')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Servidor</span>
+                      {sortConfig?.key === 'servidor' && <span>{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                    </div>
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                    Servidor
+                  <th
+                    className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('activo')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Activo</span>
+                      {sortConfig?.key === 'activo' && <span>{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                    </div>
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                    Activo
+                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Acciones</th>
+                </tr>
+                <tr className="bg-gray-100">
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-700">
+                    <input
+                      type="text"
+                      value={filters.id}
+                      onChange={(event) => handleFilterChange('id', event.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                      placeholder="ID"
+                    />
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                    Acciones
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-700">
+                    <input
+                      type="text"
+                      value={filters.nombre}
+                      onChange={(event) => handleFilterChange('nombre', event.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                      placeholder="Nombre del sitio"
+                    />
                   </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-700" />
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-700">
+                    <select
+                      value={filters.hacienda}
+                      onChange={(event) => handleFilterChange('hacienda', event.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                    >
+                      <option value="">Todas</option>
+                      {uniqueHaciendas.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-700">
+                    <select
+                      value={filters.tipoArea}
+                      onChange={(event) => handleFilterChange('tipoArea', event.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                    >
+                      <option value="">Todas</option>
+                      {uniqueTipoAreas.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-700">
+                    <select
+                      value={filters.cliente}
+                      onChange={(event) => handleFilterChange('cliente', event.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                    >
+                      <option value="">Todos</option>
+                      {uniqueClientes.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-700">
+                    <select
+                      value={filters.consola}
+                      onChange={(event) => handleFilterChange('consola', event.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                    >
+                      <option value="">Todas</option>
+                      {uniqueConsolas.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-700">
+                    <input
+                      type="text"
+                      value={filters.servidor}
+                      onChange={(event) => handleFilterChange('servidor', event.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                      placeholder="Servidor"
+                    />
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-700">
+                    <select
+                      value={filters.activo}
+                      onChange={(event) => handleFilterChange('activo', event.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                    >
+                      <option value="">Todos</option>
+                      <option value="true">Activo</option>
+                      <option value="false">Inactivo</option>
+                    </select>
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-700" />
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {sitios.map((sitio) => (
+                {sortedSitios.map((sitio) => (
                   <tr key={sitio.id}>
                     <td className="px-4 py-3 text-sm text-gray-700">{sitio.id}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{sitio.nombre}</td>
@@ -1042,28 +1414,16 @@ const Sitios: React.FC = () => {
                       {sitio.descripcion && sitio.descripcion.trim() ? sitio.descripcion : '—'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
-                      {formatRelationLabel(
-                        getSitioHaciendaNombre(sitio),
-                        'Sin hacienda',
-                      )}
+                      {haciendaDisplayName(sitio)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
-                      {formatRelationLabel(
-                        getSitioTipoAreaDescripcion(sitio) ?? getSitioTipoAreaNombre(sitio),
-                        'Sin tipo de área',
-                      )}
+                      {tipoAreaDisplayName(sitio)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
-                      {formatRelationLabel(
-                        getSitioClienteNombre(sitio),
-                        'Sin asignar',
-                      )}
+                      {clienteDisplayName(sitio)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
-                      {formatRelationLabel(
-                        getSitioConsolaNombre(sitio),
-                        'Sin consola',
-                      )}
+                      {consolaDisplayName(sitio)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       {sitio.servidor && sitio.servidor.trim() ? sitio.servidor : '—'}
