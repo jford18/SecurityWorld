@@ -16,7 +16,6 @@ export interface TechnicalFailurePayload {
   deptResponsable?: string;
   departamentoResponsableId?: string | number | null;
   tipoProblema?: string;
-  tipoEquipo?: string;
   tipoProblemaEquipo?: string;
   nodo?: string;
   sitio?: string;
