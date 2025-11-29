@@ -17,7 +17,7 @@ export const listAsignaciones = async (_req, res) => {
       `SELECT
         A.nodo_id,
         A.sitio_id,
-        A.fecha_creacion,
+        A.fecha_asignacion,
         B.nombre AS nodo_nombre,
         C.nombre AS sitio_nombre
       FROM nodos_sitios A
@@ -132,7 +132,7 @@ export const assignSitio = async (req, res) => {
     if (ids.length > 0) {
       await client.query(
         `
-        INSERT INTO public.nodos_sitios (nodo_id, sitio_id, fecha_creacion)
+        INSERT INTO public.nodos_sitios (nodo_id, sitio_id, fecha_asignacion)
         SELECT $1, UNNEST($2::int[]), NOW();
         `,
         [nodoId, ids]
@@ -165,7 +165,7 @@ export const unassignSitio = async (req, res) => {
     const deleteResult = await pool.query(
       `DELETE FROM nodos_sitios
       WHERE nodo_id = $1 AND sitio_id = $2
-      RETURNING nodo_id, sitio_id, fecha_creacion`,
+      RETURNING nodo_id, sitio_id, fecha_asignacion`,
       [nodoId, sitioId]
     );
 
