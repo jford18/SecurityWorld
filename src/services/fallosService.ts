@@ -39,6 +39,7 @@ export interface TechnicalFailurePayload {
   responsable_verificacion_cierre_id?: number | string | null;
   reportadoCliente?: boolean;
   affectationType?: string;
+  tipo_afectacion?: string;
   horaFallo?: string;
   // NEW: Campo combinado en formato ISO para fecha y hora del fallo.
   fechaHoraFallo?: string;

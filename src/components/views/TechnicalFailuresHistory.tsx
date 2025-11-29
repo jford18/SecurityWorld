@@ -102,13 +102,8 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
           .toString()
           .toLowerCase();
       case 'tipoAfectacion': {
-        const tipoAfectacion = failure.tipoAfectacion || failure.tipo_afectacion;
-        const equipo = failure.equipoAfectado || failure.equipo_afectado;
-        const value =
-          tipoAfectacion === 'EQUIPO' && equipo
-            ? `EQUIPO-${equipo}`
-            : tipoAfectacion || '';
-        return value.toString().toLowerCase();
+        const tipoAfectacion = failure.tipoAfectacion || failure.tipo_afectacion || '';
+        return tipoAfectacion.toString().toLowerCase();
       }
       case 'sitioNombre':
         return (failure.sitioNombre || failure.sitio_nombre || '')
@@ -415,13 +410,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                       || 'Sin información'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {(() => {
-                      const tipoAfectacion = fallo.tipoAfectacion || fallo.tipo_afectacion;
-                      const equipo = fallo.equipoAfectado || fallo.equipo_afectado;
-                      return tipoAfectacion === 'EQUIPO' && equipo
-                        ? `EQUIPO-${equipo}`
-                        : tipoAfectacion || 'Sin información';
-                    })()}
+                    {fallo.tipoAfectacion || fallo.tipo_afectacion || 'Sin información'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {fallo.sitioNombre || fallo.sitio_nombre || 'Sin información'}
