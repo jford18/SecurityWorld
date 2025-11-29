@@ -60,7 +60,6 @@ export const listSitiosByNodo = async (req, res) => {
       FROM sitios S
       LEFT JOIN nodos_sitios NS
         ON NS.sitio_id = S.id
-        AND NS.activo = TRUE
       WHERE
         S.activo = TRUE
         AND (NS.nodo_id = $1 OR NS.nodo_id IS NULL)
