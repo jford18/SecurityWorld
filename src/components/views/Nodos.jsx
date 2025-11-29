@@ -32,6 +32,15 @@ const Nodos = () => {
   const [loadingProveedores, setLoadingProveedores] = useState(false);
   const [proveedoresError, setProveedoresError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [filters, setFilters] = useState({
+    id: '',
+    nombre: '',
+    ip: '',
+    cliente: '',
+    estado: '',
+    fechaCreacion: '',
+  });
+  const [sortConfig, setSortConfig] = useState(null);
 
   const fetchNodos = async () => {
     try {
@@ -72,27 +81,107 @@ const Nodos = () => {
     fetchProveedores();
   }, []);
 
+  const getClienteNombre = (nodo) =>
+    String(
+      nodo.cliente_nombre ??
+        nodo.clienteNombre ??
+        nodo.proveedor_nombre ??
+        nodo.proveedorNombre ??
+        ''
+    );
+
+  const getComparableValue = (nodo, key) => {
+    switch (key) {
+      case 'cliente':
+        return getClienteNombre(nodo);
+      case 'estado':
+        return nodo.activo ? 'activo' : 'inactivo';
+      case 'fechaCreacion':
+      case 'fecha_creacion':
+        return nodo.fecha_creacion ? new Date(nodo.fecha_creacion).getTime() : 0;
+      case 'id':
+        return Number(nodo.id) || 0;
+      default:
+        return String(nodo[key] ?? '');
+    }
+  };
+
   const filteredNodos = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) {
-      return nodos;
-    }
-    return nodos.filter((nodo) =>
-      [
-        nodo.nombre,
-        nodo.id,
-        nodo.ip,
-        nodo.proveedor_nombre,
-        nodo.proveedorNombre,
-      ].some((value) =>
-        String(value ?? '')
-          .toLowerCase()
-          .includes(term)
-      )
-    );
-  }, [nodos, searchTerm]);
+    const filterId = filters.id.trim().toLowerCase();
+    const filterNombre = filters.nombre.trim().toLowerCase();
+    const filterIp = filters.ip.trim().toLowerCase();
+    const filterCliente = filters.cliente.trim().toLowerCase();
+    const filterEstado = filters.estado.trim().toLowerCase();
+    const filterFecha = filters.fechaCreacion.trim().toLowerCase();
 
-  const totalPages = Math.max(1, Math.ceil(filteredNodos.length / ITEMS_PER_PAGE));
+    return nodos.filter((nodo) => {
+      const matchesSearch = !term
+        ? true
+        : [
+            nodo.nombre,
+            nodo.id,
+            nodo.ip,
+            nodo.proveedor_nombre,
+            nodo.proveedorNombre,
+            nodo.cliente_nombre,
+            nodo.clienteNombre,
+          ].some((value) =>
+            String(value ?? '')
+              .toLowerCase()
+              .includes(term)
+          );
+
+      if (!matchesSearch) {
+        return false;
+      }
+
+      const fechaTexto = nodo.fecha_creacion
+        ? new Date(nodo.fecha_creacion).toLocaleString().toLowerCase()
+        : '';
+
+      return (
+        String(nodo.id ?? '')
+          .toLowerCase()
+          .includes(filterId) &&
+        String(nodo.nombre ?? '')
+          .toLowerCase()
+          .includes(filterNombre) &&
+        String(nodo.ip ?? '')
+          .toLowerCase()
+          .includes(filterIp) &&
+        getClienteNombre(nodo).toLowerCase().includes(filterCliente) &&
+        (filters.estado.trim() === ''
+          ? true
+          : (nodo.activo ? 'activo' : 'inactivo')
+              .toLowerCase()
+              .includes(filterEstado)) &&
+        fechaTexto.includes(filterFecha)
+      );
+    });
+  }, [nodos, searchTerm, filters]);
+
+  const sortedNodos = useMemo(() => {
+    if (!sortConfig) return filteredNodos;
+
+    const directionMultiplier = sortConfig.direction === 'asc' ? 1 : -1;
+
+    return [...filteredNodos].sort((a, b) => {
+      const aValue = getComparableValue(a, sortConfig.key);
+      const bValue = getComparableValue(b, sortConfig.key);
+
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        if (aValue === bValue) return 0;
+        return aValue > bValue ? directionMultiplier : -directionMultiplier;
+      }
+
+      return String(aValue)
+        .toLowerCase()
+        .localeCompare(String(bValue).toLowerCase(), 'es') * directionMultiplier;
+    });
+  }, [filteredNodos, sortConfig]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedNodos.length / ITEMS_PER_PAGE));
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -102,8 +191,8 @@ const Nodos = () => {
 
   const currentItems = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredNodos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredNodos, currentPage]);
+    return sortedNodos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [sortedNodos, currentPage]);
 
   const openCreateModal = () => {
     setIsEditing(false);
@@ -204,6 +293,29 @@ const Nodos = () => {
     setCurrentPage(1);
   };
 
+  const handleFilterChange = (field, value) => {
+    setFilters((prev) => ({ ...prev, [field]: value }));
+    setCurrentPage(1);
+  };
+
+  const handleSort = (column) => {
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== column) {
+        return { key: column, direction: 'asc' };
+      }
+
+      return { key: column, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+    });
+  };
+
+  const renderSortIcon = (column) => {
+    if (!sortConfig || sortConfig.key !== column) {
+      return '▼▲';
+    }
+
+    return sortConfig.direction === 'asc' ? '▲' : '▼';
+  };
+
   const renderStatus = (isActive) => (
     <span
       className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
@@ -254,29 +366,123 @@ const Nodos = () => {
           <div className="space-y-4">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-[#1C2E4A]">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
-                      ID
+                <thead>
+                  <tr className="bg-[#1C2E4A] text-white">
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                      <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSort('id')}
+                          className="flex items-center gap-2 font-semibold"
+                        >
+                          <span>ID</span>
+                          <span>{renderSortIcon('id')}</span>
+                        </button>
+                        <input
+                          type="text"
+                          className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                          placeholder="Filtrar…"
+                          value={filters.id}
+                          onChange={(e) => handleFilterChange('id', e.target.value)}
+                        />
+                      </div>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
-                      Nombre
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                      <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSort('nombre')}
+                          className="flex items-center gap-2 font-semibold"
+                        >
+                          <span>Nombre</span>
+                          <span>{renderSortIcon('nombre')}</span>
+                        </button>
+                        <input
+                          type="text"
+                          className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                          placeholder="Filtrar…"
+                          value={filters.nombre}
+                          onChange={(e) => handleFilterChange('nombre', e.target.value)}
+                        />
+                      </div>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
-                      IP
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                      <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSort('ip')}
+                          className="flex items-center gap-2 font-semibold"
+                        >
+                          <span>IP</span>
+                          <span>{renderSortIcon('ip')}</span>
+                        </button>
+                        <input
+                          type="text"
+                          className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                          placeholder="Filtrar…"
+                          value={filters.ip}
+                          onChange={(e) => handleFilterChange('ip', e.target.value)}
+                        />
+                      </div>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
-                      Proveedor
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                      <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSort('cliente')}
+                          className="flex items-center gap-2 font-semibold"
+                        >
+                          <span>Cliente</span>
+                          <span>{renderSortIcon('cliente')}</span>
+                        </button>
+                        <input
+                          type="text"
+                          className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                          placeholder="Filtrar…"
+                          value={filters.cliente}
+                          onChange={(e) => handleFilterChange('cliente', e.target.value)}
+                        />
+                      </div>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
-                      Activo
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                      <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSort('estado')}
+                          className="flex items-center gap-2 font-semibold"
+                        >
+                          <span>Estado</span>
+                          <span>{renderSortIcon('estado')}</span>
+                        </button>
+                        <input
+                          type="text"
+                          className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                          placeholder="Filtrar…"
+                          value={filters.estado}
+                          onChange={(e) => handleFilterChange('estado', e.target.value)}
+                        />
+                      </div>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
-                      Fecha creación
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                      <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSort('fechaCreacion')}
+                          className="flex items-center gap-2 font-semibold"
+                        >
+                          <span>Fecha creación</span>
+                          <span>{renderSortIcon('fechaCreacion')}</span>
+                        </button>
+                        <input
+                          type="text"
+                          className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                          placeholder="Filtrar…"
+                          value={filters.fechaCreacion}
+                          onChange={(e) => handleFilterChange('fechaCreacion', e.target.value)}
+                        />
+                      </div>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
-                      Acciones
-                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
