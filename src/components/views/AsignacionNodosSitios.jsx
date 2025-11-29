@@ -3,7 +3,6 @@ import { getAll as getNodos } from '../../services/nodos.service';
 import {
   assign as assignNodoSitio,
   getByNodo as getSitiosAsignados,
-  unassign as unassignNodoSitio,
 } from '../../services/nodosSitios.service';
 
 const toast = {
@@ -210,21 +209,16 @@ const AsignacionNodosSitios = () => {
       return;
     }
 
+    const sitiosIds = Array.from(selectedSitios).filter((id) => Number.isInteger(id));
+
     try {
       setSaving(true);
       setErrorMessage('');
 
-      await Promise.all(
-        asignaciones.map((item) =>
-          assignNodoSitio({ nodo_id: selectedNodoId, sitio_id: item.id })
-        )
-      );
-
-      await Promise.all(
-        eliminaciones.map((item) =>
-          unassignNodoSitio({ nodo_id: selectedNodoId, sitio_id: item.id })
-        )
-      );
+      await assignNodoSitio({
+        nodoId: Number(selectedNodoId),
+        sitiosIds,
+      });
 
       toast.success('Cambios guardados correctamente');
       await loadSitiosPorNodo(selectedNodoId);
