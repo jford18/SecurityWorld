@@ -15,7 +15,17 @@ export type TipoEquipoAfectadoPayload = {
   activo: boolean;
 };
 
-type ApiEnvelope<T> = T | { data?: T };
+export type TipoEquipoAfectadoListResponse = {
+  data: TipoEquipoAfectado[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+type ApiEnvelope<T> =
+  | T
+  | { data?: T }
+  | { status?: string; message?: string; data?: T };
 
 const hasDataProp = (payload: unknown): payload is { data: unknown } => {
   return typeof payload === 'object' && payload !== null && 'data' in payload;
@@ -33,10 +43,32 @@ export async function getAllTipoEquipoAfectado(params?: {
   page?: number;
   limit?: number;
   search?: string;
-}): Promise<TipoEquipoAfectado[]> {
-  const response = await api.get<ApiEnvelope<TipoEquipoAfectado[]>>(BASE_PATH, { params });
+}): Promise<TipoEquipoAfectadoListResponse> {
+  const response = await api.get<ApiEnvelope<TipoEquipoAfectadoListResponse | TipoEquipoAfectado[]>>(BASE_PATH, { params });
   const data = unwrap(response.data);
-  return Array.isArray(data) ? data : [];
+
+  if (Array.isArray(data)) {
+    return {
+      data,
+      total: data.length,
+      page: 1,
+      limit: data.length,
+    };
+  }
+
+  const records = Array.isArray((data as { data?: unknown })?.data)
+    ? ((data as { data?: TipoEquipoAfectado[] }).data ?? [])
+    : Array.isArray((data as { items?: unknown })?.items)
+      ? ((data as { items?: TipoEquipoAfectado[] }).items ?? [])
+      : [];
+
+  const total = Number((data as { total?: unknown })?.total ?? records.length) || records.length;
+  const page = Number((data as { page?: unknown })?.page ?? 1) || 1;
+  const limit =
+    Number((data as { limit?: unknown })?.limit ?? (data as { pageSize?: unknown })?.pageSize ?? records.length) ||
+    records.length;
+
+  return { data: records, total, page, limit };
 }
 
 export async function getTipoEquipoAfectado(id: number): Promise<TipoEquipoAfectado | null> {
