@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { create, deleteNodo, getAll, update } from '../../services/nodos.service';
 import { getProveedores } from '../../services/proveedoresService';
 
@@ -11,6 +12,13 @@ const primaryButtonClasses = `${baseButtonClasses} bg-yellow-400 text-[#1C2E4A] 
 const secondaryButtonClasses = `${baseButtonClasses} border border-yellow-400 text-[#1C2E4A] hover:bg-yellow-100 focus:ring-yellow-400`;
 const dangerButtonClasses = `${baseButtonClasses} bg-red-500 text-white hover:bg-red-600 focus:ring-red-500`;
 const successButtonClasses = `${baseButtonClasses} bg-emerald-500 text-white hover:bg-emerald-600 focus:ring-emerald-500`;
+
+const formatTimestamp = () => {
+  const now = new Date();
+  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(
+    now.getHours(),
+  ).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+};
 
 const initialFormState = {
   nombre: '',
@@ -194,6 +202,28 @@ const Nodos = () => {
     return sortedNodos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [sortedNodos, currentPage]);
 
+  const handleExportToExcel = () => {
+    if (loading || currentItems.length === 0) return;
+
+    const formattedRows = currentItems.map((nodo) => ({
+      ID: nodo.id ?? '—',
+      Nombre: nodo.nombre ?? '—',
+      IP: nodo.ip || '—',
+      Cliente: getClienteNombre(nodo) || '—',
+      Activo: nodo.activo ? 'Sí' : 'No',
+      'Fecha creación': nodo.fecha_creacion
+        ? new Date(nodo.fecha_creacion).toLocaleString()
+        : '—',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Nodos');
+
+    const filename = `mantenimiento_nodos_${formatTimestamp()}.xlsx`;
+    XLSX.writeFile(workbook, filename);
+  };
+
   const openCreateModal = () => {
     setIsEditing(false);
     setSelectedNodo(null);
@@ -337,9 +367,19 @@ const Nodos = () => {
             Gestiona los nodos disponibles para las operaciones del sistema.
           </p>
         </div>
-        <button type="button" className={primaryButtonClasses} onClick={openCreateModal}>
-          Nuevo Nodo
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={secondaryButtonClasses}
+            onClick={handleExportToExcel}
+            disabled={loading || currentItems.length === 0}
+          >
+            Exportar a Excel
+          </button>
+          <button type="button" className={primaryButtonClasses} onClick={openCreateModal}>
+            Nuevo Nodo
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
