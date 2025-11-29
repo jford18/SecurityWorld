@@ -16,10 +16,11 @@ import {
   ConclusionEventoDTO,
   getAll as getAllConclusionesEvento,
 } from '../../services/conclusionEventoService';
-import { Sitio, getSitios } from '../../services/sitiosService';
+import { Sitio, getSitios, getSitio } from '../../services/sitiosService';
 import { resolveConsolaIdByName } from '../../services/consolasService';
 import { useSession } from '../context/SessionContext';
 import { getAll as getFuerzasReaccion } from '../../services/fuerzaReaccion.service';
+import { getPersonasByCliente } from '../../services/clientePersona.service';
 
 const toBoolean = (value: unknown, defaultValue = false): boolean => {
   if (typeof value === 'boolean') {
@@ -116,6 +117,11 @@ type IntrusionFormData = {
   fuerza_reaccion_id: string;
 };
 
+type PersonaOption = {
+  id: number;
+  nombreCompleto: string;
+};
+
 const getInitialDateTimeValue = () => {
   const now = new Date();
   now.setSeconds(0, 0);
@@ -168,6 +174,78 @@ const Intrusions: React.FC = () => {
   const { session } = useSession();
   const [sitios, setSitios] = useState<Sitio[]>([]);
   const [fuerzasReaccion, setFuerzasReaccion] = useState<FuerzaReaccionCatalogItem[]>([]);
+  const [sitioId, setSitioId] = useState<number | null>(null);
+  const [clienteId, setClienteId] = useState<number | null>(null);
+  const [clienteNombre, setClienteNombre] = useState('');
+  const [personaId, setPersonaId] = useState<number | null>(null);
+  const [personasCliente, setPersonasCliente] = useState<PersonaOption[]>([]);
+
+  const resetClientePersonaSelection = () => {
+    setSitioId(null);
+    setClienteId(null);
+    setClienteNombre('');
+    setPersonasCliente([]);
+    setPersonaId(null);
+  };
+
+  const clearSitioSeleccion = () => {
+    resetClientePersonaSelection();
+    setFormData((prev) => (prev.sitioId ? { ...prev, sitioId: '' } : prev));
+  };
+
+  const handleChangeSitio = async (value: number | null) => {
+    setSitioId(value);
+    setClienteId(null);
+    setClienteNombre('');
+    setPersonasCliente([]);
+    setPersonaId(null);
+
+    if (!value) return;
+
+    try {
+      const sitio = await getSitio(value);
+
+      const clienteDelSitio =
+        sitio?.cliente_id ?? sitio?.clienteId ?? null;
+
+      if (clienteDelSitio) {
+        setClienteId(clienteDelSitio);
+        setClienteNombre(sitio?.cliente_nombre ?? sitio?.clienteNombre ?? '');
+
+        try {
+          const personasResp = await getPersonasByCliente(clienteDelSitio);
+          const personas = Array.isArray(personasResp)
+            ? personasResp
+            : ((personasResp as { data?: unknown })?.data as unknown[] | undefined) ?? [];
+
+          setPersonasCliente(
+            personas
+              .map((p) => {
+                if (!p || typeof p !== 'object') return null;
+                const persona = p as { persona_id?: unknown; id?: unknown; nombre?: unknown; apellido?: unknown };
+                const parsedId = persona.persona_id ?? persona.id;
+                const idNumber = Number(parsedId);
+
+                if (!Number.isFinite(idNumber)) return null;
+
+                const nombre = persona.nombre == null ? '' : String(persona.nombre);
+                const apellido = persona.apellido == null ? '' : String(persona.apellido);
+
+                return {
+                  id: idNumber,
+                  nombreCompleto: `${nombre} ${apellido}`.trim(),
+                };
+              })
+              .filter((p): p is PersonaOption => p !== null)
+          );
+        } catch (err) {
+          console.error('Error al obtener personas del cliente:', err);
+        }
+      }
+    } catch (err) {
+      console.error('Error al obtener datos del sitio:', err);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -226,7 +304,7 @@ const Intrusions: React.FC = () => {
       if (!consoleName) {
         if (isMounted) {
           setSitios([]);
-          setFormData((prev) => (prev.sitioId ? { ...prev, sitioId: '' } : prev));
+          clearSitioSeleccion();
         }
         return;
       }
@@ -238,7 +316,7 @@ const Intrusions: React.FC = () => {
 
         if (consolaId === null) {
           setSitios([]);
-          setFormData((prev) => (prev.sitioId ? { ...prev, sitioId: '' } : prev));
+          clearSitioSeleccion();
           return;
         }
 
@@ -255,13 +333,17 @@ const Intrusions: React.FC = () => {
             return prev;
           }
           const exists = lista.some((sitio) => String(sitio.id) === prev.sitioId);
-          return exists ? prev : { ...prev, sitioId: '' };
+          if (exists) {
+            return prev;
+          }
+          resetClientePersonaSelection();
+          return { ...prev, sitioId: '' };
         });
       } catch (err) {
         console.error('Error cargando sitios por consola', err);
         if (isMounted) {
           setSitios([]);
-          setFormData((prev) => (prev.sitioId ? { ...prev, sitioId: '' } : prev));
+          clearSitioSeleccion();
         }
       }
     };
@@ -587,14 +669,16 @@ const Intrusions: React.FC = () => {
       return;
     }
 
-    const sitioIdNumber = Number(formData.sitioId);
-    if (Number.isNaN(sitioIdNumber)) {
+    const sitioIdNumber = sitioId ?? Number(formData.sitioId);
+    if (!Number.isInteger(sitioIdNumber)) {
       alert('El sitio seleccionado no es válido.');
       return;
     }
 
     const sitioSeleccionado =
-      sitios.find((sitio) => String(sitio.id) === formData.sitioId) ?? null;
+      sitios.find((sitio) => sitio.id === sitioIdNumber) ??
+      sitios.find((sitio) => String(sitio.id) === formData.sitioId) ??
+      null;
 
     if (formData.fecha_evento && formData.fecha_reaccion) {
       const fechaEventoDate = new Date(formData.fecha_evento);
@@ -704,6 +788,7 @@ const Intrusions: React.FC = () => {
         requiereProtocolo && fuerzaReaccionValue !== null
           ? fuerzaReaccionValue
           : null,
+      persona_id: personaId,
     };
 
     try {
@@ -713,6 +798,7 @@ const Intrusions: React.FC = () => {
           ? created
           : { ...created, sitio_nombre: sitioSeleccionado.nombre };
       setIntrusions((prev) => [enriched, ...prev]);
+      resetClientePersonaSelection();
       setFormData(buildInitialFormData());
       setTipoIntrusionId('');
       setTipoDescripcion('');
@@ -809,15 +895,55 @@ const Intrusions: React.FC = () => {
                   </label>
                   <select
                     value={formData.sitioId}
-                    onChange={(event) =>
-                      setFormData((prev) => ({ ...prev, sitioId: event.target.value }))
-                    }
+                    onChange={(event) => {
+                      const { value } = event.target;
+                      setFormData((prev) => ({ ...prev, sitioId: value }));
+                      const parsedValue = value ? Number(value) : null;
+                      handleChangeSitio(
+                        parsedValue !== null && !Number.isNaN(parsedValue) ? parsedValue : null
+                      );
+                    }}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   >
                     <option value="">Seleccione...</option>
                     {sitios.map((sitio) => (
                       <option key={sitio.id} value={sitio.id}>
                         {sitio.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Cliente
+                  </label>
+                  <input
+                    type="text"
+                    value={clienteNombre}
+                    disabled
+                    placeholder="Cliente asociado al sitio"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 text-gray-700 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Persona
+                  </label>
+                  <select
+                    value={personaId ?? ''}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setPersonaId(value ? Number(value) : null);
+                    }}
+                    disabled={!clienteId || personasCliente.length === 0}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="">
+                      {clienteId ? 'Seleccione una persona' : 'Seleccione primero un sitio'}
+                    </option>
+                    {personasCliente.map((persona) => (
+                      <option key={persona.id} value={persona.id}>
+                        {persona.nombreCompleto}
                       </option>
                     ))}
                   </select>

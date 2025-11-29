@@ -15,6 +15,7 @@ export interface IntrusionPayload {
   sustraccion_material?: boolean;
   sitio_id?: number | null;
   fuerza_reaccion_id?: number | null;
+  persona_id?: number | null;
 }
 
 const normalizeFechaValue = (value: unknown): string | null => {
@@ -59,6 +60,7 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     sustraccion_material?: unknown;
     fuerza_reaccion_id?: unknown;
     fuerza_reaccion_descripcion?: unknown;
+    persona_id?: unknown;
   };
 
   const id = Number(base.id);
@@ -97,6 +99,14 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     fuerzaReaccionValue === null || Number.isNaN(fuerzaReaccionValue)
       ? null
       : fuerzaReaccionValue;
+  const personaIdValue =
+    base.persona_id === null || base.persona_id === undefined
+      ? null
+      : Number(base.persona_id);
+  const personaId =
+    personaIdValue === null || Number.isNaN(personaIdValue)
+      ? null
+      : personaIdValue;
 
   return {
     id,
@@ -131,6 +141,7 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
       base.fuerza_reaccion_descripcion == null
         ? null
         : String(base.fuerza_reaccion_descripcion),
+    persona_id: personaId,
   };
 };
 
