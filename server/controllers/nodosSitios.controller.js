@@ -17,13 +17,12 @@ export const listAsignaciones = async (_req, res) => {
       `SELECT
         A.nodo_id,
         A.sitio_id,
-        A.fecha_asignacion,
+        A.fecha_creacion,
         B.nombre AS nodo_nombre,
         C.nombre AS sitio_nombre
       FROM nodos_sitios A
       INNER JOIN nodos B ON A.nodo_id = B.id
       INNER JOIN sitios C ON A.sitio_id = C.id
-      WHERE A.activo = TRUE
       ORDER BY A.nodo_id, C.nombre`
     );
 
@@ -107,52 +106,49 @@ const validatePayload = (payload) => {
 };
 
 export const assignSitio = async (req, res) => {
-  const validation = validatePayload(req.body);
+  const { nodoId, sitiosIds } = req.body;
 
-  if (!validation.valid) {
-    return res.status(400).json(formatError(validation.message));
+  if (!nodoId) {
+    return res.status(400).json(formatError("nodoId es requerido"));
   }
 
-  const { nodoId, sitioId } = validation;
+  const ids = Array.isArray(sitiosIds) ? sitiosIds : [];
 
+  const client = await pool.connect();
   try {
-    const existingAssignment = await pool.query(
-      `SELECT nodo_id
-      FROM nodos_sitios A
-      WHERE A.sitio_id = $1 AND A.activo = TRUE
-      LIMIT 1`,
-      [sitioId]
-    );
+    await client.query("BEGIN");
 
-    if (existingAssignment.rowCount > 0) {
-      const assignedNodoId = Number(existingAssignment.rows[0].nodo_id);
+    await client.query("DELETE FROM public.nodos_sitios WHERE nodo_id = $1;", [
+      nodoId,
+    ]);
 
-      if (assignedNodoId === nodoId) {
-        return res
-          .status(409)
-          .json(formatError("La asignación ya existe para el nodo y sitio"));
-      }
-
-      return res.status(409).json(
-        formatError(
-          "El sitio ya está asignado a otro nodo. Libéralo antes de reasignarlo"
-        )
+    if (ids.length > 0) {
+      await client.query(
+        "DELETE FROM public.nodos_sitios WHERE sitio_id = ANY($1::int[]) AND nodo_id <> $2;",
+        [ids, nodoId]
       );
     }
 
-    const insertResult = await pool.query(
-      `INSERT INTO nodos_sitios (nodo_id, sitio_id, activo)
-      VALUES ($1, $2, TRUE)
-      RETURNING nodo_id, sitio_id, fecha_asignacion`,
-      [nodoId, sitioId]
-    );
+    if (ids.length > 0) {
+      await client.query(
+        `
+        INSERT INTO public.nodos_sitios (nodo_id, sitio_id, fecha_creacion)
+        SELECT $1, UNNEST($2::int[]), NOW();
+        `,
+        [nodoId, ids]
+      );
+    }
 
-    res.status(201).json(
-      formatSuccess("Asignación creada correctamente", insertResult.rows[0])
+    await client.query("COMMIT");
+    return res.json(
+      formatSuccess("Asignación de sitios guardada correctamente")
     );
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Error al asignar sitio al nodo:", error);
-    res.status(500).json(formatError("Error al crear la asignación"));
+    return res.status(500).json(formatError("Error al asignar sitios al nodo"));
+  } finally {
+    client.release();
   }
 };
 
@@ -169,7 +165,7 @@ export const unassignSitio = async (req, res) => {
     const deleteResult = await pool.query(
       `DELETE FROM nodos_sitios
       WHERE nodo_id = $1 AND sitio_id = $2
-      RETURNING nodo_id, sitio_id, fecha_asignacion`,
+      RETURNING nodo_id, sitio_id, fecha_creacion`,
       [nodoId, sitioId]
     );
 
