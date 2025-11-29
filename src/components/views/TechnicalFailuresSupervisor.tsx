@@ -10,10 +10,14 @@ import {
   updateFallo,
   fetchCatalogos,
   TechnicalFailurePayload,
+  getFalloDuration,
+  getFalloHistorial,
+  deleteFallo,
 } from '../../services/fallosService';
 import { useSession } from '../context/SessionContext';
 import { getAllDepartamentosResponsables } from '../../services/departamentosResponsablesService';
 import TechnicalFailuresHistory from './TechnicalFailuresHistory';
+import { FailureHistory, FailureHistoryEntry } from '../../types';
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
   departamentos: [],
@@ -138,17 +142,29 @@ const EditFailureModal: React.FC<{
   departamentos: CatalogoDepartamento[];
   responsables: CatalogoResponsable[];
   onSave: (updatedFailure: TechnicalFailure) => void;
+  onCloseFallo: (updatedFailure: TechnicalFailure) => void;
+  onDeleteFallo?: (failureId: string) => void;
   onClose: () => void;
   isSaving: boolean;
   currentUserName?: string | null;
+  history?: FailureHistory | null;
+  historyError?: string | null;
+  isHistoryLoading?: boolean;
+  isAdmin?: boolean;
 }> = ({
   failure,
   departamentos,
   responsables,
   onSave,
+  onCloseFallo,
+  onDeleteFallo,
   onClose,
   isSaving,
   currentUserName,
+  history,
+  historyError,
+  isHistoryLoading,
+  isAdmin = false,
 }) => {
   const normalizeFailure = useCallback(
     (failureToNormalize: TechnicalFailure) => {
@@ -207,6 +223,10 @@ const EditFailureModal: React.FC<{
     'general' | 'supervisor' | 'cierre'
   >('general');
 
+  const isClosed = (failure.estado || '').toUpperCase() === 'CERRADO';
+  const isReadOnly = isClosed;
+  const canDelete = isReadOnly && isAdmin;
+
   useEffect(() => {
     setEditData(normalizeFailure(failure));
     setActiveTab('general');
@@ -226,6 +246,7 @@ const EditFailureModal: React.FC<{
   };
 
   const handleResolutionChange = (value: string) => {
+    if (isReadOnly) return;
     const { date, time } = splitDateTimeLocalValue(value);
     setEditData((prev) => ({
       ...prev,
@@ -298,8 +319,17 @@ const EditFailureModal: React.FC<{
     }
 
     const novedad = editData.novedadDetectada?.trim() || '';
-    const departamentoId =
-      editData.departamentoResponsableId?.trim() || editData.deptResponsable?.trim() || '';
+    const departamentoId = (() => {
+      if (typeof editData.departamentoResponsableId === 'string') {
+        return editData.departamentoResponsableId.trim();
+      }
+
+      if (editData.departamentoResponsableId != null) {
+        return String(editData.departamentoResponsableId);
+      }
+
+      return editData.deptResponsable?.trim() || '';
+    })();
 
     if (novedad.length > 0 && !departamentoId) {
       alert(
@@ -311,6 +341,10 @@ const EditFailureModal: React.FC<{
     onSave(editData);
   };
 
+  const handleCloseFallo = () => {
+    onCloseFallo(editData);
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex flex-col gap-2 mb-4">
@@ -320,6 +354,11 @@ const EditFailureModal: React.FC<{
         <p className="text-sm text-gray-500">
           Actualiza la información del reporte seleccionado sin perder de vista el historial.
         </p>
+        {isReadOnly && (
+          <p className="text-sm text-red-600 font-semibold">
+            Este fallo se encuentra cerrado y no puede ser modificado.
+          </p>
+        )}
       </div>
 
       <div className="mb-6 border-b border-gray-200">
@@ -461,7 +500,8 @@ const EditFailureModal: React.FC<{
                   deptResponsable: selectedLabel,
                 }));
               }}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              disabled={isReadOnly}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-500"
             >
               <option value="">Seleccione...</option>
               {departamentos.map((dep) => (
@@ -480,7 +520,8 @@ const EditFailureModal: React.FC<{
               name="novedadDetectada"
               value={editData.novedadDetectada || ''}
               onChange={handleChange}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              disabled={isReadOnly}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-500"
               rows={4}
             />
           </div>
@@ -497,7 +538,8 @@ const EditFailureModal: React.FC<{
               value={editData.fechaHoraResolucion || ''}
               onChange={(e) => handleResolutionChange(e.target.value)}
               max={nowForInput}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm"
+              disabled={isReadOnly}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm disabled:bg-gray-100 disabled:text-gray-500"
             />
           </div>
           <div className="md:col-span-2">
@@ -518,17 +560,102 @@ const EditFailureModal: React.FC<{
         </div>
       )}
 
+      <div className="mt-6 border-t border-gray-100 pt-4">
+        <h5 className="text-md font-semibold text-[#1C2E4A] mb-2">Historial del fallo</h5>
+        {isHistoryLoading && <p className="text-sm text-gray-500">Cargando historial...</p>}
+        {historyError && !isHistoryLoading && (
+          <p className="text-sm text-red-600">{historyError}</p>
+        )}
+        {history && !isHistoryLoading && (
+          <div className="space-y-2 text-sm text-gray-700">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div>
+                <span className="font-semibold">Departamento responsable: </span>
+                {history.departamento_responsable || editData.deptResponsable || 'Sin información'}
+              </div>
+              <div>
+                <span className="font-semibold">Fecha/Hora de creación: </span>
+                {formatFechaHoraDisplay(
+                  history.fecha ?? undefined,
+                  undefined,
+                  history.hora ?? undefined,
+                ) || 'Sin información'}
+              </div>
+              <div>
+                <span className="font-semibold">Fecha/Hora de resolución: </span>
+                {formatFechaHoraDisplay(
+                  history.fecha_resolucion ?? undefined,
+                  history.fecha_resolucion || editData.fechaResolucion,
+                  history.hora_resolucion || editData.horaResolucion,
+                ) || 'Sin información'}
+              </div>
+              <div>
+                <span className="font-semibold">Duración total: </span>
+                {history.duracionTexto || 'Sin información'}
+              </div>
+            </div>
+            {Array.isArray(history.acciones) && history.acciones.length > 0 && (
+              <div className="mt-3">
+                <p className="font-semibold mb-2">Acciones registradas</p>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 text-xs">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Fecha</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Verificación apertura</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Verificación cierre</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Novedad</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {history.acciones.map((accion: FailureHistoryEntry) => (
+                        <tr key={accion.id}>
+                          <td className="px-3 py-2 text-gray-700">
+                            {formatFechaHoraDisplay(accion.fecha_creacion || undefined) || 'Sin información'}
+                          </td>
+                          <td className="px-3 py-2 text-gray-700">{accion.verificacion_apertura || '—'}</td>
+                          <td className="px-3 py-2 text-gray-700">{accion.verificacion_cierre || '—'}</td>
+                          <td className="px-3 py-2 text-gray-700">{accion.novedad_detectada || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="mt-8 flex flex-col gap-3 border-t border-gray-100 pt-6 md:flex-row md:justify-end">
-        <div className="flex gap-4 justify-end">
+        <div className="flex gap-4 justify-end flex-wrap">
+          {canDelete && onDeleteFallo && (
+            <button
+              onClick={() => onDeleteFallo(failure.id)}
+              disabled={isSaving}
+              className="px-6 py-2 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700 transition-colors disabled:opacity-60"
+            >
+              Eliminar
+            </button>
+          )}
           <button
             onClick={onClose}
             className="px-6 py-2 bg-gray-200 text-gray-800 font-semibold rounded-md hover:bg-gray-300 transition-colors"
           >
             Cancelar
           </button>
+          {!isReadOnly && (
+            <button
+              onClick={handleCloseFallo}
+              disabled={isSaving}
+              className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60"
+            >
+              {isSaving ? 'Procesando...' : 'Cerrar fallo'}
+            </button>
+          )}
           <button
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || isReadOnly}
             className="px-6 py-2 bg-[#F9C300] text-[#1C2E4A] font-semibold rounded-md hover:bg-yellow-400 transition-colors disabled:opacity-60"
           >
             {isSaving ? 'Guardando...' : 'Guardar Cambios'}
@@ -548,11 +675,27 @@ const TechnicalFailuresSupervisor: React.FC = () => {
   const [currentFailure, setCurrentFailure] = useState<TechnicalFailure | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [history, setHistory] = useState<FailureHistory | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
   const responsables = useMemo(
     () => catalogos.responsablesVerificacion,
     [catalogos.responsablesVerificacion],
   );
+
+  const roleContext = useMemo(
+    () => ({
+      roleId: session.roleId ?? session.activeRoleId ?? null,
+      roleName: session.roleName ?? null,
+    }),
+    [session.roleId, session.activeRoleId, session.roleName],
+  );
+
+  const isAdmin = useMemo(() => {
+    const role = (session.roleName || '').toLowerCase();
+    return role.includes('admin') || role.includes('supervisor');
+  }, [session.roleName]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -591,9 +734,28 @@ const TechnicalFailuresSupervisor: React.FC = () => {
     loadData();
   }, []);
 
+  const loadHistory = useCallback(
+    async (failureId: string) => {
+      setIsHistoryLoading(true);
+      setHistory(null);
+      setHistoryError(null);
+      try {
+        const result = await getFalloHistorial(failureId, roleContext);
+        setHistory(result);
+      } catch (error) {
+        console.error('Error al cargar el historial del fallo:', error);
+        setHistoryError('No se pudo cargar el historial del fallo.');
+      } finally {
+        setIsHistoryLoading(false);
+      }
+    },
+    [roleContext],
+  );
+
   const handleEdit = (failure: TechnicalFailure) => {
     setCurrentFailure(failure);
     setIsModalOpen(true);
+    loadHistory(failure.id);
   };
 
   const handleCloseModal = () => {
@@ -601,103 +763,180 @@ const TechnicalFailuresSupervisor: React.FC = () => {
     setCurrentFailure(null);
   };
 
+  const prepareUpdatePayload = useCallback(
+    (updatedFailure: TechnicalFailure) => {
+      const { date: resolutionDate, time: resolutionTime } = splitDateTimeLocalValue(
+        updatedFailure.fechaHoraResolucion,
+      );
+
+      const failureDateTimeValue =
+        buildFailureDateTimeValue(updatedFailure) ?? updatedFailure.fecha;
+
+      const { date: failureDateFromDateTime, time: failureTimeFromDateTime } =
+        splitDateTimeLocalValue(failureDateTimeValue);
+
+      const fechaFalloPayload = failureDateFromDateTime || updatedFailure.fecha;
+      const horaFalloPayload =
+        failureTimeFromDateTime ||
+        updatedFailure.hora ||
+        updatedFailure.horaFallo ||
+        undefined;
+
+      const resolutionComparable = toComparableDate(
+        updatedFailure.fechaHoraResolucion ||
+          (resolutionDate
+            ? `${resolutionDate}${resolutionTime ? `T${resolutionTime}` : ''}`
+            : undefined),
+      );
+      const failureComparable = toComparableDate(failureDateTimeValue);
+
+      if (
+        resolutionComparable &&
+        failureComparable &&
+        resolutionComparable < failureComparable
+      ) {
+        alert('La fecha de resolución debe ser igual o posterior a la fecha de fallo.');
+        return null;
+      }
+
+      let verificacionCierreNombre = updatedFailure.verificacionCierre?.trim();
+      let verificacionCierreId = updatedFailure.verificacionCierreId;
+
+      if ((!verificacionCierreNombre || !verificacionCierreId) && session.user) {
+        const matched = responsables.find(
+          (responsable) =>
+            responsable.nombre?.trim().toLowerCase() ===
+            session.user?.trim().toLowerCase(),
+        );
+        if (matched) {
+          verificacionCierreNombre = matched.nombre;
+          verificacionCierreId = String(matched.id);
+        }
+      }
+
+      const loggedUserId =
+        session.userId != null && !Number.isNaN(Number(session.userId))
+          ? Number(session.userId)
+          : null;
+
+      const existingResponsableCierreId =
+        updatedFailure.responsable_verificacion_cierre_id != null &&
+        !Number.isNaN(Number(updatedFailure.responsable_verificacion_cierre_id))
+          ? Number(updatedFailure.responsable_verificacion_cierre_id)
+          : null;
+
+      const hasResolutionInfo = Boolean(resolutionDate || updatedFailure.fechaResolucion);
+      const responsableVerificacionCierreId = hasResolutionInfo
+        ? existingResponsableCierreId ?? loggedUserId ?? null
+        : null;
+
+      const payload: TechnicalFailurePayload = {
+        fecha: fechaFalloPayload,
+        hora: horaFalloPayload,
+        horaFallo: horaFalloPayload,
+        equipo_afectado: updatedFailure.equipo_afectado,
+        descripcion_fallo: updatedFailure.descripcion_fallo,
+        responsable: updatedFailure.responsable,
+        deptResponsable: updatedFailure.deptResponsable,
+        departamentoResponsableId: updatedFailure.departamentoResponsableId,
+        fechaResolucion: resolutionDate,
+        horaResolucion: resolutionTime,
+        fechaHoraResolucion: updatedFailure.fechaHoraResolucion || undefined,
+        verificacionApertura: updatedFailure.verificacionApertura,
+        verificacionAperturaId: updatedFailure.verificacionAperturaId,
+        verificacionCierre: verificacionCierreNombre,
+        verificacionCierreId,
+        novedadDetectada: updatedFailure.novedadDetectada,
+        fechaHoraFallo: failureDateTimeValue,
+        ultimoUsuarioEditoId: loggedUserId ?? undefined,
+        responsable_verificacion_cierre_id: responsableVerificacionCierreId,
+      };
+
+      return { payload, resolutionDate, resolutionTime };
+    },
+    [responsables, session.user, session.userId],
+  );
+
+  const persistFailureUpdate = useCallback(
+    async (
+      updatedFailure: TechnicalFailure,
+      options: { requireResolution?: boolean; confirmClosure?: boolean } = {},
+    ) => {
+      const builtPayload = prepareUpdatePayload(updatedFailure);
+      if (!builtPayload) return;
+
+      const { payload, resolutionDate, resolutionTime } = builtPayload;
+
+      if (options.requireResolution && (!resolutionDate || !resolutionTime)) {
+        alert('Debe ingresar la fecha y hora de resolución antes de cerrar el fallo.');
+        return;
+      }
+
+      if (options.confirmClosure) {
+        try {
+          const duration = await getFalloDuration(updatedFailure.id, roleContext);
+          const confirmed = window.confirm(
+            `El fallo ha estado abierto durante ${duration.duracionTexto}. ¿Desea cerrarlo?`,
+          );
+          if (!confirmed) {
+            return;
+          }
+        } catch (error) {
+          console.error('No se pudo calcular la duración del fallo:', error);
+          alert('No se pudo calcular la duración del fallo. Verifique los datos e intente nuevamente.');
+          return;
+        }
+      }
+
+      try {
+        setIsSubmitting(true);
+        const saved = await updateFallo(updatedFailure.id, payload, roleContext);
+        setFailures((prev) => prev.map((f) => (f.id === saved.id ? saved : f)));
+        setIsModalOpen(false);
+        setCurrentFailure(null);
+        alert('Reporte actualizado correctamente.');
+      } catch (error) {
+        console.error('Error al actualizar el fallo técnico:', error);
+        const message = (error as any)?.response?.data?.mensaje || 'No se pudo actualizar el reporte.';
+        alert(message);
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [prepareUpdatePayload, roleContext],
+  );
+
   const handleUpdateFailure = async (updatedFailure: TechnicalFailure) => {
-    const { date: resolutionDate, time: resolutionTime } = splitDateTimeLocalValue(
-      updatedFailure.fechaHoraResolucion,
+    await persistFailureUpdate(updatedFailure);
+  };
+
+  const handleCloseFailure = async (updatedFailure: TechnicalFailure) => {
+    await persistFailureUpdate(updatedFailure, {
+      requireResolution: true,
+      confirmClosure: true,
+    });
+  };
+
+  const handleDeleteFailure = async (failureId: string) => {
+    const confirmed = window.confirm(
+      '¿Está seguro de eliminar este fallo cerrado? Esta acción no se puede deshacer.',
     );
 
-    const failureDateTimeValue =
-      buildFailureDateTimeValue(updatedFailure) ?? updatedFailure.fecha;
-
-    const { date: failureDateFromDateTime, time: failureTimeFromDateTime } =
-      splitDateTimeLocalValue(failureDateTimeValue);
-
-    const fechaFalloPayload = failureDateFromDateTime || updatedFailure.fecha;
-    const horaFalloPayload =
-      failureTimeFromDateTime ||
-      updatedFailure.hora ||
-      updatedFailure.horaFallo ||
-      undefined;
-
-    const resolutionComparable = toComparableDate(
-      updatedFailure.fechaHoraResolucion ||
-        (resolutionDate
-          ? `${resolutionDate}${resolutionTime ? `T${resolutionTime}` : ''}`
-          : undefined),
-    );
-    const failureComparable = toComparableDate(failureDateTimeValue);
-
-    if (resolutionComparable && failureComparable && resolutionComparable < failureComparable) {
-      alert('La fecha de resolución debe ser igual o posterior a la fecha de fallo.');
+    if (!confirmed) {
       return;
     }
 
-    let verificacionCierreNombre = updatedFailure.verificacionCierre?.trim();
-    let verificacionCierreId = updatedFailure.verificacionCierreId;
-
-    if ((!verificacionCierreNombre || !verificacionCierreId) && session.user) {
-      const matched = responsables.find(
-        (responsable) =>
-          responsable.nombre?.trim().toLowerCase() ===
-          session.user?.trim().toLowerCase(),
-      );
-      if (matched) {
-        verificacionCierreNombre = matched.nombre;
-        verificacionCierreId = String(matched.id);
-      }
-    }
-
-    const loggedUserId =
-      session.userId != null && !Number.isNaN(Number(session.userId))
-        ? Number(session.userId)
-        : null;
-
-    const existingResponsableCierreId =
-      updatedFailure.responsable_verificacion_cierre_id != null &&
-      !Number.isNaN(Number(updatedFailure.responsable_verificacion_cierre_id))
-        ? Number(updatedFailure.responsable_verificacion_cierre_id)
-        : null;
-
-    const hasResolutionInfo = Boolean(resolutionDate || updatedFailure.fechaResolucion);
-    const responsableVerificacionCierreId = hasResolutionInfo
-      ? existingResponsableCierreId ?? loggedUserId ?? null
-      : null;
-
-    const payload: TechnicalFailurePayload = {
-      fecha: fechaFalloPayload,
-      hora: horaFalloPayload,
-      horaFallo: horaFalloPayload,
-      equipo_afectado: updatedFailure.equipo_afectado,
-      descripcion_fallo: updatedFailure.descripcion_fallo,
-      responsable: updatedFailure.responsable,
-      deptResponsable: updatedFailure.deptResponsable,
-      departamentoResponsableId: updatedFailure.departamentoResponsableId,
-      fechaResolucion: resolutionDate,
-      horaResolucion: resolutionTime,
-      fechaHoraResolucion: updatedFailure.fechaHoraResolucion || undefined,
-      verificacionApertura: updatedFailure.verificacionApertura,
-      verificacionAperturaId: updatedFailure.verificacionAperturaId,
-      verificacionCierre: verificacionCierreNombre,
-      verificacionCierreId,
-      novedadDetectada: updatedFailure.novedadDetectada,
-      fechaHoraFallo: failureDateTimeValue,
-      ultimoUsuarioEditoId:
-        session.userId != null && !Number.isNaN(Number(session.userId))
-          ? Number(session.userId)
-          : undefined,
-      responsable_verificacion_cierre_id: responsableVerificacionCierreId,
-    };
-
     try {
       setIsSubmitting(true);
-      const saved = await updateFallo(updatedFailure.id, payload);
-      setFailures((prev) => prev.map((f) => (f.id === saved.id ? saved : f)));
+      await deleteFallo(failureId, roleContext);
+      setFailures((prev) => prev.filter((f) => f.id !== failureId));
       setIsModalOpen(false);
       setCurrentFailure(null);
-      alert('Reporte actualizado correctamente.');
+      alert('Fallo eliminado correctamente.');
     } catch (error) {
-      console.error('Error al actualizar el fallo técnico:', error);
-      alert('No se pudo actualizar el reporte.');
+      console.error('Error al eliminar el fallo técnico:', error);
+      const message = (error as any)?.response?.data?.mensaje || 'No se pudo eliminar el fallo.';
+      alert(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -723,9 +962,15 @@ const TechnicalFailuresSupervisor: React.FC = () => {
           departamentos={catalogos.departamentos}
           responsables={responsables}
           onSave={handleUpdateFailure}
+          onCloseFallo={handleCloseFailure}
+          onDeleteFallo={handleDeleteFailure}
           onClose={handleCloseModal}
           isSaving={isSubmitting}
           currentUserName={session.user}
+          history={history}
+          historyError={historyError}
+          isHistoryLoading={isHistoryLoading}
+          isAdmin={isAdmin}
         />
       )}
     </div>
@@ -737,17 +982,29 @@ const EditTechnicalFailureSupervisorModal: React.FC<{
   departamentos: CatalogoDepartamento[];
   responsables: CatalogoResponsable[];
   onSave: (updatedFailure: TechnicalFailure) => void;
+  onCloseFallo: (updatedFailure: TechnicalFailure) => void;
+  onDeleteFallo?: (failureId: string) => void;
   onClose: () => void;
   isSaving: boolean;
   currentUserName?: string | null;
+  history?: FailureHistory | null;
+  historyError?: string | null;
+  isHistoryLoading?: boolean;
+  isAdmin?: boolean;
 }> = ({
   failure,
   departamentos,
   responsables,
   onSave,
+  onCloseFallo,
+  onDeleteFallo,
   onClose,
   isSaving,
   currentUserName,
+  history,
+  historyError,
+  isHistoryLoading,
+  isAdmin,
 }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
@@ -757,9 +1014,15 @@ const EditTechnicalFailureSupervisorModal: React.FC<{
           departamentos={departamentos}
           responsables={responsables}
           onSave={onSave}
+          onCloseFallo={onCloseFallo}
+          onDeleteFallo={onDeleteFallo}
           onClose={onClose}
           isSaving={isSaving}
           currentUserName={currentUserName}
+          history={history}
+          historyError={historyError}
+          isHistoryLoading={isHistoryLoading}
+          isAdmin={isAdmin}
         />
       </div>
     </div>
