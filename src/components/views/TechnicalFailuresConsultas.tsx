@@ -70,6 +70,7 @@ const TechnicalFailuresConsultas: React.FC = () => {
           isLoading={isLoading}
           activeRole={session.roleName ?? undefined}
           showActions={false}
+          enableExport
         />
       </div>
     </div>
