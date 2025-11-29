@@ -68,10 +68,10 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
         limit: pageSize,
       });
 
-      setItems(response.items ?? []);
+      setItems(response.data ?? []);
       setTotal(response.total ?? 0);
       setPage(response.page ?? 1);
-      setPageSize(response.pageSize ?? pageSize);
+      setPageSize(response.limit ?? pageSize);
       setError(null);
     } catch (err) {
       const message = resolveErrorMessage(err, 'No se pudo cargar el catálogo');

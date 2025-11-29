@@ -61,20 +61,13 @@ export const listCatalogoTipoEquipoAfectado = async (req, res) => {
     const items = result.rows.map(mapRow);
     const totalRecords = Number(result.rows[0]?.total_count ?? items.length) || items.length;
     const responsePayload = {
-      items,
+      data: items,
       total: totalRecords,
       page: paginationClause ? pageNumber : 1,
-      pageSize: paginationClause ? pageSize : items.length,
+      limit: paginationClause ? pageSize : items.length,
     };
 
-    res
-      .status(200)
-      .json(
-        formatSuccess(
-          "Listado de tipos de equipo afectado",
-          responsePayload
-        )
-      );
+    res.status(200).json(responsePayload);
   } catch (error) {
     console.error("Error al listar tipos de equipo afectado:", error);
     res
