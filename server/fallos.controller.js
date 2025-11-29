@@ -354,14 +354,7 @@ export const getFallos = async (req, res) => {
         ft.id,
         ft.fecha,
         ft.hora,
-        COALESCE(
-          TO_CHAR(ft.fecha, 'YYYY-MM-DD') ||
-            CASE
-              WHEN ft.hora IS NOT NULL THEN ' ' || LPAD(ft.hora, 5, '0')
-              ELSE ''
-            END,
-          ''
-        ) AS fecha_hora_fallo,
+        TO_CHAR(ft.fecha::timestamp + ft.hora, 'YYYY-MM-DD HH24:MI') AS fecha_hora_fallo,
         ft.equipo_afectado,
         ft.descripcion_fallo,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
