@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { getAll as getNodos } from '../../services/nodos.service';
 import {
   assign as assignNodoSitio,
@@ -239,6 +240,30 @@ const AsignacionNodosSitios = () => {
 
   const isLoading = loadingNodos || loadingSitios;
 
+  const handleExportToExcel = () => {
+    if (isLoading || sitios.length === 0) return;
+
+    const formattedRows = sitios.map((sitio) => ({
+      Seleccionar: sitio.asignado ? 'Sí' : 'No',
+      Sitio: sitio.nombre ?? 'Sin nombre',
+      'Descripción': sitio.descripcion || 'Sin descripción',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Asignación');
+
+    const now = new Date();
+    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+      now.getDate()
+    ).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(
+      now.getMinutes()
+    ).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+
+    const filename = `asignacion_nodos_sitios_${timestamp}.xlsx`;
+    XLSX.writeFile(workbook, filename);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -312,48 +337,66 @@ const AsignacionNodosSitios = () => {
           ) : sitios.length === 0 ? (
             <p className="text-sm text-gray-500">No hay sitios disponibles para asignar.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-[#1C2E4A]">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                      Seleccionar
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                      Sitio
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
-                      Descripción
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {sitios.map((sitio) => {
-                    const sitioId = Number(sitio.id);
-                    const checked = selectedSitios.has(sitioId);
-                    return (
-                      <tr key={sitio.id}>
-                        <td className="px-4 py-3 text-sm text-gray-700">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
-                            checked={checked}
-                            onChange={(event) =>
-                              handleToggleSitio(sitioId, event.target.checked)
-                            }
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                          {sitio.nombre}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-500">
-                          {sitio.descripcion || 'Sin descripción'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-[#1C2E4A]">Sitios del nodo</h3>
+                <button
+                  type="button"
+                  onClick={handleExportToExcel}
+                  disabled={isLoading || sitios.length === 0}
+                  className={`px-4 py-2 text-sm font-semibold text-white rounded-md ${
+                    isLoading || sitios.length === 0
+                      ? 'bg-blue-300 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                >
+                  Exportar a Excel
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-[#1C2E4A]">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                        Seleccionar
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                        Sitio
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                        Descripción
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {sitios.map((sitio) => {
+                      const sitioId = Number(sitio.id);
+                      const checked = selectedSitios.has(sitioId);
+                      return (
+                        <tr key={sitio.id}>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
+                              checked={checked}
+                              onChange={(event) =>
+                                handleToggleSitio(sitioId, event.target.checked)
+                              }
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                            {sitio.nombre}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500">
+                            {sitio.descripcion || 'Sin descripción'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
