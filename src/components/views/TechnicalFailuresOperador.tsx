@@ -5,10 +5,7 @@ import AutocompleteComboBox from '../ui/AutocompleteComboBox';
 import { TechnicalFailure, TechnicalFailureCatalogs, CatalogoNodo } from '../../types';
 import { Sitio, getSitios } from '../../services/sitiosService';
 import { resolveConsolaIdByName } from '../../services/consolasService';
-import {
-  getAllTipoEquipoAfectado,
-  TipoEquipoAfectado,
-} from '../../services/tipoEquipoAfectadoService';
+import { getAllTipoEquipoAfectado } from '@services/tipoEquipoAfectadoService';
 import {
   fetchFallos,
   createFallo,
@@ -127,7 +124,7 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [nodosError, setNodosError] = useState<string | null>(null);
   const [isLoadingNodos, setIsLoadingNodos] = useState(false);
   const [tiposEquipoAfectado, setTiposEquipoAfectado] = useState<
-    TipoEquipoAfectado[]
+    Array<{ id: number; nombre: string }>
   >([]);
 
   const getSelectedDispositivo = (camaraValue: string) => {
@@ -331,9 +328,13 @@ const TechnicalFailuresOperador: React.FC = () => {
 
     const loadTiposEquipoAfectado = async () => {
       try {
-        const data = await getAllTipoEquipoAfectado();
+        const response = await getAllTipoEquipoAfectado({
+          page: 1,
+          limit: 1000,
+          search: '',
+        });
         if (!isMounted) return;
-        setTiposEquipoAfectado(data);
+        setTiposEquipoAfectado(response.data ?? []);
       } catch (error) {
         console.error('Error cargando tipos de equipo afectado:', error);
         if (isMounted) {
