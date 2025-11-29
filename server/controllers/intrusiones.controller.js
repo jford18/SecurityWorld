@@ -21,6 +21,13 @@ const mapIntrusionRow = (row) => {
       ? null
       : Number(row.fuerza_reaccion_id);
 
+  const personaRaw =
+    row?.persona_id === null || row?.persona_id === undefined
+      ? row?.personal_id
+      : row.persona_id;
+  const personaId =
+    personaRaw === null || personaRaw === undefined ? null : Number(personaRaw);
+
   return {
     id: row?.id,
     ubicacion: row?.ubicacion ?? "",
@@ -47,6 +54,7 @@ const mapIntrusionRow = (row) => {
         ? null
         : Number(fuerzaReaccionId),
     fuerza_reaccion_descripcion: row?.fuerza_reaccion_descripcion ?? null,
+    persona_id: personaId === null || Number.isNaN(personaId) ? null : personaId,
   };
 };
 
@@ -122,7 +130,21 @@ const getIntrusionesMetadata = async () => {
 };
 
 export const listIntrusiones = async (_req, res) => {
+  let metadata;
   try {
+    metadata = await getIntrusionesMetadata();
+  } catch (error) {
+    console.error("Error al preparar metadata de intrusiones:", error);
+    return res
+      .status(500)
+      .json({ mensaje: "No se pudo preparar la consulta de intrusiones" });
+  }
+
+  try {
+    const personaSelect = metadata.personaColumn
+      ? `, i.${metadata.personaColumn} AS persona_id`
+      : "";
+
     const result = await pool.query(
       `SELECT
          i.id,
@@ -138,7 +160,7 @@ export const listIntrusiones = async (_req, res) => {
          i.medio_comunicacion_id,
          i.conclusion_evento_id,
          i.sustraccion_material,
-         i.fuerza_reaccion_id,
+         i.fuerza_reaccion_id${personaSelect},
          s.nombre AS sitio_nombre,
          m.descripcion AS medio_comunicacion_descripcion,
          ce.descripcion AS conclusion_evento_descripcion,
@@ -173,7 +195,18 @@ export const createIntrusion = async (req, res) => {
     sustraccion_material,
     sitio_id,
     fuerza_reaccion_id,
+    persona_id,
   } = req.body || {};
+
+  let metadata;
+  try {
+    metadata = await getIntrusionesMetadata();
+  } catch (error) {
+    console.error("No se pudo obtener metadata de intrusiones:", error);
+    return res
+      .status(500)
+      .json({ mensaje: "No se pudo preparar el registro de intrusiones." });
+  }
 
   const fechaEventoValue = fecha_evento ? parseFechaValue(fecha_evento) : new Date();
   const fechaReaccionValue = fecha_reaccion ? parseFechaValue(fecha_reaccion) : null;
@@ -191,6 +224,11 @@ export const createIntrusion = async (req, res) => {
     typeof sustraccion_material === "boolean" ? sustraccion_material : false;
   const sitioIdValue = parseIntegerOrNull(sitio_id);
   const fuerzaReaccionValue = parseIntegerOrNull(fuerza_reaccion_id);
+  const personaRaw = persona_id ?? req.body?.personal_id;
+  const personaIdValue =
+    metadata.personaColumn && personaRaw !== undefined
+      ? parseIntegerOrNull(personaRaw)
+      : null;
 
   if (sitioIdValue === undefined) {
     return res
@@ -252,26 +290,83 @@ export const createIntrusion = async (req, res) => {
       .json({ mensaje: "El identificador de la fuerza de reacción no es válido." });
   }
 
+  if (metadata.personaColumn && personaRaw !== undefined && personaIdValue === undefined) {
+    return res
+      .status(400)
+      .json({ mensaje: "El identificador de la persona no es válido." });
+  }
+
   try {
+    const columns = [
+      "ubicacion",
+      "sitio_id",
+      "tipo",
+      "estado",
+      "descripcion",
+      "fecha_evento",
+      "fecha_reaccion",
+      "fecha_reaccion_fuera",
+      "llego_alerta",
+      "medio_comunicacion_id",
+      "conclusion_evento_id",
+      "sustraccion_material",
+      "fuerza_reaccion_id",
+    ];
+
+    const values = [
+      ubicacion ?? null,
+      sitioIdValue,
+      tipo ?? null,
+      estado ?? null,
+      descripcion ?? null,
+      fechaEventoValue,
+      fechaReaccionValue,
+      fechaReaccionFueraValue,
+      llegoAlertaValue,
+      medioComValue,
+      conclusionEventoValue,
+      sustraccionMaterialValue,
+      fuerzaReaccionValue,
+    ];
+
+    if (metadata.personaColumn) {
+      columns.push(metadata.personaColumn);
+      values.push(personaIdValue);
+    }
+
+    const placeholders = columns.map((_, index) => `$${index + 1}`);
+
+    const returningColumns = [
+      "id",
+      "ubicacion",
+      "sitio_id",
+      "tipo",
+      "estado",
+      "descripcion",
+      "fecha_evento",
+      "fecha_reaccion",
+      "fecha_reaccion_fuera",
+      "llego_alerta",
+      "medio_comunicacion_id",
+      "conclusion_evento_id",
+      "sustraccion_material",
+      "fuerza_reaccion_id",
+      metadata.personaColumn
+        ? `${metadata.personaColumn} AS persona_id`
+        : null,
+      "(SELECT nombre FROM public.sitios WHERE id = sitio_id) AS sitio_nombre",
+      `(
+        SELECT descripcion
+          FROM public."catalogo_fuerza_reaccion"
+         WHERE id = fuerza_reaccion_id
+       ) AS fuerza_reaccion_descripcion`,
+    ].filter(Boolean);
+
     const result = await pool.query(
-      `INSERT INTO public.intrusiones (ubicacion, sitio_id, tipo, estado, descripcion, fecha_evento, fecha_reaccion, fecha_reaccion_fuera, llego_alerta, medio_comunicacion_id, conclusion_evento_id, sustraccion_material, fuerza_reaccion_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-       RETURNING id, ubicacion, sitio_id, tipo, estado, descripcion, fecha_evento, fecha_reaccion, fecha_reaccion_fuera, llego_alerta, medio_comunicacion_id, conclusion_evento_id, sustraccion_material, fuerza_reaccion_id, (SELECT nombre FROM public.sitios WHERE id = sitio_id) AS sitio_nombre, (SELECT descripcion FROM public."catalogo_fuerza_reaccion" WHERE id = fuerza_reaccion_id) AS fuerza_reaccion_descripcion`,
-      [
-        ubicacion ?? null,
-        sitioIdValue,
-        tipo ?? null,
-        estado ?? null,
-        descripcion ?? null,
-        fechaEventoValue,
-        fechaReaccionValue,
-        fechaReaccionFueraValue,
-        llegoAlertaValue,
-        medioComValue,
-        conclusionEventoValue,
-        sustraccionMaterialValue,
-        fuerzaReaccionValue,
-      ]
+      `INSERT INTO public.intrusiones (${columns.join(", ")})
+       VALUES (${placeholders.join(", ")})
+       RETURNING ${returningColumns.join(", ")}`,
+      values
     );
 
     const created = result.rows[0];
