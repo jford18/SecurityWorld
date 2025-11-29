@@ -28,7 +28,6 @@ type FailureFormData = {
   tipoProblema: string;
   reportadoCliente: boolean;
   nodo: string;
-  tipoEquipo: string;
   tipoEquipoAfectadoId: string;
   camara: string;
   tipoProblemaEquipo: string;
@@ -57,7 +56,6 @@ const buildInitialFormData = (): FailureFormData => ({
   tipoProblema: '',
   reportadoCliente: false,
   nodo: '',
-  tipoEquipo: '',
   tipoEquipoAfectadoId: '',
   camara: '',
   tipoProblemaEquipo: '',
@@ -248,14 +246,6 @@ const TechnicalFailuresOperador: React.FC = () => {
     [nodos]
   );
 
-  const tipoEquipoItems = useMemo(
-    () => [
-      { id: 'empty', label: 'Seleccione...', value: '' },
-      ...catalogos.tiposEquipo.map((tipo) => ({ id: tipo, label: tipo, value: tipo })),
-    ],
-    [catalogos.tiposEquipo]
-  );
-
   const tipoEquipoAfectadoItems = useMemo(
     () => [
       { id: 'empty', label: 'Seleccione...', value: '' },
@@ -274,6 +264,14 @@ const TechnicalFailuresOperador: React.FC = () => {
       ...catalogos.tiposProblemaEquipo.map((tipo) => ({ id: tipo, label: tipo, value: tipo })),
     ],
     [catalogos.tiposProblemaEquipo]
+  );
+
+  const selectedTipoEquipoAfectado = useMemo(
+    () =>
+      tiposEquipoAfectado.find(
+        (tipo) => String(tipo.id ?? tipo.nombre ?? '') === formData.tipoEquipoAfectadoId
+      ) ?? null,
+    [tiposEquipoAfectado, formData.tipoEquipoAfectadoId]
   );
 
   const camaraItems = useMemo(
@@ -406,12 +404,6 @@ const TechnicalFailuresOperador: React.FC = () => {
     }
 
     if (fieldValues.affectationType === 'Equipo') {
-      if (!fieldValues.tipoEquipo) {
-        tempErrors.tipoEquipo = 'El tipo de equipo es obligatorio.';
-      } else {
-        delete tempErrors.tipoEquipo;
-      }
-
       if (!fieldValues.tipoEquipoAfectadoId) {
         tempErrors.tipoEquipoAfectadoId = 'El tipo de equipo afectado es obligatorio.';
       } else {
@@ -420,7 +412,7 @@ const TechnicalFailuresOperador: React.FC = () => {
 
       const equipoHcActual = isDeviceFromHC(getSelectedDispositivo(fieldValues.camara));
 
-      if (fieldValues.tipoEquipo === 'Cámara') {
+      if (selectedTipoEquipoAfectado?.nombre === 'Cámara') {
         if (!fieldValues.camara) {
           tempErrors.camara = 'La cámara es obligatoria.';
         } else {
@@ -440,7 +432,6 @@ const TechnicalFailuresOperador: React.FC = () => {
         delete tempErrors.tipoProblemaEquipo;
       }
     } else {
-      delete tempErrors.tipoEquipo;
       delete tempErrors.tipoEquipoAfectadoId;
       delete tempErrors.camara;
       delete tempErrors.tipoProblemaEquipo;
@@ -456,7 +447,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       [name]: rawValue,
     } as FailureFormData;
 
-    if (name === 'tipoEquipo') {
+    if (name === 'tipoEquipoAfectadoId') {
       newValues.camara = '';
       newValues.tipoProblemaEquipo = '';
     }
@@ -647,7 +638,7 @@ const TechnicalFailuresOperador: React.FC = () => {
     if (formData.affectationType === 'Nodo') {
       equipo_afectado = selectedNodo?.nombre || 'N/A';
     } else if (formData.affectationType === 'Equipo') {
-      const equipo = formData.camara || formData.tipoEquipo;
+      const equipo = formData.camara || selectedTipoEquipoAfectado?.nombre || 'Equipo';
       equipo_afectado = `${equipo} en ${sitioNombre}`;
     } else if (formData.affectationType === 'Punto') {
       equipo_afectado = `Punto en ${sitioNombre}`;
@@ -704,7 +695,6 @@ const TechnicalFailuresOperador: React.FC = () => {
       descripcion_fallo: descripcion_fallo || 'Sin descripción',
       responsable: session.user,
       tipoProblema: tipoProblemaPayload,
-      tipoEquipo: formData.tipoEquipo,
       tipoProblemaEquipo: tipoProblemaEquipoPayload,
       tipo_equipo_afectado_id: tipoEquipoAfectadoIdPayload,
       nodo: formData.nodo,
@@ -910,18 +900,6 @@ const TechnicalFailuresOperador: React.FC = () => {
             </div>
             <div className="md:col-span-2">
               <AutocompleteComboBox
-                label="Tipo de Equipo *"
-                value={formData.tipoEquipo}
-                onChange={(selected: string) => applyFieldUpdate('tipoEquipo', selected)}
-                items={tipoEquipoItems}
-                displayField="label"
-                valueField="value"
-                placeholder="Buscar tipo de equipo..."
-                error={errors.tipoEquipo}
-              />
-            </div>
-            <div className="md:col-span-2">
-              <AutocompleteComboBox
                 label="Tipo de Problema *"
                 value={formData.tipoProblema}
                 onChange={(selected: string) => applyFieldUpdate('tipoProblema', selected)}
@@ -947,7 +925,7 @@ const TechnicalFailuresOperador: React.FC = () => {
                 />
               </div>
             )}
-            {formData.tipoEquipo === 'Cámara' && (
+            {selectedTipoEquipoAfectado?.nombre === 'Cámara' && (
               <div className="md:col-span-2">
                 <AutocompleteComboBox
                   label="Cámara *"
