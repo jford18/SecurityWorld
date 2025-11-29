@@ -6,6 +6,10 @@ import { TechnicalFailure, TechnicalFailureCatalogs, CatalogoNodo } from '../../
 import { Sitio, getSitios } from '../../services/sitiosService';
 import { resolveConsolaIdByName } from '../../services/consolasService';
 import {
+  getAllTipoEquipoAfectado,
+  TipoEquipoAfectado,
+} from '../../services/tipoEquipoAfectadoService';
+import {
   fetchFallos,
   createFallo,
   fetchCatalogos,
@@ -25,6 +29,7 @@ type FailureFormData = {
   reportadoCliente: boolean;
   nodo: string;
   tipoEquipo: string;
+  tipoEquipoAfectadoId: string;
   camara: string;
   tipoProblemaEquipo: string;
   sitioId: string;
@@ -53,6 +58,7 @@ const buildInitialFormData = (): FailureFormData => ({
   reportadoCliente: false,
   nodo: '',
   tipoEquipo: '',
+  tipoEquipoAfectadoId: '',
   camara: '',
   tipoProblemaEquipo: '',
   sitioId: '',
@@ -122,6 +128,9 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [nodos, setNodos] = useState<CatalogoNodo[]>([]);
   const [nodosError, setNodosError] = useState<string | null>(null);
   const [isLoadingNodos, setIsLoadingNodos] = useState(false);
+  const [tiposEquipoAfectado, setTiposEquipoAfectado] = useState<
+    TipoEquipoAfectado[]
+  >([]);
 
   const getSelectedDispositivo = (camaraValue: string) => {
     if (!camaraValue) return null;
@@ -247,6 +256,18 @@ const TechnicalFailuresOperador: React.FC = () => {
     [catalogos.tiposEquipo]
   );
 
+  const tipoEquipoAfectadoItems = useMemo(
+    () => [
+      { id: 'empty', label: 'Seleccione...', value: '' },
+      ...tiposEquipoAfectado.map((tipo) => ({
+        id: String(tipo.id ?? tipo.nombre ?? ''),
+        label: tipo.nombre,
+        value: String(tipo.id),
+      })),
+    ],
+    [tiposEquipoAfectado]
+  );
+
   const tipoProblemaEquipoItems = useMemo(
     () => [
       { id: 'empty', label: 'Seleccione...', value: '' },
@@ -307,6 +328,31 @@ const TechnicalFailuresOperador: React.FC = () => {
     fetchNodos();
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadTiposEquipoAfectado = async () => {
+      try {
+        const data = await getAllTipoEquipoAfectado();
+        if (!isMounted) return;
+        setTiposEquipoAfectado(data);
+      } catch (error) {
+        console.error('Error cargando tipos de equipo afectado:', error);
+        if (isMounted) {
+          setTiposEquipoAfectado([]);
+        }
+      }
+    };
+
+    if (formData.affectationType === 'Equipo' && tiposEquipoAfectado.length === 0) {
+      loadTiposEquipoAfectado();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [formData.affectationType, tiposEquipoAfectado.length]);
+
   const selectedNodo = useMemo(
     () => nodos.find((nodoItem) => String(nodoItem.id) === formData.nodo) ?? null,
     [nodos, formData.nodo]
@@ -366,6 +412,12 @@ const TechnicalFailuresOperador: React.FC = () => {
         delete tempErrors.tipoEquipo;
       }
 
+      if (!fieldValues.tipoEquipoAfectadoId) {
+        tempErrors.tipoEquipoAfectadoId = 'El tipo de equipo afectado es obligatorio.';
+      } else {
+        delete tempErrors.tipoEquipoAfectadoId;
+      }
+
       const equipoHcActual = isDeviceFromHC(getSelectedDispositivo(fieldValues.camara));
 
       if (fieldValues.tipoEquipo === 'Cámara') {
@@ -389,6 +441,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       }
     } else {
       delete tempErrors.tipoEquipo;
+      delete tempErrors.tipoEquipoAfectadoId;
       delete tempErrors.camara;
       delete tempErrors.tipoProblemaEquipo;
     }
@@ -547,6 +600,16 @@ const TechnicalFailuresOperador: React.FC = () => {
   }, [formData.affectationType, selectedSitio]);
 
   useEffect(() => {
+    if (formData.affectationType !== 'Equipo' && formData.tipoEquipoAfectadoId) {
+      setFormData((prev) => ({ ...prev, tipoEquipoAfectadoId: '' }));
+      setErrors((prev) => {
+        const { tipoEquipoAfectadoId, ...rest } = prev;
+        return rest;
+      });
+    }
+  }, [formData.affectationType, formData.tipoEquipoAfectadoId]);
+
+  useEffect(() => {
     if (formData.affectationType === 'Equipo' && equipoEsHC) {
       return;
     }
@@ -622,6 +685,14 @@ const TechnicalFailuresOperador: React.FC = () => {
 
     const tipoProblemaPayload = equipoDesdeHC ? formData.tipoProblemaEquipo : formData.tipoProblema;
     const tipoProblemaEquipoPayload = equipoDesdeHC ? formData.tipoProblemaEquipo : undefined;
+    const tipoEquipoAfectadoIdPayload = (() => {
+      if (formData.affectationType !== 'Equipo' || !formData.tipoEquipoAfectadoId) {
+        return null;
+      }
+
+      const parsed = Number(formData.tipoEquipoAfectadoId);
+      return Number.isNaN(parsed) ? formData.tipoEquipoAfectadoId : parsed;
+    })();
 
     const payload: TechnicalFailurePayload = {
       fecha: fechaFalloPayload,
@@ -635,6 +706,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       tipoProblema: tipoProblemaPayload,
       tipoEquipo: formData.tipoEquipo,
       tipoProblemaEquipo: tipoProblemaEquipoPayload,
+      tipo_equipo_afectado_id: tipoEquipoAfectadoIdPayload,
       nodo: formData.nodo,
       sitio: sitioNombre,
       sitio_id: selectedSitio ? selectedSitio.id : undefined,
@@ -805,13 +877,15 @@ const TechnicalFailuresOperador: React.FC = () => {
               <div>
                 <AutocompleteComboBox
                   label="Tipo de Equipo Afectado *"
-                  value={formData.tipoEquipo}
-                  onChange={(selected: string) => applyFieldUpdate('tipoEquipo', selected)}
-                  items={tipoEquipoItems}
+                  value={formData.tipoEquipoAfectadoId}
+                  onChange={(selected: string) =>
+                    applyFieldUpdate('tipoEquipoAfectadoId', selected)
+                  }
+                  items={tipoEquipoAfectadoItems}
                   displayField="label"
                   valueField="value"
-                  placeholder="Buscar tipo de equipo..."
-                  error={errors.tipoEquipo}
+                  placeholder="Buscar tipo de equipo afectado..."
+                  error={errors.tipoEquipoAfectadoId}
                 />
               </div>
               <div className="flex items-end">
@@ -833,6 +907,18 @@ const TechnicalFailuresOperador: React.FC = () => {
                   </div>
                 </div>
               </div>
+            </div>
+            <div className="md:col-span-2">
+              <AutocompleteComboBox
+                label="Tipo de Equipo *"
+                value={formData.tipoEquipo}
+                onChange={(selected: string) => applyFieldUpdate('tipoEquipo', selected)}
+                items={tipoEquipoItems}
+                displayField="label"
+                valueField="value"
+                placeholder="Buscar tipo de equipo..."
+                error={errors.tipoEquipo}
+              />
             </div>
             <div className="md:col-span-2">
               <AutocompleteComboBox
