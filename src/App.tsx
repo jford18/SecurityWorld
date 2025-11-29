@@ -38,6 +38,7 @@ import ConclusionEventoScreen from './pages/administracion/ConclusionEventoScree
 import FuerzaReaccionScreen from './pages/administracion/FuerzaReaccionScreen';
 import InformeEventosScreen from './screens/reportes/InformeEventosScreen';
 import TiposServicioPage from './pages/administracion/TiposServicioPage';
+import TipoEquipoAfectadoScreen from './pages/administracion/TipoEquipoAfectadoScreen';
 
 import HaciendaPage from './pages/administracion/HaciendaPage.tsx';
 
@@ -134,6 +135,10 @@ const routeConfig: RouteDefinition[] = [
   {
     path: '/administracion/tipo-intrusion',
     element: <TipoIntrusion />,
+  },
+  {
+    path: '/administracion/tipo-equipo-afectado',
+    element: <TipoEquipoAfectadoScreen />,
   },
   { path: '/administracion/tipo-servicio', element: <TiposServicioPage /> },
   { path: '/administracion/clientes', element: <Clientes /> },
