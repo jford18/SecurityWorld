@@ -206,16 +206,23 @@ const mapFalloRowToDto = (row) => ({
   fecha: formatDate(row.fecha) || "",
   hora: row.hora || undefined,
   horaFallo: row.hora || undefined,
+  fechaHoraFallo: row.fecha_hora_fallo || undefined,
   equipo_afectado: row.equipo_afectado ?? "",
   descripcion_fallo: row.descripcion_fallo ?? "",
   responsable: row.responsable || "",
   deptResponsable: row.departamento || undefined,
+  departamentoResponsableId: row.departamento_id ?? null,
   consola: row.consola || undefined, // FIX: expose consola name retrieved via the LEFT JOIN so the frontend can display it without additional lookups.
   sitio_nombre: row.sitio_nombre || "",
   tipo_problema_id: row.tipo_problema_id ?? null,
   tipo_afectacion: row.tipo_afectacion || "",
+  tipoProblemaNombre: row.tipo_afectacion || undefined,
   fechaResolucion: formatDate(row.fecha_resolucion) || undefined,
   horaResolucion: row.hora_resolucion || undefined,
+  fechaHoraResolucion: row.fecha_hora_resolucion || undefined,
+  estado: row.estado || undefined,
+  fecha_creacion: row.fecha_creacion ? formatDate(row.fecha_creacion) : undefined,
+  fecha_actualizacion: row.fecha_actualizacion ? formatDate(row.fecha_actualizacion) : undefined,
   verificacionApertura: row.verificacion_apertura || undefined,
   verificacionCierre: row.verificacion_cierre || undefined,
   novedadDetectada: row.novedad_detectada || undefined,
@@ -227,6 +234,63 @@ const mapFalloRowToDto = (row) => ({
     row.responsable_verificacion_cierre_nombre || null,
 });
 
+const normalizeRoleName = (req) => {
+  const candidate =
+    req.user?.rol_nombre ||
+    req.user?.roleName ||
+    req.user?.rol ||
+    req.headers["x-role-name"] ||
+    req.headers["x-rol-nombre"] ||
+    req.headers["x-role"] ||
+    req.headers["x-rol"] ||
+    "";
+
+  return String(candidate).trim().toLowerCase();
+};
+
+const isAdminUser = (req) => {
+  const roleName = normalizeRoleName(req);
+
+  if (!roleName) {
+    return Boolean(req.user?.es_admin || req.user?.is_admin);
+  }
+
+  return ["admin", "administrador", "administrator", "supervisor"].some((keyword) =>
+    roleName.includes(keyword)
+  );
+};
+
+const buildDateTime = (dateValue, timeValue) => {
+  if (!dateValue) return null;
+  const datePart = formatDate(dateValue);
+  if (!datePart) return null;
+
+  const timePart = (timeValue || "00:00").toString().slice(0, 8);
+  const normalizedTime = timePart.length === 5 ? `${timePart}:00` : timePart;
+
+  const candidate = `${datePart}${normalizedTime ? `T${normalizedTime}` : ""}`;
+  const parsed = new Date(candidate);
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatDurationFromMs = (durationMs) => {
+  const totalMinutes = Math.floor(durationMs / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+
+  const parts = [];
+  if (days > 0) parts.push(`${days} día${days === 1 ? "" : "s"}`);
+  if (hours > 0) parts.push(`${hours} hora${hours === 1 ? "" : "s"}`);
+  parts.push(`${minutes} minuto${minutes === 1 ? "" : "s"}`);
+
+  return {
+    duracionTexto: parts.join(" "),
+    totalMinutos: totalMinutes,
+  };
+};
+
 const fetchFalloById = async (client, id) => {
   const result = await client.query(
       `SELECT
@@ -237,11 +301,15 @@ const fetchFalloById = async (client, id) => {
         ft.descripcion_fallo,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
+        dept.id AS departamento_id,
         sitio.nombre AS sitio_nombre,
         ft.tipo_problema_id,
         tp.descripcion AS tipo_afectacion,
         ft.fecha_resolucion,
         ft.hora_resolucion,
+        ft.estado,
+        ft.fecha_creacion,
+        ft.fecha_actualizacion,
         seguimiento.novedad_detectada,
         COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
         COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre,
@@ -285,12 +353,16 @@ export const getFallos = async (req, res) => {
         ft.descripcion_fallo,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
+        dept.id AS departamento_id,
         consola.nombre AS consola,
         sitio.nombre AS sitio_nombre,
         ft.tipo_problema_id,
         tp.descripcion AS tipo_afectacion,
         ft.fecha_resolucion,
-        ft.hora_resolucion
+        ft.hora_resolucion,
+        ft.estado,
+        ft.fecha_creacion,
+        ft.fecha_actualizacion
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
@@ -541,6 +613,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
     fecha,
     hora,
     deptResponsable,
+    departamentoResponsableId,
     fechaResolucion,
     horaResolucion,
     horaFallo,
@@ -581,7 +654,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
     await client.query("BEGIN");
 
     const existingResult = await client.query(
-      "SELECT id, fecha, hora FROM fallos_tecnicos WHERE id = $1",
+      "SELECT id, fecha, hora, estado, departamento_id, fecha_resolucion, hora_resolucion FROM fallos_tecnicos WHERE id = $1",
       [id]
     );
 
@@ -590,19 +663,34 @@ export const actualizarFalloSupervisor = async (req, res) => {
       return res.status(404).json({ mensaje: "El fallo técnico no existe." });
     }
 
+    const existingFallo = existingResult.rows[0];
+
+    if (existingFallo.estado === "CERRADO") {
+      await client.query("ROLLBACK");
+      const statusCode = isAdminUser(req) ? 400 : 403;
+      return res
+        .status(statusCode)
+        .json({ mensaje: "No se puede modificar un fallo que ya está cerrado." });
+    }
+
     const deptResult = await client.query(
       "SELECT id, nombre FROM departamentos_responsables"
     );
     const dept = deptResult.rows;
 
-    const departamentoId = dept.find((d) => {
-      return (
-        String(d.nombre).trim().toLowerCase() ===
-        String(deptResponsable || "").trim().toLowerCase()
-      );
-    })?.id ?? null;
+    const departamentoIdFromPayload = (() => {
+      const parsed = Number(departamentoResponsableId);
+      return Number.isFinite(parsed) ? parsed : null;
+    })();
 
-    const existingFallo = existingResult.rows[0];
+    const departamentoId =
+      departamentoIdFromPayload ??
+      dept.find((d) => {
+        return (
+          String(d.nombre).trim().toLowerCase() ===
+          String(deptResponsable || "").trim().toLowerCase()
+        );
+      })?.id ?? null;
     const { fecha: fechaFalloPayload, hora: horaFalloPayload } =
       resolveFechaHoraFallo({
         fecha,
@@ -614,6 +702,22 @@ export const actualizarFalloSupervisor = async (req, res) => {
     const fechaFalloValue =
       fechaFalloPayload || formatDate(existingFallo?.fecha) || null;
     const horaFalloValue = horaFalloPayload || existingFallo?.hora || null;
+
+    const departamentoFinalId =
+      departamentoId ?? existingFallo.departamento_id ?? null;
+
+    const fechaResolucionValue =
+      fechaResolucion ?? existingFallo.fecha_resolucion ?? null;
+    const horaResolucionValue =
+      horaResolucion ?? existingFallo.hora_resolucion ?? null;
+
+    if (fechaResolucionValue && !departamentoFinalId) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        mensaje:
+          "Debe seleccionar un Departamento Responsable antes de cerrar el fallo.",
+      });
+    }
 
     await client.query(
       `UPDATE fallos_tecnicos
@@ -627,9 +731,9 @@ export const actualizarFalloSupervisor = async (req, res) => {
       [
         fechaFalloValue,
         horaFalloValue,
-        departamentoId,
-        fechaResolucion || null,
-        horaResolucion || null,
+        departamentoFinalId,
+        fechaResolucionValue,
+        horaResolucionValue,
         id,
       ]
     );
@@ -699,6 +803,176 @@ export const actualizarFalloSupervisor = async (req, res) => {
     return res
       .status(500)
       .json({ message: "Error interno del servidor" });
+  } finally {
+    client.release();
+  }
+};
+
+export const getDuracionFallo = async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+
+  try {
+    const result = await client.query(
+      "SELECT fecha, hora, fecha_resolucion, hora_resolucion FROM fallos_tecnicos WHERE id = $1",
+      [id]
+    );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ mensaje: "El fallo técnico no existe." });
+    }
+
+    const fallo = result.rows[0];
+
+    if (!fallo.fecha_resolucion || !fallo.hora_resolucion) {
+      return res.status(400).json({
+        mensaje: "Debe ingresar la fecha y hora de resolución antes de cerrar el fallo.",
+      });
+    }
+
+    const fechaHoraFallo = buildDateTime(fallo.fecha, fallo.hora);
+    const fechaHoraResolucion = buildDateTime(
+      fallo.fecha_resolucion,
+      fallo.hora_resolucion
+    );
+
+    if (!fechaHoraFallo || !fechaHoraResolucion) {
+      return res.status(400).json({
+        mensaje: "No es posible calcular la duración con la información disponible.",
+      });
+    }
+
+    const diffMs = Math.max(0, fechaHoraResolucion.getTime() - fechaHoraFallo.getTime());
+    const duration = formatDurationFromMs(diffMs);
+
+    return res.json(duration);
+  } catch (error) {
+    console.error("Error al calcular la duración del fallo técnico:", error);
+    return res.status(500).json({
+      mensaje: "Ocurrió un error al calcular la duración del fallo.",
+    });
+  } finally {
+    client.release();
+  }
+};
+
+export const getHistorialFallo = async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+
+  try {
+    const falloResult = await client.query(
+      `SELECT
+         ft.id,
+         ft.fecha,
+         ft.hora,
+         ft.fecha_resolucion,
+         ft.hora_resolucion,
+         ft.estado,
+         ft.fecha_creacion,
+         dept.nombre AS departamento
+       FROM fallos_tecnicos ft
+       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
+       WHERE ft.id = $1`,
+      [id]
+    );
+
+    if (!falloResult.rowCount) {
+      return res.status(404).json({ mensaje: "El fallo técnico no existe." });
+    }
+
+    const fallo = falloResult.rows[0];
+    const accionesResult = await client.query(
+      `SELECT
+         sf.id,
+         sf.novedad_detectada,
+         sf.fecha_creacion,
+         sf.fecha_actualizacion,
+         COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
+         COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre
+       FROM seguimiento_fallos sf
+       LEFT JOIN usuarios apertura ON apertura.id = sf.verificacion_apertura_id
+       LEFT JOIN usuarios cierre ON cierre.id = sf.verificacion_cierre_id
+       WHERE sf.fallo_id = $1
+       ORDER BY sf.fecha_creacion ASC`,
+      [id]
+    );
+
+    const fechaHoraFallo = buildDateTime(fallo.fecha, fallo.hora);
+    const fechaHoraResolucion = buildDateTime(
+      fallo.fecha_resolucion,
+      fallo.hora_resolucion
+    );
+
+    const duration =
+      fechaHoraFallo && fechaHoraResolucion
+        ? formatDurationFromMs(
+            Math.max(0, fechaHoraResolucion.getTime() - fechaHoraFallo.getTime())
+          )
+        : null;
+
+    return res.json({
+      departamento_responsable: fallo.departamento || null,
+      fecha: formatDate(fallo.fecha) || null,
+      hora: fallo.hora || null,
+      fecha_resolucion: formatDate(fallo.fecha_resolucion) || null,
+      hora_resolucion: fallo.hora_resolucion || null,
+      fecha_creacion: formatDate(fallo.fecha_creacion) || null,
+      estado: fallo.estado || null,
+      duracionTexto: duration?.duracionTexto || null,
+      totalMinutos: duration?.totalMinutos ?? null,
+      acciones: accionesResult.rows,
+    });
+  } catch (error) {
+    console.error("Error al obtener historial del fallo técnico:", error);
+    return res.status(500).json({
+      mensaje: "Ocurrió un error al obtener el historial del fallo.",
+    });
+  } finally {
+    client.release();
+  }
+};
+
+export const eliminarFalloTecnico = async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+
+  try {
+    const falloResult = await client.query(
+      "SELECT id, estado FROM fallos_tecnicos WHERE id = $1",
+      [id]
+    );
+
+    if (!falloResult.rowCount) {
+      return res.status(404).json({ mensaje: "El fallo técnico no existe." });
+    }
+
+    const fallo = falloResult.rows[0];
+
+    if (!isAdminUser(req)) {
+      return res.status(403).json({
+        mensaje: "Solo un usuario administrador puede eliminar fallos cerrados.",
+      });
+    }
+
+    if (fallo.estado !== "CERRADO") {
+      return res.status(400).json({
+        mensaje: "Solo se pueden eliminar fallos cerrados.",
+      });
+    }
+
+    await client.query("BEGIN");
+    await client.query("DELETE FROM seguimiento_fallos WHERE fallo_id = $1", [id]);
+    await client.query("DELETE FROM fallos_tecnicos WHERE id = $1", [id]);
+    await client.query("COMMIT");
+
+    return res.json({ mensaje: "Fallo técnico eliminado correctamente." });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error al eliminar el fallo técnico:", error);
+    return res.status(500).json({
+      mensaje: "Ocurrió un error al eliminar el fallo técnico.",
+    });
   } finally {
     client.release();
   }

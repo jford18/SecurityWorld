@@ -4,7 +4,14 @@ import {
   CatalogoNodo,
   TechnicalFailure,
   TechnicalFailureCatalogs,
+  FailureDurationResponse,
+  FailureHistory,
 } from '../types';
+
+type RequestContext = {
+  roleId?: number | null;
+  roleName?: string | null;
+};
 
 export interface TechnicalFailurePayload {
   id?: string;
@@ -104,18 +111,65 @@ export const getFallos = async (): Promise<TechnicalFailure[]> => {
 
 export const fetchFallos = getFallos;
 
+const buildRoleHeaders = (context?: RequestContext) => {
+  const headers: Record<string, string> = {};
+
+  if (context?.roleName) {
+    headers['x-role-name'] = context.roleName;
+  }
+
+  if (context?.roleId != null) {
+    headers['x-role-id'] = String(context.roleId);
+  }
+
+  return headers;
+};
+
 export const createFallo = async (
-  payload: TechnicalFailurePayload
+  payload: TechnicalFailurePayload,
+  context?: RequestContext,
 ): Promise<TechnicalFailure> => {
-  const { data } = await apiClient.post<TechnicalFailure>('/fallos', payload);
+  const { data } = await apiClient.post<TechnicalFailure>('/fallos', payload, {
+    headers: buildRoleHeaders(context),
+  });
   return data;
 };
 
 export const updateFallo = async (
   id: string,
-  payload: TechnicalFailurePayload
+  payload: TechnicalFailurePayload,
+  context?: RequestContext,
 ): Promise<TechnicalFailure> => {
-  const { data } = await apiClient.put<TechnicalFailure>(`/fallos/${id}`, payload);
+  const { data } = await apiClient.put<TechnicalFailure>(`/fallos/${id}`, payload, {
+    headers: buildRoleHeaders(context),
+  });
+  return data;
+};
+
+export const getFalloDuration = async (
+  id: string,
+  context?: RequestContext,
+): Promise<FailureDurationResponse> => {
+  const { data } = await apiClient.get<FailureDurationResponse>(`/fallos/${id}/duracion`, {
+    headers: buildRoleHeaders(context),
+  });
+  return data;
+};
+
+export const getFalloHistorial = async (
+  id: string,
+  context?: RequestContext,
+): Promise<FailureHistory> => {
+  const { data } = await apiClient.get<FailureHistory>(`/fallos/${id}/historial`, {
+    headers: buildRoleHeaders(context),
+  });
+  return data;
+};
+
+export const deleteFallo = async (id: string, context?: RequestContext) => {
+  const { data } = await apiClient.delete<{ mensaje?: string }>(`/fallos/${id}`, {
+    headers: buildRoleHeaders(context),
+  });
   return data;
 };
 
