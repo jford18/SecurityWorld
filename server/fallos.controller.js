@@ -207,13 +207,16 @@ const mapFalloRowToDto = (row) => ({
   hora: row.hora || undefined,
   horaFallo: row.hora || undefined,
   fechaHoraFallo: row.fecha_hora_fallo || undefined,
+  problema: row.problema || row.tipo_problema_descripcion || undefined,
   equipo_afectado: row.equipo_afectado ?? "",
   descripcion_fallo: row.descripcion_fallo ?? "",
   responsable: row.responsable || "",
   deptResponsable: row.departamento || undefined,
+  departamento_responsable: row.departamento_responsable || undefined,
   departamentoResponsableId: row.departamento_id ?? null,
   consola: row.consola || undefined, // FIX: expose consola name retrieved via the LEFT JOIN so the frontend can display it without additional lookups.
-  sitio_nombre: row.sitio_nombre || "",
+  sitio_nombre: row.sitio_nombre || undefined,
+  sitio: row.sitio || row.sitio_nombre || undefined,
   tipo_problema_id: row.tipo_problema_id ?? null,
   tipo_afectacion: row.tipo_afectacion || "",
   tipoProblemaNombre: row.tipo_problema_descripcion || undefined,
@@ -221,6 +224,7 @@ const mapFalloRowToDto = (row) => ({
   horaResolucion: row.hora_resolucion || undefined,
   fechaHoraResolucion: row.fecha_hora_resolucion || undefined,
   estado: row.estado || undefined,
+  estado_texto: row.estado_texto || undefined,
   fecha_creacion: row.fecha_creacion ? formatDate(row.fecha_creacion) : undefined,
   fecha_actualizacion: row.fecha_actualizacion ? formatDate(row.fecha_actualizacion) : undefined,
   verificacionApertura: row.verificacion_apertura || undefined,
@@ -350,19 +354,38 @@ export const getFallos = async (req, res) => {
         ft.id,
         ft.fecha,
         ft.hora,
+        COALESCE(
+          TO_CHAR(ft.fecha, 'YYYY-MM-DD') ||
+            CASE
+              WHEN ft.hora IS NOT NULL THEN ' ' || LPAD(ft.hora, 5, '0')
+              ELSE ''
+            END,
+          ''
+        ) AS fecha_hora_fallo,
         ft.equipo_afectado,
         ft.descripcion_fallo,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
         dept.id AS departamento_id,
         consola.nombre AS consola,
+        COALESCE(sitio.nombre, 'Sin sitio asignado') AS sitio,
         sitio.nombre AS sitio_nombre,
         ft.tipo_problema_id,
         tp.descripcion AS tipo_problema_descripcion,
+        tp.descripcion AS problema,
         ft.tipo_afectacion,
         ft.fecha_resolucion,
         ft.hora_resolucion,
         ft.estado,
+        CASE
+          WHEN ft.fecha_resolucion IS NOT NULL THEN 'RESUELTO'
+          WHEN ft.fecha IS NOT NULL THEN CONCAT(
+            GREATEST(0, DATE_PART('day', CURRENT_DATE - ft.fecha)::int),
+            ' días pendiente'
+          )
+          ELSE '0 días pendiente'
+        END AS estado_texto,
+        dept.nombre AS departamento_responsable,
         ft.fecha_creacion,
         ft.fecha_actualizacion
       FROM fallos_tecnicos ft

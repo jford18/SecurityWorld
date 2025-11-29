@@ -3,6 +3,10 @@ import { TechnicalFailure } from '../../types';
 import { calcularEstado } from './TechnicalFailuresUtils';
 
 const formatFechaHoraFallo = (failure: TechnicalFailure) => {
+  if (failure.fechaHoraFallo) {
+    return failure.fechaHoraFallo;
+  }
+
   const horaFallo = failure.hora ?? failure.horaFallo;
   if (failure.fecha && horaFallo) {
     return `${failure.fecha} ${horaFallo.toString().substring(0, 5)}`;
@@ -94,7 +98,8 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     switch (key) {
       case 'problema':
         return (
-          failure.tipoProblemaNombre
+          failure.problema
+            || failure.tipoProblemaNombre
             || failure.tipoProblema
             || failure.descripcion_fallo
             || ''
@@ -106,15 +111,17 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
         return tipoAfectacion.toString().toLowerCase();
       }
       case 'sitioNombre':
-        return (failure.sitioNombre || failure.sitio_nombre || '')
+        return (failure.sitio || failure.sitioNombre || failure.sitio_nombre || '')
           .toString()
           .toLowerCase();
       case 'estado': {
-        const estado = calcularEstado(failure);
-        return estado.texto.toLowerCase();
+        const estado = failure.estado_texto || calcularEstado(failure).texto;
+        return estado.toLowerCase();
       }
       case 'departamentoResponsable':
         return (
+          failure.departamento_responsable
+            ||
           failure.departamentoNombre
             || failure.deptResponsable
             || ''
@@ -404,16 +411,22 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                     {formatFechaHoraFallo(fallo) || 'Sin información'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {fallo.tipoProblemaNombre
+                    {fallo.problema
+                      || fallo.tipoProblemaNombre
                       || fallo.tipoProblema
                       || fallo.descripcion_fallo
                       || 'Sin información'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {fallo.tipoAfectacion || fallo.tipo_afectacion || 'Sin información'}
+                    {fallo.tipo_afectacion
+                      || fallo.tipoAfectacion
+                      || 'Sin información'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {fallo.sitioNombre || fallo.sitio_nombre || 'Sin información'}
+                    {fallo.sitio
+                      || fallo.sitioNombre
+                      || fallo.sitio_nombre
+                      || 'Sin sitio asignado'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {(() => {
@@ -438,7 +451,8 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                     })()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {fallo.departamentoNombre
+                    {fallo.departamento_responsable
+                      || fallo.departamentoNombre
                       || fallo.deptResponsable
                       || 'Sin información'}
                   </td>
