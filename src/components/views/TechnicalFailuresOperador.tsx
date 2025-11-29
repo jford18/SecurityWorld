@@ -5,7 +5,7 @@ import AutocompleteComboBox from '../ui/AutocompleteComboBox';
 import { TechnicalFailure, TechnicalFailureCatalogs, CatalogoNodo } from '../../types';
 import { Sitio, getSitios } from '../../services/sitiosService';
 import { resolveConsolaIdByName } from '../../services/consolasService';
-import { getAllTipoEquipoAfectado } from '@services/tipoEquipoAfectadoService';
+import { getAllTipoEquipoAfectado } from '../../services/tipoEquipoAfectadoService';
 import {
   fetchFallos,
   createFallo,
