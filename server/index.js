@@ -33,6 +33,7 @@ import departamentosResponsablesRoutes from "./routes/departamentosResponsables.
 import conclusionEventoRoutes from "./routes/conclusionEvento.routes.js";
 import reportesEventosRoutes from "./routes/reportesEventos.routes.js";
 import tipoServicioRoutes from "./routes/tipoServicio.routes.js";
+import catalogoTipoEquipoAfectadoRoutes from "./routes/catalogoTipoEquipoAfectadoRoutes.js";
 
 dotenv.config();
 
@@ -49,6 +50,7 @@ const knownApiPrefixes = [
   "/api/tipo-intrusion",
   "/api/intrusiones",
   "/api/catalogos",
+  "/api/catalogo-tipo-equipo-afectado",
   "/api/asignar-cliente-sitio",
   "/api/fallos",
   "/api/consolas",
@@ -129,6 +131,7 @@ app.use("/api", haciendasRoutes);
 app.use("/api", tipoAreaRoutes);
 app.use("/api/v1/departamentos-responsables", departamentosResponsablesRoutes);
 app.use("/api/tipos-servicio", tipoServicioRoutes);
+app.use("/api/catalogo-tipo-equipo-afectado", catalogoTipoEquipoAfectadoRoutes);
 
 const logRoutes = (stack) => {
   stack
