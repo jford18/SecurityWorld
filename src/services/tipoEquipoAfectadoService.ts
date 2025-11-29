@@ -1,140 +1,68 @@
-import api from './api';
-
-const ENDPOINT = '/catalogo-tipo-equipo-afectado';
+import apiClient from './apiClient';
 
 export interface TipoEquipoAfectado {
   id: number;
   nombre: string;
-  descripcion: string | null;
-  activo: boolean;
-  fecha_creacion: string;
-}
-
-export interface TipoEquipoAfectadoPayload {
-  nombre: string;
   descripcion?: string | null;
-  activo?: boolean;
 }
 
-export interface TipoEquipoAfectadoListResponse {
-  items: TipoEquipoAfectado[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
-const unwrap = <T>(payload: T | { data: T }): T => {
-  if (payload && typeof payload === 'object' && 'data' in payload) {
-    return (payload as { data: T }).data;
-  }
-  return payload as T;
+type RawTipoEquipoAfectado = {
+  id?: unknown;
+  ID?: unknown;
+  nombre?: unknown;
+  NOMBRE?: unknown;
+  descripcion?: unknown;
+  DESCRIPCION?: unknown;
 };
 
-const mapItem = (item: any): TipoEquipoAfectado => ({
-  id: Number(item?.id) || 0,
-  nombre: item?.nombre ?? '',
-  descripcion: item?.descripcion ?? null,
-  activo: Boolean(item?.activo),
-  fecha_creacion: item?.fecha_creacion ?? '',
-});
+type MaybeWrappedResponse = RawTipoEquipoAfectado[] | { data?: unknown };
 
-const normalizeList = (payload: unknown): TipoEquipoAfectadoListResponse => {
-  const unwrapped = unwrap(payload as any);
+const mapItem = (item: RawTipoEquipoAfectado): TipoEquipoAfectado | null => {
+  const idValue = Number(item.id ?? item.ID);
+  const nombreValue = item.nombre ?? item.NOMBRE;
+  const descripcionValue = item.descripcion ?? item.DESCRIPCION;
 
-  if (unwrapped && typeof unwrapped === 'object' && 'items' in (unwrapped as any)) {
-    const { items, total, page, pageSize } = unwrapped as {
-      items?: any[];
-      total?: number;
-      page?: number;
-      pageSize?: number;
-    };
-
-    const normalizedItems = Array.isArray(items) ? items.map(mapItem) : [];
-    return {
-      items: normalizedItems,
-      total: typeof total === 'number' ? total : normalizedItems.length,
-      page: typeof page === 'number' ? page : 1,
-      pageSize:
-        typeof pageSize === 'number' && pageSize > 0
-          ? pageSize
-          : normalizedItems.length || 10,
-    };
+  if (!Number.isFinite(idValue)) {
+    return null;
   }
 
-  const fallbackItems = Array.isArray(unwrapped) ? unwrapped.map(mapItem) : [];
-  return {
-    items: fallbackItems,
-    total: fallbackItems.length,
-    page: 1,
-    pageSize: fallbackItems.length || 10,
-  };
+  const nombre =
+    typeof nombreValue === 'string'
+      ? nombreValue
+      : nombreValue != null
+      ? String(nombreValue)
+      : '';
+
+  if (!nombre) {
+    return null;
+  }
+
+  const descripcion =
+    typeof descripcionValue === 'string'
+      ? descripcionValue
+      : descripcionValue != null
+      ? String(descripcionValue)
+      : null;
+
+  return { id: idValue, nombre, descripcion };
 };
 
-const sanitizeParams = (
-  params?: Record<string, string | number | boolean | undefined | null>
-) => {
-  if (!params) return undefined;
+const normalizeResponse = (payload: MaybeWrappedResponse): TipoEquipoAfectado[] => {
+  const rawData = Array.isArray(payload) ? payload : (payload?.data as unknown);
 
-  const sanitizedEntries = Object.entries(params).reduce<Record<string, string | number | boolean>>(
-    (acc, [key, value]) => {
-      if (value === undefined || value === null) return acc;
-      if (typeof value === 'string') {
-        const trimmed = value.trim();
-        if (!trimmed) return acc;
-        acc[key] = trimmed;
-        return acc;
-      }
-      if (typeof value === 'number' && Number.isNaN(value)) return acc;
-      acc[key] = value;
-      return acc;
-    },
-    {}
-  );
+  if (!Array.isArray(rawData)) {
+    return [];
+  }
 
-  return Object.keys(sanitizedEntries).length > 0 ? sanitizedEntries : undefined;
+  return rawData
+    .map((item) => mapItem(item) as TipoEquipoAfectado | null)
+    .filter((item): item is TipoEquipoAfectado => item !== null)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
 };
 
-export const getAllTipoEquipoAfectado = async (
-  params?: Record<string, string | number | boolean | null | undefined>
-): Promise<TipoEquipoAfectadoListResponse> => {
-  const sanitized = sanitizeParams(params);
-  const response = sanitized
-    ? await api.get(ENDPOINT, { params: sanitized })
-    : await api.get(ENDPOINT);
-  return normalizeList(response.data);
+export const getAllTipoEquipoAfectado = async (): Promise<TipoEquipoAfectado[]> => {
+  const { data } = await apiClient.get<MaybeWrappedResponse>('/catalogo-tipo-equipo-afectado');
+  return normalizeResponse(data);
 };
 
-export const getTipoEquipoAfectadoById = async (
-  id: number | string
-): Promise<TipoEquipoAfectado | null> => {
-  const response = await api.get(`${ENDPOINT}/${id}`);
-  const payload = unwrap<TipoEquipoAfectado | null>(response.data as any);
-  return payload ? mapItem(payload) : null;
-};
-
-export const createTipoEquipoAfectado = async (
-  data: TipoEquipoAfectadoPayload
-): Promise<TipoEquipoAfectado> => {
-  const response = await api.post(ENDPOINT, data);
-  return mapItem(unwrap(response.data as any));
-};
-
-export const updateTipoEquipoAfectado = async (
-  id: number | string,
-  data: TipoEquipoAfectadoPayload
-): Promise<TipoEquipoAfectado> => {
-  const response = await api.put(`${ENDPOINT}/${id}`, data);
-  return mapItem(unwrap(response.data as any));
-};
-
-export const deleteTipoEquipoAfectado = async (id: number | string): Promise<void> => {
-  await api.delete(`${ENDPOINT}/${id}`);
-};
-
-export default {
-  getAllTipoEquipoAfectado,
-  getTipoEquipoAfectadoById,
-  createTipoEquipoAfectado,
-  updateTipoEquipoAfectado,
-  deleteTipoEquipoAfectado,
-};
+export default { getAllTipoEquipoAfectado };
