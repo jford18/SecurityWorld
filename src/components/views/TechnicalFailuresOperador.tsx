@@ -692,6 +692,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       horaFallo: horaFalloPayload,
       fechaHoraFallo: fechaHoraFalloISO,
       affectationType: formData.affectationType,
+      tipo_afectacion: formData.affectationType,
       equipo_afectado: equipo_afectado || 'No especificado',
       descripcion_fallo: descripcion_fallo || 'Sin descripción',
       responsable: session.user,

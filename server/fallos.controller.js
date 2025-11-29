@@ -216,7 +216,7 @@ const mapFalloRowToDto = (row) => ({
   sitio_nombre: row.sitio_nombre || "",
   tipo_problema_id: row.tipo_problema_id ?? null,
   tipo_afectacion: row.tipo_afectacion || "",
-  tipoProblemaNombre: row.tipo_afectacion || undefined,
+  tipoProblemaNombre: row.tipo_problema_descripcion || undefined,
   fechaResolucion: formatDate(row.fecha_resolucion) || undefined,
   horaResolucion: row.hora_resolucion || undefined,
   fechaHoraResolucion: row.fecha_hora_resolucion || undefined,
@@ -304,7 +304,8 @@ const fetchFalloById = async (client, id) => {
         dept.id AS departamento_id,
         sitio.nombre AS sitio_nombre,
         ft.tipo_problema_id,
-        tp.descripcion AS tipo_afectacion,
+        tp.descripcion AS tipo_problema_descripcion,
+        ft.tipo_afectacion,
         ft.fecha_resolucion,
         ft.hora_resolucion,
         ft.estado,
@@ -357,7 +358,8 @@ export const getFallos = async (req, res) => {
         consola.nombre AS consola,
         sitio.nombre AS sitio_nombre,
         ft.tipo_problema_id,
-        tp.descripcion AS tipo_afectacion,
+        tp.descripcion AS tipo_problema_descripcion,
+        ft.tipo_afectacion,
         ft.fecha_resolucion,
         ft.hora_resolucion,
         ft.estado,
@@ -402,10 +404,11 @@ export const createFallo = async (req, res) => {
     horaResolucion,
     horaFallo,
     fechaHoraFallo,
+    tipo_afectacion,
+    affectationType,
     verificacionApertura,
     verificacionCierre,
     novedadDetectada,
-    affectationType,
     sitio_id: rawSitioId,
     sitioId: rawSitioIdCamel,
   } = req.body || {};
@@ -475,6 +478,12 @@ export const createFallo = async (req, res) => {
     });
   }
 
+  const rawTipoAfectacion = tipo_afectacion ?? affectationType;
+  const tipoAfectacionValue =
+    rawTipoAfectacion === undefined || rawTipoAfectacion === null
+      ? null
+      : String(rawTipoAfectacion).trim() || null;
+
   const client = await pool.connect();
 
   try {
@@ -539,12 +548,13 @@ export const createFallo = async (req, res) => {
         tipo_problema_id,
         consola_id,
         sitio_id,
+        tipo_afectacion,
         fecha_resolucion,
         hora_resolucion,
         fecha_creacion,
         fecha_actualizacion
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW()
       ) RETURNING id`,
       [
         fechaFalloValue,
@@ -556,6 +566,7 @@ export const createFallo = async (req, res) => {
         tipoProblemaId,
         consolaId,
         sitioIdValue,
+        tipoAfectacionValue,
         fechaResolucion || null,
         horaResolucion || null, // FIX: exclude estado so the generated column is calculated by PostgreSQL during inserts.
       ]
@@ -654,7 +665,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
     await client.query("BEGIN");
 
     const existingResult = await client.query(
-      "SELECT id, fecha, hora, estado, departamento_id, fecha_resolucion, hora_resolucion FROM fallos_tecnicos WHERE id = $1",
+      "SELECT id, fecha, hora, estado, departamento_id, fecha_resolucion, hora_resolucion, tipo_afectacion FROM fallos_tecnicos WHERE id = $1",
       [id]
     );
 
@@ -703,6 +714,12 @@ export const actualizarFalloSupervisor = async (req, res) => {
       fechaFalloPayload || formatDate(existingFallo?.fecha) || null;
     const horaFalloValue = horaFalloPayload || existingFallo?.hora || null;
 
+    const rawTipoAfectacion = tipo_afectacion ?? affectationType;
+    const tipoAfectacionValue =
+      rawTipoAfectacion === undefined || rawTipoAfectacion === null
+        ? existingFallo.tipo_afectacion || null
+        : String(rawTipoAfectacion).trim() || null;
+
     const departamentoFinalId =
       departamentoId ?? existingFallo.departamento_id ?? null;
 
@@ -724,14 +741,16 @@ export const actualizarFalloSupervisor = async (req, res) => {
          SET fecha = $1,
              hora = $2,
              departamento_id = $3,
-             fecha_resolucion = $4,
-             hora_resolucion = $5,
+             tipo_afectacion = $4,
+             fecha_resolucion = $5,
+             hora_resolucion = $6,
              fecha_actualizacion = NOW()
-        WHERE id = $6`,
+        WHERE id = $7`,
       [
         fechaFalloValue,
         horaFalloValue,
         departamentoFinalId,
+        tipoAfectacionValue,
         fechaResolucionValue,
         horaResolucionValue,
         id,
