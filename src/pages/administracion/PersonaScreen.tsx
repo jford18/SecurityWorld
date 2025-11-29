@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import {
   create as createPersona,
   getAll as getPersonas,
@@ -38,6 +39,13 @@ const primaryButtonClasses = `${baseButtonClasses} bg-yellow-400 text-[#1C2E4A] 
 const secondaryButtonClasses = `${baseButtonClasses} border border-yellow-400 text-[#1C2E4A] hover:bg-yellow-100 focus:ring-yellow-400`;
 const dangerButtonClasses = `${baseButtonClasses} bg-red-500 text-white hover:bg-red-600 focus:ring-red-500`;
 const successButtonClasses = `${baseButtonClasses} bg-emerald-500 text-white hover:bg-emerald-600 focus:ring-emerald-500`;
+
+const formatTimestamp = () => {
+  const now = new Date();
+  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(
+    now.getHours(),
+  ).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+};
 
 const initialFormState: PersonaFormState = {
   nombre: '',
@@ -127,6 +135,28 @@ const PersonaScreen: React.FC = () => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredPersonas.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredPersonas, currentPage]);
+
+  const handleExportToExcel = () => {
+    if (loading || currentItems.length === 0) return;
+
+    const formattedRows = currentItems.map((persona) => ({
+      ID: persona.id ?? '—',
+      Nombre: persona.nombre ?? '—',
+      Apellido: persona.apellido ?? '—',
+      Cargo: persona.cargo_descripcion ?? '—',
+      Estado: persona.estado ? 'Activo' : 'Inactivo',
+      'Fecha Creación': persona.fecha_creacion
+        ? new Date(persona.fecha_creacion).toLocaleString()
+        : '—',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Personas');
+
+    const filename = `mantenimiento_personas_${formatTimestamp()}.xlsx`;
+    XLSX.writeFile(workbook, filename);
+  };
 
   const openCreateModal = () => {
     setIsEditing(false);
@@ -262,9 +292,19 @@ const PersonaScreen: React.FC = () => {
             Administra las personas registradas y su asignación de cargos.
           </p>
         </div>
-        <button type="button" className={primaryButtonClasses} onClick={openCreateModal}>
-          Nueva Persona
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={secondaryButtonClasses}
+            onClick={handleExportToExcel}
+            disabled={loading || currentItems.length === 0}
+          >
+            Exportar a Excel
+          </button>
+          <button type="button" className={primaryButtonClasses} onClick={openCreateModal}>
+            Nueva Persona
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 space-y-4">

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import * as XLSX from 'xlsx';
 import type { Hacienda } from '../../types';
 import { deleteHacienda, fetchHaciendas } from '../../services/haciendaService';
 import HaciendaForm from './HaciendaForm.tsx';
@@ -8,6 +9,13 @@ const baseButtonClasses =
 const primaryButtonClasses = `${baseButtonClasses} bg-[#1C2E4A] text-white hover:bg-[#243b55] focus:ring-[#1C2E4A]`;
 const secondaryButtonClasses = `${baseButtonClasses} bg-gray-200 text-gray-700 hover:bg-gray-300 focus:ring-gray-300`;
 const dangerButtonClasses = `${baseButtonClasses} bg-red-600 text-white hover:bg-red-700 focus:ring-red-600`;
+
+const formatTimestamp = () => {
+  const now = new Date();
+  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(
+    now.getHours(),
+  ).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+};
 
 type ModalMode = 'create' | 'edit';
 
@@ -73,6 +81,24 @@ const HaciendaPage: React.FC = () => {
     }
   };
 
+  const handleExportToExcel = () => {
+    if (loading || haciendas.length === 0) return;
+
+    const formattedRows = haciendas.map((hacienda) => ({
+      ID: hacienda.id ?? '—',
+      Nombre: hacienda.nombre ?? '—',
+      Dirección: hacienda.direccion ?? '—',
+      Activo: hacienda.activo ? 'Sí' : 'No',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Haciendas');
+
+    const filename = `mantenimiento_haciendas_${formatTimestamp()}.xlsx`;
+    XLSX.writeFile(workbook, filename);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -82,9 +108,19 @@ const HaciendaPage: React.FC = () => {
             Administra las haciendas disponibles.
           </p>
         </div>
-        <button type="button" className={primaryButtonClasses} onClick={openCreateModal}>
-          Nueva Hacienda
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={secondaryButtonClasses}
+            onClick={handleExportToExcel}
+            disabled={loading || haciendas.length === 0}
+          >
+            Exportar a Excel
+          </button>
+          <button type="button" className={primaryButtonClasses} onClick={openCreateModal}>
+            Nueva Hacienda
+          </button>
+        </div>
       </div>
 
       {error && (

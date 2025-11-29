@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import api from "@/services/api";
 import {
   createCliente,
@@ -33,6 +34,13 @@ const baseButtonClasses =
 const primaryButtonClasses = `${baseButtonClasses} bg-yellow-400 text-[#1C2E4A] shadow-sm hover:bg-yellow-500 focus:ring-yellow-400`;
 const secondaryButtonClasses = `${baseButtonClasses} border border-yellow-400 text-[#1C2E4A] hover:bg-yellow-100 focus:ring-yellow-400`;
 const dangerButtonClasses = `${baseButtonClasses} bg-red-500 text-white hover:bg-red-600 focus:ring-red-500`;
+
+const formatTimestamp = () => {
+  const now = new Date();
+  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(
+    now.getHours(),
+  ).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
+};
 
 const resolveErrorMessage = (error, fallback) => {
   if (error?.response?.data?.message) {
@@ -125,6 +133,7 @@ const Clientes = () => {
   const [clientes, setClientes] = useState([]);
   const [search, setSearch] = useState("");
   const [sortConfig, setSortConfig] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const [clienteId, setClienteId] = useState(null);
   const [nombre, setNombre] = useState("");
@@ -151,6 +160,7 @@ const Clientes = () => {
 
   const fetchClientes = useCallback(async () => {
     try {
+      setLoading(true);
       const searchTerm = search.trim();
       const data = await getAllClientes(
         searchTerm ? { q: searchTerm } : undefined
@@ -164,6 +174,8 @@ const Clientes = () => {
       );
       toast.error(message);
       setClientes([]); // Evita romper el renderizado
+    } finally {
+      setLoading(false);
     }
   }, [search]);
 
@@ -251,6 +263,27 @@ const Clientes = () => {
 
     return sorted;
   }, [clientes, sortConfig]);
+
+  const handleExportToExcel = () => {
+    if (loading || !Array.isArray(sortedClientes) || sortedClientes.length === 0) {
+      return;
+    }
+
+    const formattedRows = sortedClientes.map((cliente) => ({
+      ID: cliente.id ?? "—",
+      Nombre: cliente.nombre ?? "—",
+      Identificación: cliente.identificacion ?? "—",
+      "Tipo de servicio": cliente.tipo_servicio_nombre ?? "—",
+      Activo: cliente.activo ? "Sí" : "No",
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Clientes");
+
+    const filename = `mantenimiento_clientes_${formatTimestamp()}.xlsx`;
+    XLSX.writeFile(workbook, filename);
+  };
 
   const handleSave = async (event) => {
     event.preventDefault();
@@ -674,16 +707,26 @@ const Clientes = () => {
               {`Se encontraron ${clientes.length} cliente(s)`}
             </p>
           </div>
-          <label className="flex w-full items-center gap-3 md:w-auto">
-            <span className="text-sm font-medium text-gray-700">Buscar</span>
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="w-full md:w-64 rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-              placeholder="Buscar por nombre, identificación o tipo de servicio"
-            />
-          </label>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
+            <label className="flex w-full items-center gap-3 md:w-auto">
+              <span className="text-sm font-medium text-gray-700">Buscar</span>
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="w-full md:w-64 rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+                placeholder="Buscar por nombre, identificación o tipo de servicio"
+              />
+            </label>
+            <button
+              type="button"
+              className={secondaryButtonClasses}
+              onClick={handleExportToExcel}
+              disabled={loading || sortedClientes.length === 0}
+            >
+              Exportar a Excel
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
