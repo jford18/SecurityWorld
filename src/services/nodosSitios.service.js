@@ -46,15 +46,23 @@ const executeMutation = async (url, options, fallbackMessage) => {
   return extractData(data);
 };
 
-export const assign = async (payload) =>
-  executeMutation(
+export const assign = async ({ nodoId, sitiosIds } = {}) => {
+  const payload = {
+    nodoId: Number(nodoId),
+    sitiosIds: Array.isArray(sitiosIds)
+      ? sitiosIds.map((id) => Number(id)).filter((id) => Number.isInteger(id))
+      : [],
+  };
+
+  return executeMutation(
     API_URL,
     {
       method: 'POST',
-      body: JSON.stringify(payload ?? {}),
+      body: JSON.stringify(payload),
     },
     'Error al crear la asignación'
   );
+};
 
 export const unassign = async (payload) =>
   executeMutation(
