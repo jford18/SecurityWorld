@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import esLocale from 'date-fns/locale/es';
-import { format, isAfter, isSameDay, startOfDay } from 'date-fns';
+import { format, isAfter, isSameDay, startOfDay, parse, isValid } from 'date-fns';
 import 'react-datepicker/dist/react-datepicker.css';
 
 type CustomHeaderProps = {
@@ -48,13 +48,36 @@ const clampToEndOfDay = (date: Date) => {
   return result;
 };
 
+const parseInputDate = (inputValue: string): Date | null => {
+  const trimmed = inputValue.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const candidateFormats = [
+    'dd/MM/yyyy HH:mm',
+    'dd/MM/yyyy, HH:mm',
+    "yyyy-MM-dd'T'HH:mm",
+  ];
+
+  for (const formatString of candidateFormats) {
+    const parsed = parse(trimmed, formatString, new Date());
+    if (isValid(parsed)) {
+      return parsed;
+    }
+  }
+
+  const fallbackDate = new Date(trimmed);
+  return Number.isNaN(fallbackDate.getTime()) ? null : fallbackDate;
+};
+
 const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
   id,
   name,
   label = 'Fecha y Hora del Fallo *',
   value,
   onChange,
-  placeholder = 'Seleccione fecha y hora',
+  placeholder = 'dd/mm/aaaa hh:mm',
   required,
   error,
   timeIntervalMinutes = 5,
@@ -110,6 +133,19 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
     ],
     [],
   );
+
+  const handleInputBlur = (inputValue: string) => {
+    const parsed = parseInputDate(inputValue);
+
+    if (parsed) {
+      handleDateChange(parsed);
+      return;
+    }
+
+    if (!inputValue.trim()) {
+      handleDateChange(null);
+    }
+  };
 
   const CustomCalendarContainer: React.FC<CalendarContainerProps> = ({
     className,
@@ -183,10 +219,20 @@ const FechaHoraFalloPicker: React.FC<FechaHoraFalloPickerProps> = ({
           name={name}
           selected={selectedDate}
           onChange={handleDateChange}
+          onChangeRaw={(event) => {
+            if (!(event?.target instanceof HTMLInputElement)) {
+              return;
+            }
+
+            if (!event.target.value.trim()) {
+              handleDateChange(null);
+            }
+          }}
+          onBlur={(event) => handleInputBlur(event.target.value)}
           showTimeSelect
           timeIntervals={timeIntervalMinutes}
           timeFormat="HH:mm"
-          dateFormat="dd/MM/yyyy, HH:mm"
+          dateFormat="dd/MM/yyyy HH:mm"
           locale="es"
           maxDate={now}
           minTime={minTime}
