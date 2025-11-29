@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { TechnicalFailure } from '../../types';
 import { calcularEstado } from './TechnicalFailuresUtils';
 
@@ -47,6 +48,7 @@ interface TechnicalFailuresHistoryProps {
   activeRole: string | undefined;
   handleEdit?: (failure: TechnicalFailure) => void;
   showActions?: boolean;
+  enableExport?: boolean;
 }
 
 const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
@@ -55,6 +57,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   activeRole: _activeRole,
   handleEdit,
   showActions = true,
+  enableExport = false,
 }) => {
   const [filters, setFilters] = useState({
     fechaDesde: '',
@@ -254,6 +257,42 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     return sortConfig.direction === 'asc' ? ' ▲' : ' ▼';
   };
 
+  const handleExportToExcel = () => {
+    if (isLoading || sortedFailures.length === 0) return;
+
+    const formattedRows = sortedFailures.map((fallo) => ({
+      'Fecha y Hora de Fallo': formatFechaHoraFallo(fallo) || 'Sin información',
+      Problema:
+        fallo.problema
+          || fallo.tipoProblemaNombre
+          || fallo.tipoProblema
+          || fallo.descripcion_fallo
+          || 'Sin información',
+      'Tipo de Afectación': fallo.tipo_afectacion || fallo.tipoAfectacion || 'Sin información',
+      Sitio: fallo.sitio || fallo.sitioNombre || fallo.sitio_nombre || 'Sin sitio asignado',
+      Estado: calcularEstado(fallo).texto,
+      'Departamento Responsable':
+        fallo.departamento_responsable
+          || fallo.departamentoNombre
+          || fallo.deptResponsable
+          || 'Sin información',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Consultas');
+
+    const now = new Date();
+    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+      now.getDate()
+    ).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(
+      now.getMinutes()
+    ).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+
+    const filename = `consultas_fallos_tecnicos_${timestamp}.xlsx`;
+    XLSX.writeFile(workbook, filename);
+  };
+
   return (
     <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
       <div className="flex items-center justify-between mb-4">
@@ -267,6 +306,20 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
           >
             Limpiar filtros
           </button>
+          {enableExport && (
+            <button
+              type="button"
+              onClick={handleExportToExcel}
+              disabled={isLoading || sortedFailures.length === 0}
+              className={`px-4 py-2 text-sm font-semibold text-white rounded-md ${
+                isLoading || sortedFailures.length === 0
+                  ? 'bg-blue-300 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              Exportar a Excel
+            </button>
+          )}
         </div>
       </div>
       <div className="overflow-x-auto relative">
