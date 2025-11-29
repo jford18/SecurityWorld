@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import {
   fetchIntrusionesConsolidado,
   IntrusionConsolidadoFilters,
@@ -162,6 +163,32 @@ const IntrusionsConsolidated: React.FC = () => {
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
+  const handleExportToExcel = () => {
+    if (isLoading || data.length === 0) return;
+
+    const formattedRows = data.map((row) => ({
+      'Fecha y hora de intrusión': formatDateTime(row.fechaHoraIntrusion) || 'Sin información',
+      Sitio: row.sitio || 'Sin información',
+      'Tipo intrusión': row.tipoIntrusion || 'Sin información',
+      'Llegó alerta': row.llegoAlerta ? 'Sí' : 'No',
+      'Personal identificado (Cargo – Persona)': row.personalIdentificado?.trim() || 'N/A',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Consolidado');
+
+    const now = new Date();
+    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+      now.getDate()
+    ).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(
+      now.getMinutes()
+    ).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+
+    const filename = `consolidado_intrusiones_${timestamp}.xlsx`;
+    XLSX.writeFile(workbook, filename);
+  };
+
   return (
     <div className="space-y-6">
       <h3 className="text-3xl font-medium text-[#1C2E4A]">Consolidado de Intrusiones</h3>
@@ -267,24 +294,39 @@ const IntrusionsConsolidated: React.FC = () => {
         {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
         <div className="flex items-center justify-between mb-4">
           <h4 className="text-lg font-semibold text-[#1C2E4A]">Resultados</h4>
-          <div className="flex items-center gap-3 text-sm text-gray-600">
-            <span>
-              Página {pagination.page} de {totalPages}
-            </span>
-            <label className="flex items-center gap-2">
-              <span>Filas por página:</span>
-              <select
-                value={pagination.pageSize}
-                onChange={handlePageSizeChange}
-                className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              >
-                {[5, 10, 20, 50].map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={handleExportToExcel}
+              disabled={isLoading || data.length === 0}
+              className={`px-4 py-2 text-sm font-semibold text-white rounded-md ${
+                isLoading || data.length === 0
+                  ? 'bg-blue-300 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              Exportar a Excel
+            </button>
+
+            <div className="flex items-center gap-3 text-sm text-gray-600">
+              <span>
+                Página {pagination.page} de {totalPages}
+              </span>
+              <label className="flex items-center gap-2">
+                <span>Filas por página:</span>
+                <select
+                  value={pagination.pageSize}
+                  onChange={handlePageSizeChange}
+                  className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                >
+                  {[5, 10, 20, 50].map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
         </div>
 
