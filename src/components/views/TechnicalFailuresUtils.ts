@@ -2,6 +2,7 @@ import { TechnicalFailure } from '../../types';
 
 export const calcularEstado = (reporte: TechnicalFailure): { texto: string; color: string } => {
   const {
+    estado_texto,
     fecha,
     hora,
     horaFallo,
@@ -14,6 +15,15 @@ export const calcularEstado = (reporte: TechnicalFailure): { texto: string; colo
     novedadDetectada,
     estado,
   } = reporte;
+
+  if (estado_texto) {
+    const textoNormalizado = estado_texto.trim();
+    const esResuelto = textoNormalizado.toUpperCase() === 'RESUELTO';
+    return {
+      texto: textoNormalizado,
+      color: esResuelto ? '#4CAF50' : '#F44336',
+    };
+  }
 
   const camposCompletos =
     deptResponsable &&

@@ -10,11 +10,13 @@ export interface TechnicalFailure {
   departamentoResponsableId?: string | number | null;
   sitio_nombre?: string;
   sitioNombre?: string;
+  sitio?: string;
   tipo_afectacion?: string;
   tipoAfectacion?: string;
   equipoAfectado?: string;
   horaFallo?: string;
   fechaHoraFallo?: string;
+  problema?: string;
   fechaResolucion?: string;
   horaResolucion?: string;
   fechaHoraResolucion?: string;
@@ -27,12 +29,14 @@ export interface TechnicalFailure {
   tipoProblema?: string;
   departamentoNombre?: string;
   estado?: string | null;
+  estado_texto?: string;
   fecha_creacion?: string | null;
   fecha_actualizacion?: string | null;
   ultimo_usuario_edito_id?: number | null;
   ultimo_usuario_edito_nombre?: string | null;
   responsable_verificacion_cierre_id?: number | null;
   responsable_verificacion_cierre_nombre?: string | null;
+  departamento_responsable?: string;
 }
 
 export interface FailureDurationResponse {
