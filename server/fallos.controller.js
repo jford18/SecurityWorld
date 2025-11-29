@@ -373,7 +373,7 @@ export const getFallos = async (req, res) => {
         CASE
           WHEN ft.fecha_resolucion IS NOT NULL THEN 'RESUELTO'
           WHEN ft.fecha IS NOT NULL THEN CONCAT(
-            GREATEST(0, DATE_PART('day', CURRENT_DATE - ft.fecha)::int),
+            GREATEST(0, (CURRENT_DATE::date - ft.fecha)::int),
             ' días pendiente'
           )
           ELSE '0 días pendiente'
