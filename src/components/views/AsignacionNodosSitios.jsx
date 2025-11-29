@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { getAll as getNodos } from '../../services/nodos.service';
-import { getSitios } from '../../services/sitiosService';
 import {
   assign as assignNodoSitio,
   getByNodo as getSitiosAsignados,
@@ -47,7 +46,6 @@ const AsignacionNodosSitios = () => {
   const [initialSitios, setInitialSitios] = useState(new Set());
   const [loadingNodos, setLoadingNodos] = useState(false);
   const [loadingSitios, setLoadingSitios] = useState(false);
-  const [loadingAsignaciones, setLoadingAsignaciones] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -90,118 +88,65 @@ const AsignacionNodosSitios = () => {
     }
   }, []);
 
-  const loadSitiosCatalogo = useCallback(async (options = {}) => {
-    const includeIdsRaw = Array.isArray(options.includeIds)
-      ? options.includeIds
-      : [];
-
-    const includeIds = includeIdsRaw
-      .map((value) => Number(value))
-      .filter((id) => Number.isInteger(id) && id > 0);
-
-    const uniqueIncludeIds = Array.from(new Set(includeIds));
-
-    try {
-      setLoadingSitios(true);
-      const params = { soloDisponibles: true };
-
-      if (uniqueIncludeIds.length > 0) {
-        params.sitioActualId = uniqueIncludeIds;
-      }
-
-      const response = await getSitios(params);
-      const lista = Array.isArray(response)
-        ? response
-        : response?.data;
-
-      if (!Array.isArray(lista)) {
-        throw new Error('Respuesta inválida al cargar sitios');
-      }
-
-      const sitiosOrdenados = [...lista]
-        .filter((sitio) => sitio.activo !== false)
-        .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''));
-
-      setSitios(sitiosOrdenados);
-      setErrorMessage('');
-    } catch (error) {
-      console.error('Error al cargar sitios:', error);
-      const message = resolveErrorMessage(error, 'No se pudieron cargar los sitios');
-      setErrorMessage(message);
-      toast.error(message);
-      setSitios([]);
-    } finally {
-      setLoadingSitios(false);
-    }
-  }, []);
-
-  const loadAsignaciones = useCallback(
+  const loadSitiosPorNodo = useCallback(
     async (nodoId) => {
       if (!nodoId) {
         const vacio = new Set();
+        setSitios([]);
         setSelectedSitios(vacio);
         setInitialSitios(new Set(vacio));
-        return vacio;
+        return;
       }
 
       try {
-        setLoadingAsignaciones(true);
+        setLoadingSitios(true);
         const response = await getSitiosAsignados(nodoId);
-        const lista = Array.isArray(response)
-          ? response
-          : response?.data;
+        const payload = response?.sitios ?? response?.data ?? response;
 
-        if (!Array.isArray(lista)) {
-          throw new Error('Respuesta inválida al cargar las asignaciones');
+        if (!Array.isArray(payload)) {
+          throw new Error('Respuesta inválida al cargar los sitios del nodo');
         }
 
+        const sitiosOrdenados = [...payload]
+          .filter((sitio) => sitio.activo !== false)
+          .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''));
+
         const asignados = new Set(
-          lista.map((item) => Number(item.sitio_id)).filter((id) => Number.isInteger(id))
+          sitiosOrdenados
+            .filter((item) => item.asignado === true)
+            .map((item) => Number(item.id))
+            .filter((id) => Number.isInteger(id))
         );
 
+        setSitios(sitiosOrdenados);
         setSelectedSitios(asignados);
         setInitialSitios(new Set(asignados));
         setErrorMessage('');
-        return asignados;
       } catch (error) {
-        console.error('Error al cargar asignaciones del nodo:', error);
+        console.error('Error al cargar sitios del nodo:', error);
         const message = resolveErrorMessage(
           error,
-          'No se pudieron cargar las asignaciones'
+          'No se pudieron cargar los sitios del nodo'
         );
         setErrorMessage(message);
         toast.error(message);
-        const vacio = new Set();
-        setSelectedSitios(vacio);
-        setInitialSitios(new Set(vacio));
-        return vacio;
+        setSitios([]);
+        setSelectedSitios(new Set());
+        setInitialSitios(new Set());
       } finally {
-        setLoadingAsignaciones(false);
+        setLoadingSitios(false);
       }
     },
     []
   );
 
-  const refreshSitiosDisponibles = useCallback(
-    async (nodoId) => {
-      const asignados = await loadAsignaciones(nodoId);
-      const includeIds = Array.from(asignados ?? []).filter((id) =>
-        Number.isInteger(id)
-      );
-
-      await loadSitiosCatalogo({ includeIds });
-    },
-    [loadAsignaciones, loadSitiosCatalogo]
-  );
-
   useEffect(() => {
     loadNodos();
-    loadSitiosCatalogo();
-  }, [loadNodos, loadSitiosCatalogo]);
+  }, [loadNodos]);
 
   useEffect(() => {
-    refreshSitiosDisponibles(selectedNodoId);
-  }, [selectedNodoId, refreshSitiosDisponibles]);
+    loadSitiosPorNodo(selectedNodoId);
+  }, [selectedNodoId, loadSitiosPorNodo]);
 
   const handleSelectNodo = (event) => {
     const value = Number(event.target.value);
@@ -209,6 +154,12 @@ const AsignacionNodosSitios = () => {
   };
 
   const handleToggleSitio = (sitioId, checked) => {
+    setSitios((prev) =>
+      prev.map((sitio) =>
+        Number(sitio.id) === sitioId ? { ...sitio, asignado: checked } : sitio
+      )
+    );
+
     setSelectedSitios((prev) => {
       const updated = new Set(prev);
       if (checked) {
@@ -241,6 +192,11 @@ const AsignacionNodosSitios = () => {
     return { asignaciones, eliminaciones };
   }, [selectedSitios, initialSitios]);
 
+  const sitiosAsignados = useMemo(
+    () => sitios.filter((sitio) => sitio.asignado).length,
+    [sitios]
+  );
+
   const handleGuardar = async () => {
     if (!selectedNodoId) {
       toast.error('Selecciona un nodo para guardar los cambios');
@@ -271,7 +227,7 @@ const AsignacionNodosSitios = () => {
       );
 
       toast.success('Cambios guardados correctamente');
-      await refreshSitiosDisponibles(selectedNodoId);
+      await loadSitiosPorNodo(selectedNodoId);
     } catch (error) {
       console.error('Error al guardar cambios de asignación:', error);
       const message = resolveErrorMessage(error, 'No se pudieron guardar los cambios');
@@ -284,10 +240,10 @@ const AsignacionNodosSitios = () => {
 
   const handleRefrescar = async () => {
     await loadNodos();
-    await refreshSitiosDisponibles(selectedNodoId);
+    await loadSitiosPorNodo(selectedNodoId);
   };
 
-  const isLoading = loadingNodos || loadingSitios || loadingAsignaciones;
+  const isLoading = loadingNodos || loadingSitios;
 
   return (
     <div className="space-y-6">
@@ -345,7 +301,7 @@ const AsignacionNodosSitios = () => {
           <div className="space-y-1">
             <p className="text-sm text-gray-600">
               {selectedNodoId
-                ? `Sitios asignados: ${selectedSitios.size}`
+                ? `Sitios asignados: ${sitiosAsignados}`
                 : 'Selecciona un nodo para ver las asignaciones'}
             </p>
             {errorMessage && (
