@@ -1,68 +1,64 @@
-import apiClient from './apiClient';
+import api from './api';
 
-export interface TipoEquipoAfectado {
+const BASE_PATH = '/catalogo-tipo-equipo-afectado';
+
+export type TipoEquipoAfectado = {
   id: number;
   nombre: string;
   descripcion?: string | null;
+  activo: boolean;
+};
+
+export type TipoEquipoAfectadoPayload = {
+  nombre: string;
+  descripcion?: string;
+  activo: boolean;
+};
+
+type ApiEnvelope<T> = T | { data?: T };
+
+const hasDataProp = (payload: unknown): payload is { data: unknown } => {
+  return typeof payload === 'object' && payload !== null && 'data' in payload;
+};
+
+const unwrap = <T>(payload: ApiEnvelope<T>): T => {
+  if (hasDataProp(payload)) {
+    return (payload as { data: T }).data ?? (payload as unknown as T);
+  }
+
+  return payload as T;
+};
+
+export async function getAllTipoEquipoAfectado(params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+}): Promise<TipoEquipoAfectado[]> {
+  const response = await api.get<ApiEnvelope<TipoEquipoAfectado[]>>(BASE_PATH, { params });
+  const data = unwrap(response.data);
+  return Array.isArray(data) ? data : [];
 }
 
-type RawTipoEquipoAfectado = {
-  id?: unknown;
-  ID?: unknown;
-  nombre?: unknown;
-  NOMBRE?: unknown;
-  descripcion?: unknown;
-  DESCRIPCION?: unknown;
-};
+export async function getTipoEquipoAfectado(id: number): Promise<TipoEquipoAfectado | null> {
+  const response = await api.get<ApiEnvelope<TipoEquipoAfectado | null>>(`${BASE_PATH}/${id}`);
+  return unwrap(response.data);
+}
 
-type MaybeWrappedResponse = RawTipoEquipoAfectado[] | { data?: unknown };
+export async function createTipoEquipoAfectado(
+  payload: TipoEquipoAfectadoPayload,
+): Promise<TipoEquipoAfectado> {
+  const response = await api.post<ApiEnvelope<TipoEquipoAfectado>>(BASE_PATH, payload);
+  return unwrap(response.data);
+}
 
-const mapItem = (item: RawTipoEquipoAfectado): TipoEquipoAfectado | null => {
-  const idValue = Number(item.id ?? item.ID);
-  const nombreValue = item.nombre ?? item.NOMBRE;
-  const descripcionValue = item.descripcion ?? item.DESCRIPCION;
+export async function updateTipoEquipoAfectado(
+  id: number,
+  payload: TipoEquipoAfectadoPayload,
+): Promise<TipoEquipoAfectado> {
+  const response = await api.put<ApiEnvelope<TipoEquipoAfectado>>(`${BASE_PATH}/${id}`, payload);
+  return unwrap(response.data);
+}
 
-  if (!Number.isFinite(idValue)) {
-    return null;
-  }
-
-  const nombre =
-    typeof nombreValue === 'string'
-      ? nombreValue
-      : nombreValue != null
-      ? String(nombreValue)
-      : '';
-
-  if (!nombre) {
-    return null;
-  }
-
-  const descripcion =
-    typeof descripcionValue === 'string'
-      ? descripcionValue
-      : descripcionValue != null
-      ? String(descripcionValue)
-      : null;
-
-  return { id: idValue, nombre, descripcion };
-};
-
-const normalizeResponse = (payload: MaybeWrappedResponse): TipoEquipoAfectado[] => {
-  const rawData = Array.isArray(payload) ? payload : (payload?.data as unknown);
-
-  if (!Array.isArray(rawData)) {
-    return [];
-  }
-
-  return rawData
-    .map((item) => mapItem(item) as TipoEquipoAfectado | null)
-    .filter((item): item is TipoEquipoAfectado => item !== null)
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
-};
-
-export const getAllTipoEquipoAfectado = async (): Promise<TipoEquipoAfectado[]> => {
-  const { data } = await apiClient.get<MaybeWrappedResponse>('/catalogo-tipo-equipo-afectado');
-  return normalizeResponse(data);
-};
-
-export default { getAllTipoEquipoAfectado };
+export async function deleteTipoEquipoAfectado(id: number): Promise<void> {
+  await api.delete(`${BASE_PATH}/${id}`);
+}
