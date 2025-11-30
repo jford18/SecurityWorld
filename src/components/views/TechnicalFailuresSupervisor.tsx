@@ -284,6 +284,12 @@ const EditFailureModal: React.FC<{
     );
   }, [departamentos, editData.deptResponsable, editData.departamentoResponsableId]);
 
+  const tieneDepartamentoResponsable = useMemo(() => {
+    if (editData.departamentoResponsableId) return true;
+    if (editData.deptResponsable && editData.deptResponsable.trim() !== '') return true;
+    return false;
+  }, [editData.departamentoResponsableId, editData.deptResponsable]);
+
   const handleSave = () => {
     let cierre: Date | null = null;
 
@@ -338,10 +344,20 @@ const EditFailureModal: React.FC<{
       return;
     }
 
+    if (activeTab === 'cierre' && !tieneDepartamentoResponsable) {
+      alert('Debes asignar primero un Departamento responsable en "Datos generales".');
+      return;
+    }
+
     onSave(editData);
   };
 
   const handleCloseFallo = () => {
+    if (!tieneDepartamentoResponsable) {
+      alert('Debes asignar primero un Departamento responsable en "Datos generales".');
+      return;
+    }
+
     onCloseFallo(editData);
   };
 
@@ -530,6 +546,12 @@ const EditFailureModal: React.FC<{
 
       {activeTab === 'cierre' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {!tieneDepartamentoResponsable && (
+            <div className="md:col-span-2 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+              Debes asignar primero un Departamento responsable en la pestaña "Datos generales"
+              antes de registrar la verificación de cierre.
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700">Fecha y Hora Resolución</label>
             <input
@@ -538,7 +560,7 @@ const EditFailureModal: React.FC<{
               value={editData.fechaHoraResolucion || ''}
               onChange={(e) => handleResolutionChange(e.target.value)}
               max={nowForInput}
-              disabled={isReadOnly}
+              disabled={isReadOnly || !tieneDepartamentoResponsable}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm disabled:bg-gray-100 disabled:text-gray-500"
             />
           </div>
@@ -647,7 +669,7 @@ const EditFailureModal: React.FC<{
           {!isReadOnly && (
             <button
               onClick={handleCloseFallo}
-              disabled={isSaving}
+              disabled={isSaving || !tieneDepartamentoResponsable}
               className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60"
             >
               {isSaving ? 'Procesando...' : 'Cerrar fallo'}
@@ -655,7 +677,11 @@ const EditFailureModal: React.FC<{
           )}
           <button
             onClick={handleSave}
-            disabled={isSaving || isReadOnly}
+            disabled={
+              isSaving ||
+              isReadOnly ||
+              (activeTab === 'cierre' && !tieneDepartamentoResponsable)
+            }
             className="px-6 py-2 bg-[#F9C300] text-[#1C2E4A] font-semibold rounded-md hover:bg-yellow-400 transition-colors disabled:opacity-60"
           >
             {isSaving ? 'Guardando...' : 'Guardar Cambios'}
