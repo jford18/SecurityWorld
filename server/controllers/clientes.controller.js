@@ -350,8 +350,16 @@ export const getPersonasByCliente = async (req, res) => {
       [parsedClienteId]
     );
 
+    const personas = (result.rows ?? []).map((row) => {
+      const { cargo_descripcion, ...rest } = row;
+      return {
+        ...rest,
+        cargo: cargo_descripcion,
+      };
+    });
+
     res.status(200).json(
-      formatSuccess("Personas asociadas al cliente", result.rows ?? [])
+      formatSuccess("Personas asociadas al cliente", personas)
     );
   } catch (error) {
     console.error("[CLIENTES] Error al obtener personas por cliente:", error);

@@ -119,7 +119,9 @@ type IntrusionFormData = {
 
 type PersonaOption = {
   id: number;
-  nombreCompleto: string;
+  nombre: string;
+  apellido: string;
+  cargo?: string | null;
 };
 
 const getInitialDateTimeValue = () => {
@@ -220,23 +222,22 @@ const Intrusions: React.FC = () => {
 
           setPersonasCliente(
             personas
-              .map((p) => {
+              .map((p: any) => {
                 if (!p || typeof p !== 'object') return null;
-                const persona = p as { persona_id?: unknown; id?: unknown; nombre?: unknown; apellido?: unknown };
-                const parsedId = persona.persona_id ?? persona.id;
-                const idNumber = Number(parsedId);
-
-                if (!Number.isFinite(idNumber)) return null;
-
-                const nombre = persona.nombre == null ? '' : String(persona.nombre);
-                const apellido = persona.apellido == null ? '' : String(persona.apellido);
+                const id = p.persona_id ?? p.id;
+                if (id == null) return null;
 
                 return {
-                  id: idNumber,
-                  nombreCompleto: `${nombre} ${apellido}`.trim(),
+                  id: Number(id),
+                  nombre: p.nombre ?? '',
+                  apellido: p.apellido ?? '',
+                  cargo: p.cargo ?? null,
                 };
               })
-              .filter((p): p is PersonaOption => p !== null)
+              .filter(
+                (p): p is PersonaOption =>
+                  p !== null && Number.isFinite(p.id)
+              )
           );
         } catch (err) {
           console.error('Error al obtener personas del cliente:', err);
@@ -941,11 +942,18 @@ const Intrusions: React.FC = () => {
                     <option value="">
                       {clienteId ? 'Seleccione una persona' : 'Seleccione primero un sitio'}
                     </option>
-                    {personasCliente.map((persona) => (
-                      <option key={persona.id} value={persona.id}>
-                        {persona.nombreCompleto}
-                      </option>
-                    ))}
+                    {personasCliente.map((p) => {
+                      const nombreCompleto = `${p.nombre} ${p.apellido}`.trim();
+                      const etiqueta = p.cargo
+                        ? `${nombreCompleto} - ${p.cargo}`
+                        : nombreCompleto;
+
+                      return (
+                        <option key={p.id} value={p.id}>
+                          {etiqueta}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div className="flex items-center gap-3">
