@@ -322,7 +322,95 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
           )}
         </div>
       </div>
-      <div className="overflow-x-auto relative">
+
+      <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Fecha desde</label>
+            <input
+              type="date"
+              value={filters.fechaDesde}
+              onChange={(e) => handleFilterChange('fechaDesde', e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="Desde"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Fecha hasta</label>
+            <input
+              type="date"
+              value={filters.fechaHasta}
+              onChange={(e) => handleFilterChange('fechaHasta', e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="Hasta"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Problema</label>
+            <input
+              type="text"
+              value={filters.problema}
+              onChange={(e) => handleFilterChange('problema', e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="Filtrar problema"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Tipo de Afectación</label>
+            <select
+              value={filters.tipoAfectacion}
+              onChange={(e) => handleFilterChange('tipoAfectacion', e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Todos</option>
+              {tipoAfectacionOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Sitio</label>
+            <input
+              type="text"
+              value={filters.sitio}
+              onChange={(e) => handleFilterChange('sitio', e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="Filtrar sitio"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Estado</label>
+            <select
+              value={filters.estado}
+              onChange={(e) => handleFilterChange('estado', e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Todos</option>
+              <option value="resuelto">Resuelto</option>
+              <option value="pendiente">Pendiente</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Departamento Responsable</label>
+            <select
+              value={filters.departamento}
+              onChange={(e) => handleFilterChange('departamento', e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Todos</option>
+              {departamentoOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -371,84 +459,6 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                 </th>
               )}
             </tr>
-            <tr>
-              <th className="px-6 py-2">
-                <div className="flex flex-col gap-1 text-xs text-gray-700">
-                  <input
-                    type="date"
-                    value={filters.fechaDesde}
-                    onChange={(e) => handleFilterChange('fechaDesde', e.target.value)}
-                    className="border rounded px-2 py-1 text-sm"
-                    placeholder="Desde"
-                  />
-                  <input
-                    type="date"
-                    value={filters.fechaHasta}
-                    onChange={(e) => handleFilterChange('fechaHasta', e.target.value)}
-                    className="border rounded px-2 py-1 text-sm"
-                    placeholder="Hasta"
-                  />
-                </div>
-              </th>
-              <th className="px-6 py-2">
-                <input
-                  type="text"
-                  value={filters.problema}
-                  onChange={(e) => handleFilterChange('problema', e.target.value)}
-                  className="border rounded px-2 py-1 text-sm w-full"
-                  placeholder="Filtrar problema"
-                />
-              </th>
-              <th className="px-6 py-2">
-                <select
-                  value={filters.tipoAfectacion}
-                  onChange={(e) => handleFilterChange('tipoAfectacion', e.target.value)}
-                  className="border rounded px-2 py-1 text-sm w-full"
-                >
-                  <option value="">Todos</option>
-                  {tipoAfectacionOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
-              </th>
-              <th className="px-6 py-2">
-                <input
-                  type="text"
-                  value={filters.sitio}
-                  onChange={(e) => handleFilterChange('sitio', e.target.value)}
-                  className="border rounded px-2 py-1 text-sm w-full"
-                  placeholder="Filtrar sitio"
-                />
-              </th>
-              <th className="px-6 py-2">
-                <select
-                  value={filters.estado}
-                  onChange={(e) => handleFilterChange('estado', e.target.value)}
-                  className="border rounded px-2 py-1 text-sm w-full"
-                >
-                  <option value="">Todos</option>
-                  <option value="resuelto">Resuelto</option>
-                  <option value="pendiente">Pendiente</option>
-                </select>
-              </th>
-              <th className="px-6 py-2">
-                <select
-                  value={filters.departamento}
-                  onChange={(e) => handleFilterChange('departamento', e.target.value)}
-                  className="border rounded px-2 py-1 text-sm w-full"
-                >
-                  <option value="">Todos</option>
-                  {departamentoOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
-              </th>
-              {actionsEnabled && <th className="px-6 py-2" />}
-            </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {sortedFailures.length === 0 ? (
@@ -460,22 +470,22 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
             ) : (
               sortedFailures.map((fallo) => (
                 <tr key={fallo.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                     {formatFechaHoraFallo(fallo) || 'Sin información'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                     {fallo.problema
                       || fallo.tipoProblemaNombre
                       || fallo.tipoProblema
                       || fallo.descripcion_fallo
                       || 'Sin información'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                     {fallo.tipo_afectacion
                       || fallo.tipoAfectacion
                       || 'Sin información'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                     {fallo.sitio
                       || fallo.sitioNombre
                       || fallo.sitio_nombre
@@ -503,7 +513,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                       );
                     })()}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                     {fallo.departamento_responsable
                       || fallo.departamentoNombre
                       || fallo.deptResponsable
