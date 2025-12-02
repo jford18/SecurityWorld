@@ -386,7 +386,9 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                     {fallo.reportadoCliente ? 'Sí' : 'No'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {fallo.responsable?.trim() || 'N/A'}
+                    {fallo.personal_identificado_cargo && fallo.personal_identificado_nombre
+                      ? `${fallo.personal_identificado_cargo} - ${fallo.personal_identificado_nombre}`
+                      : 'N/A'}
                   </td>
                 </tr>
               ))
