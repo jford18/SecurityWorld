@@ -152,6 +152,21 @@ export const createCatalogoTipoEquipoAfectado = async (req, res) => {
   }
 
   try {
+    // Verificar si ya existe un registro con el mismo nombre (case-insensitive)
+    const duplicateCheck = await pool.query(
+      `SELECT id
+       FROM public.catalogo_tipo_equipo_afectado
+       WHERE LOWER(nombre) = LOWER($1)
+       LIMIT 1`,
+      [trimmedNombre]
+    );
+
+    if (duplicateCheck.rowCount > 0) {
+      return res
+        .status(400)
+        .json(formatError("Ya existe un tipo de equipo afectado con ese nombre"));
+    }
+
     const normalizedActivo = normalizeBoolean(activo, true);
     const result = await pool.query(
       "INSERT INTO public.catalogo_tipo_equipo_afectado (nombre, descripcion, activo) VALUES ($1, $2, $3) RETURNING id, nombre, descripcion, activo, fecha_creacion",
@@ -168,6 +183,13 @@ export const createCatalogoTipoEquipoAfectado = async (req, res) => {
       );
   } catch (error) {
     console.error("Error al crear tipo de equipo afectado:", error);
+
+    if (error?.code === "23505") {
+      return res
+        .status(400)
+        .json(formatError("Ya existe un tipo de equipo afectado con ese nombre"));
+    }
+
     res
       .status(500)
       .json(formatError("Error al crear el tipo de equipo afectado"));
