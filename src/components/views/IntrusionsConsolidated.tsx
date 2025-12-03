@@ -48,6 +48,10 @@ const IntrusionsConsolidated: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<keyof IntrusionConsolidadoRow | null>(
+    'fechaHoraIntrusion'
+  );
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const [sitios, setSitios] = useState<Sitio[]>([]);
   const [tiposIntrusion, setTiposIntrusion] = useState<TipoIntrusionItem[]>([]);
@@ -150,10 +154,53 @@ const IntrusionsConsolidated: React.FC = () => {
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
-  const handleExportToExcel = () => {
-    if (isLoading || data.length === 0) return;
+  const handleSort = (field: keyof IntrusionConsolidadoRow) => {
+    setSortField((prevField) => {
+      if (prevField !== field) {
+        setSortDirection('asc');
+        return field;
+      }
+      setSortDirection((prevDirection) => (prevDirection === 'asc' ? 'desc' : 'asc'));
+      return field;
+    });
+  };
 
-    const formattedRows = data.map((row) => ({
+  const sortedData = useMemo(() => {
+    if (!sortField) return data;
+
+    const multiplier = sortDirection === 'asc' ? 1 : -1;
+
+    return [...data].sort((a, b) => {
+      if (sortField === 'fechaHoraIntrusion') {
+        const aTime = a.fechaHoraIntrusion ? new Date(a.fechaHoraIntrusion).getTime() : 0;
+        const bTime = b.fechaHoraIntrusion ? new Date(b.fechaHoraIntrusion).getTime() : 0;
+        return (aTime - bTime) * multiplier;
+      }
+
+      const aValue = a[sortField];
+      const bValue = b[sortField];
+
+      if (typeof aValue === 'boolean' || typeof bValue === 'boolean') {
+        const aBool = aValue ? 1 : 0;
+        const bBool = bValue ? 1 : 0;
+        return (aBool - bBool) * multiplier;
+      }
+
+      const aText = (aValue ?? '').toString().toLowerCase();
+      const bText = (bValue ?? '').toString().toLowerCase();
+      return aText.localeCompare(bText) * multiplier;
+    });
+  }, [data, sortDirection, sortField]);
+
+  const renderSortIndicator = (field: keyof IntrusionConsolidadoRow) => {
+    if (sortField !== field) return null;
+    return sortDirection === 'asc' ? '▲' : '▼';
+  };
+
+  const handleExportToExcel = () => {
+    if (isLoading || sortedData.length === 0) return;
+
+    const formattedRows = sortedData.map((row) => ({
       'Fecha y hora de intrusión':
         formatIntrusionDateTime(row.fechaHoraIntrusion) || 'Sin información',
       Sitio: row.sitio || 'Sin información',
@@ -325,15 +372,19 @@ const IntrusionsConsolidated: React.FC = () => {
                 {intrusionesColumns.map((column) => (
                   <th
                     key={column.key}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none"
+                    onClick={() => handleSort(column.key as keyof IntrusionConsolidadoRow)}
                   >
-                    {column.header}
+                    <div className="flex items-center gap-1">
+                      <span>{column.header}</span>
+                      <span className="text-xs">{renderSortIndicator(column.key as keyof IntrusionConsolidadoRow)}</span>
+                    </div>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {data.length === 0 ? (
+              {sortedData.length === 0 ? (
                 <tr>
                   <td
                     colSpan={intrusionesColumns.length}
@@ -343,7 +394,7 @@ const IntrusionsConsolidated: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                data.map((row) => (
+                sortedData.map((row) => (
                   <tr key={row.id ?? `${row.sitio}-${row.fechaHoraIntrusion}`} className="hover:bg-gray-50">
                     {intrusionesColumns.map((column) => (
                       <td
