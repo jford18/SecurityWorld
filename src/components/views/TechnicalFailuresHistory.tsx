@@ -326,21 +326,50 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Fecha y hora de intrusión
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => handleSort('fechaFallo')}
+              >
+                Fecha y Hora de Fallo{renderSortIndicator('fechaFallo')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Sitio
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => handleSort('problema')}
+              >
+                Problema{renderSortIndicator('problema')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Tipo de intrusión
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => handleSort('tipoAfectacion')}
+              >
+                Tipo de Afectación{renderSortIndicator('tipoAfectacion')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Llegó alerta
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => handleSort('sitioNombre')}
+              >
+                Sitio{renderSortIndicator('sitioNombre')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Personal identificado (Cargo – Persona)
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => handleSort('estado')}
+              >
+                Estado{renderSortIndicator('estado')}
               </th>
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => handleSort('departamentoResponsable')}
+              >
+                Departamento Responsable{renderSortIndicator('departamentoResponsable')}
+              </th>
+              {actionsEnabled && (
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  Acciones
+                </th>
+              )}
             </tr>
             <tr>
               <th className="px-6 py-2">
@@ -361,6 +390,64 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                   />
                 </div>
               </th>
+              <th className="px-6 py-2">
+                <input
+                  type="text"
+                  value={filters.problema}
+                  onChange={(e) => handleFilterChange('problema', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                  placeholder="Filtrar problema"
+                />
+              </th>
+              <th className="px-6 py-2">
+                <select
+                  value={filters.tipoAfectacion}
+                  onChange={(e) => handleFilterChange('tipoAfectacion', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                >
+                  <option value="">Todos</option>
+                  {tipoAfectacionOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </th>
+              <th className="px-6 py-2">
+                <input
+                  type="text"
+                  value={filters.sitio}
+                  onChange={(e) => handleFilterChange('sitio', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                  placeholder="Filtrar sitio"
+                />
+              </th>
+              <th className="px-6 py-2">
+                <select
+                  value={filters.estado}
+                  onChange={(e) => handleFilterChange('estado', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                >
+                  <option value="">Todos</option>
+                  <option value="resuelto">Resuelto</option>
+                  <option value="pendiente">Pendiente</option>
+                </select>
+              </th>
+              <th className="px-6 py-2">
+                <select
+                  value={filters.departamento}
+                  onChange={(e) => handleFilterChange('departamento', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                >
+                  <option value="">Todos</option>
+                  {departamentoOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </th>
+              {actionsEnabled && <th className="px-6 py-2" />}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -373,23 +460,65 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
             ) : (
               sortedFailures.map((fallo) => (
                 <tr key={fallo.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatFechaHoraFallo(fallo) || 'Sin información'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {fallo.sitio || 'Sin información'}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {fallo.problema
+                      || fallo.tipoProblemaNombre
+                      || fallo.tipoProblema
+                      || fallo.descripcion_fallo
+                      || 'Sin información'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {fallo.tipo_afectacion || 'Sin información'}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {fallo.tipo_afectacion
+                      || fallo.tipoAfectacion
+                      || 'Sin información'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {fallo.reportadoCliente ? 'Sí' : 'No'}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {fallo.sitio
+                      || fallo.sitioNombre
+                      || fallo.sitio_nombre
+                      || 'Sin sitio asignado'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {fallo.personal_identificado_cargo && fallo.personal_identificado_nombre
-                      ? `${fallo.personal_identificado_cargo} - ${fallo.personal_identificado_nombre}`
-                      : 'N/A'}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {(() => {
+                      const estado = calcularEstado(fallo);
+                      return (
+                        <span
+                          style={{
+                            backgroundColor: estado.color,
+                            color: 'white',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '0.9em',
+                            fontWeight: 'bold',
+                            display: 'inline-block',
+                            minWidth: '110px',
+                            textAlign: 'center',
+                          }}
+                        >
+                          {estado.texto}
+                        </span>
+                      );
+                    })()}
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {fallo.departamento_responsable
+                      || fallo.departamentoNombre
+                      || fallo.deptResponsable
+                      || 'Sin información'}
+                  </td>
+                  {actionsEnabled && handleEdit && (
+                    <td className="px-6 py-3 text-left whitespace-nowrap">
+                      <button
+                        onClick={() => handleEdit(fallo)}
+                        className="text-blue-600 hover:underline text-sm font-semibold"
+                      >
+                        Editar
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
