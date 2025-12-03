@@ -329,9 +329,9 @@ const TechnicalFailuresOperador: React.FC = () => {
     const loadTiposEquipoAfectado = async () => {
       try {
         const response = await getAllTipoEquipoAfectado({
-          page: 1,
+          page: 0,
           limit: 1000,
-          search: '',
+          search: undefined,
         });
         if (!isMounted) return;
         setTiposEquipoAfectado(response.data ?? []);
