@@ -32,11 +32,11 @@ export const listCatalogoTipoEquipoAfectado = async (req, res) => {
   const { search = "", page, limit } = req.query ?? {};
 
   const filters = [];
-  const values = [];
+  const filterValues = [];
 
   if (typeof search === "string" && search.trim()) {
-    values.push(`%${search.trim()}%`);
-    filters.push(`nombre ILIKE $${values.length}`);
+    filterValues.push(`%${search.trim()}%`);
+    filters.push(`nombre ILIKE $${filterValues.length}`);
   }
 
   const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
@@ -45,26 +45,35 @@ export const listCatalogoTipoEquipoAfectado = async (req, res) => {
   let paginationClause = "";
   const pageNumber = Number(page);
   const pageSize = Number(limit);
+  const hasPagination =
+    Number.isFinite(pageNumber) && pageNumber >= 0 && Number.isFinite(pageSize) && pageSize > 0;
 
-  if (Number.isFinite(pageNumber) && Number.isFinite(pageSize) && pageNumber > 0 && pageSize > 0) {
-    const offset = (pageNumber - 1) * pageSize;
-    values.push(pageSize, offset);
-    paginationClause = ` LIMIT $${values.length - 1} OFFSET $${values.length}`;
+  const dataValues = [...filterValues];
+
+  if (hasPagination) {
+    const offset = pageNumber * pageSize;
+    const limitIndex = dataValues.length + 1;
+    const offsetIndex = dataValues.length + 2;
+    paginationClause = ` LIMIT $${limitIndex} OFFSET $${offsetIndex}`;
+    dataValues.push(pageSize, offset);
   }
 
   try {
+    const baseQuery = `FROM public.catalogo_tipo_equipo_afectado ${whereClause}`;
+    const countResult = await pool.query(`SELECT COUNT(*) ${baseQuery}`, filterValues);
+    const totalRecords = Number(countResult.rows[0]?.count ?? 0);
+
     const result = await pool.query(
-      `SELECT id, nombre, descripcion, activo, fecha_creacion, COUNT(*) OVER() AS total_count FROM public.catalogo_tipo_equipo_afectado ${whereClause} ${orderClause}${paginationClause}`,
-      values
+      `SELECT id, nombre, descripcion, activo, fecha_creacion ${baseQuery} ${orderClause}${paginationClause}`,
+      dataValues
     );
 
     const items = result.rows.map(mapRow);
-    const totalRecords = Number(result.rows[0]?.total_count ?? items.length) || items.length;
     const responsePayload = {
       data: items,
       total: totalRecords,
-      page: paginationClause ? pageNumber : 1,
-      limit: paginationClause ? pageSize : items.length,
+      page: hasPagination ? pageNumber : 0,
+      limit: hasPagination ? pageSize : items.length,
     };
 
     res.status(200).json(responsePayload);
