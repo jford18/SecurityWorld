@@ -35,12 +35,12 @@ const formatDate = (value: string | null | undefined) => {
   return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
 };
 
-const pageSizeOptions = [5, 10, 20, 50];
+const pageSizeOptions = [5, 10, 20, 50, 100];
 
 const TipoEquipoAfectadoScreen: React.FC = () => {
   const [items, setItems] = useState<TipoEquipoAfectado[]>([]);
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -54,24 +54,25 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const totalPages = useMemo(
-    () => Math.max(1, Math.ceil((total || 0) / (pageSize || 1))),
-    [pageSize, total]
-  );
+  const totalPages = useMemo(() => Math.ceil(total / pageSize), [pageSize, total]);
+
+  useEffect(() => {
+    if (totalPages > 0 && page >= totalPages) {
+      setPage(totalPages - 1);
+    }
+  }, [page, totalPages]);
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const response = await getAllTipoEquipoAfectado({
         search: search.trim() || undefined,
-        page,
+        page: page + 1,
         limit: pageSize,
       });
 
       setItems(response.data ?? []);
       setTotal(response.total ?? 0);
-      setPage(response.page ?? 1);
-      setPageSize(response.limit ?? pageSize);
       setError(null);
     } catch (err) {
       const message = resolveErrorMessage(err, 'No se pudo cargar el catálogo');
@@ -164,12 +165,17 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
   };
 
   const handleChangePageSize = (value: number) => {
-    setPageSize(value);
-    setPage(1);
+    const numericValue = Number.parseInt(String(value), 10);
+    const nextPageSize = Number.isFinite(numericValue) && numericValue > 0 ? numericValue : pageSize;
+
+    setPageSize(nextPageSize);
+    setPage(0);
   };
 
   const handleChangePage = (nextPage: number) => {
-    const clampedPage = Math.min(Math.max(1, nextPage), totalPages);
+    if (totalPages <= 0) return;
+
+    const clampedPage = Math.min(Math.max(0, nextPage), totalPages - 1);
     setPage(clampedPage);
   };
 
@@ -194,7 +200,7 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
-                setPage(1);
+                setPage(0);
               }}
               className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
               placeholder="Nombre del tipo de equipo"
@@ -204,7 +210,7 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
             <span className="text-sm text-gray-600">Filas por página:</span>
             <select
               value={pageSize}
-              onChange={(e) => handleChangePageSize(Number(e.target.value))}
+              onChange={(e) => handleChangePageSize(Number.parseInt(e.target.value, 10))}
               className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
             >
               {pageSizeOptions.map((option) => (
@@ -268,24 +274,24 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-gray-600">
-            Página {page} de {totalPages} • {total} registros
+            Página {totalPages > 0 ? page + 1 : 0} de {totalPages} • {total} registros
           </p>
           <div className="flex items-center gap-2">
             <button
               type="button"
               className={secondaryButtonClasses}
-              disabled={page <= 1}
+              disabled={page <= 0}
               onClick={() => handleChangePage(page - 1)}
             >
               Anterior
             </button>
             <span className="text-sm text-gray-700">
-              {page} / {totalPages}
+              {totalPages > 0 ? page + 1 : 0} / {totalPages}
             </span>
             <button
               type="button"
               className={secondaryButtonClasses}
-              disabled={page >= totalPages}
+              disabled={totalPages === 0 || page + 1 >= totalPages}
               onClick={() => handleChangePage(page + 1)}
             >
               Siguiente
