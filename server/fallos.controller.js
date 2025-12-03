@@ -1,5 +1,4 @@
 import { pool } from "./db.js";
-import technicalFailuresSeed from "./data/technicalFailuresSeed.js";
 import {
   nodos,
   nodoCliente,
@@ -59,146 +58,6 @@ const findUserId = (users, nameOrUsername) => {
       .some((value) => String(value).trim().toLowerCase() === normalized)
   );
   return user ? user.id : null;
-};
-
-const seedFallosIfNeeded = async (client) => {
-  const countResult = await client.query(
-    "SELECT COUNT(*)::int AS total FROM fallos_tecnicos"
-  );
-  const total = countResult.rows[0]?.total ?? 0;
-
-  if (total > 0) {
-    return;
-  }
-
-  await client.query("BEGIN");
-
-  try {
-    const usersResult = await client.query(
-      "SELECT id, nombre_usuario, nombre_completo FROM usuarios"
-    );
-    const usuarios = usersResult.rows;
-
-    const departamentosResult = await client.query(
-      "SELECT id, nombre FROM departamentos_responsables"
-    );
-    const departamentos = departamentosResult.rows;
-
-    const tiposProblemaResult = await client.query(
-      "SELECT id, descripcion FROM catalogo_tipo_problema"
-    );
-    const tiposProblema = tiposProblemaResult.rows;
-
-    const consolasResult = await client.query(
-      "SELECT id, nombre FROM consolas"
-    );
-    const consolas = consolasResult.rows;
-
-    const defaultUserId = usuarios[0]?.id ?? null;
-    const defaultDepartmentId = departamentos[0]?.id ?? null;
-    const defaultTipoProblemaId = tiposProblema[0]?.id ?? null;
-    const defaultConsolaId = consolas[0]?.id ?? null;
-
-    const now = new Date();
-
-    for (const seed of technicalFailuresSeed) {
-      const responsableId =
-        findUserId(usuarios, seed.responsableUsername) ||
-        findUserId(usuarios, seed.responsable) ||
-        defaultUserId;
-
-      const departamentoId = departamentos.find((d) => {
-        return String(d.nombre).trim().toLowerCase() ===
-          String(seed.deptResponsable || "").trim().toLowerCase();
-      })?.id ?? defaultDepartmentId;
-
-      const tipoProblemaId = tiposProblema.find((tipo) => {
-        return String(tipo.descripcion).trim().toLowerCase() ===
-          String(seed.tipoProblema || seed.descripcion_fallo || "")
-            .trim()
-            .toLowerCase();
-      })?.id ?? defaultTipoProblemaId;
-
-      const consolaId = consolas.find((c) => {
-        return String(c.nombre).trim().toLowerCase() ===
-          String(seed.consola || "").trim().toLowerCase();
-      })?.id ?? defaultConsolaId;
-
-      const falloInsert = await client.query(
-        `INSERT INTO fallos_tecnicos (
-          fecha,
-          hora,
-          equipo_afectado,
-          descripcion_fallo,
-          responsable_id,
-          departamento_id,
-          tipo_problema_id,
-          consola_id,
-          fecha_resolucion,
-          hora_resolucion,
-          fecha_creacion,
-          fecha_actualizacion
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
-        ) RETURNING id`,
-        [
-          seed.fecha,
-          seed.hora || null,
-          seed.equipo_afectado,
-          seed.descripcion_fallo,
-          responsableId,
-          departamentoId,
-          tipoProblemaId,
-          consolaId,
-          seed.fechaResolucion || null,
-          seed.horaResolucion || null,
-          now, // FIX: omit estado because it is a generated column; PostgreSQL will derive it from fecha_resolucion.
-          now,
-        ]
-      );
-
-      const falloId = falloInsert.rows[0]?.id;
-
-      if (!falloId) {
-        continue;
-      }
-
-      const verificacionAperturaId =
-        findUserId(usuarios, seed.verificacionAperturaUsername) ||
-        findUserId(usuarios, seed.verificacionApertura);
-      const verificacionCierreId =
-        findUserId(usuarios, seed.verificacionCierreUsername) ||
-        findUserId(usuarios, seed.verificacionCierre);
-
-      if (
-        verificacionAperturaId ||
-        verificacionCierreId ||
-        seed.novedadDetectada
-      ) {
-        await client.query(
-          `INSERT INTO seguimiento_fallos (
-            fallo_id,
-            verificacion_apertura_id,
-            verificacion_cierre_id,
-            novedad_detectada,
-            fecha_creacion
-          ) VALUES ($1, $2, $3, $4, $5)`,
-          [
-            falloId,
-            verificacionAperturaId ?? null,
-            verificacionCierreId ?? null,
-            seed.novedadDetectada || null,
-            now,
-          ]
-        );
-      }
-    }
-
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  }
 };
 
 const mapFalloRowToDto = (row) => ({
@@ -347,8 +206,6 @@ export const getFallos = async (req, res) => {
   const client = await pool.connect();
 
   try {
-    await seedFallosIfNeeded(client);
-
     const result = await client.query(
       `SELECT
         ft.id,
