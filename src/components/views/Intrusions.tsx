@@ -125,21 +125,6 @@ type PersonaOption = {
   cargo?: string | null;
 };
 
-const buildPersonalLabel = (persona?: PersonaOption | null) => {
-  if (!persona) return '';
-
-  const nombreCompleto = [persona.nombre, persona.apellido]
-    .filter(Boolean)
-    .map((value) => value.trim())
-    .join(' ');
-
-  if (persona.cargo && nombreCompleto) {
-    return `${persona.cargo} - ${nombreCompleto}`;
-  }
-
-  return nombreCompleto;
-};
-
 const getInitialDateTimeValue = () => {
   const now = new Date();
   now.setSeconds(0, 0);
@@ -538,14 +523,6 @@ const Intrusions: React.FC = () => {
     }));
   };
 
-  const personaLabelMap = useMemo(() => {
-    const map = new Map<number, string>();
-    personasCliente.forEach((persona) => {
-      map.set(persona.id, buildPersonalLabel(persona));
-    });
-    return map;
-  }, [personasCliente]);
-
   const intrusionesTableData = useMemo<IntrusionConsolidadoRow[]>(
     () =>
       intrusions.map((intrusion) => ({
@@ -554,13 +531,9 @@ const Intrusions: React.FC = () => {
         sitio: intrusion.sitio_nombre || intrusion.ubicacion || '',
         tipoIntrusion: intrusion.tipo ?? '',
         llegoAlerta: intrusion.llego_alerta ?? false,
-        personalIdentificado:
-          intrusion.personalIdentificado?.trim() ||
-          (intrusion.persona_id != null
-            ? personaLabelMap.get(intrusion.persona_id) ?? ''
-            : ''),
+        personalIdentificado: intrusion.personal_identificado?.trim() || '',
       })),
-    [intrusions, personaLabelMap]
+    [intrusions]
   );
 
   const isSubmitDisabled = useMemo(() => {

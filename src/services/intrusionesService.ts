@@ -61,7 +61,6 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     fuerza_reaccion_id?: unknown;
     fuerza_reaccion_descripcion?: unknown;
     persona_id?: unknown;
-    personalIdentificado?: unknown;
     personal_identificado?: unknown;
   };
 
@@ -110,13 +109,6 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
       ? null
       : personaIdValue;
 
-  const personalIdentificadoRaw =
-    base.personalIdentificado ?? base.personal_identificado ?? null;
-  const personalIdentificado =
-    personalIdentificadoRaw == null
-      ? ''
-      : String(personalIdentificadoRaw).trim();
-
   return {
     id,
     fecha_evento: fechaEvento,
@@ -151,7 +143,10 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
         ? null
         : String(base.fuerza_reaccion_descripcion),
     persona_id: personaId,
-    personalIdentificado,
+    personal_identificado:
+      base.personal_identificado == null
+        ? null
+        : String(base.personal_identificado),
   };
 };
 
