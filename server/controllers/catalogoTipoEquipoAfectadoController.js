@@ -32,14 +32,21 @@ export const listCatalogoTipoEquipoAfectado = async (req, res) => {
   try {
     const { search = "", page = 0, limit = 10 } = req.query ?? {};
 
+    console.log("🔎 [TIPO-EQ-AFECTADO] req.query:", req.query);
+
     // Normalización segura de page y limit
-    const safePageNumber = Number.parseInt(page, 10);
-    const safePageSize = Number.parseInt(limit, 10);
+    const rawPage = Number.parseInt(page, 10);
+    const rawLimit = Number.parseInt(limit, 10);
 
-    const safePage = Number.isFinite(safePageNumber) && safePageNumber >= 0 ? safePageNumber : 0;
-    const safeLimit = Number.isFinite(safePageSize) && safePageSize > 0 ? safePageSize : 10;
-
+    const safePage = Number.isFinite(rawPage) && rawPage >= 0 ? rawPage : 0;
+    const safeLimit = Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 10;
     const offset = safePage * safeLimit;
+
+    console.log("🔎 [TIPO-EQ-AFECTADO] calculados:", {
+      safePage,
+      safeLimit,
+      offset,
+    });
 
     // Filtros dinámicos
     const filters = [];
@@ -52,6 +59,9 @@ export const listCatalogoTipoEquipoAfectado = async (req, res) => {
 
     const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
 
+    console.log("🔎 [TIPO-EQ-AFECTADO] whereClause:", whereClause);
+    console.log("🔎 [TIPO-EQ-AFECTADO] params (filtros):", params);
+
     // 1) Total de registros (sin paginar)
     const totalQuery = `
       SELECT COUNT(*) AS total
@@ -59,12 +69,14 @@ export const listCatalogoTipoEquipoAfectado = async (req, res) => {
       ${whereClause}
     `;
 
+    console.log("🧮 [TIPO-EQ-AFECTADO] totalQuery:", totalQuery);
+
     const totalResult = await pool.query(totalQuery, params);
     const totalRecords = Number(totalResult.rows[0]?.total ?? 0);
 
+    console.log("🧮 [TIPO-EQ-AFECTADO] totalRecords:", totalRecords);
+
     // 2) Datos paginados
-    // OJO: LIMIT y OFFSET usan SIEMPRE los dos últimos parámetros,
-    // por eso se construyen con params.length + 1 y params.length + 2
     const dataQuery = `
       SELECT id, nombre, descripcion, activo, fecha_creacion
       FROM public.catalogo_tipo_equipo_afectado
@@ -75,16 +87,23 @@ export const listCatalogoTipoEquipoAfectado = async (req, res) => {
     `;
 
     const dataParams = [...params, safeLimit, offset];
+
+    console.log("📄 [TIPO-EQ-AFECTADO] dataQuery:", dataQuery);
+    console.log("📄 [TIPO-EQ-AFECTADO] dataParams:", dataParams);
+
     const result = await pool.query(dataQuery, dataParams);
 
     const items = result.rows.map(mapRow);
+
+    console.log("📊 [TIPO-EQ-AFECTADO] items.length:", items.length);
+    console.log("📊 [TIPO-EQ-AFECTADO] ids página:", items.map((i) => i.id));
 
     return res.status(200).json({
       data: items,
       total: totalRecords,
     });
   } catch (error) {
-    console.error("Error al listar tipos de equipo afectado:", error);
+    console.error("❌ Error al listar tipos de equipo afectado:", error);
     return res
       .status(500)
       .json(formatError("Error al listar los tipos de equipo afectado"));
