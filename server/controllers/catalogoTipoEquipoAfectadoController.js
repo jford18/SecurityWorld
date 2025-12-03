@@ -31,6 +31,12 @@ const mapRow = (row) => ({
 export const listCatalogoTipoEquipoAfectado = async (req, res) => {
   const { search = "", page, limit } = req.query ?? {};
 
+  const pageNumber = Number.parseInt(page, 10);
+  const pageSize = Number.parseInt(limit, 10);
+  const safePage = Number.isFinite(pageNumber) && pageNumber >= 0 ? pageNumber : 0;
+  const safeLimit = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 10;
+  const offset = safePage * safeLimit;
+
   const filters = [];
   const filterValues = [];
 
@@ -40,43 +46,27 @@ export const listCatalogoTipoEquipoAfectado = async (req, res) => {
   }
 
   const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
-  const orderClause = "ORDER BY id";
-
-  let paginationClause = "";
-  const pageNumber = Number(page);
-  const pageSize = Number(limit);
-  const hasPagination =
-    Number.isFinite(pageNumber) && pageNumber >= 0 && Number.isFinite(pageSize) && pageSize > 0;
-
-  const dataValues = [...filterValues];
-
-  if (hasPagination) {
-    const offset = pageNumber * pageSize;
-    const limitIndex = dataValues.length + 1;
-    const offsetIndex = dataValues.length + 2;
-    paginationClause = ` LIMIT $${limitIndex} OFFSET $${offsetIndex}`;
-    dataValues.push(pageSize, offset);
-  }
+  const orderClause = "ORDER BY id ASC";
 
   try {
     const baseQuery = `FROM public.catalogo_tipo_equipo_afectado ${whereClause}`;
-    const countResult = await pool.query(`SELECT COUNT(*) ${baseQuery}`, filterValues);
-    const totalRecords = Number(countResult.rows[0]?.count ?? 0);
+    const totalResult = await pool.query(`SELECT COUNT(*) AS total ${baseQuery}`, filterValues);
+    const totalRecords = Number(totalResult.rows[0]?.total ?? 0);
 
+    const dataValues = [...filterValues, safeLimit, offset];
     const result = await pool.query(
-      `SELECT id, nombre, descripcion, activo, fecha_creacion ${baseQuery} ${orderClause}${paginationClause}`,
+      `SELECT id, nombre, descripcion, activo, fecha_creacion ${baseQuery} ${orderClause} LIMIT $${
+        dataValues.length - 1
+      } OFFSET $${dataValues.length}`,
       dataValues
     );
 
     const items = result.rows.map(mapRow);
-    const responsePayload = {
+
+    res.status(200).json({
       data: items,
       total: totalRecords,
-      page: hasPagination ? pageNumber : 0,
-      limit: hasPagination ? pageSize : items.length,
-    };
-
-    res.status(200).json(responsePayload);
+    });
   } catch (error) {
     console.error("Error al listar tipos de equipo afectado:", error);
     res
