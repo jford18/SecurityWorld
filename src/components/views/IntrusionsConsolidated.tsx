@@ -9,6 +9,10 @@ import { getSitios, Sitio } from '../../services/sitiosService';
 import * as tipoIntrusionService from '../../services/tipoIntrusion.service';
 import * as personaService from '../../services/persona.service';
 import { IntrusionConsolidadoRow } from '../../types';
+import {
+  formatIntrusionDateTime,
+  intrusionesColumns,
+} from '@/components/intrusiones/intrusionesColumns';
 
 interface TipoIntrusionItem {
   id: number;
@@ -21,23 +25,6 @@ interface PersonaItem {
   apellido: string;
   cargo_descripcion?: string;
 }
-
-const formatDateTime = (value: string | null) => {
-  if (!value) return '';
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value.replace('T', ' ').replace('Z', '');
-  }
-
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.getDate()).padStart(2, '0');
-  const hours = String(parsed.getHours()).padStart(2, '0');
-  const minutes = String(parsed.getMinutes()).padStart(2, '0');
-
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
-};
 
 const buildPersonalLabel = (persona?: PersonaItem | null) => {
   if (!persona) return '';
@@ -167,7 +154,8 @@ const IntrusionsConsolidated: React.FC = () => {
     if (isLoading || data.length === 0) return;
 
     const formattedRows = data.map((row) => ({
-      'Fecha y hora de intrusión': formatDateTime(row.fechaHoraIntrusion) || 'Sin información',
+      'Fecha y hora de intrusión':
+        formatIntrusionDateTime(row.fechaHoraIntrusion) || 'Sin información',
       Sitio: row.sitio || 'Sin información',
       'Tipo intrusión': row.tipoIntrusion || 'Sin información',
       'Llegó alerta': row.llegoAlerta ? 'Sí' : 'No',
@@ -334,28 +322,21 @@ const IntrusionsConsolidated: React.FC = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fecha y hora de intrusión
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Sitio
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tipo intrusión
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Llegó alerta
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Personal identificado (Cargo – Persona)
-                </th>
+                {intrusionesColumns.map((column) => (
+                  <th
+                    key={column.key}
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    {column.header}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {data.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={intrusionesColumns.length}
                     className="px-6 py-4 text-center text-sm text-gray-500"
                   >
                     {isLoading ? 'Cargando información...' : 'No hay registros disponibles.'}
@@ -364,21 +345,14 @@ const IntrusionsConsolidated: React.FC = () => {
               ) : (
                 data.map((row) => (
                   <tr key={row.id ?? `${row.sitio}-${row.fechaHoraIntrusion}`} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                      {formatDateTime(row.fechaHoraIntrusion) || 'Sin información'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                      {row.sitio || 'Sin información'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                      {row.tipoIntrusion || 'Sin información'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                      {row.llegoAlerta ? 'Sí' : 'No'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                      {row.personalIdentificado?.trim() || 'N/A'}
-                    </td>
+                    {intrusionesColumns.map((column) => (
+                      <td
+                        key={column.key}
+                        className="px-6 py-4 whitespace-nowrap text-sm text-gray-700"
+                      >
+                        {column.render(row)}
+                      </td>
+                    ))}
                   </tr>
                 ))
               )}
