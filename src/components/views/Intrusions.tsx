@@ -168,6 +168,10 @@ const Intrusions: React.FC = () => {
   const [clienteNombre, setClienteNombre] = useState('');
   const [personaId, setPersonaId] = useState<number | null>(null);
   const [personasCliente, setPersonasCliente] = useState<PersonaOption[]>([]);
+  const [sortField, setSortField] = useState<keyof IntrusionConsolidadoRow | null>(
+    'fechaHoraIntrusion'
+  );
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const resetClientePersonaSelection = () => {
     setSitioId(null);
@@ -535,6 +539,50 @@ const Intrusions: React.FC = () => {
       })),
     [intrusions]
   );
+
+  const handleSort = (field: keyof IntrusionConsolidadoRow) => {
+    setSortField((prevField) => {
+      if (prevField !== field) {
+        setSortDirection('asc');
+        return field;
+      }
+      setSortDirection((prevDirection) => (prevDirection === 'asc' ? 'desc' : 'asc'));
+      return field;
+    });
+  };
+
+  const sortedIntrusiones = useMemo(() => {
+    if (!sortField) return intrusionesTableData;
+
+    const directionMultiplier = sortDirection === 'asc' ? 1 : -1;
+
+    return [...intrusionesTableData].sort((a, b) => {
+      if (sortField === 'fechaHoraIntrusion') {
+        const aDate = a.fechaHoraIntrusion ? new Date(a.fechaHoraIntrusion).getTime() : 0;
+        const bDate = b.fechaHoraIntrusion ? new Date(b.fechaHoraIntrusion).getTime() : 0;
+        return (aDate - bDate) * directionMultiplier;
+      }
+
+      const aValue = a[sortField];
+      const bValue = b[sortField];
+
+      if (typeof aValue === 'boolean' || typeof bValue === 'boolean') {
+        const aBool = aValue ? 1 : 0;
+        const bBool = bValue ? 1 : 0;
+        return (aBool - bBool) * directionMultiplier;
+      }
+
+      const aText = (aValue ?? '').toString().toLowerCase();
+      const bText = (bValue ?? '').toString().toLowerCase();
+
+      return aText.localeCompare(bText) * directionMultiplier;
+    });
+  }, [intrusionesTableData, sortDirection, sortField]);
+
+  const renderSortIndicator = (field: keyof IntrusionConsolidadoRow) => {
+    if (sortField !== field) return null;
+    return sortDirection === 'asc' ? '▲' : '▼';
+  };
 
   const isSubmitDisabled = useMemo(() => {
     const tipoValue = tipoDescripcion.trim();
@@ -1077,15 +1125,19 @@ const Intrusions: React.FC = () => {
                 {intrusionesColumns.map((column) => (
                   <th
                     key={column.key}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none"
+                    onClick={() => handleSort(column.key as keyof IntrusionConsolidadoRow)}
                   >
-                    {column.header}
+                    <div className="flex items-center gap-1">
+                      <span>{column.header}</span>
+                      <span className="text-xs">{renderSortIndicator(column.key as keyof IntrusionConsolidadoRow)}</span>
+                    </div>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {intrusionesTableData.length === 0 ? (
+              {sortedIntrusiones.length === 0 ? (
                 <tr>
                   <td
                     colSpan={intrusionesColumns.length}
@@ -1095,7 +1147,7 @@ const Intrusions: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                intrusionesTableData.map((row) => (
+                sortedIntrusiones.map((row) => (
                   <tr key={row.id ?? `${row.sitio}-${row.fechaHoraIntrusion}`} className="hover:bg-gray-50">
                     {intrusionesColumns.map((column) => (
                       <td
