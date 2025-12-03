@@ -152,6 +152,7 @@ export interface Intrusion {
   fuerza_reaccion_id: number | null;
   fuerza_reaccion_descripcion?: string | null;
   persona_id?: number | null;
+  personalIdentificado?: string;
 }
 
 export interface IntrusionConsolidadoRow {

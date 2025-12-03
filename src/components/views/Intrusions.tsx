@@ -555,9 +555,10 @@ const Intrusions: React.FC = () => {
         tipoIntrusion: intrusion.tipo ?? '',
         llegoAlerta: intrusion.llego_alerta ?? false,
         personalIdentificado:
-          intrusion.persona_id != null
+          intrusion.personalIdentificado?.trim() ||
+          (intrusion.persona_id != null
             ? personaLabelMap.get(intrusion.persona_id) ?? ''
-            : '',
+            : ''),
       })),
     [intrusions, personaLabelMap]
   );
