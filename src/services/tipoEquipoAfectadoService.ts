@@ -1,13 +1,14 @@
-import api from './api';
+import api from './apiClient';
 
 const BASE_PATH = '/catalogo-tipo-equipo-afectado';
 
-export type TipoEquipoAfectado = {
+export interface TipoEquipoAfectado {
   id: number;
   nombre: string;
-  descripcion?: string | null;
+  descripcion: string | null;
   activo: boolean;
-};
+  fecha_creacion: string;
+}
 
 export type TipoEquipoAfectadoPayload = {
   nombre: string;
@@ -15,12 +16,10 @@ export type TipoEquipoAfectadoPayload = {
   activo: boolean;
 };
 
-export type TipoEquipoAfectadoListResponse = {
+interface ListResponse {
   data: TipoEquipoAfectado[];
   total: number;
-  page: number;
-  limit: number;
-};
+}
 
 type ApiEnvelope<T> =
   | T
@@ -39,40 +38,21 @@ const unwrap = <T>(payload: ApiEnvelope<T>): T => {
   return payload as T;
 };
 
-export async function getAllTipoEquipoAfectado(params?: {
+export const getAllTipoEquipoAfectado = async (params: {
+  search?: string;
   page?: number;
   limit?: number;
-  search?: string;
-}): Promise<TipoEquipoAfectadoListResponse> {
-  const response = await api.get<ApiEnvelope<TipoEquipoAfectadoListResponse | TipoEquipoAfectado[]>>(BASE_PATH, { params });
-  const data = unwrap(response.data);
+}): Promise<ListResponse> => {
+  const response = await api.get(BASE_PATH, { params });
 
-  if (Array.isArray(data)) {
-    return {
-      data,
-      total: data.length,
-      page: 1,
-      limit: data.length,
-    };
-  }
+  // El backend devuelve { data: [...], total: number }
+  const payload = response.data ?? {};
 
-  const records = Array.isArray((data as { data?: unknown })?.data)
-    ? ((data as { data?: TipoEquipoAfectado[] }).data ?? [])
-    : Array.isArray((data as { items?: unknown })?.items)
-      ? ((data as { items?: TipoEquipoAfectado[] }).items ?? [])
-      : [];
-
-  const total = Number((data as { total?: unknown })?.total ?? records.length) || records.length;
-  const pageValue = (data as { page?: unknown })?.page;
-  const limitValue = (data as { limit?: unknown })?.limit ?? (data as { pageSize?: unknown })?.pageSize;
-
-  const page = Number.isFinite(Number(pageValue)) ? Number(pageValue) : params?.page ?? 0;
-  const limit = Number.isFinite(Number(limitValue))
-    ? Number(limitValue)
-    : params?.limit ?? records.length;
-
-  return { data: records, total, page, limit };
-}
+  return {
+    data: payload.data ?? [],
+    total: payload.total ?? 0,
+  };
+};
 
 export async function getTipoEquipoAfectado(id: number): Promise<TipoEquipoAfectado | null> {
   const response = await api.get<ApiEnvelope<TipoEquipoAfectado | null>>(`${BASE_PATH}/${id}`);

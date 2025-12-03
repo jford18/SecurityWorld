@@ -68,14 +68,16 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await getAllTipoEquipoAfectado({
+
+      // getAllTipoEquipoAfectado debe devolver { data, total }
+      const { data, total } = await getAllTipoEquipoAfectado({
         search: search.trim() || undefined,
         page,
         limit: rowsPerPage,
       });
 
-      setItems(response.data ?? []);
-      setTotal(response.total ?? 0);
+      setItems(data ?? []);
+      setTotal(total ?? 0);
       setError(null);
     } catch (err) {
       const message = resolveErrorMessage(err, 'No se pudo cargar el catálogo');
