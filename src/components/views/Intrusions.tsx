@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import FechaHoraFalloPicker from '../ui/FechaHoraFalloPicker';
 import { intrusionsData as mockIntrusions } from '../../data/mockData';
-import { Intrusion } from '../../types';
+import { Intrusion, IntrusionConsolidadoRow } from '../../types';
 import {
   createIntrusion,
   fetchIntrusiones,
@@ -21,6 +21,7 @@ import { resolveConsolaIdByName } from '../../services/consolasService';
 import { useSession } from '../context/SessionContext';
 import { getAll as getFuerzasReaccion } from '../../services/fuerzaReaccion.service';
 import { getPersonasByCliente } from '../../services/clientePersona.service';
+import { intrusionesColumns } from '@/components/intrusiones/intrusionesColumns';
 
 const toBoolean = (value: unknown, defaultValue = false): boolean => {
   if (typeof value === 'boolean') {
@@ -144,20 +145,6 @@ const buildInitialFormData = (): IntrusionFormData => ({
   fuerza_reaccion_id: '',
 });
 
-const formatFechaEvento = (value: string) => {
-  if (!value) {
-    return 'Sin registro';
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return 'Sin registro';
-  }
-  return parsed.toLocaleString('es-EC', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  });
-};
-
 const Intrusions: React.FC = () => {
   const [formData, setFormData] = useState<IntrusionFormData>(buildInitialFormData());
   const [intrusions, setIntrusions] = useState<Intrusion[]>([]);
@@ -181,6 +168,10 @@ const Intrusions: React.FC = () => {
   const [clienteNombre, setClienteNombre] = useState('');
   const [personaId, setPersonaId] = useState<number | null>(null);
   const [personasCliente, setPersonasCliente] = useState<PersonaOption[]>([]);
+  const [sortField, setSortField] = useState<keyof IntrusionConsolidadoRow | null>(
+    'fechaHoraIntrusion'
+  );
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const resetClientePersonaSelection = () => {
     setSitioId(null);
@@ -536,15 +527,62 @@ const Intrusions: React.FC = () => {
     }));
   };
 
-  const medioDescripcionMap = useMemo(() => {
-    const map = new Map<number, string>();
-    mediosComunicacion.forEach((medio) => {
-      if (typeof medio?.id === 'number') {
-        map.set(medio.id, medio.descripcion ?? '');
+  const intrusionesTableData = useMemo<IntrusionConsolidadoRow[]>(
+    () =>
+      intrusions.map((intrusion) => ({
+        id: intrusion.id ?? null,
+        fechaHoraIntrusion: intrusion.fecha_evento ?? null,
+        sitio: intrusion.sitio_nombre || intrusion.ubicacion || '',
+        tipoIntrusion: intrusion.tipo ?? '',
+        llegoAlerta: intrusion.llego_alerta ?? false,
+        personalIdentificado: intrusion.personal_identificado?.trim() || '',
+      })),
+    [intrusions]
+  );
+
+  const handleSort = (field: keyof IntrusionConsolidadoRow) => {
+    setSortField((prevField) => {
+      if (prevField !== field) {
+        setSortDirection('asc');
+        return field;
       }
+      setSortDirection((prevDirection) => (prevDirection === 'asc' ? 'desc' : 'asc'));
+      return field;
     });
-    return map;
-  }, [mediosComunicacion]);
+  };
+
+  const sortedIntrusiones = useMemo(() => {
+    if (!sortField) return intrusionesTableData;
+
+    const directionMultiplier = sortDirection === 'asc' ? 1 : -1;
+
+    return [...intrusionesTableData].sort((a, b) => {
+      if (sortField === 'fechaHoraIntrusion') {
+        const aDate = a.fechaHoraIntrusion ? new Date(a.fechaHoraIntrusion).getTime() : 0;
+        const bDate = b.fechaHoraIntrusion ? new Date(b.fechaHoraIntrusion).getTime() : 0;
+        return (aDate - bDate) * directionMultiplier;
+      }
+
+      const aValue = a[sortField];
+      const bValue = b[sortField];
+
+      if (typeof aValue === 'boolean' || typeof bValue === 'boolean') {
+        const aBool = aValue ? 1 : 0;
+        const bBool = bValue ? 1 : 0;
+        return (aBool - bBool) * directionMultiplier;
+      }
+
+      const aText = (aValue ?? '').toString().toLowerCase();
+      const bText = (bValue ?? '').toString().toLowerCase();
+
+      return aText.localeCompare(bText) * directionMultiplier;
+    });
+  }, [intrusionesTableData, sortDirection, sortField]);
+
+  const renderSortIndicator = (field: keyof IntrusionConsolidadoRow) => {
+    if (sortField !== field) return null;
+    return sortDirection === 'asc' ? '▲' : '▼';
+  };
 
   const isSubmitDisabled = useMemo(() => {
     const tipoValue = tipoDescripcion.trim();
@@ -1084,67 +1122,41 @@ const Intrusions: React.FC = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha y hora</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sitio</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Medio de comunicación</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Llegó alerta</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
+                {intrusionesColumns.map((column) => (
+                  <th
+                    key={column.key}
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none"
+                    onClick={() => handleSort(column.key as keyof IntrusionConsolidadoRow)}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>{column.header}</span>
+                      <span className="text-xs">{renderSortIndicator(column.key as keyof IntrusionConsolidadoRow)}</span>
+                    </div>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {intrusions.length === 0 ? (
+              {sortedIntrusiones.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td
+                    colSpan={intrusionesColumns.length}
+                    className="px-6 py-4 text-center text-sm text-gray-500"
+                  >
                     No hay intrusiones registradas.
                   </td>
                 </tr>
               ) : (
-                intrusions.map((intrusion) => (
-                  <tr key={intrusion.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatFechaEvento(intrusion.fecha_evento)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {intrusion.sitio_nombre || intrusion.ubicacion || 'Sin sitio'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {intrusion.tipo || 'Sin tipo'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {(
-                        intrusion.medio_comunicacion_descripcion ??
-                        (intrusion.medio_comunicacion_id != null
-                          ? medioDescripcionMap.get(intrusion.medio_comunicacion_id) || 'No especificado'
-                          : 'No especificado')
-                      ) || 'No especificado'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          intrusion.estado?.toLowerCase() === 'atendido'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}
+                sortedIntrusiones.map((row) => (
+                  <tr key={row.id ?? `${row.sitio}-${row.fechaHoraIntrusion}`} className="hover:bg-gray-50">
+                    {intrusionesColumns.map((column) => (
+                      <td
+                        key={column.key}
+                        className="px-6 py-4 whitespace-nowrap text-sm text-gray-700"
                       >
-                        {intrusion.estado || 'Sin estado'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          intrusion.llego_alerta
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        {intrusion.llego_alerta ? 'Sí' : 'No'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
-                      {intrusion.descripcion || 'Sin descripción'}
-                    </td>
+                        {column.render(row)}
+                      </td>
+                    ))}
                   </tr>
                 ))
               )}

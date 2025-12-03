@@ -61,6 +61,7 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     fuerza_reaccion_id?: unknown;
     fuerza_reaccion_descripcion?: unknown;
     persona_id?: unknown;
+    personal_identificado?: unknown;
   };
 
   const id = Number(base.id);
@@ -142,6 +143,10 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
         ? null
         : String(base.fuerza_reaccion_descripcion),
     persona_id: personaId,
+    personal_identificado:
+      base.personal_identificado == null
+        ? null
+        : String(base.personal_identificado),
   };
 };
 

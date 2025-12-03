@@ -28,6 +28,14 @@ const mapIntrusionRow = (row) => {
   const personaId =
     personaRaw === null || personaRaw === undefined ? null : Number(personaRaw);
 
+  const personaNombre = row?.persona_nombre ? String(row.persona_nombre).trim() : "";
+  const cargoDescripcion = row?.cargo_descripcion
+    ? String(row.cargo_descripcion).trim()
+    : "";
+  const personalIdentificado = cargoDescripcion && personaNombre
+    ? `${cargoDescripcion} - ${personaNombre}`
+    : personaNombre || row?.personal_identificado || null;
+
   return {
     id: row?.id,
     ubicacion: row?.ubicacion ?? "",
@@ -55,6 +63,7 @@ const mapIntrusionRow = (row) => {
         : Number(fuerzaReaccionId),
     fuerza_reaccion_descripcion: row?.fuerza_reaccion_descripcion ?? null,
     persona_id: personaId === null || Number.isNaN(personaId) ? null : personaId,
+    personal_identificado: personalIdentificado,
   };
 };
 
@@ -142,7 +151,12 @@ export const listIntrusiones = async (_req, res) => {
 
   try {
     const personaSelect = metadata.personaColumn
-      ? `, i.${metadata.personaColumn} AS persona_id`
+      ? `, i.${metadata.personaColumn} AS persona_id, CONCAT_WS(' ', p.nombre, p.apellido) AS persona_nombre, c.descripcion AS cargo_descripcion`
+      : "";
+
+    const personaJoin = metadata.personaColumn
+      ? "LEFT JOIN public.persona AS p ON p.id = i." + metadata.personaColumn +
+        " LEFT JOIN public.catalogo_cargo AS c ON c.id = p.cargo_id"
       : "";
 
     const result = await pool.query(
@@ -170,6 +184,7 @@ export const listIntrusiones = async (_req, res) => {
        LEFT JOIN public.catalogo_medio_comunicacion AS m ON m.id = i.medio_comunicacion_id
        LEFT JOIN public.catalogo_conclusion_evento AS ce ON ce.id = i.conclusion_evento_id
        LEFT JOIN public."catalogo_fuerza_reaccion" AS fr ON fr.id = i.fuerza_reaccion_id
+       ${personaJoin}
        ORDER BY i.fecha_evento DESC NULLS LAST, i.id DESC`
     );
     const intrusiones = result.rows.map(mapIntrusionRow);
