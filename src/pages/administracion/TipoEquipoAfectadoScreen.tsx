@@ -54,7 +54,7 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const totalPages = useMemo(() => Math.ceil(total / pageSize), [pageSize, total]);
+  const totalPages = useMemo(() => (pageSize > 0 ? Math.ceil(total / pageSize) : 0), [pageSize, total]);
 
   useEffect(() => {
     if (totalPages > 0 && page >= totalPages) {
@@ -67,7 +67,7 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
       setLoading(true);
       const response = await getAllTipoEquipoAfectado({
         search: search.trim() || undefined,
-        page: page + 1,
+        page,
         limit: pageSize,
       });
 
@@ -177,6 +177,12 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
 
     const clampedPage = Math.min(Math.max(0, nextPage), totalPages - 1);
     setPage(clampedPage);
+  };
+
+  const handleNextPage = () => {
+    if (page < totalPages - 1) {
+      setPage(page + 1);
+    }
   };
 
   return (
@@ -291,8 +297,8 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
             <button
               type="button"
               className={secondaryButtonClasses}
-              disabled={totalPages === 0 || page + 1 >= totalPages}
-              onClick={() => handleChangePage(page + 1)}
+              disabled={totalPages === 0 || page >= totalPages - 1}
+              onClick={handleNextPage}
             >
               Siguiente
             </button>
