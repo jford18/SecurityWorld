@@ -41,7 +41,7 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
   const [items, setItems] = useState<TipoEquipoAfectado[]>([]);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +54,10 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const totalPages = useMemo(() => (pageSize > 0 ? Math.ceil(total / pageSize) : 0), [pageSize, total]);
+  const totalPages = useMemo(
+    () => (rowsPerPage > 0 ? Math.ceil(total / rowsPerPage) : 0),
+    [rowsPerPage, total],
+  );
 
   useEffect(() => {
     if (totalPages > 0 && page >= totalPages) {
@@ -68,7 +71,7 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
       const response = await getAllTipoEquipoAfectado({
         search: search.trim() || undefined,
         page,
-        limit: pageSize,
+        limit: rowsPerPage,
       });
 
       setItems(response.data ?? []);
@@ -83,7 +86,7 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search]);
+  }, [page, rowsPerPage, search]);
 
   useEffect(() => {
     fetchData();
@@ -166,22 +169,21 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
 
   const handleChangePageSize = (value: number) => {
     const numericValue = Number.parseInt(String(value), 10);
-    const nextPageSize = Number.isFinite(numericValue) && numericValue > 0 ? numericValue : pageSize;
+    const nextPageSize = Number.isFinite(numericValue) && numericValue > 0 ? numericValue : rowsPerPage;
 
-    setPageSize(nextPageSize);
+    setRowsPerPage(nextPageSize);
     setPage(0);
-  };
-
-  const handleChangePage = (nextPage: number) => {
-    if (totalPages <= 0) return;
-
-    const clampedPage = Math.min(Math.max(0, nextPage), totalPages - 1);
-    setPage(clampedPage);
   };
 
   const handleNextPage = () => {
     if (page < totalPages - 1) {
       setPage(page + 1);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (page > 0) {
+      setPage(page - 1);
     }
   };
 
@@ -215,7 +217,7 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">Filas por página:</span>
             <select
-              value={pageSize}
+              value={rowsPerPage}
               onChange={(e) => handleChangePageSize(Number.parseInt(e.target.value, 10))}
               className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
             >
@@ -287,7 +289,7 @@ const TipoEquipoAfectadoScreen: React.FC = () => {
               type="button"
               className={secondaryButtonClasses}
               disabled={page <= 0}
-              onClick={() => handleChangePage(page - 1)}
+              onClick={handlePreviousPage}
             >
               Anterior
             </button>

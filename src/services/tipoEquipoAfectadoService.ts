@@ -63,10 +63,13 @@ export async function getAllTipoEquipoAfectado(params?: {
       : [];
 
   const total = Number((data as { total?: unknown })?.total ?? records.length) || records.length;
-  const page = Number((data as { page?: unknown })?.page ?? 1) || 1;
-  const limit =
-    Number((data as { limit?: unknown })?.limit ?? (data as { pageSize?: unknown })?.pageSize ?? records.length) ||
-    records.length;
+  const pageValue = (data as { page?: unknown })?.page;
+  const limitValue = (data as { limit?: unknown })?.limit ?? (data as { pageSize?: unknown })?.pageSize;
+
+  const page = Number.isFinite(Number(pageValue)) ? Number(pageValue) : params?.page ?? 0;
+  const limit = Number.isFinite(Number(limitValue))
+    ? Number(limitValue)
+    : params?.limit ?? records.length;
 
   return { data: records, total, page, limit };
 }
