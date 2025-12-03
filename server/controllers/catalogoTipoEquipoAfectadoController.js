@@ -29,47 +29,63 @@ const mapRow = (row) => ({
 });
 
 export const listCatalogoTipoEquipoAfectado = async (req, res) => {
-  const { search = "", page, limit } = req.query ?? {};
-
-  const pageNumber = Number.parseInt(page, 10);
-  const pageSize = Number.parseInt(limit, 10);
-  const safePage = Number.isFinite(pageNumber) && pageNumber >= 0 ? pageNumber : 0;
-  const safeLimit = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 10;
-  const offset = safePage * safeLimit;
-
-  const filters = [];
-  const filterValues = [];
-
-  if (typeof search === "string" && search.trim()) {
-    filterValues.push(`%${search.trim()}%`);
-    filters.push(`nombre ILIKE $${filterValues.length}`);
-  }
-
-  const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
-  const orderClause = "ORDER BY id ASC";
-
   try {
-    const baseQuery = `FROM public.catalogo_tipo_equipo_afectado ${whereClause}`;
-    const totalResult = await pool.query(`SELECT COUNT(*) AS total ${baseQuery}`, filterValues);
+    const { search = "", page = 0, limit = 10 } = req.query ?? {};
+
+    // Normalización segura de page y limit
+    const safePageNumber = Number.parseInt(page, 10);
+    const safePageSize = Number.parseInt(limit, 10);
+
+    const safePage = Number.isFinite(safePageNumber) && safePageNumber >= 0 ? safePageNumber : 0;
+    const safeLimit = Number.isFinite(safePageSize) && safePageSize > 0 ? safePageSize : 10;
+
+    const offset = safePage * safeLimit;
+
+    // Filtros dinámicos
+    const filters = [];
+    const params = [];
+
+    if (typeof search === "string" && search.trim()) {
+      params.push(`%${search.trim()}%`);
+      filters.push(`nombre ILIKE $${params.length}`);
+    }
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
+
+    // 1) Total de registros (sin paginar)
+    const totalQuery = `
+      SELECT COUNT(*) AS total
+      FROM public.catalogo_tipo_equipo_afectado
+      ${whereClause}
+    `;
+
+    const totalResult = await pool.query(totalQuery, params);
     const totalRecords = Number(totalResult.rows[0]?.total ?? 0);
 
-    const dataValues = [...filterValues, safeLimit, offset];
-    const result = await pool.query(
-      `SELECT id, nombre, descripcion, activo, fecha_creacion ${baseQuery} ${orderClause} LIMIT $${
-        dataValues.length - 1
-      } OFFSET $${dataValues.length}`,
-      dataValues
-    );
+    // 2) Datos paginados
+    // OJO: LIMIT y OFFSET usan SIEMPRE los dos últimos parámetros,
+    // por eso se construyen con params.length + 1 y params.length + 2
+    const dataQuery = `
+      SELECT id, nombre, descripcion, activo, fecha_creacion
+      FROM public.catalogo_tipo_equipo_afectado
+      ${whereClause}
+      ORDER BY id ASC
+      LIMIT $${params.length + 1}
+      OFFSET $${params.length + 2}
+    `;
+
+    const dataParams = [...params, safeLimit, offset];
+    const result = await pool.query(dataQuery, dataParams);
 
     const items = result.rows.map(mapRow);
 
-    res.status(200).json({
+    return res.status(200).json({
       data: items,
       total: totalRecords,
     });
   } catch (error) {
     console.error("Error al listar tipos de equipo afectado:", error);
-    res
+    return res
       .status(500)
       .json(formatError("Error al listar los tipos de equipo afectado"));
   }
