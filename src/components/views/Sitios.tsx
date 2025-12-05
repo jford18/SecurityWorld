@@ -1154,6 +1154,9 @@ const Sitios: React.FC = () => {
       'Tipo de área': tipoAreaDisplayName(sitio),
       Cliente: clienteDisplayName(sitio),
       Consola: consolaDisplayName(sitio),
+      Ubicación: sitio.ubicacion && sitio.ubicacion.trim() ? sitio.ubicacion : '—',
+      Longitud: sitio.longitud ?? '—',
+      Latitud: sitio.latitud ?? '—',
       Servidor: sitio.servidor && sitio.servidor.trim() ? sitio.servidor : '—',
       Activo: sitio.activo ? 'Sí' : 'No',
     }));
