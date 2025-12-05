@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import AutocompleteComboBox from '../ui/AutocompleteComboBox';
 import api from '../../services/api';
 import { fetchHaciendas } from '../../services/haciendaService';
@@ -367,6 +368,13 @@ const primaryButtonClasses =
   'inline-flex justify-center rounded-md bg-yellow-400 px-4 py-2 font-semibold text-[#1C2E4A] shadow-sm hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-400';
 const secondaryButtonClasses =
   'inline-flex justify-center rounded-md border border-yellow-400 px-4 py-2 font-semibold text-[#1C2E4A] hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-400';
+
+const formatTimestamp = () => {
+  const now = new Date();
+  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(
+    now.getHours(),
+  ).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+};
 
 const Sitios: React.FC = () => {
   const [sitios, setSitios] = useState<Sitio[]>([]);
@@ -1133,6 +1141,31 @@ const Sitios: React.FC = () => {
   const filteredSitios = useMemo(() => filterSitios(sitios), [filterSitios, sitios]);
   const sortedSitios = useMemo(() => sortSitios(filteredSitios), [filteredSitios, sortSitios]);
 
+  const handleExportSitiosToExcel = () => {
+    if (loading || sortedSitios.length === 0) {
+      return;
+    }
+
+    const formattedRows = sortedSitios.map((sitio) => ({
+      ID: sitio.id ?? '—',
+      Nombre: sitio.nombre ?? '—',
+      Descripción: sitio.descripcion && sitio.descripcion.trim() ? sitio.descripcion : '—',
+      Hacienda: haciendaDisplayName(sitio),
+      'Tipo de área': tipoAreaDisplayName(sitio),
+      Cliente: clienteDisplayName(sitio),
+      Consola: consolaDisplayName(sitio),
+      Servidor: sitio.servidor && sitio.servidor.trim() ? sitio.servidor : '—',
+      Activo: sitio.activo ? 'Sí' : 'No',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sitios');
+
+    const filename = `mantenimiento_sitios_${formatTimestamp()}.xlsx`;
+    XLSX.writeFile(workbook, filename);
+  };
+
   const uniqueClientes = useMemo(() => {
     const values = new Set<string>();
 
@@ -1201,9 +1234,19 @@ const Sitios: React.FC = () => {
             Gestiona los sitios disponibles para monitoreo y asignación dentro del sistema.
           </p>
         </div>
-        <button type="button" className={primaryButtonClasses} onClick={handleOpenCreateModal}>
-          Nuevo Sitio
-        </button>
+        <div className="flex flex-wrap gap-2 justify-end">
+          <button
+            type="button"
+            className={secondaryButtonClasses}
+            onClick={handleExportSitiosToExcel}
+            disabled={loading || sortedSitios.length === 0}
+          >
+            Exportar a Excel
+          </button>
+          <button type="button" className={primaryButtonClasses} onClick={handleOpenCreateModal}>
+            Nuevo Sitio
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
