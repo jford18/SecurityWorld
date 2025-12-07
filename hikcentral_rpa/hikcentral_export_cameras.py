@@ -1,5 +1,6 @@
 import os
 import time
+import traceback
 from pathlib import Path
 
 from selenium import webdriver
@@ -109,8 +110,18 @@ def run():
         )
         login_button.click()
 
-        # Esperar que aparezca la pestaña "Maintenance" en la barra superior
+        # ========================
+        # ESPERAR PORTAL PRINCIPAL
+        # ========================
         print("[3] Esperando carga del portal principal...")
+
+        # 1) Verificar que la URL cambie a /portal (login exitoso)
+        wait.until(EC.url_contains("/portal"))
+
+        # 2) Dar un pequeño tiempo extra para que la SPA pinte el menú
+        time.sleep(5)
+
+        # 3) Buscar la pestaña Maintenance en la barra superior
         maintenance_tab = wait.until(
             EC.element_to_be_clickable((By.XPATH, "//*[normalize-space(text())='Maintenance']"))
         )
@@ -121,7 +132,6 @@ def run():
         print("[4] Abriendo pestaña Maintenance...")
         maintenance_tab.click()
 
-        # Resource Status
         print("[5] Abriendo menú Resource Status...")
         resource_status = wait.until(
             EC.element_to_be_clickable(
@@ -130,7 +140,6 @@ def run():
         )
         resource_status.click()
 
-        # Camera
         print("[6] Seleccionando Camera...")
         camera_item = wait.until(
             EC.element_to_be_clickable((By.XPATH, "//*[normalize-space(text())='Camera']"))
@@ -150,14 +159,12 @@ def run():
         limpiar_descargas()
         export_button.click()
 
-        # Opción Excel
         print("[9] Seleccionando formato Excel...")
         excel_option = wait.until(
             EC.element_to_be_clickable((By.XPATH, "//*[normalize-space(text())='Excel']"))
         )
         excel_option.click()
 
-        # Botón Export del panel lateral (tomamos el último botón con texto Export)
         print("[10] Ejecutando exportación...")
         panel_export_button = wait.until(
             EC.element_to_be_clickable(
@@ -166,14 +173,14 @@ def run():
         )
         panel_export_button.click()
 
-        # Esperar descarga
         print("[11] Esperando que se descargue el archivo Excel...")
         archivo = esperar_descarga(timeout=90)
 
         print(f"[OK] Archivo descargado en: {archivo}")
 
     except Exception as e:
-        print(f"[ERROR] Ocurrió un problema: {e}")
+        print(f"[ERROR] Ocurrió un problema: {e.__class__.__name__}: {e}")
+        traceback.print_exc()
     finally:
         driver.quit()
 
