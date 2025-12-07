@@ -340,38 +340,30 @@ def run():
             limpiar_descargas()
 
             try:
-                export_toolbar_button = None
-
-                # 1) Buscar todos los elementos visibles que contengan el texto 'Export'
-                candidates = driver.find_elements(
-                    By.XPATH, "//*[contains(normalize-space(.), 'Export')]"
-                )
-                visible_candidates = [el for el in candidates if el.is_displayed()]
-
-                # 2) De los candidatos visibles, intentar subir a un ancestro clickeable
-                for el in visible_candidates:
-                    try:
-                        ancestor = el.find_element(
+                # Localizar el botón Export por su estructura real:
+                # <span class="el-button-wrapper"> ... <div class="el-button-slot-wrapper">Export</div> ... </span>
+                export_toolbar_button = wait.until(
+                    EC.element_to_be_clickable(
+                        (
                             By.XPATH,
-                            "./ancestor::*[self::button or contains(@class,'el-button') or contains(@class,'btn')][1]",
+                            "//span[contains(@class,'el-button-wrapper')][.//div[contains(@class,'el-button-slot-wrapper') and normalize-space(text())='Export']]",
                         )
-                        export_toolbar_button = ancestor
-                        break
-                    except NoSuchElementException:
-                        if export_toolbar_button is None:
-                            export_toolbar_button = el
+                    )
+                )
 
+                # Fallback alternativo por el ícono, por si el anterior falla en algún momento:
+                # <i class="h-icon-export"></i> → subir al span.el-button-wrapper
                 if export_toolbar_button is None:
-                    raise TimeoutException(
-                        "No se encontró ningún elemento visible con texto Export"
+                    export_toolbar_button = wait.until(
+                        EC.element_to_be_clickable(
+                            (
+                                By.XPATH,
+                                "//i[contains(@class,'h-icon-export')]/ancestor::span[contains(@class,'el-button-wrapper')][1]",
+                            )
+                        )
                     )
 
-                # 3) Asegurar que el botón Export sea clickeable
-                export_toolbar_button = wait.until(
-                    EC.element_to_be_clickable(export_toolbar_button)
-                )
-
-                # 4) Intentar click directo, luego ActionChains y finalmente JavaScript
+                # Intentar click directo, luego ActionChains y finalmente JavaScript
                 clicked = False
 
                 try:
@@ -391,7 +383,6 @@ def run():
 
                 if not clicked:
                     driver.execute_script("arguments[0].click();", export_toolbar_button)
-
             except Exception as e:
                 print(f"[ERROR] Ocurrió un problema en la exportación de cámaras: {e}")
                 raise TimeoutException("No se encontró el botón Export de la barra superior")
