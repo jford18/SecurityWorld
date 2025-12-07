@@ -321,37 +321,108 @@ def run():
             print(f"[ERROR] Ocurrió un problema al seleccionar Camera: {e}")
             raise Exception("No se pudo hacer clic en la pestaña 'Cameras'")
 
-        # Esperar a que cargue la tabla y el botón Export
         print("[7] Esperando que cargue la tabla de cámaras...")
-        export_button = wait.until(
-            EC.element_to_be_clickable((By.XPATH, "//*[normalize-space(text())='Export']"))
-        )
 
-        # ========================
-        # EXPORTAR A EXCEL
-        # ========================
-        print("[8] Abriendo panel de Export...")
-        limpiar_descargas()
-        export_button.click()
-
-        print("[9] Seleccionando formato Excel...")
-        excel_option = wait.until(
-            EC.element_to_be_clickable((By.XPATH, "//*[normalize-space(text())='Excel']"))
-        )
-        excel_option.click()
-
-        print("[10] Ejecutando exportación...")
-        panel_export_button = wait.until(
-            EC.element_to_be_clickable(
-                (By.XPATH, "(//*[normalize-space(text())='Export'])[last()]")
+        try:
+            # 1) Esperar al menos una fila en la tabla de cámaras
+            wait.until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, ".el-table__body-wrapper tbody tr")
+                )
             )
-        )
-        panel_export_button.click()
 
-        print("[11] Esperando que se descargue el archivo Excel...")
-        archivo = esperar_descarga(timeout=90)
+            print("[8] Abriendo panel de exportación...")
 
-        print(f"[OK] Archivo descargado en: {archivo}")
+            limpiar_descargas()
+
+            # 2) Botón Export de la barra superior (a la derecha, junto a Refresh)
+            export_toolbar_button = None
+
+            try:
+                export_toolbar_button = wait.until(
+                    EC.element_to_be_clickable(
+                        (
+                            By.XPATH,
+                            "//span[normalize-space(text())='Export']/ancestor::button[1]"
+                        )
+                    )
+                )
+            except TimeoutException:
+                # Fallback: cualquier elemento clickeable con texto Export en la zona superior
+                candidates = driver.find_elements(
+                    By.XPATH,
+                    "//header//span[normalize-space(text())='Export']"
+                )
+                visibles = [el for el in candidates if el.is_displayed()]
+                if visibles:
+                    export_toolbar_button = visibles[0]
+
+            if export_toolbar_button is None:
+                raise TimeoutException("No se encontró el botón Export de la barra superior")
+
+            # Intentar click directo, luego ActionChains y luego JS
+            clicked = False
+            try:
+                export_toolbar_button.click()
+                clicked = True
+            except ElementClickInterceptedException:
+                clicked = False
+            except Exception:
+                clicked = False
+
+            if not clicked:
+                try:
+                    ActionChains(driver).move_to_element(export_toolbar_button).click().perform()
+                    clicked = True
+                except Exception:
+                    clicked = False
+
+            if not clicked:
+                driver.execute_script("arguments[0].click();", export_toolbar_button)
+
+            # 3) Seleccionar formato Excel en el panel lateral
+            print("[9] Seleccionando formato Excel...")
+
+            excel_option = wait.until(
+                EC.element_to_be_clickable(
+                    (
+                        By.XPATH,
+                        "//label[.//span[normalize-space(text())='Excel']]"
+                    )
+                )
+            )
+            excel_option.click()
+
+            # 4) Botón Export dentro del panel lateral
+            print("[10] Ejecutando exportación...")
+
+            export_side_button = wait.until(
+                EC.element_to_be_clickable(
+                    (
+                        By.XPATH,
+                        "//div[contains(@class, 'el-drawer') or contains(@class, 'el-dialog')]"
+                        "//button[.//span[normalize-space(text())='Export'] or normalize-space(text())='Export']"
+                    )
+                )
+            )
+
+            try:
+                export_side_button.click()
+            except Exception:
+                driver.execute_script("arguments[0].click();", export_side_button)
+
+            # 5) Esperar la descarga usando la función ya existente
+            print("[11] Esperando archivo descargado...")
+
+            archivo_descargado = esperar_descarga(timeout=120)
+            print(f"[11] Archivo descargado en: {archivo_descargado}")
+
+            # Si ya tienes lógica para mover/renombrar el archivo, llámala aquí
+            # reutilizando las variables existentes (por ejemplo DOWNLOAD_DIR, nombre base, etc.)
+
+        except Exception as e:
+            print(f"[ERROR] Ocurrió un problema en la exportación de cámaras: {e}")
+            raise
 
     except Exception as e:
         print(f"[ERROR] Ocurrió un problema: {e.__class__.__name__}: {e}")
