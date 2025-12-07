@@ -15,7 +15,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 # CONFIGURACIÓN GENERAL
 # ========================
 
-URL = "https://181.198.203.254:443/#/"
+URL = "http://181.198.203.254:443/#/"
 
 HIK_USER = os.getenv("HIK_USER", "SeguraM")
 HIK_PASSWORD = os.getenv("HIK_PASSWORD", "Victor1a3467!")
