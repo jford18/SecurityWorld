@@ -32,24 +32,31 @@ DOWNLOAD_DIR = BASE_DIR / "downloads"
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
 
-def configurar_navegador() -> webdriver.Chrome:
+def crear_driver() -> webdriver.Chrome:
     """Configura Chrome con Selenium, carpeta de descargas y manejo de certificado."""
+
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
     chrome_options = Options()
     chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("--ignore-certificate-errors")  # certificado no confiable
+    chrome_options.add_argument("--allow-running-insecure-content")
     chrome_options.add_argument("--disable-notifications")
+    chrome_options.add_argument("--safebrowsing-disable-download-protection")
 
     prefs = {
         "download.default_directory": str(DOWNLOAD_DIR),
         "download.prompt_for_download": False,
         "download.directory_upgrade": True,
         "safebrowsing.enabled": True,
+        "safebrowsing.disable_download_protection": True,
+        "profile.default_content_setting_values.automatic_downloads": 1,
     }
     chrome_options.add_experimental_option("prefs", prefs)
 
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
+    driver.maximize_window()
     return driver
 
 
@@ -188,7 +195,7 @@ def click_menu_item_by_title(driver, title: str) -> bool:
 
 
 def run():
-    driver = configurar_navegador()
+    driver = crear_driver()
     wait = WebDriverWait(driver, 30)
 
     try:
