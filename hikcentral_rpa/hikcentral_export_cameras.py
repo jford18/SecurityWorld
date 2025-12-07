@@ -190,26 +190,27 @@ def run():
         print("[5] Abriendo menú Resource Status...")
         time.sleep(3)  # pequeño buffer para que el árbol de menú termine de dibujarse
 
-        if not click_menu_item_by_title(driver, "Resource Status"):
-            raise Exception("No se pudo hacer clic en el menú 'Resource Status' por title")
+        try:
+            resource_status_menu = wait.until(
+                EC.element_to_be_clickable(
+                    (By.XPATH, "//i[contains(@class, 'icon-svg-nav_realtime_status_resources')]/ancestor::li[1]")
+                )
+            )
+            resource_status_menu.click()
+        except Exception:
+            raise Exception("No se pudo hacer clic en el menú 'Resource Status'")
 
         print("[6] Seleccionando Camera...")
 
-        # Esperar a que exista el span del menú Camera en el DOM
-        wait.until(
-            lambda d: d.execute_script(
-                "return !!document.querySelector(\"span.menu-title[title='Camera']\");"
+        try:
+            camera_tab = wait.until(
+                EC.element_to_be_clickable(
+                    (By.XPATH, "//i[contains(@class, 'icon-svg-nav_realtime_status_cameras')]/ancestor::li[1]")
+                )
             )
-        )
-
-        # Hacer clic en Camera usando JavaScript
-        driver.execute_script("""
-            var el = document.querySelector("span.menu-title[title='Camera']");
-            if (!el) {
-                throw new Error('No se encontró el menú Camera');
-            }
-            el.click();
-        """)
+            camera_tab.click()
+        except Exception:
+            raise Exception("No se pudo hacer clic en la pestaña 'Cameras'")
 
         # Esperar a que cargue la tabla y el botón Export
         print("[7] Esperando que cargue la tabla de cámaras...")
