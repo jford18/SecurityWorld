@@ -191,13 +191,17 @@ def run():
         time.sleep(3)  # pequeño buffer para que el árbol de menú termine de dibujarse
 
         try:
-            resource_status_menu = wait.until(
-                EC.element_to_be_clickable(
-                    (By.XPATH, "//i[contains(@class, 'icon-svg-nav_realtime_status_resources')]/ancestor::li[1]")
-                )
+            resource_status_span = wait.until(
+                EC.element_to_be_clickable((By.ID, "subMenuTitle2"))
             )
-            resource_status_menu.click()
-        except Exception:
+            # Usa click normal primero
+            try:
+                resource_status_span.click()
+            except Exception:
+                # Si el click normal falla, usa JavaScript como fallback
+                driver.execute_script("arguments[0].click();", resource_status_span)
+        except Exception as e:
+            print(f"[ERROR] Detalle al intentar abrir Resource Status: {e}")
             raise Exception("No se pudo hacer clic en el menú 'Resource Status'")
 
         print("[6] Seleccionando Camera...")
