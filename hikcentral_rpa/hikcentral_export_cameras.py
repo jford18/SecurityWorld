@@ -15,7 +15,6 @@ from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
 
 
 # ========================
@@ -27,35 +26,47 @@ URL = "http://181.198.203.254:443/#/"
 HIK_USER = os.getenv("HIK_USER", "SeguraM")
 HIK_PASSWORD = os.getenv("HIK_PASSWORD", "Victor1a3467!")
 
-BASE_DIR = Path(__file__).resolve().parent
-DOWNLOAD_DIR = BASE_DIR / "downloads"
-DOWNLOAD_DIR.mkdir(exist_ok=True)
+DOWNLOAD_DIR = Path(r"C:\\portal-sw\SecurityWorld\hikcentral_rpa\downloads")
 
 
 def crear_driver() -> webdriver.Chrome:
-    """Configura Chrome con Selenium, carpeta de descargas y manejo de certificado."""
+    """Configura y devuelve un driver de Chrome listo para descargar archivos."""
 
     DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
     chrome_options = Options()
-    chrome_options.add_argument("--start-maximized")
-    chrome_options.add_argument("--ignore-certificate-errors")  # certificado no confiable
-    chrome_options.add_argument("--allow-running-insecure-content")
-    chrome_options.add_argument("--disable-notifications")
-    chrome_options.add_argument("--safebrowsing-disable-download-protection")
 
     prefs = {
         "download.default_directory": str(DOWNLOAD_DIR),
         "download.prompt_for_download": False,
         "download.directory_upgrade": True,
-        "safebrowsing.enabled": True,
+        "safebrowsing.enabled": False,
         "safebrowsing.disable_download_protection": True,
         "profile.default_content_setting_values.automatic_downloads": 1,
+        "profile.default_content_setting_values.popups": 0,
     }
     chrome_options.add_experimental_option("prefs", prefs)
 
-    service = Service(ChromeDriverManager().install())
+    chrome_options.add_argument("--ignore-certificate-errors")
+    chrome_options.add_argument("--allow-running-insecure-content")
+    chrome_options.add_argument("--safebrowsing-disable-download-protection")
+    chrome_options.add_argument("--disable-popup-blocking")
+    chrome_options.add_argument(
+        "--disable-features=BlockInsecurePrivateNetworkRequests,BlockInsecureDownloadRestrictions,DownloadBubble"
+    )
+    chrome_options.add_argument("--start-maximized")
+
+    service = Service(executable_path=r"C:\\portal-sw\SecurityWorld\chromedriver.exe")
     driver = webdriver.Chrome(service=service, options=chrome_options)
+
+    driver.execute_cdp_cmd(
+        "Page.setDownloadBehavior",
+        {
+            "behavior": "allow",
+            "downloadPath": str(DOWNLOAD_DIR),
+        },
+    )
+
     driver.maximize_window()
     return driver
 
@@ -69,23 +80,32 @@ def limpiar_descargas(download_dir: Path = DOWNLOAD_DIR):
             pass
 
 
-def esperar_descarga(download_dir: Path, archivos_previos: set[str], timeout: int = 60) -> Path:
-    """
-    Espera hasta que exista algún archivo descargado sin extensión .crdownload.
-    Devuelve la ruta del archivo descargado.
-    """
-    fin = time.time() + timeout
+def esperar_descarga(download_dir: Path, archivos_previos, timeout: int = 120) -> str:
+    """Espera hasta detectar un nuevo archivo .xlsx o .xls en download_dir."""
 
-    while time.time() < fin:
-        archivos = list(download_dir.glob("*"))
-        if archivos:
-            archivos_finales = [f for f in archivos if not f.name.endswith(".crdownload")]
-            for archivo in archivos_finales:
-                if archivo.name not in archivos_previos:
-                    return archivo
-        time.sleep(1)
+    print("[9] Esperando archivo descargado...")
+    inicio = time.time()
 
-    raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
+    while True:
+        archivos_actuales = os.listdir(download_dir)
+        nuevos = [
+            f
+            for f in archivos_actuales
+            if f not in archivos_previos
+            and not f.endswith(".crdownload")
+            and (f.endswith(".xlsx") or f.endswith(".xls"))
+        ]
+
+        if nuevos:
+            archivo = nuevos[0]
+            ruta = str(download_dir / archivo)
+            print(f"[9] Archivo encontrado: {ruta}")
+            return ruta
+
+        if time.time() - inicio > timeout:
+            raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
+
+        time.sleep(2)
 
 
 def export_camera_status_to_excel(driver: webdriver.Chrome, wait: WebDriverWait, download_dir: Path = DOWNLOAD_DIR):
@@ -97,7 +117,7 @@ def export_camera_status_to_excel(driver: webdriver.Chrome, wait: WebDriverWait,
     print("[8] Abriendo panel de exportación desde Camera...")
 
     # Guardar listado previo de archivos para detectar el nuevo
-    archivos_previos = {f.name for f in download_dir.glob("*")}
+    archivos_previos = os.listdir(DOWNLOAD_DIR)
 
     # 1) Click en el botón Export del header de la pestaña Camera
     export_toolbar_button = wait.until(
@@ -144,9 +164,8 @@ def export_camera_status_to_excel(driver: webdriver.Chrome, wait: WebDriverWait,
     driver.execute_script("arguments[0].click();", export_confirm_button)
 
     # 5) Esperar que el archivo termine de descargarse en download_dir
-    print("[9] Esperando archivo descargado...")
-    archivo_descargado = esperar_descarga(download_dir, archivos_previos, timeout=120)
-    print(f"[9] Archivo descargado en: {archivo_descargado}")
+    archivo_descargado = esperar_descarga(DOWNLOAD_DIR, archivos_previos, timeout=180)
+    print(f"[10] Archivo descargado en: {archivo_descargado}")
 
 
 def click_menu_item_by_title(driver, title: str) -> bool:
@@ -199,6 +218,7 @@ def run():
     wait = WebDriverWait(driver, 30)
 
     try:
+        print(f"[DEBUG] DOWNLOAD_DIR = {DOWNLOAD_DIR}")
         print("[1] Navegando a la URL...")
         driver.get(URL)
 
