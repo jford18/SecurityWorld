@@ -143,12 +143,22 @@ def run():
         """)
 
         print("[5] Abriendo menú Resource Status...")
-        resource_status = wait.until(
-            EC.element_to_be_clickable(
-                (By.XPATH, "//*[normalize-space(text())='Resource Status']")
+
+        # Esperar a que exista el <li title="Resource Status"> en el DOM
+        wait.until(
+            lambda d: d.execute_script(
+                "return !!document.querySelector(\"li[title='Resource Status']\");"
             )
         )
-        resource_status.click()
+
+        # Hacer clic en Resource Status usando solo JavaScript
+        driver.execute_script("""
+            var el = document.querySelector("li[title='Resource Status']");
+            if (!el) {
+                throw new Error('No se encontró el menú Resource Status');
+            }
+            el.click();
+        """)
 
         print("[6] Seleccionando Camera...")
         camera_item = wait.until(
