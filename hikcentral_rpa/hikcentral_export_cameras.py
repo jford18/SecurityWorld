@@ -15,6 +15,7 @@ from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 
 
 # ========================
@@ -51,12 +52,10 @@ def crear_driver() -> webdriver.Chrome:
     chrome_options.add_argument("--allow-running-insecure-content")
     chrome_options.add_argument("--safebrowsing-disable-download-protection")
     chrome_options.add_argument("--disable-popup-blocking")
-    chrome_options.add_argument(
-        "--disable-features=BlockInsecurePrivateNetworkRequests,BlockInsecureDownloadRestrictions,DownloadBubble"
-    )
+    chrome_options.add_argument("--disable-features=BlockInsecureDownloadRestrictions,DownloadBubble")
     chrome_options.add_argument("--start-maximized")
 
-    service = Service(executable_path=r"C:\\portal-sw\SecurityWorld\chromedriver.exe")
+    service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
     driver.execute_cdp_cmd(
@@ -68,6 +67,7 @@ def crear_driver() -> webdriver.Chrome:
     )
 
     driver.maximize_window()
+    print(f"[DEBUG] DOWNLOAD_DIR = {DOWNLOAD_DIR}")
     return driver
 
 
