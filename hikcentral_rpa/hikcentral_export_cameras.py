@@ -4,8 +4,10 @@ import traceback
 from pathlib import Path
 
 from selenium import webdriver
+from selenium.common.exceptions import ElementClickInterceptedException, TimeoutException
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -166,25 +168,57 @@ def run():
         print("[4] Buscando pestaña Maintenance en el menú superior...")
 
         try:
-            # Localiza el elemento de Maintenance por texto visible en la barra superior
-            maintenance_tab = wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        "//header//nav//*[normalize-space(text())='Maintenance' or normalize-space(.)='Maintenance']",
-                    )
+            maintenance_tab = None
+
+            # 1) Intentar primero como link <a> por texto exacto
+            try:
+                maintenance_tab = wait.until(
+                    EC.element_to_be_clickable((By.LINK_TEXT, "Maintenance"))
                 )
-            )
+            except TimeoutException:
+                pass
+
+            # 2) Si no se encontró, buscar por texto exacto en cualquier tag visible
+            if maintenance_tab is None:
+                candidates = driver.find_elements(
+                    By.XPATH,
+                    "//*[normalize-space(text())='Maintenance']"
+                )
+                visible = [el for el in candidates if el.is_displayed()]
+                if visible:
+                    # Tomar el primero visible
+                    maintenance_tab = visible[0]
+
+            if maintenance_tab is None:
+                raise TimeoutException("No se encontró ningún elemento visible con texto 'Maintenance'")
 
             print("[4] Abriendo pestaña Maintenance...")
 
+            clicked = False
+
+            # 3) Intentar click directo
             try:
                 maintenance_tab.click()
+                clicked = True
+            except ElementClickInterceptedException:
+                clicked = False
             except Exception:
-                # Fallback con JavaScript por si el click normal falla
+                clicked = False
+
+            # 4) Si el click directo falla, intentar con ActionChains
+            if not clicked:
+                try:
+                    actions = ActionChains(driver)
+                    actions.move_to_element(maintenance_tab).click().perform()
+                    clicked = True
+                except Exception:
+                    clicked = False
+
+            # 5) Si aún falla, usar JavaScript como último recurso
+            if not clicked:
                 driver.execute_script("arguments[0].click();", maintenance_tab)
 
-            # Espera a que aparezca el submenú vinculado a Maintenance
+            # 6) Una vez clicado Maintenance, esperar a que aparezca el submenú Resource Status
             wait.until(
                 EC.visibility_of_element_located((By.ID, "subMenuTitle2"))
             )
