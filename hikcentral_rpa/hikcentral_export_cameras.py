@@ -115,28 +115,19 @@ def run():
         # ========================
         print("[3] Esperando carga del portal principal...")
 
-        # 1) Esperar a que la URL cambie a /portal (login exitoso)
+        # Esperar a que la URL cambie a /portal (login exitoso)
         wait.until(lambda d: "/portal" in d.current_url)
 
-        # 2) Esperar a que el texto 'Maintenance' exista en el HTML
-        wait.until(lambda d: "Maintenance" in d.page_source)
+        # Pequeña pausa para que el menú superior termine de dibujarse
+        time.sleep(3)
 
-        # 3) Hacer clic en la pestaña Maintenance usando JavaScript
-        print("[4] Buscando y haciendo clic en la pestaña Maintenance (vía JS)...")
-        driver.execute_script("""
-            const elements = Array.from(document.querySelectorAll('span, a, li, div'));
-            const target = elements.find(el => el.textContent.trim() === 'Maintenance');
-            if (target) {
-                target.click();
-            } else {
-                throw new Error('No se encontró el elemento con texto Maintenance');
-            }
-        """)
-
-        # ========================
-        # NAVEGAR A CAMERA
-        # ========================
+        # Buscar la pestaña Maintenance por atributo title y hacer clic
         print("[4] Abriendo pestaña Maintenance...")
+        maintenance_tab = wait.until(
+            EC.element_to_be_clickable(
+                (By.XPATH, "//li[@title='Maintenance'] | //div[@title='Maintenance'] | //span[@title='Maintenance']")
+            )
+        )
         maintenance_tab.click()
 
         print("[5] Abriendo menú Resource Status...")
