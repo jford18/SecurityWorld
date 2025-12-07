@@ -53,34 +53,93 @@ def configurar_navegador() -> webdriver.Chrome:
     return driver
 
 
-def limpiar_descargas():
+def limpiar_descargas(download_dir: Path = DOWNLOAD_DIR):
     """Elimina archivos previos en la carpeta de descargas para identificar el nuevo Excel."""
-    for f in DOWNLOAD_DIR.glob("*"):
+    for f in download_dir.glob("*"):
         try:
             f.unlink()
         except Exception:
             pass
 
 
-def esperar_descarga(timeout: int = 60) -> Path:
+def esperar_descarga(download_dir: Path, archivos_previos: set[str], timeout: int = 60) -> Path:
     """
     Espera hasta que exista algún archivo descargado sin extensión .crdownload.
     Devuelve la ruta del archivo descargado.
     """
     fin = time.time() + timeout
-    ultimo_archivo = None
 
     while time.time() < fin:
-        archivos = list(DOWNLOAD_DIR.glob("*"))
+        archivos = list(download_dir.glob("*"))
         if archivos:
-            # Ignorar archivos temporales .crdownload
             archivos_finales = [f for f in archivos if not f.name.endswith(".crdownload")]
-            if archivos_finales:
-                ultimo_archivo = max(archivos_finales, key=lambda x: x.stat().st_mtime)
-                return ultimo_archivo
+            for archivo in archivos_finales:
+                if archivo.name not in archivos_previos:
+                    return archivo
         time.sleep(1)
 
     raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
+
+
+def export_camera_status_to_excel(driver: webdriver.Chrome, wait: WebDriverWait, download_dir: Path = DOWNLOAD_DIR):
+    """
+    Ejecuta el flujo completo de exportación de cámaras a Excel desde la pestaña Camera
+    en Resource Status.
+    """
+
+    print("[8] Abriendo panel de exportación desde Camera...")
+
+    # Guardar listado previo de archivos para detectar el nuevo
+    archivos_previos = {f.name for f in download_dir.glob("*")}
+
+    # 1) Click en el botón Export del header de la pestaña Camera
+    export_toolbar_button = wait.until(
+        EC.element_to_be_clickable(
+            (
+                By.XPATH,
+                "//div[contains(@class,'access-statics')]"
+                "//div[contains(@class,'resource') and contains(@class,'left')]"
+                "//button[@title='Export']"
+                "//div[contains(@class,'el-button-slot-wrapper') and normalize-space()='Export']/ancestor::button[1]",
+            )
+        )
+    )
+    driver.execute_script("arguments[0].click();", export_toolbar_button)
+
+    # 2) Esperar a que se abra el drawer/panel de Export
+    wait.until(
+        EC.visibility_of_element_located(
+            (
+                By.XPATH,
+                "//div[contains(@class,'drawer')]//span[contains(@class,'drawer-head-title') and normalize-space()='Export']",
+            )
+        )
+    )
+
+    # 3) Seleccionar opción Excel si existe
+    excel_options = driver.find_elements(
+        By.XPATH,
+        "//div[contains(@class,'drawer')]//label[contains(@class,'el-radio') and (translate(@title,'excel','EXCEL')='EXCEL' or .//span[normalize-space()='Excel'])]",
+    )
+    if excel_options:
+        excel_option = wait.until(EC.element_to_be_clickable(excel_options[0]))
+        driver.execute_script("arguments[0].click();", excel_option)
+
+    # 4) Click en el botón Export dentro del panel/drawer (no Export All)
+    export_confirm_button = wait.until(
+        EC.element_to_be_clickable(
+            (
+                By.XPATH,
+                "(//div[contains(@class,'drawer') or contains(@class,'el-dialog__footer')]//button[.//div[normalize-space()='Export']])[last()]",
+            )
+        )
+    )
+    driver.execute_script("arguments[0].click();", export_confirm_button)
+
+    # 5) Esperar que el archivo termine de descargarse en download_dir
+    print("[9] Esperando archivo descargado...")
+    archivo_descargado = esperar_descarga(download_dir, archivos_previos, timeout=120)
+    print(f"[9] Archivo descargado en: {archivo_descargado}")
 
 
 def click_menu_item_by_title(driver, title: str) -> bool:
@@ -335,98 +394,12 @@ def run():
                 )
             )
 
-            print("[8] Abriendo panel de exportación...")
 
-            limpiar_descargas()
+            # 2) Iniciar el flujo robusto de exportación
+            limpiar_descargas(DOWNLOAD_DIR)
+            export_camera_status_to_excel(driver, wait, DOWNLOAD_DIR)
 
-            try:
-                # Localizar el botón Export por su estructura real:
-                # <span class="el-button-wrapper"> ... <div class="el-button-slot-wrapper">Export</div> ... </span>
-                export_toolbar_button = wait.until(
-                    EC.element_to_be_clickable(
-                        (
-                            By.XPATH,
-                            "//span[contains(@class,'el-button-wrapper')][.//div[contains(@class,'el-button-slot-wrapper') and normalize-space(text())='Export']]",
-                        )
-                    )
-                )
-
-                # Fallback alternativo por el ícono, por si el anterior falla en algún momento:
-                # <i class="h-icon-export"></i> → subir al span.el-button-wrapper
-                if export_toolbar_button is None:
-                    export_toolbar_button = wait.until(
-                        EC.element_to_be_clickable(
-                            (
-                                By.XPATH,
-                                "//i[contains(@class,'h-icon-export')]/ancestor::span[contains(@class,'el-button-wrapper')][1]",
-                            )
-                        )
-                    )
-
-                # Intentar click directo, luego ActionChains y finalmente JavaScript
-                clicked = False
-
-                try:
-                    export_toolbar_button.click()
-                    clicked = True
-                except ElementClickInterceptedException:
-                    clicked = False
-                except Exception:
-                    clicked = False
-
-                if not clicked:
-                    try:
-                        ActionChains(driver).move_to_element(export_toolbar_button).click().perform()
-                        clicked = True
-                    except Exception:
-                        clicked = False
-
-                if not clicked:
-                    driver.execute_script("arguments[0].click();", export_toolbar_button)
-            except Exception as e:
-                print(f"[ERROR] Ocurrió un problema en la exportación de cámaras: {e}")
-                raise TimeoutException("No se encontró el botón Export de la barra superior")
-
-            # 3) Seleccionar formato Excel en el panel lateral
-            print("[9] Seleccionando formato Excel...")
-
-            excel_option = wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        "//label[.//span[normalize-space(text())='Excel']]"
-                    )
-                )
-            )
-            excel_option.click()
-
-            # 4) Botón Export dentro del panel lateral
-            print("[10] Ejecutando exportación...")
-
-            export_side_button = wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        "//div[contains(@class, 'el-drawer') or contains(@class, 'el-dialog')]"
-                        "//button[.//span[normalize-space(text())='Export'] or normalize-space(text())='Export']"
-                    )
-                )
-            )
-
-            try:
-                export_side_button.click()
-            except Exception:
-                driver.execute_script("arguments[0].click();", export_side_button)
-
-            # 5) Esperar la descarga usando la función ya existente
-            print("[11] Esperando archivo descargado...")
-
-            archivo_descargado = esperar_descarga(timeout=120)
-            print(f"[11] Archivo descargado en: {archivo_descargado}")
-
-            # Si ya tienes lógica para mover/renombrar el archivo, llámala aquí
-            # reutilizando las variables existentes (por ejemplo DOWNLOAD_DIR, nombre base, etc.)
-
+            # Aquí podrías añadir lógica adicional para renombrar/mover el archivo descargado
         except Exception as e:
             print(f"[ERROR] Ocurrió un problema en la exportación de cámaras: {e}")
             raise
