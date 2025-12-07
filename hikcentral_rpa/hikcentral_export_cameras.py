@@ -77,6 +77,51 @@ def esperar_descarga(timeout: int = 60) -> Path:
     raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
 
 
+def click_menu_item_by_title(driver, title: str) -> bool:
+    """
+    Intenta hacer clic en un elemento cuyo atributo title sea igual a `title`.
+    Primero en el documento principal, luego dentro de todos los iframes.
+    Devuelve True si lo encontró y clickeó, False en caso contrario.
+    """
+    script = """
+    var title = arguments[0];
+    var candidates = document.querySelectorAll("li[title], a[title], div[title], span[title]");
+    for (var i = 0; i < candidates.length; i++) {
+        var el = candidates[i];
+        if (el.getAttribute('title') === title) {
+            el.click();
+            return true;
+        }
+    }
+    return false;
+    """
+
+    # Intentar en el documento principal
+    try:
+        found = driver.execute_script(script, title)
+        if found:
+            return True
+    except Exception:
+        pass
+
+    # Intentar en todos los iframes
+    frames = driver.find_elements(By.TAG_NAME, "iframe")
+    for frame in frames:
+        try:
+            driver.switch_to.frame(frame)
+            found = driver.execute_script(script, title)
+            driver.switch_to.default_content()
+            if found:
+                return True
+        except Exception:
+            driver.switch_to.default_content()
+            continue
+
+    # Volver siempre al contexto principal
+    driver.switch_to.default_content()
+    return False
+
+
 def run():
     driver = configurar_navegador()
     wait = WebDriverWait(driver, 30)
@@ -143,28 +188,28 @@ def run():
         """)
 
         print("[5] Abriendo menú Resource Status...")
+        time.sleep(3)  # pequeño buffer para que el árbol de menú termine de dibujarse
 
-        # Esperar a que exista el <li title="Resource Status"> en el DOM
+        if not click_menu_item_by_title(driver, "Resource Status"):
+            raise Exception("No se pudo hacer clic en el menú 'Resource Status' por title")
+
+        print("[6] Seleccionando Camera...")
+
+        # Esperar a que exista el span del menú Camera en el DOM
         wait.until(
             lambda d: d.execute_script(
-                "return !!document.querySelector(\"li[title='Resource Status']\");"
+                "return !!document.querySelector(\"span.menu-title[title='Camera']\");"
             )
         )
 
-        # Hacer clic en Resource Status usando solo JavaScript
+        # Hacer clic en Camera usando JavaScript
         driver.execute_script("""
-            var el = document.querySelector("li[title='Resource Status']");
+            var el = document.querySelector("span.menu-title[title='Camera']");
             if (!el) {
-                throw new Error('No se encontró el menú Resource Status');
+                throw new Error('No se encontró el menú Camera');
             }
             el.click();
         """)
-
-        print("[6] Seleccionando Camera...")
-        camera_item = wait.until(
-            EC.element_to_be_clickable((By.XPATH, "//*[normalize-space(text())='Camera']"))
-        )
-        camera_item.click()
 
         # Esperar a que cargue la tabla y el botón Export
         print("[7] Esperando que cargue la tabla de cámaras...")
