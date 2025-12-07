@@ -118,17 +118,29 @@ def run():
         # Esperar a que la URL cambie a /portal (login exitoso)
         wait.until(lambda d: "/portal" in d.current_url)
 
-        # Pequeña pausa para que el menú superior termine de dibujarse
-        time.sleep(3)
-
-        # Buscar la pestaña Maintenance por atributo title y hacer clic
-        print("[4] Abriendo pestaña Maintenance...")
-        maintenance_tab = wait.until(
-            EC.element_to_be_clickable(
-                (By.XPATH, "//li[@title='Maintenance'] | //div[@title='Maintenance'] | //span[@title='Maintenance']")
+        # Esperar a que exista el <li title="Maintenance"> en el DOM
+        print("[4] Buscando pestaña Maintenance en el menú superior...")
+        wait.until(
+            lambda d: d.execute_script(
+                "return !!document.querySelector(\"li[title='Maintenance']\") || "
+                "!!document.evaluate(\"//div[normalize-space(text())='Maintenance']\", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;"
             )
         )
-        maintenance_tab.click()
+
+        # Hacer clic en Maintenance usando solo JavaScript
+        print("[4] Abriendo pestaña Maintenance...")
+        driver.execute_script("""
+            var el = document.querySelector("li[title='Maintenance']");
+            if (!el) {
+                var xpath = "//div[normalize-space(text())='Maintenance']";
+                var res = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                el = res.singleNodeValue;
+            }
+            if (!el) {
+                throw new Error('No se encontró la pestaña Maintenance');
+            }
+            el.click();
+        """)
 
         print("[5] Abriendo menú Resource Status...")
         resource_status = wait.until(
