@@ -163,43 +163,50 @@ def run():
         # Esperar a que la URL cambie a /portal (login exitoso)
         wait.until(lambda d: "/portal" in d.current_url)
 
-        # Esperar a que exista el <li title="Maintenance"> en el DOM
         print("[4] Buscando pestaña Maintenance en el menú superior...")
-        wait.until(
-            lambda d: d.execute_script(
-                "return !!document.querySelector(\"li[title='Maintenance']\") || "
-                "!!document.evaluate(\"//div[normalize-space(text())='Maintenance']\", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;"
-            )
-        )
-
-        # Hacer clic en Maintenance usando solo JavaScript
-        print("[4] Abriendo pestaña Maintenance...")
-        driver.execute_script("""
-            var el = document.querySelector("li[title='Maintenance']");
-            if (!el) {
-                var xpath = "//div[normalize-space(text())='Maintenance']";
-                var res = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                el = res.singleNodeValue;
-            }
-            if (!el) {
-                throw new Error('No se encontró la pestaña Maintenance');
-            }
-            el.click();
-        """)
-
-        print("[5] Abriendo menú Resource Status...")
-        time.sleep(3)  # pequeño buffer para que el árbol de menú termine de dibujarse
 
         try:
+            # Localiza el elemento de Maintenance por texto visible en la barra superior
+            maintenance_tab = wait.until(
+                EC.element_to_be_clickable(
+                    (
+                        By.XPATH,
+                        "//header//nav//*[normalize-space(text())='Maintenance' or normalize-space(.)='Maintenance']",
+                    )
+                )
+            )
+
+            print("[4] Abriendo pestaña Maintenance...")
+
+            try:
+                maintenance_tab.click()
+            except Exception:
+                # Fallback con JavaScript por si el click normal falla
+                driver.execute_script("arguments[0].click();", maintenance_tab)
+
+            # Espera a que aparezca el submenú vinculado a Maintenance
+            wait.until(
+                EC.visibility_of_element_located((By.ID, "subMenuTitle2"))
+            )
+
+        except Exception as e:
+            print(f"[ERROR] Ocurrió un problema al abrir Maintenance: {e}")
+            raise Exception("No se pudo hacer clic en la pestaña 'Maintenance'")
+
+        print("[5] Abriendo menú Resource Status...")
+
+        try:
+            # Espera a que el span de Resource Status sea clickeable
             resource_status_span = wait.until(
                 EC.element_to_be_clickable((By.ID, "subMenuTitle2"))
             )
-            # Usa click normal primero
+
             try:
                 resource_status_span.click()
             except Exception:
-                # Si el click normal falla, usa JavaScript como fallback
+                # Fallback con JavaScript si el click normal falla
                 driver.execute_script("arguments[0].click();", resource_status_span)
+
         except Exception as e:
             print(f"[ERROR] Detalle al intentar abrir Resource Status: {e}")
             raise Exception("No se pudo hacer clic en el menú 'Resource Status'")
