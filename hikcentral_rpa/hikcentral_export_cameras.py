@@ -272,6 +272,38 @@ def ir_a_pestana_maintenance(driver, wait):
         raise Exception("No se pudo hacer clic en la pestaña 'Maintenance'")
 
 
+def abrir_menu_resource_status(driver, wait):
+    print("[5] Abriendo menú Resource Status...")
+
+    locators = [
+        (By.ID, "subMenuTitle1"),  # Nuevo ambiente
+        (By.ID, "subMenuTitle2"),  # Ambiente anterior
+        (
+            By.XPATH,
+            "//span[@title='Resource Status' and contains(@class,'first-level-weight')]",
+        ),
+        (
+            By.XPATH,
+            "//i[contains(@class,'icon-svg-nav_realtime_status_resources')]"
+            "/ancestor::div[contains(@class,'el-submenu__title')][1]",
+        ),
+    ]
+
+    for by, selector in locators:
+        try:
+            elem = wait.until(EC.element_to_be_clickable((by, selector)))
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elem)
+            try:
+                elem.click()
+            except Exception:
+                driver.execute_script("arguments[0].click();", elem)
+            return
+        except TimeoutException:
+            continue
+
+    raise Exception("No se pudo hacer clic en el menú 'Resource Status'")
+
+
 def run():
     driver = crear_driver()
     wait = WebDriverWait(driver, 30)
@@ -316,23 +348,7 @@ def run():
 
         ir_a_pestana_maintenance(driver, wait)
 
-        print("[5] Abriendo menú Resource Status...")
-
-        try:
-            # Espera a que el span de Resource Status sea clickeable
-            resource_status_span = wait.until(
-                EC.element_to_be_clickable((By.ID, "subMenuTitle2"))
-            )
-
-            try:
-                resource_status_span.click()
-            except Exception:
-                # Fallback con JavaScript si el click normal falla
-                driver.execute_script("arguments[0].click();", resource_status_span)
-
-        except Exception as e:
-            print(f"[ERROR] Detalle al intentar abrir Resource Status: {e}")
-            raise Exception("No se pudo hacer clic en el menú 'Resource Status'")
+        abrir_menu_resource_status(driver, wait)
 
         print("[6] Seleccionando Camera...")
 
