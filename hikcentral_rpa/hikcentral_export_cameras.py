@@ -304,6 +304,50 @@ def abrir_menu_resource_status(driver, wait):
     raise Exception("No se pudo hacer clic en el menú 'Resource Status'")
 
 
+def seleccionar_camera(driver, wait):
+    print("[6] Seleccionando Camera...")
+
+    try:
+        # Asegurar que el submenú "Resource Status" está expandido
+        try:
+            resource_li = driver.find_element(
+                By.XPATH,
+                "//span[@title='Resource Status']/ancestor::li[contains(@class,'el-submenu')]"
+            )
+            classes = resource_li.get_attribute("class") or ""
+            if "is-opened" not in classes:
+                header = resource_li.find_element(By.CSS_SELECTOR, ".el-submenu__title")
+                driver.execute_script("arguments[0].click();", header)
+        except Exception:
+            # Si algo falla aquí, igual intentamos seguir con el click de Camera
+            pass
+
+        # Localizar la opción "Camera" dentro de Resource Status
+        try:
+            camera_item = wait.until(
+                EC.element_to_be_clickable((
+                    By.XPATH,
+                    "//li[contains(@class,'el-menu-item') and @title='Camera']"
+                ))
+            )
+        except TimeoutException:
+            # Fallback por texto, por compatibilidad con otros ambientes
+            camera_item = wait.until(
+                EC.element_to_be_clickable((
+                    By.XPATH,
+                    "//span[@title='Camera' or normalize-space()='Camera']"
+                    "/ancestor::li[contains(@class,'el-menu-item')]"
+                ))
+            )
+
+        # Asegurar visibilidad y hacer click vía JS para evitar problemas de hover
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", camera_item)
+        driver.execute_script("arguments[0].click();", camera_item)
+
+    except TimeoutException:
+        raise Exception("No se pudo hacer clic en la opción 'Camera' del menú Resource Status")
+
+
 def esperar_tabla_camaras(driver, wait, timeout: int = 30):
     """
     Espera a que la tabla de cámaras esté lista:
@@ -372,81 +416,7 @@ def run():
 
         abrir_menu_resource_status(driver, wait)
 
-        print("[6] Seleccionando Camera...")
-
-        try:
-            camera_tab = None
-            labels_to_try = ["Cameras", "Camera"]
-
-            # 1) Intentar encontrar un <span> con texto exacto 'Cameras' o 'Camera'
-            for label in labels_to_try:
-                try:
-                    camera_tab = wait.until(
-                        EC.element_to_be_clickable(
-                            (By.XPATH, f"//span[normalize-space(text())='{label}']")
-                        )
-                    )
-                    break
-                except TimeoutException:
-                    camera_tab = None
-
-            # 2) Si no se encontró, buscar cualquier elemento visible con ese texto
-            if camera_tab is None:
-                for label in labels_to_try:
-                    candidates = driver.find_elements(
-                        By.XPATH,
-                        f"//*[normalize-space(text())='{label}']"
-                    )
-                    visible = [el for el in candidates if el.is_displayed()]
-                    if visible:
-                        camera_tab = visible[0]
-                        break
-
-            # 3) Como último intento, usar el icono de cameras y subir al padre clickeable
-            if camera_tab is None:
-                try:
-                    camera_tab = wait.until(
-                        EC.presence_of_element_located(
-                            (
-                                By.XPATH,
-                                "//i[contains(@class, 'icon-svg-nav_realtime_status_cameras')]/ancestor::*[self::li or self::div or self::button][1]"
-                            )
-                        )
-                    )
-                except TimeoutException:
-                    camera_tab = None
-
-            if camera_tab is None:
-                raise TimeoutException("No se encontró ningún elemento visible para la pestaña Camera/Cameras")
-
-            # --- Realizar el click con varios fallbacks ---
-            clicked = False
-
-            # 4) Click directo
-            try:
-                camera_tab.click()
-                clicked = True
-            except ElementClickInterceptedException:
-                clicked = False
-            except Exception:
-                clicked = False
-
-            # 5) Si falla, usar ActionChains
-            if not clicked:
-                try:
-                    actions = ActionChains(driver)
-                    actions.move_to_element(camera_tab).click().perform()
-                    clicked = True
-                except Exception:
-                    clicked = False
-
-            # 6) Si aún falla, usar JavaScript
-            if not clicked:
-                driver.execute_script("arguments[0].click();", camera_tab)
-
-        except Exception as e:
-            print(f"[ERROR] Ocurrió un problema al seleccionar Camera: {e}")
-            raise Exception("No se pudo hacer clic en la pestaña 'Cameras'")
+        seleccionar_camera(driver, wait)
 
         try:
             esperar_tabla_camaras(driver, wait)
