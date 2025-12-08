@@ -304,6 +304,28 @@ def abrir_menu_resource_status(driver, wait):
     raise Exception("No se pudo hacer clic en el menú 'Resource Status'")
 
 
+def esperar_tabla_camaras(driver, wait, timeout: int = 30):
+    """
+    Espera a que la tabla de cámaras esté lista:
+    - con filas, o
+    - con el mensaje de tabla vacía.
+    """
+    print("[7] Esperando que cargue la tabla de cámaras...")
+
+    def tabla_cargada(d):
+        try:
+            wrapper = d.find_element(By.CSS_SELECTOR, ".el-table__body-wrapper")
+        except Exception:
+            return False
+
+        filas = wrapper.find_elements(By.CSS_SELECTOR, "tbody tr")
+        empty = d.find_elements(By.CSS_SELECTOR, ".el-table__empty-block")
+        # Consideramos que la tabla "cargó" si tiene filas o si aparece el bloque vacío
+        return len(filas) > 0 or len(empty) > 0
+
+    wait.until(tabla_cargada)
+
+
 def run():
     driver = crear_driver()
     wait = WebDriverWait(driver, 30)
@@ -426,15 +448,8 @@ def run():
             print(f"[ERROR] Ocurrió un problema al seleccionar Camera: {e}")
             raise Exception("No se pudo hacer clic en la pestaña 'Cameras'")
 
-        print("[7] Esperando que cargue la tabla de cámaras...")
-
         try:
-            # 1) Esperar al menos una fila en la tabla de cámaras
-            wait.until(
-                EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, ".el-table__body-wrapper tbody tr")
-                )
-            )
+            esperar_tabla_camaras(driver, wait)
 
 
             # 2) Iniciar el flujo robusto de exportación
