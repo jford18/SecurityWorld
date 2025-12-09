@@ -22,11 +22,9 @@ from webdriver_manager.chrome import ChromeDriverManager
 # ========================
 # CONFIGURACIÓN GENERAL
 # ========================
-
-URL = "http://181.198.203.254:443/#/"
-
-HIK_USER = os.getenv("HIK_USER", "SeguraM")
-HIK_PASSWORD = os.getenv("HIK_PASSWORD", "Victor1a3467!")
+URL = "https://172.16.9.253/#"
+HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
+HIK_PASSWORD = os.getenv("HIK_PASSWORD", "AbcDef*91Ghj#")
 
 DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")
 
