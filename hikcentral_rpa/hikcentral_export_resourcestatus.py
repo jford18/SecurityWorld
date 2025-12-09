@@ -312,6 +312,58 @@ def esperar_tabla_resource_status(driver, wait, opcion: str, timeout: int = 30):
     wait.until(tabla_cargada)
 
 
+def encontrar_boton_export(driver, wait):
+    """
+    Devuelve el WebElement del botón 'Export' en la barra de herramientas
+    de la vista actual (Camera, Encoding Device, etc.).
+    Intenta primero el selector original que ya funcionaba para Camera
+    y luego prueba selectores más genéricos.
+    """
+    # 1) INTENTO PRINCIPAL: usar EXACTAMENTE el mismo selector/XPATH
+    #    que hoy se usa en este archivo (o que se usaba en export_camera_status_to_excel).
+    try:
+        boton = wait.until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//div[contains(@class,'access-statics')]"
+                    "//div[contains(@class,'resource') and contains(@class,'left')]"
+                    "//button[@title='Export']"
+                    "//div[contains(@class,'el-button-slot-wrapper') and normalize-space()='Export']/ancestor::button[1]",
+                )
+            )
+        )
+        return boton
+    except TimeoutException:
+        pass
+
+    # 2) INTENTO GENÉRICO 1: toolbar + icono export + texto Export
+    xpath_opcion1 = (
+        "//div[contains(@class,'toolbar') or contains(@class,'hik-toolbar') or contains(@class,'tool-bar')]"
+        "//span[contains(@class,'el-button-wrapper')]"
+        "[.//i[contains(@class,'h-icon-export')] and .//div[normalize-space(text())='Export']]"
+    )
+
+    try:
+        boton = wait.until(
+            EC.element_to_be_clickable((By.XPATH, xpath_opcion1))
+        )
+        return boton
+    except TimeoutException:
+        pass
+
+    # 3) INTENTO GENÉRICO 2: cualquier botón Export visible
+    xpath_opcion2 = (
+        "//span[contains(@class,'el-button-wrapper')]"
+        "[.//div[contains(@class,'el-button-slot-wrapper') and normalize-space(text())='Export']]"
+    )
+
+    boton = wait.until(
+        EC.presence_of_element_located((By.XPATH, xpath_opcion2))
+    )
+    return boton
+
+
 def export_resource_status_to_excel(
     driver: webdriver.Chrome,
     wait: WebDriverWait,
@@ -332,18 +384,10 @@ def export_resource_status_to_excel(
     print(f"[8] Abriendo panel de exportación desde {opcion}...")
 
     archivos_previos = os.listdir(download_dir)
+    
+    export_toolbar_button = encontrar_boton_export(driver, wait)
 
-    export_toolbar_button = wait.until(
-        EC.element_to_be_clickable(
-            (
-                By.XPATH,
-                "//div[contains(@class,'access-statics')]"
-                "//div[contains(@class,'resource') and contains(@class,'left')]"
-                "//button[@title='Export']"
-                "//div[contains(@class,'el-button-slot-wrapper') and normalize-space()='Export']/ancestor::button[1]",
-            )
-        )
-    )
+    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", export_toolbar_button)
     driver.execute_script("arguments[0].click();", export_toolbar_button)
 
     wait.until(
