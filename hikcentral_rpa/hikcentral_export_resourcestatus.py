@@ -4,6 +4,8 @@ import time
 import traceback
 from pathlib import Path
 
+import psutil
+
 from selenium import webdriver
 from selenium.common.exceptions import (
     ElementClickInterceptedException,
@@ -19,6 +21,41 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
 
+class StepTimer:
+    def __init__(self):
+        self.start = time.perf_counter()
+        self.last = self.start
+        # Proceso actual, para medir memoria del script de Python
+        self.proc = psutil.Process(os.getpid())
+
+    def mark(self, label: str):
+        """
+        Imprime:
+        - tiempo del paso
+        - tiempo total desde el inicio
+        - CPU y RAM del servidor
+        - RAM usada por este proceso de Python
+        """
+        now = time.perf_counter()
+        step_secs = now - self.last
+        total_secs = now - self.start
+
+        # Recursos del servidor
+        cpu_percent = psutil.cpu_percent(interval=0.1)          # CPU total del server
+        mem = psutil.virtual_memory()
+        mem_percent = mem.percent                               # % RAM total usada
+        proc_mem_mb = self.proc.memory_info().rss / (1024**2)   # MB usados por este script
+
+        print(
+            f"[PERF] {label:<45} "
+            f"paso: {step_secs:6.2f}s | total: {total_secs:6.2f}s | "
+            f"CPU: {cpu_percent:5.1f}% | RAM: {mem_percent:5.1f}% | "
+            f"PY-MEM: {proc_mem_mb:6.1f} MB"
+        )
+
+        self.last = now
+
+
 # ========================
 # CONFIGURACIÓN GENERAL
 # ========================
@@ -27,6 +64,8 @@ HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
 HIK_PASSWORD = os.getenv("HIK_PASSWORD", "AbcDef*91Ghj#")
 
 DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")
+
+step_timer: StepTimer | None = None
 
 
 def crear_driver() -> webdriver.Chrome:
@@ -99,6 +138,8 @@ def esperar_descarga(download_dir: Path, archivos_previos, timeout: int = 120) -
             archivo = nuevos[0]
             ruta = str(download_dir / archivo)
             print(f"[9] Archivo encontrado: {ruta}")
+            if step_timer:
+                step_timer.mark("[9] Descarga detectada")
             return ruta
 
         if time.time() - inicio > timeout:
@@ -168,6 +209,8 @@ def ir_a_pestana_maintenance(driver, wait):
             )
         )
         driver.execute_script("arguments[0].click();", boton_go)
+        if step_timer:
+            step_timer.mark("[4] Pestaña Maintenance")
         return
     except TimeoutException:
         print("   [Aviso] Botón 'Go to Maintenance' no encontrado, pruebo menú principal...")
@@ -196,6 +239,8 @@ def ir_a_pestana_maintenance(driver, wait):
             )
         )
         driver.execute_script("arguments[0].click();", opcion_maintenance)
+        if step_timer:
+            step_timer.mark("[4] Pestaña Maintenance")
         return
     except TimeoutException:
         print("   [Aviso] Menú 'Maintenance' no disponible, pruebo pestaña superior...")
@@ -212,6 +257,8 @@ def ir_a_pestana_maintenance(driver, wait):
             )
         )
         driver.execute_script("arguments[0].click();", tab_maintenance)
+        if step_timer:
+            step_timer.mark("[4] Pestaña Maintenance")
         return
     except TimeoutException:
         raise Exception("No se pudo hacer clic en la pestaña 'Maintenance'")
@@ -242,6 +289,8 @@ def abrir_menu_resource_status(driver, wait):
                 elem.click()
             except Exception:
                 driver.execute_script("arguments[0].click();", elem)
+            if step_timer:
+                step_timer.mark("[5] Menú Resource Status")
             return
         except TimeoutException:
             continue
@@ -281,6 +330,9 @@ def seleccionar_opcion_resource_status(driver, wait, opcion: str):
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", item)
         driver.execute_script("arguments[0].click();", item)
 
+        if step_timer:
+            step_timer.mark(f"[6] Opción '{opcion}'")
+
     except TimeoutException:
         raise Exception(f"No se pudo hacer clic en la opción '{opcion}' del menú Resource Status")
 
@@ -308,6 +360,9 @@ def esperar_tabla_resource_status(driver, wait, opcion: str, timeout: int = 30):
         return len(filas) > 0 or len(empty) > 0
 
     wait.until(tabla_cargada)
+
+    if step_timer:
+        step_timer.mark(f"[7] Tabla recursos cargada ({opcion})")
 
 
 def encontrar_boton_export(driver, wait):
@@ -381,6 +436,9 @@ def export_resource_status_to_excel(
 
     print(f"[8] Abriendo panel de exportación desde {opcion}...")
 
+    if step_timer:
+        step_timer.mark(f"[8] Panel exportación ({opcion})")
+
     archivos_previos = os.listdir(download_dir)
     
     export_toolbar_button = encontrar_boton_export(driver, wait)
@@ -396,6 +454,9 @@ def export_resource_status_to_excel(
             )
         )
     )
+
+    if step_timer:
+        step_timer.mark(f"[8] Panel exportación abierto ({opcion})")
 
     excel_options = driver.find_elements(
         By.XPATH,
@@ -415,8 +476,14 @@ def export_resource_status_to_excel(
     )
     driver.execute_script("arguments[0].click();", export_confirm_button)
 
+    if step_timer:
+        step_timer.mark(f"[8] Export lanzado ({opcion})")
+
     archivo_descargado = esperar_descarga(download_dir, archivos_previos, timeout=180)
     print(f"[10] Archivo descargado en: {archivo_descargado}")
+
+    if step_timer:
+        step_timer.mark("[10] Archivo descargado")
     return Path(archivo_descargado)
 
 
@@ -444,6 +511,9 @@ def run():
     opcion = args.opcion
 
     driver = None
+    global step_timer
+    step_timer = StepTimer()
+    timer = step_timer
     try:
         driver = crear_driver()
         wait = WebDriverWait(driver, 30)
@@ -451,6 +521,8 @@ def run():
         print(f"[DEBUG] DOWNLOAD_DIR = {DOWNLOAD_DIR}")
         print("[1] Navegando a la URL...")
         driver.get(URL)
+        if timer:
+            timer.mark("[1] Navegando a la URL")
 
         # ========================
         # LOGIN
@@ -476,6 +548,8 @@ def run():
             EC.element_to_be_clickable((By.XPATH, "//*[normalize-space(text())='Log In']"))
         )
         login_button.click()
+        if timer:
+            timer.mark("[2] Login")
 
         # ========================
         # ESPERAR PORTAL PRINCIPAL
@@ -484,6 +558,8 @@ def run():
 
         # Esperar a que la URL cambie a /portal (login exitoso)
         wait.until(lambda d: "/portal" in d.current_url)
+        if timer:
+            timer.mark("[3] Portal principal cargado")
 
         ir_a_pestana_maintenance(driver, wait)
 
@@ -491,14 +567,23 @@ def run():
             limpiar_descargas(DOWNLOAD_DIR)
             export_resource_status_to_excel(driver, wait, DOWNLOAD_DIR, opcion)
 
+            if timer:
+                timer.mark("[8] Export completado")
+
             print(f"[OK] Export de '{opcion}' completado.")
+            if timer:
+                timer.mark("[FIN] Script completo")
         except Exception as e:
             print(f"[ERROR] Ocurrió un problema en la exportación de '{opcion}': {e}")
+            if timer:
+                timer.mark("[ERROR] Fin por excepción")
             raise
 
     except Exception as e:
         print(f"[ERROR] Ocurrió un problema en la exportación de '{opcion}': {e.__class__.__name__}: {e}")
         traceback.print_exc()
+        if timer:
+            timer.mark("[ERROR] Fin por excepción")
     finally:
         if driver:
             driver.quit()
