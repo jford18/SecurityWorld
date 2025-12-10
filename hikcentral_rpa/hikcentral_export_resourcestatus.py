@@ -510,6 +510,10 @@ def run():
     args = parser.parse_args()
     opcion = args.opcion
 
+    baseline_cpu = psutil.cpu_percent(interval=1)
+    baseline_ram = psutil.virtual_memory().percent
+    print(f"[PERF] [0] Baseline antes de automatizar... CPU: {baseline_cpu:.1f}% | RAM: {baseline_ram:.1f}%")
+
     driver = None
     global step_timer
     step_timer = StepTimer()
@@ -587,6 +591,10 @@ def run():
     finally:
         if driver:
             driver.quit()
+
+        final_cpu = psutil.cpu_percent(interval=1)
+        final_ram = psutil.virtual_memory().percent
+        print(f"[PERF] [FIN] Estado al terminar script... CPU: {final_cpu:.1f}% | RAM: {final_ram:.1f}%")
 
 
 if __name__ == "__main__":
