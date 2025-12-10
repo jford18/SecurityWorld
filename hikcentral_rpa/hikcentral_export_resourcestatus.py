@@ -2,7 +2,6 @@ import argparse
 import os
 import time
 import traceback
-from datetime import datetime
 from pathlib import Path
 
 import psutil
@@ -63,6 +62,7 @@ class StepTimer:
 # CONFIGURACIÓN GENERAL
 # ========================
 URL = "https://172.16.9.253/#"
+SCRIPT_NAME = "hikcentral_export_resourcestatus.py"
 HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
 HIK_PASSWORD = os.getenv("HIK_PASSWORD", "AbcDef*91Ghj#")
 
@@ -77,6 +77,7 @@ def registrar_cpu(medicion: float):
 
 
 def registrar_analisis_rendimiento(
+    script: str,
     opcion: str,
     duracion_total_seg: float,
     cpu_max: float | None,
@@ -92,10 +93,12 @@ def registrar_analisis_rendimiento(
             dbname=os.getenv("DB_NAME", "securityworld"),
         )
 
+        cpu_max_value = cpu_max if cpu_max is not None else 0.0
         observacion = (
-            f"Duración total: {duracion_total_seg:.2f}s. "
-            f"CPU máx: {cpu_max if cpu_max is not None else 0:.1f}%. "
-            f"CPU final: {cpu_final:.1f}%. RAM final: {ram_final:.1f}%."
+            f"EJECUCION: {duracion_total_seg:.2f}s. "
+            f"CPU_MAX={cpu_max_value:.1f}%. "
+            f"CPU_FINAL={cpu_final:.1f}%. "
+            f"RAM_FINAL={ram_final:.1f}%."
         )
 
         with conn:
@@ -103,15 +106,14 @@ def registrar_analisis_rendimiento(
                 cur.execute(
                     """
                     INSERT INTO LOG_HIKCENTRAL_RPA_RENDIMIENTO
-                    (FECHA_EJECUCION, SCRIPT, OPCION, DURACION_TOTAL_SEG, CPU_MAX, CPU_FINAL, RAM_FINAL, OBSERVACION)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    (SCRIPT, OPCION, DURACION_TOTAL_SEG, CPU_MAX, CPU_FINAL, RAM_FINAL, OBSERVACION)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
-                        datetime.now(),
-                        "hikcentral_export_resourcestatus.py",
+                        script,
                         opcion,
                         round(duracion_total_seg, 2),
-                        cpu_max,
+                        cpu_max_value,
                         cpu_final,
                         ram_final,
                         observacion,
@@ -659,6 +661,7 @@ def run():
         cpu_max = max(cpu_measurements) if cpu_measurements else None
 
         registrar_analisis_rendimiento(
+            script=SCRIPT_NAME,
             opcion=opcion,
             duracion_total_seg=duracion_total_seg,
             cpu_max=cpu_max,
