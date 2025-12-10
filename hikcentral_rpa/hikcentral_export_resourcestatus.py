@@ -2,9 +2,11 @@ import argparse
 import os
 import time
 import traceback
+from datetime import datetime
 from pathlib import Path
 
 import psutil
+import psycopg2
 
 from selenium import webdriver
 from selenium.common.exceptions import (
@@ -42,6 +44,7 @@ class StepTimer:
 
         # Recursos del servidor
         cpu_percent = psutil.cpu_percent(interval=0.1)          # CPU total del server
+        registrar_cpu(cpu_percent)
         mem = psutil.virtual_memory()
         mem_percent = mem.percent                               # % RAM total usada
         proc_mem_mb = self.proc.memory_info().rss / (1024**2)   # MB usados por este script
@@ -65,7 +68,59 @@ HIK_PASSWORD = os.getenv("HIK_PASSWORD", "AbcDef*91Ghj#")
 
 DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")
 
+cpu_measurements: list[float] = []
 step_timer: StepTimer | None = None
+
+
+def registrar_cpu(medicion: float):
+    cpu_measurements.append(medicion)
+
+
+def registrar_analisis_rendimiento(
+    opcion: str,
+    duracion_total_seg: float,
+    cpu_max: float | None,
+    cpu_final: float,
+    ram_final: float,
+):
+    try:
+        conn = psycopg2.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432"),
+            user=os.getenv("DB_USER", "postgres"),
+            password=os.getenv("DB_PASS", "123456"),
+            dbname=os.getenv("DB_NAME", "securityworld"),
+        )
+
+        observacion = (
+            f"Duración total: {duracion_total_seg:.2f}s. "
+            f"CPU máx: {cpu_max if cpu_max is not None else 0:.1f}%. "
+            f"CPU final: {cpu_final:.1f}%. RAM final: {ram_final:.1f}%."
+        )
+
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO LOG_HIKCENTRAL_RPA_RENDIMIENTO
+                    (FECHA_EJECUCION, SCRIPT, OPCION, DURACION_TOTAL_SEG, CPU_MAX, CPU_FINAL, RAM_FINAL, OBSERVACION)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        datetime.now(),
+                        "hikcentral_export_resourcestatus.py",
+                        opcion,
+                        round(duracion_total_seg, 2),
+                        cpu_max,
+                        cpu_final,
+                        ram_final,
+                        observacion,
+                    ),
+                )
+
+        print("[INFO] Registro de rendimiento insertado correctamente.")
+    except Exception as e:
+        print(f"[ERROR] No se pudo registrar el rendimiento en la base de datos: {e}")
 
 
 def crear_driver() -> webdriver.Chrome:
@@ -511,6 +566,7 @@ def run():
     opcion = args.opcion
 
     baseline_cpu = psutil.cpu_percent(interval=1)
+    registrar_cpu(baseline_cpu)
     baseline_ram = psutil.virtual_memory().percent
     print(f"[PERF] [0] Baseline antes de automatizar... CPU: {baseline_cpu:.1f}% | RAM: {baseline_ram:.1f}%")
 
@@ -594,7 +650,21 @@ def run():
 
         final_cpu = psutil.cpu_percent(interval=1)
         final_ram = psutil.virtual_memory().percent
+        registrar_cpu(final_cpu)
         print(f"[PERF] [FIN] Estado al terminar script... CPU: {final_cpu:.1f}% | RAM: {final_ram:.1f}%")
+
+        duracion_total_seg = (
+            time.perf_counter() - step_timer.start if step_timer else 0.0
+        )
+        cpu_max = max(cpu_measurements) if cpu_measurements else None
+
+        registrar_analisis_rendimiento(
+            opcion=opcion,
+            duracion_total_seg=duracion_total_seg,
+            cpu_max=cpu_max,
+            cpu_final=final_cpu,
+            ram_final=final_ram,
+        )
 
 
 if __name__ == "__main__":
