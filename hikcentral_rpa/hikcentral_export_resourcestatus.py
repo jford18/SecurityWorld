@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 import time
 import traceback
 from pathlib import Path
@@ -22,10 +23,74 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
 
+class PerformanceRecorder:
+    def __init__(self, start_time: float | None = None):
+        self.start_time = start_time if start_time is not None else time.perf_counter()
+        self.steps: list[dict] = []
+        self.cpu_max: float | None = None
+        self.proc = psutil.Process(os.getpid())
+
+    def _parse_step_label(self, label: str) -> tuple[int | None, str]:
+        match = re.search(r"\[(\d+)\]", label)
+        if not match:
+            return None, label
+
+        return int(match.group(1)), label.strip()
+
+    def _update_cpu_max(self, cpu_percent: float):
+        if self.cpu_max is None or cpu_percent > self.cpu_max:
+            self.cpu_max = cpu_percent
+
+    def update_cpu(self, cpu_percent: float):
+        self._update_cpu_max(cpu_percent)
+
+    def add_step(
+        self,
+        label: str,
+        step_secs: float,
+        total_secs: float,
+        cpu_percent: float,
+        mem_percent: float,
+        proc_mem_mb: float,
+    ):
+        num_paso, descripcion = self._parse_step_label(label)
+        if num_paso is None:
+            return
+
+        self._update_cpu_max(cpu_percent)
+        self.steps.append(
+            {
+                "num_paso": num_paso,
+                "descripcion": descripcion,
+                "tiempo_paso": round(step_secs, 2),
+                "tiempo_total": round(total_secs, 2),
+                "cpu": round(cpu_percent, 1),
+                "ram": round(mem_percent, 1),
+                "py_mem": int(proc_mem_mb),
+            }
+        )
+
+    def record_baseline(self, cpu_percent: float, mem_percent: float):
+        self._update_cpu_max(cpu_percent)
+        total_secs = time.perf_counter() - self.start_time
+        self.steps.append(
+            {
+                "num_paso": 0,
+                "descripcion": "[0] Baseline antes de automatizar",
+                "tiempo_paso": 0.0,
+                "tiempo_total": round(total_secs, 2),
+                "cpu": round(cpu_percent, 1),
+                "ram": round(mem_percent, 1),
+                "py_mem": int(self.proc.memory_info().rss / (1024**2)),
+            }
+        )
+
+
 class StepTimer:
-    def __init__(self):
-        self.start = time.perf_counter()
+    def __init__(self, start_time: float | None = None, recorder: PerformanceRecorder | None = None):
+        self.start = start_time if start_time is not None else time.perf_counter()
         self.last = self.start
+        self.recorder = recorder
         # Proceso actual, para medir memoria del script de Python
         self.proc = psutil.Process(os.getpid())
 
@@ -55,6 +120,16 @@ class StepTimer:
             f"PY-MEM: {proc_mem_mb:6.1f} MB"
         )
 
+        if self.recorder:
+            self.recorder.add_step(
+                label,
+                step_secs,
+                total_secs,
+                cpu_percent,
+                mem_percent,
+                proc_mem_mb,
+            )
+
         self.last = now
 
 
@@ -70,19 +145,19 @@ DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")
 
 cpu_measurements: list[float] = []
 step_timer: StepTimer | None = None
+performance_recorder: PerformanceRecorder | None = None
 
 
 def registrar_cpu(medicion: float):
     cpu_measurements.append(medicion)
 
 
-def registrar_analisis_rendimiento(
-    script: str,
+def registrar_ejecucion_y_pasos(
     opcion: str,
     duracion_total_seg: float,
-    cpu_max: float | None,
     cpu_final: float,
     ram_final: float,
+    recorder: PerformanceRecorder | None,
 ):
     try:
         conn = psycopg2.connect(
@@ -93,34 +168,57 @@ def registrar_analisis_rendimiento(
             dbname=os.getenv("DB_NAME", "securityworld"),
         )
 
-        cpu_max_value = cpu_max if cpu_max is not None else 0.0
+        cpu_max_value = recorder.cpu_max if recorder and recorder.cpu_max is not None else 0.0
         observacion = (
-            f"EJECUCION: {duracion_total_seg:.2f}s. "
-            f"CPU_MAX={cpu_max_value:.1f}%. "
-            f"CPU_FINAL={cpu_final:.1f}%. "
-            f"RAM_FINAL={ram_final:.1f}%."
+            f"Ejecución de {opcion} finalizada en {duracion_total_seg:.2f}s. "
+            f"CPU max: {cpu_max_value:.1f}%. RAM final: {ram_final:.1f}%."
         )
 
         with conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO LOG_HIKCENTRAL_RPA_RENDIMIENTO
+                    INSERT INTO PUBLIC.LOG_RPA_EJECUCION
                     (SCRIPT, OPCION, DURACION_TOTAL_SEG, CPU_MAX, CPU_FINAL, RAM_FINAL, OBSERVACION)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING ID_EJECUCION
                     """,
                     (
-                        script,
+                        SCRIPT_NAME,
                         opcion,
                         round(duracion_total_seg, 2),
-                        cpu_max_value,
-                        cpu_final,
-                        ram_final,
+                        round(cpu_max_value, 1),
+                        round(cpu_final, 1),
+                        round(ram_final, 1),
                         observacion,
                     ),
                 )
+                id_ejecucion = cur.fetchone()[0]
 
-        print("[INFO] Registro de rendimiento insertado correctamente.")
+                if recorder:
+                    pasos_ordenados = sorted(recorder.steps, key=lambda x: x.get("num_paso", 0))
+                    cur.executemany(
+                        """
+                        INSERT INTO PUBLIC.LOG_RPA_EJECUCION_PASO
+                        (ID_EJECUCION, NUM_PASO, DESCRIPCION, TIEMPO_PASO_SEG, TIEMPO_TOTAL_SEG, CPU_PORCENTAJE, RAM_PORCENTAJE, PY_MEM_NIVEL)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        [
+                            (
+                                id_ejecucion,
+                                paso.get("num_paso"),
+                                paso.get("descripcion"),
+                                paso.get("tiempo_paso"),
+                                paso.get("tiempo_total"),
+                                paso.get("cpu"),
+                                paso.get("ram"),
+                                paso.get("py_mem"),
+                            )
+                            for paso in pasos_ordenados
+                        ],
+                    )
+
+        print("[INFO] Registro de rendimiento y pasos insertado correctamente.")
     except Exception as e:
         print(f"[ERROR] No se pudo registrar el rendimiento en la base de datos: {e}")
 
@@ -554,6 +652,7 @@ def export_camera_status_to_excel(driver: webdriver.Chrome, wait: WebDriverWait,
 
 
 def run():
+    global step_timer, performance_recorder
     parser = argparse.ArgumentParser(
         description="Exportar opciones de Resource Status a Excel en HikCentral."
     )
@@ -567,14 +666,20 @@ def run():
     args = parser.parse_args()
     opcion = args.opcion
 
+    performance_recorder = PerformanceRecorder(time.perf_counter())
+
     baseline_cpu = psutil.cpu_percent(interval=1)
     registrar_cpu(baseline_cpu)
     baseline_ram = psutil.virtual_memory().percent
     print(f"[PERF] [0] Baseline antes de automatizar... CPU: {baseline_cpu:.1f}% | RAM: {baseline_ram:.1f}%")
+    if performance_recorder:
+        performance_recorder.record_baseline(baseline_cpu, baseline_ram)
 
     driver = None
-    global step_timer
-    step_timer = StepTimer()
+    step_timer = StepTimer(
+        start_time=performance_recorder.start_time if performance_recorder else None,
+        recorder=performance_recorder,
+    )
     timer = step_timer
     try:
         driver = crear_driver()
@@ -653,20 +758,22 @@ def run():
         final_cpu = psutil.cpu_percent(interval=1)
         final_ram = psutil.virtual_memory().percent
         registrar_cpu(final_cpu)
+        if performance_recorder:
+            performance_recorder.update_cpu(final_cpu)
         print(f"[PERF] [FIN] Estado al terminar script... CPU: {final_cpu:.1f}% | RAM: {final_ram:.1f}%")
 
         duracion_total_seg = (
-            time.perf_counter() - step_timer.start if step_timer else 0.0
+            time.perf_counter() - performance_recorder.start_time
+            if performance_recorder
+            else 0.0
         )
-        cpu_max = max(cpu_measurements) if cpu_measurements else None
 
-        registrar_analisis_rendimiento(
-            script=SCRIPT_NAME,
+        registrar_ejecucion_y_pasos(
             opcion=opcion,
             duracion_total_seg=duracion_total_seg,
-            cpu_max=cpu_max,
             cpu_final=final_cpu,
             ram_final=final_ram,
+            recorder=performance_recorder,
         )
 
 
