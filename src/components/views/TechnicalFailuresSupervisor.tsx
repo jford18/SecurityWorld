@@ -85,6 +85,11 @@ const findResponsableIdByName = (
   return matched ? String(matched.id) : undefined;
 };
 
+const toPositiveIntegerOrNull = (value?: string | number | null) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
 const buildFailureDateTimeValue = (failure: TechnicalFailure) => {
   if (failure.fechaHoraFallo) {
     return failure.fechaHoraFallo;
@@ -179,6 +184,10 @@ const EditFailureModal: React.FC<{
         findResponsableIdByName(responsables, failureToNormalize.verificacionCierre);
       let cierreNombre = failureToNormalize.verificacionCierre;
 
+      const responsableVerificacionCierreId = toPositiveIntegerOrNull(
+        failureToNormalize.responsable_verificacion_cierre_id,
+      );
+
       if (!cierreId && currentUserName) {
         const matched = responsables.find(
           (responsable) =>
@@ -207,8 +216,7 @@ const EditFailureModal: React.FC<{
         verificacionAperturaId: aperturaId ?? '',
         verificacionCierreId: cierreId ?? '',
         verificacionCierre: cierreNombre,
-        responsable_verificacion_cierre_id:
-          failureToNormalize.responsable_verificacion_cierre_id ?? null,
+        responsable_verificacion_cierre_id: responsableVerificacionCierreId,
         responsable_verificacion_cierre_nombre:
           failureToNormalize.responsable_verificacion_cierre_nombre ?? null,
       };
@@ -840,16 +848,11 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         }
       }
 
-      const loggedUserId =
-        session.userId != null && !Number.isNaN(Number(session.userId))
-          ? Number(session.userId)
-          : null;
+      const loggedUserId = toPositiveIntegerOrNull(session.userId as any);
 
-      const existingResponsableCierreId =
-        updatedFailure.responsable_verificacion_cierre_id != null &&
-        !Number.isNaN(Number(updatedFailure.responsable_verificacion_cierre_id))
-          ? Number(updatedFailure.responsable_verificacion_cierre_id)
-          : null;
+      const existingResponsableCierreId = toPositiveIntegerOrNull(
+        updatedFailure.responsable_verificacion_cierre_id as any,
+      );
 
       const hasResolutionInfo = Boolean(resolutionDate || updatedFailure.fechaResolucion);
       const responsableVerificacionCierreId = hasResolutionInfo
