@@ -97,6 +97,11 @@ const mapFalloRowToDto = (row) => ({
     row.responsable_verificacion_cierre_nombre || null,
 });
 
+const toNullableUserId = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
 const normalizeRoleName = (req) => {
   const candidate =
     req.user?.rol_nombre ||
@@ -529,10 +534,9 @@ export const actualizarFalloSupervisor = async (req, res) => {
     const parsed = Number(ultimoUsuarioEditoId);
     return Number.isFinite(parsed) ? parsed : null;
   })();
-  const responsableVerificacionCierreId = (() => {
-    const parsed = Number(responsable_verificacion_cierre_id);
-    return Number.isFinite(parsed) ? parsed : null;
-  })();
+  const responsableVerificacionCierreId = toNullableUserId(
+    responsable_verificacion_cierre_id
+  );
 
   try {
     await client.query("BEGIN");
@@ -642,7 +646,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
                verificacion_cierre_id = $2,
                novedad_detectada = $3,
                ultimo_usuario_edito_id = $4,
-               responsable_verificacion_cierre_id = $5,
+               responsable_verificacion_cierre_id = COALESCE($5, responsable_verificacion_cierre_id),
                fecha_actualizacion = NOW()
          WHERE fallo_id = $6`,
         [
