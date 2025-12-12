@@ -178,43 +178,45 @@ const AsignacionRolesScreen: React.FC = () => {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-lg bg-white p-4 shadow">
+        <div className="flex flex-col rounded-lg bg-white p-4 shadow">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-[#1C2E4A]">Usuarios</h2>
             {loading && <span className="text-sm text-gray-500">Cargando...</span>}
           </div>
-          <ul className="space-y-2">
-            {usuarios.map((usuario) => {
-              const isActive = usuario.id === selectedUserId;
-              return (
-                <li key={usuario.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedUserId(usuario.id);
-                      setFeedbackMessage('');
-                      setErrorMessage('');
-                    }}
-                    className={`w-full rounded-md border px-4 py-3 text-left transition-colors ${
-                      isActive
-                        ? 'border-[#1C2E4A] bg-[#1C2E4A] text-white'
-                        : 'border-gray-200 bg-white text-gray-800 hover:border-[#1C2E4A] hover:text-[#1C2E4A]'
-                    }`}
-                  >
-                    <span className="font-semibold">{usuario.nombre_usuario}</span>
-                    {usuario.nombre_completo && (
-                      <span className="block text-sm text-gray-200 sm:text-gray-500">
-                        {usuario.nombre_completo}
-                      </span>
-                    )}
-                  </button>
-                </li>
-              );
-            })}
-            {usuarios.length === 0 && !loading && (
-              <li className="text-sm text-gray-500">No hay usuarios disponibles.</li>
-            )}
-          </ul>
+          <div className="flex-1 overflow-y-auto pr-2 max-h-[calc(100vh-260px)]">
+            <ul className="space-y-2">
+              {usuarios.map((usuario) => {
+                const isActive = usuario.id === selectedUserId;
+                return (
+                  <li key={usuario.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedUserId(usuario.id);
+                        setFeedbackMessage('');
+                        setErrorMessage('');
+                      }}
+                      className={`w-full rounded-md border px-4 py-3 text-left transition-colors ${
+                        isActive
+                          ? 'border-[#1C2E4A] bg-[#1C2E4A] text-white'
+                          : 'border-gray-200 bg-white text-gray-800 hover:border-[#1C2E4A] hover:text-[#1C2E4A]'
+                      }`}
+                    >
+                      <span className="font-semibold">{usuario.nombre_usuario}</span>
+                      {usuario.nombre_completo && (
+                        <span className="block text-sm text-gray-200 sm:text-gray-500">
+                          {usuario.nombre_completo}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+              {usuarios.length === 0 && !loading && (
+                <li className="text-sm text-gray-500">No hay usuarios disponibles.</li>
+              )}
+            </ul>
+          </div>
         </div>
 
         <div className="rounded-lg bg-white p-4 shadow">
