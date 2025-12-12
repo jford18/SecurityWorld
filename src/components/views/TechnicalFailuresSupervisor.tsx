@@ -865,7 +865,6 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         responsable: updatedFailure.responsable,
         deptResponsable: updatedFailure.deptResponsable,
         departamentoResponsableId: updatedFailure.departamentoResponsableId,
-        tipo_afectacion: updatedFailure.tipo_afectacion || updatedFailure.tipoAfectacion,
         fechaResolucion: resolutionDate,
         horaResolucion: resolutionTime,
         fechaHoraResolucion: updatedFailure.fechaHoraResolucion || undefined,
