@@ -85,14 +85,25 @@ const usuarioRolesService = {
 
   async exportExcelPublic(): Promise<Blob> {
     try {
-      const response = await apiClient.get<Blob>(`/usuarios-roles/export-excel-public`, {
-        responseType: 'blob',
+      const url = `/usuarios-roles/export-excel-public?t=${Date.now()}`;
+      const response = await apiClient.get<ArrayBuffer>(url, {
+        responseType: 'arraybuffer',
         headers: {
           Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
         },
       });
 
-      return response.data;
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+
+      if (!blob || blob.size === 0) {
+        throw new Error('Export inválido: blob vacío');
+      }
+
+      return blob;
     } catch (error) {
       throw new Error(extractErrorMessage(error));
     }
