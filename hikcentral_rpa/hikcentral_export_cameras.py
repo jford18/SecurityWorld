@@ -289,19 +289,34 @@ def abrir_menu_resource_status(driver, wait):
         ),
     ]
 
-    for by, selector in locators:
-        try:
-            elem = wait.until(EC.element_to_be_clickable((by, selector)))
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elem)
-            try:
-                elem.click()
-            except Exception:
-                driver.execute_script("arguments[0].click();", elem)
-            return
-        except TimeoutException:
-            continue
+    local_wait = WebDriverWait(driver, 45)
 
-    raise Exception("No se pudo hacer clic en el menú 'Resource Status'")
+    def intentar_click_resource_status(d):
+        for by, selector in locators:
+            try:
+                elem = EC.element_to_be_clickable((by, selector))(d)
+            except Exception:
+                continue
+
+            if not elem:
+                continue
+
+            try:
+                d.execute_script("arguments[0].scrollIntoView({block: 'center'});", elem)
+                try:
+                    elem.click()
+                except Exception:
+                    d.execute_script("arguments[0].click();", elem)
+                return True
+            except Exception:
+                continue
+
+        return False
+
+    try:
+        local_wait.until(intentar_click_resource_status)
+    except TimeoutException:
+        raise Exception("No se pudo hacer clic en el menú 'Resource Status'")
 
 
 def seleccionar_camera(driver, wait):
