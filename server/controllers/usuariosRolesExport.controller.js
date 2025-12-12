@@ -1,6 +1,8 @@
 import XLSX from "xlsx";
 import pool from "../db.js";
 
+// Referencia: patrón de exportación utilizado en Mantenimiento de Nodos (src/components/views/Nodos.jsx).
+
 const getUsuarioColumnsAvailability = async () => {
   const { rows } = await pool.query(
     `
@@ -12,11 +14,21 @@ const getUsuarioColumnsAvailability = async () => {
         EXISTS (
           SELECT 1 FROM information_schema.columns
           WHERE table_schema = 'public' AND table_name = 'usuarios' AND column_name = 'correo'
-        ) AS has_correo
+        ) AS has_correo,
+        EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'usuarios' AND column_name = 'activo'
+        ) AS has_activo
     `
   );
 
-  return rows[0] ?? { has_nombre_completo: false, has_correo: false };
+  return (
+    rows[0] ?? {
+      has_nombre_completo: false,
+      has_correo: false,
+      has_activo: false,
+    }
+  );
 };
 
 const mapUsuariosConRoles = (rows) => {
@@ -28,6 +40,7 @@ const mapUsuariosConRoles = (rows) => {
       nombre_usuario: row.nombre_usuario,
       nombre_completo: row.nombre_completo,
       correo: row.correo,
+      estado: row.estado,
       roles: [],
     };
 
@@ -48,6 +61,9 @@ export const exportUsuariosRolesExcelPublic = async (_req, res) => {
       ? "u.nombre_completo"
       : "NULL::text";
     const correoField = columnInfo.has_correo ? "u.correo" : "NULL::text";
+    const estadoField = columnInfo.has_activo
+      ? "CASE WHEN u.activo IS TRUE THEN 'Activo' WHEN u.activo IS FALSE THEN 'Inactivo' ELSE '' END"
+      : "NULL::text";
 
     const query = `
       SELECT
@@ -55,6 +71,7 @@ export const exportUsuariosRolesExcelPublic = async (_req, res) => {
         u.nombre_usuario,
         ${nombreCompletoField} AS nombre_completo,
         ${correoField} AS correo,
+        ${estadoField} AS estado,
         r.nombre AS rol_nombre
       FROM usuarios u
       LEFT JOIN usuario_roles ur ON ur.usuario_id = u.id
@@ -66,12 +83,13 @@ export const exportUsuariosRolesExcelPublic = async (_req, res) => {
     const usuariosAgrupados = mapUsuariosConRoles(rows);
 
     const worksheetData = [
-      ["USUARIO", "NOMBRE", "CORREO", "ROLES"],
+      ["USUARIO", "NOMBRE", "CORREO", "ROLES", "ESTADO"],
       ...usuariosAgrupados.map((usuario) => [
         usuario.nombre_usuario ?? "",
         usuario.nombre_completo ?? "",
         usuario.correo ?? "",
         usuario.roles.join(", "),
+        usuario.estado ?? "",
       ]),
     ];
 
@@ -90,7 +108,7 @@ export const exportUsuariosRolesExcelPublic = async (_req, res) => {
       "attachment; filename=\"usuarios_roles.xlsx\""
     );
 
-    return res.send(buffer);
+    return res.status(200).send(buffer);
   } catch (error) {
     console.error("Error al exportar usuarios y roles", error);
     return res.status(500).json({ message: "No se pudo generar el Excel" });
