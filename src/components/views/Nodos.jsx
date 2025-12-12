@@ -209,7 +209,7 @@ const Nodos = () => {
       ID: nodo.id ?? '—',
       Nombre: nodo.nombre ?? '—',
       IP: nodo.ip || '—',
-      Cliente: getClienteNombre(nodo) || '—',
+      Proveedor: getClienteNombre(nodo) || '—',
       Activo: nodo.activo ? 'Sí' : 'No',
       'Fecha creación': nodo.fecha_creacion
         ? new Date(nodo.fecha_creacion).toLocaleString()
@@ -472,7 +472,7 @@ const Nodos = () => {
                           onClick={() => handleSort('cliente')}
                           className="flex items-center gap-2 font-semibold"
                         >
-                          <span>Cliente</span>
+                          <span>Proveedor</span>
                           <span>{renderSortIcon('cliente')}</span>
                         </button>
                         <input
