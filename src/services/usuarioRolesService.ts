@@ -1,5 +1,6 @@
 import type { AxiosResponse } from 'axios';
 import api from './api';
+import apiClient from './apiClient';
 
 const ROLES_ENDPOINT = '/roles';
 const USUARIO_ROLES_ENDPOINT = '/usuario-roles';
@@ -80,6 +81,21 @@ const usuarioRolesService = {
 
   async eliminarAsignacion<T = unknown>(usuarioId: number, rolId: number): Promise<T> {
     return resolveRequest<T>(api.delete(`${USUARIO_ROLES_ENDPOINT}/${usuarioId}/${rolId}`));
+  },
+
+  async exportExcelPublic(): Promise<Blob> {
+    try {
+      const response = await apiClient.get<Blob>(`/usuarios-roles/export-excel-public`, {
+        responseType: 'blob',
+        headers: {
+          Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      throw new Error(extractErrorMessage(error));
+    }
   },
 };
 
