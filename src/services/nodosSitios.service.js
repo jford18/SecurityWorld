@@ -26,6 +26,11 @@ export const getAll = async () => {
   return extractData(response.data);
 };
 
+export const getAllForExport = async () => {
+  const response = await api.get(`${BASE_PATH}/export-all`);
+  return extractData(response.data);
+};
+
 export const getByNodo = async (nodoId) => {
   const response = await api.get(`${BASE_PATH}/${nodoId}`);
   return extractData(response.data);
@@ -76,6 +81,7 @@ export const unassign = async (payload) =>
 
 export default {
   getAll,
+  getAllForExport,
   getByNodo,
   assign,
   unassign,
