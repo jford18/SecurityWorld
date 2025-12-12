@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { getAll as getNodos } from '../../services/nodos.service';
 import {
   assign as assignNodoSitio,
+  getAllForExport as getAllAsignacionesForExport,
   getByNodo as getSitiosAsignados,
 } from '../../services/nodosSitios.service';
 
@@ -240,28 +241,48 @@ const AsignacionNodosSitios = () => {
 
   const isLoading = loadingNodos || loadingSitios;
 
-  const handleExportToExcel = () => {
-    if (isLoading || sitios.length === 0) return;
+  const handleExportToExcel = async () => {
+    if (isLoading) return;
 
-    const formattedRows = sitios.map((sitio) => ({
-      Seleccionar: sitio.asignado ? 'Sí' : 'No',
-      Sitio: sitio.nombre ?? 'Sin nombre',
-      'Descripción': sitio.descripcion || 'Sin descripción',
-    }));
+    try {
+      const allAsignaciones = await getAllAsignacionesForExport();
 
-    const worksheet = XLSX.utils.json_to_sheet(formattedRows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Asignación');
+      if (!Array.isArray(allAsignaciones) || allAsignaciones.length === 0) {
+        toast.error('No hay datos para exportar');
+        return;
+      }
 
-    const now = new Date();
-    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
-      now.getDate()
-    ).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(
-      now.getMinutes()
-    ).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+      const formattedRows = allAsignaciones.map((item) => ({
+        Seleccionar: item.asignado === false ? 'No' : 'Sí',
+        Nodo: item.nodo_nombre ?? 'Sin nombre',
+        Sitio: item.sitio_nombre ?? 'Sin nombre',
+        Descripción: item.sitio_descripcion || 'Sin descripción',
+        'Fecha asignación': item.fecha_asignacion
+          ? new Date(item.fecha_asignacion).toLocaleString()
+          : 'Sin fecha',
+      }));
 
-    const filename = `asignacion_nodos_sitios_${timestamp}.xlsx`;
-    XLSX.writeFile(workbook, filename);
+      const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Asignación');
+
+      const now = new Date();
+      const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+        now.getDate()
+      ).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(
+        now.getMinutes()
+      ).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+
+      const filename = `asignacion_nodos_sitios_${timestamp}.xlsx`;
+      XLSX.writeFile(workbook, filename);
+    } catch (error) {
+      console.error('Error al exportar asignaciones nodo-sitio:', error);
+      const message = resolveErrorMessage(
+        error,
+        'Error al exportar las asignaciones nodo-sitio a Excel'
+      );
+      toast.error(message);
+    }
   };
 
   return (
@@ -343,9 +364,9 @@ const AsignacionNodosSitios = () => {
                 <button
                   type="button"
                   onClick={handleExportToExcel}
-                  disabled={isLoading || sitios.length === 0}
+                  disabled={isLoading}
                   className={`px-4 py-2 text-sm font-semibold text-white rounded-md ${
-                    isLoading || sitios.length === 0
+                    isLoading
                       ? 'bg-blue-300 cursor-not-allowed'
                       : 'bg-blue-600 hover:bg-blue-700'
                   }`}

@@ -39,6 +39,31 @@ export const listAsignaciones = async (_req, res) => {
   }
 };
 
+export const exportAllAsignacionesNodosSitios = async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+        A.nodo_id,
+        B.nombre AS nodo_nombre,
+        A.sitio_id,
+        C.nombre AS sitio_nombre,
+        C.descripcion AS sitio_descripcion,
+        A.fecha_asignacion
+      FROM nodos_sitios A
+      INNER JOIN nodos B ON A.nodo_id = B.id
+      INNER JOIN sitios C ON A.sitio_id = C.id
+      ORDER BY A.nodo_id, C.nombre`
+    );
+
+    return res.json(result.rows);
+  } catch (error) {
+    console.error("Error al exportar asignaciones nodo-sitio:", error);
+    return res
+      .status(500)
+      .json(formatError("Error al obtener datos para exportar"));
+  }
+};
+
 export const listSitiosByNodo = async (req, res) => {
   const { nodo_id: nodoIdParam } = req.params;
   const nodoId = Number(nodoIdParam);
