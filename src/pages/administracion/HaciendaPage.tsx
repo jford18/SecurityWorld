@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import type { Hacienda } from '../../types';
 import { deleteHacienda, fetchHaciendas } from '../../services/haciendaService';
@@ -18,6 +18,8 @@ const formatTimestamp = () => {
 };
 
 type ModalMode = 'create' | 'edit';
+type SortDirection = 'asc' | 'desc';
+type SortKey = 'id' | 'nombre' | 'direccion' | 'activo';
 
 const HaciendaPage: React.FC = () => {
   const [haciendas, setHaciendas] = useState<Hacienda[]>([]);
@@ -26,6 +28,7 @@ const HaciendaPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<ModalMode>('create');
   const [selected, setSelected] = useState<Hacienda | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>(null);
 
   const loadHaciendas = useCallback(async () => {
     setLoading(true);
@@ -81,10 +84,61 @@ const HaciendaPage: React.FC = () => {
     }
   };
 
+  const getComparableValue = (hacienda: Hacienda, key: SortKey) => {
+    switch (key) {
+      case 'id':
+        return Number(hacienda.id) || 0;
+      case 'activo':
+        return hacienda.activo ? 'activo' : 'inactivo';
+      default:
+        return String((hacienda as Record<string, unknown>)[key] ?? '');
+    }
+  };
+
+  const handleSort = (column: SortKey) => {
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== column) {
+        return { key: column, direction: 'asc' };
+      }
+
+      return { key: column, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+    });
+  };
+
+  const renderSortIcon = (column: SortKey) => {
+    if (!sortConfig || sortConfig.key !== column) {
+      return '▼▲';
+    }
+
+    return sortConfig.direction === 'asc' ? '▲' : '▼';
+  };
+
+  const sortedHaciendas = useMemo(() => {
+    if (!sortConfig) return haciendas;
+
+    const directionMultiplier = sortConfig.direction === 'asc' ? 1 : -1;
+
+    return [...haciendas].sort((a, b) => {
+      const aValue = getComparableValue(a, sortConfig.key);
+      const bValue = getComparableValue(b, sortConfig.key);
+
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        if (aValue === bValue) return 0;
+        return aValue > bValue ? directionMultiplier : -directionMultiplier;
+      }
+
+      return (
+        String(aValue)
+          .toLowerCase()
+          .localeCompare(String(bValue).toLowerCase(), 'es') * directionMultiplier
+      );
+    });
+  }, [haciendas, sortConfig]);
+
   const handleExportToExcel = () => {
     if (loading || haciendas.length === 0) return;
 
-    const formattedRows = haciendas.map((hacienda) => ({
+    const formattedRows = sortedHaciendas.map((hacienda) => ({
       ID: hacienda.id ?? '—',
       Nombre: hacienda.nombre ?? '—',
       Dirección: hacienda.direccion ?? '—',
@@ -135,16 +189,44 @@ const HaciendaPage: React.FC = () => {
             <thead className="bg-[#F9E79F]">
               <tr>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                  ID
+                  <button
+                    type="button"
+                    onClick={() => handleSort('id')}
+                    className="flex items-center gap-2 font-semibold"
+                  >
+                    <span>ID</span>
+                    <span>{renderSortIcon('id')}</span>
+                  </button>
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                  Nombre
+                  <button
+                    type="button"
+                    onClick={() => handleSort('nombre')}
+                    className="flex items-center gap-2 font-semibold"
+                  >
+                    <span>Nombre</span>
+                    <span>{renderSortIcon('nombre')}</span>
+                  </button>
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                  Dirección
+                  <button
+                    type="button"
+                    onClick={() => handleSort('direccion')}
+                    className="flex items-center gap-2 font-semibold"
+                  >
+                    <span>Dirección</span>
+                    <span>{renderSortIcon('direccion')}</span>
+                  </button>
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                  Activo
+                  <button
+                    type="button"
+                    onClick={() => handleSort('activo')}
+                    className="flex items-center gap-2 font-semibold"
+                  >
+                    <span>Activo</span>
+                    <span>{renderSortIcon('activo')}</span>
+                  </button>
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
                   Acciones
@@ -165,7 +247,7 @@ const HaciendaPage: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                haciendas.map((hacienda) => (
+                sortedHaciendas.map((hacienda) => (
                   <tr key={hacienda.id}>
                     <td className="px-6 py-4 text-sm text-gray-900">{hacienda.id}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">{hacienda.nombre}</td>
