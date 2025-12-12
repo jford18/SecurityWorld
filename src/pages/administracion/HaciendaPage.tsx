@@ -29,6 +29,13 @@ const HaciendaPage: React.FC = () => {
   const [modalMode, setModalMode] = useState<ModalMode>('create');
   const [selected, setSelected] = useState<Hacienda | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState({
+    id: '',
+    nombre: '',
+    direccion: '',
+    activo: '',
+  });
 
   const loadHaciendas = useCallback(async () => {
     setLoading(true);
@@ -95,6 +102,16 @@ const HaciendaPage: React.FC = () => {
     }
   };
 
+  const normalizeActivo = (value: boolean | null | undefined) => (value ? 'activo' : 'inactivo');
+
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(event.target.value);
+  };
+
+  const handleFilterChange = (field: keyof typeof filters, value: string) => {
+    setFilters((prev) => ({ ...prev, [field]: value }));
+  };
+
   const handleSort = (column: SortKey) => {
     setSortConfig((prev) => {
       if (!prev || prev.key !== column) {
@@ -113,12 +130,52 @@ const HaciendaPage: React.FC = () => {
     return sortConfig.direction === 'asc' ? '▲' : '▼';
   };
 
+  const filteredHaciendas = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    const filterId = filters.id.trim().toLowerCase();
+    const filterNombre = filters.nombre.trim().toLowerCase();
+    const filterDireccion = filters.direccion.trim().toLowerCase();
+    const filterActivo = filters.activo.trim().toLowerCase();
+
+    return haciendas.filter((hacienda) => {
+      const activeLabel = normalizeActivo(hacienda.activo ?? false);
+
+      const matchesSearch =
+        term === '' ||
+        [
+          hacienda.id,
+          hacienda.nombre,
+          hacienda.direccion,
+          activeLabel,
+        ]
+          .map((value) => String(value ?? '').toLowerCase())
+          .some((value) => value.includes(term));
+
+      if (!matchesSearch) {
+        return false;
+      }
+
+      return (
+        String(hacienda.id ?? '')
+          .toLowerCase()
+          .includes(filterId) &&
+        String(hacienda.nombre ?? '')
+          .toLowerCase()
+          .includes(filterNombre) &&
+        String(hacienda.direccion ?? '')
+          .toLowerCase()
+          .includes(filterDireccion) &&
+        (filterActivo === '' ? true : activeLabel.toLowerCase().includes(filterActivo))
+      );
+    });
+  }, [filters, haciendas, searchTerm]);
+
   const sortedHaciendas = useMemo(() => {
-    if (!sortConfig) return haciendas;
+    if (!sortConfig) return filteredHaciendas;
 
     const directionMultiplier = sortConfig.direction === 'asc' ? 1 : -1;
 
-    return [...haciendas].sort((a, b) => {
+    return [...filteredHaciendas].sort((a, b) => {
       const aValue = getComparableValue(a, sortConfig.key);
       const bValue = getComparableValue(b, sortConfig.key);
 
@@ -133,10 +190,10 @@ const HaciendaPage: React.FC = () => {
           .localeCompare(String(bValue).toLowerCase(), 'es') * directionMultiplier
       );
     });
-  }, [haciendas, sortConfig]);
+  }, [filteredHaciendas, sortConfig]);
 
   const handleExportToExcel = () => {
-    if (loading || haciendas.length === 0) return;
+    if (loading || sortedHaciendas.length === 0) return;
 
     const formattedRows = sortedHaciendas.map((hacienda) => ({
       ID: hacienda.id ?? '—',
@@ -167,7 +224,7 @@ const HaciendaPage: React.FC = () => {
             type="button"
             className={secondaryButtonClasses}
             onClick={handleExportToExcel}
-            disabled={loading || haciendas.length === 0}
+            disabled={loading || sortedHaciendas.length === 0}
           >
             Exportar a Excel
           </button>
@@ -183,99 +240,156 @@ const HaciendaPage: React.FC = () => {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-lg bg-white shadow">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-[#F9E79F]">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                  <button
-                    type="button"
-                    onClick={() => handleSort('id')}
-                    className="flex items-center gap-2 font-semibold"
-                  >
-                    <span>ID</span>
-                    <span>{renderSortIcon('id')}</span>
-                  </button>
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                  <button
-                    type="button"
-                    onClick={() => handleSort('nombre')}
-                    className="flex items-center gap-2 font-semibold"
-                  >
-                    <span>Nombre</span>
-                    <span>{renderSortIcon('nombre')}</span>
-                  </button>
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                  <button
-                    type="button"
-                    onClick={() => handleSort('direccion')}
-                    className="flex items-center gap-2 font-semibold"
-                  >
-                    <span>Dirección</span>
-                    <span>{renderSortIcon('direccion')}</span>
-                  </button>
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                  <button
-                    type="button"
-                    onClick={() => handleSort('activo')}
-                    className="flex items-center gap-2 font-semibold"
-                  >
-                    <span>Activo</span>
-                    <span>{renderSortIcon('activo')}</span>
-                  </button>
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {loading ? (
+      <div className="bg-white rounded-lg shadow p-6 space-y-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <label className="flex w-full items-center gap-3">
+            <span className="text-sm font-medium text-gray-700">Buscar</span>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              placeholder="Buscar por nombre o ID"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+            />
+          </label>
+        </div>
+
+        <div className="overflow-hidden rounded-lg border border-gray-200">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-[#F9E79F]">
                 <tr>
-                  <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
-                    Cargando información...
-                  </td>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    <div className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleSort('id')}
+                        className="flex items-center gap-2 font-semibold"
+                      >
+                        <span>ID</span>
+                        <span>{renderSortIcon('id')}</span>
+                      </button>
+                      <input
+                        type="text"
+                        className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                        placeholder="Filtrar…"
+                        value={filters.id}
+                        onChange={(e) => handleFilterChange('id', e.target.value)}
+                      />
+                    </div>
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    <div className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleSort('nombre')}
+                        className="flex items-center gap-2 font-semibold"
+                      >
+                        <span>Nombre</span>
+                        <span>{renderSortIcon('nombre')}</span>
+                      </button>
+                      <input
+                        type="text"
+                        className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                        placeholder="Filtrar…"
+                        value={filters.nombre}
+                        onChange={(e) => handleFilterChange('nombre', e.target.value)}
+                      />
+                    </div>
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    <div className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleSort('direccion')}
+                        className="flex items-center gap-2 font-semibold"
+                      >
+                        <span>Dirección</span>
+                        <span>{renderSortIcon('direccion')}</span>
+                      </button>
+                      <input
+                        type="text"
+                        className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                        placeholder="Filtrar…"
+                        value={filters.direccion}
+                        onChange={(e) => handleFilterChange('direccion', e.target.value)}
+                      />
+                    </div>
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    <div className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleSort('activo')}
+                        className="flex items-center gap-2 font-semibold"
+                      >
+                        <span>Activo</span>
+                        <span>{renderSortIcon('activo')}</span>
+                      </button>
+                      <input
+                        type="text"
+                        className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                        placeholder="Filtrar…"
+                        value={filters.activo}
+                        onChange={(e) => handleFilterChange('activo', e.target.value)}
+                      />
+                    </div>
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    Acciones
+                  </th>
                 </tr>
-              ) : haciendas.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
-                    No hay haciendas registradas.
-                  </td>
-                </tr>
-              ) : (
-                sortedHaciendas.map((hacienda) => (
-                  <tr key={hacienda.id}>
-                    <td className="px-6 py-4 text-sm text-gray-900">{hacienda.id}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{hacienda.nombre}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{hacienda.direccion}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{hacienda.activo ? 'Sí' : 'No'}</td>
-                    <td className="px-6 py-4 text-sm">
-                      <div className="flex flex-wrap gap-3">
-                        <button
-                          type="button"
-                          className={secondaryButtonClasses}
-                          onClick={() => openEditModal(hacienda)}
-                        >
-                          Editar
-                        </button>
-                        <button
-                          type="button"
-                          className={dangerButtonClasses}
-                          onClick={() => handleDelete(hacienda)}
-                        >
-                          Eliminar
-                        </button>
-                      </div>
+              </thead>
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                      Cargando información...
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : haciendas.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                      No hay haciendas registradas.
+                    </td>
+                  </tr>
+                ) : filteredHaciendas.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                      No se encontraron haciendas con los filtros aplicados.
+                    </td>
+                  </tr>
+                ) : (
+                  sortedHaciendas.map((hacienda) => (
+                    <tr key={hacienda.id}>
+                      <td className="px-6 py-4 text-sm text-gray-900">{hacienda.id}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{hacienda.nombre}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{hacienda.direccion}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{hacienda.activo ? 'Sí' : 'No'}</td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            type="button"
+                            className={secondaryButtonClasses}
+                            onClick={() => openEditModal(hacienda)}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            className={dangerButtonClasses}
+                            onClick={() => handleDelete(hacienda)}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
