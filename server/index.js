@@ -23,6 +23,7 @@ import intrusionesRoutes from "./routes/intrusiones.routes.js";
 import rolesRoutes from "./roles.routes.js";
 import usuariosRoutes from "./routes/usuarios.routes.js";
 import usuarioRolesRoutes from "./routes/usuarioRoles.routes.js";
+import usuariosRolesExportPublicRoutes from "./routes/usuariosRolesExportPublic.routes.js";
 import rolMenuRoutes from "./routes/rolMenu.js";
 import menuRoutes from "./routes/menu.routes.js";
 import proveedoresRoutes from "./routes/proveedores.routes.js";
@@ -68,6 +69,7 @@ const knownApiPrefixes = [
   "/api/roles",
   "/api/sitios",
   "/api/usuario-roles",
+  "/api/usuarios-roles/export-excel-public",
   "/api/usuarios",
   "/api/haciendas",
   "/api/tipo-area",
@@ -104,6 +106,7 @@ app.use((req, _res, next) => {
 // Rutas principales
 app.use("/api/login", authRoutes);
 app.use("/api/consolas", consolasRoutes);
+app.use("/api", usuariosRolesExportPublicRoutes);
 app.use("/api", menusRoutes);
 app.use("/api/menus", menuRoutes);
 app.use("/api/nodos", nodosRoutes);
