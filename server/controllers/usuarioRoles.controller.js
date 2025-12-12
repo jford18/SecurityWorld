@@ -1,4 +1,6 @@
 import pool from "../db.js";
+import { format } from "date-fns";
+import XLSX from "xlsx";
 
 // NEW: Utilidad interna para transformar el recordset en una estructura agrupada por usuario.
 const mapAssignmentsByUser = (rows) => {
@@ -176,5 +178,53 @@ export const eliminarRolDeUsuario = async (req, res) => {
     return res.status(500).json({ message: "Error interno del servidor" });
   } finally {
     client.release();
+  }
+};
+
+// NEW: Exporta todos los usuarios con sus roles a un archivo Excel.
+export const exportUsuarioRolesExcel = async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          u.id AS usuario_id,
+          u.nombre_usuario,
+          u.nombre_completo,
+          u.correo,
+          u.activo,
+          COALESCE(string_agg(r.nombre, ', ' ORDER BY r.nombre), '') AS roles
+        FROM usuarios u
+        LEFT JOIN usuario_roles ur ON ur.usuario_id = u.id
+        LEFT JOIN roles r ON r.id = ur.rol_id
+        GROUP BY u.id, u.nombre_usuario, u.nombre_completo, u.correo, u.activo
+        ORDER BY u.id ASC
+      `
+    );
+
+    const worksheetData = rows.map((row) => ({
+      USUARIO: row.nombre_usuario ?? "",
+      NOMBRE: row.nombre_completo ?? "",
+      CORREO: row.correo ?? "",
+      ROLES: row.roles ?? "",
+      ESTADO: row.activo ? "Activo" : "Inactivo",
+    }));
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Usuarios-Roles");
+
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+    const today = format(new Date(), "yyyyMMdd");
+    const filename = `usuarios_roles_${today}.xlsx`;
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.end(buffer);
+  } catch (error) {
+    console.error("Error al exportar usuarios y roles", error);
+    return res.status(500).json({ message: "No se pudo generar el archivo Excel" });
   }
 };

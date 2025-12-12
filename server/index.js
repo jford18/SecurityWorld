@@ -66,6 +66,7 @@ const knownApiPrefixes = [
   "/api/nodos-sitios",
   "/api/rol-menu",
   "/api/roles",
+  "/api/usuarios-roles",
   "/api/sitios",
   "/api/usuario-roles",
   "/api/usuarios",
@@ -121,6 +122,7 @@ app.use("/api/intrusiones", intrusionesRoutes);
 app.use("/api/usuarios", usuariosRoutes);
 app.use("/api/roles", rolesRoutes);
 app.use("/api/usuario-roles", usuarioRolesRoutes);
+app.use("/api/usuarios-roles", usuarioRolesRoutes);
 app.use("/api/rol-menu", rolMenuRoutes);
 app.use("/api/sitios", sitiosRoutes);
 app.use("/api/clientes", clientesRoutes);

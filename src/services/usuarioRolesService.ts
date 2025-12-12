@@ -1,9 +1,12 @@
 import type { AxiosResponse } from 'axios';
 import api from './api';
+import { API_BASE_URL } from './apiClient';
 
 const ROLES_ENDPOINT = '/roles';
 const USUARIO_ROLES_ENDPOINT = '/usuario-roles';
 const DEFAULT_ERROR_MESSAGE = 'Error al comunicarse con el servidor';
+
+const EXPORT_USUARIOS_ROLES_ENDPOINT = '/usuarios-roles/export-excel';
 
 type ApiEnvelope<T> = T | { data: T };
 
@@ -80,6 +83,42 @@ const usuarioRolesService = {
 
   async eliminarAsignacion<T = unknown>(usuarioId: number, rolId: number): Promise<T> {
     return resolveRequest<T>(api.delete(`${USUARIO_ROLES_ENDPOINT}/${usuarioId}/${rolId}`));
+  },
+
+  async exportUsuariosRolesExcel(): Promise<void> {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}${EXPORT_USUARIOS_ROLES_ENDPOINT}`, {
+        credentials: 'include',
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : undefined,
+      });
+
+      if (!response.ok) {
+        throw new Error('No se pudo generar el archivo de exportación');
+      }
+
+      const blob = await response.blob();
+
+      const preparedBlob = new Blob([blob], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(preparedBlob);
+      const link = document.createElement('a');
+      const now = new Date();
+      const yyyymmdd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+      link.href = url;
+      link.download = `usuarios_roles_${yyyymmdd}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      throw new Error(extractErrorMessage(error));
+    }
   },
 };
 

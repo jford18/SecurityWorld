@@ -33,6 +33,7 @@ const AsignacionRolesScreen: React.FC = () => {
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
 
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [savingMap, setSavingMap] = useState<Record<string, boolean>>({});
   const [feedbackMessage, setFeedbackMessage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -145,6 +146,22 @@ const AsignacionRolesScreen: React.FC = () => {
     }
   };
 
+  const handleExportExcel = async () => {
+    setFeedbackMessage('');
+    setErrorMessage('');
+
+    try {
+      setExporting(true);
+      await usuarioRolesService.exportUsuariosRolesExcel();
+      setFeedbackMessage('Exportación iniciada, revisa tus descargas.');
+    } catch (error) {
+      console.error('Error al exportar usuarios y roles', error);
+      setErrorMessage((error as Error).message || 'No se pudo exportar el Excel');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* NEW: Encabezado y descripción del módulo */}
@@ -155,15 +172,25 @@ const AsignacionRolesScreen: React.FC = () => {
             Selecciona un usuario para agregar o quitar roles disponibles en la plataforma.
           </p>
         </div>
-        <button
-          type="button"
-          className={secondaryButtonClasses}
-          onClick={() => {
-            loadData();
-          }}
-        >
-          Actualizar vista
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className={secondaryButtonClasses}
+            onClick={() => {
+              loadData();
+            }}
+          >
+            Actualizar vista
+          </button>
+          <button
+            type="button"
+            className={primaryButtonClasses}
+            onClick={handleExportExcel}
+            disabled={exporting}
+          >
+            {exporting ? 'Exportando...' : 'Exportar Excel'}
+          </button>
+        </div>
       </div>
 
       {feedbackMessage && (
@@ -284,3 +311,6 @@ const AsignacionRolesScreen: React.FC = () => {
 };
 
 export default AsignacionRolesScreen;
+
+// Exportación Excel: componente src/pages/admin/AsignacionRolesScreen.tsx; servicio src/services/usuarioRolesService.ts;
+// endpoint GET /api/usuarios-roles/export-excel usando tablas usuarios, roles y usuario_roles.
