@@ -2,6 +2,23 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { getUsuarios } from '../../services/usuariosService';
 import usuarioRolesService from '../../services/usuarioRolesService';
 
+// Referencia: exportación en Mantenimiento de Nodos (src/components/views/Nodos.jsx).
+// Archivos modificados en usuarios-roles: este componente y server/controllers/usuariosRolesExport.controller.js.
+const toast = {
+  success: (message: string) => {
+    if (typeof window !== 'undefined') {
+      window.alert(message);
+    }
+    console.log(message);
+  },
+  error: (message: string) => {
+    if (typeof window !== 'undefined') {
+      window.alert(message);
+    }
+    console.error(message);
+  },
+};
+
 export type UsuarioListado = {
   id: number;
   nombre_usuario: string;
@@ -151,6 +168,14 @@ const AsignacionRolesScreen: React.FC = () => {
       setExporting(true);
       setErrorMessage('');
       const blob = await usuarioRolesService.exportExcelPublic();
+
+      if (!(blob instanceof Blob) || blob.size === 0) {
+        console.error('La exportación no devolvió un Blob válido', blob);
+        toast.error('La exportación no devolvió un archivo válido. Revisar endpoint.');
+        setErrorMessage('La exportación no devolvió un archivo válido. Revisar endpoint.');
+        return;
+      }
+
       const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = downloadUrl;
