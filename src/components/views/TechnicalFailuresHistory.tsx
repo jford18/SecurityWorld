@@ -49,6 +49,7 @@ interface TechnicalFailuresHistoryProps {
   handleEdit?: (failure: TechnicalFailure) => void;
   showActions?: boolean;
   enableExport?: boolean;
+  renderActions?: (failure: TechnicalFailure) => React.ReactNode;
 }
 
 const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
@@ -58,6 +59,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   handleEdit,
   showActions = true,
   enableExport = false,
+  renderActions,
 }) => {
   const [filters, setFilters] = useState({
     fechaDesde: '',
@@ -69,7 +71,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     departamento: '',
   });
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
-  const actionsEnabled = showActions && Boolean(handleEdit);
+  const actionsEnabled = showActions && Boolean(handleEdit || renderActions);
   const columnsCount = actionsEnabled ? 7 : 6;
 
   const getFechaFalloTimestamp = (failure: TechnicalFailure) => {
@@ -509,14 +511,20 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                       || fallo.deptResponsable
                       || 'Sin información'}
                   </td>
-                  {actionsEnabled && handleEdit && (
+                  {actionsEnabled && (
                     <td className="px-6 py-3 text-left whitespace-nowrap">
-                      <button
-                        onClick={() => handleEdit(fallo)}
-                        className="text-blue-600 hover:underline text-sm font-semibold"
-                      >
-                        Editar
-                      </button>
+                      {renderActions ? (
+                        renderActions(fallo)
+                      ) : (
+                        handleEdit && (
+                          <button
+                            onClick={() => handleEdit(fallo)}
+                            className="text-blue-600 hover:underline text-sm font-semibold"
+                          >
+                            Editar
+                          </button>
+                        )
+                      )}
                     </td>
                   )}
                 </tr>
