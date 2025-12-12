@@ -144,8 +144,6 @@ const TechnicalFailuresOperador: React.FC = () => {
 
   const equipoEsHC = useMemo(() => isDeviceFromHC(selectedDispositivo), [selectedDispositivo]);
 
-  const handleEdit = (_failure: TechnicalFailure) => {};
-
   const sitioItems = useMemo(
     () => [
       { id: 'empty', nombre: 'Seleccione...', value: '' },
@@ -1039,7 +1037,7 @@ const TechnicalFailuresOperador: React.FC = () => {
         failures={failures}
         isLoading={isLoading}
         activeRole={session.roleName ?? undefined}
-        handleEdit={handleEdit}
+        showActions={false}
       />
     </div>
   );
