@@ -41,6 +41,7 @@ dotenv.config();
 const env = process.env;
 
 const app = express();
+app.set("etag", false);
 app.use(express.json());
 
 app.use(cors());

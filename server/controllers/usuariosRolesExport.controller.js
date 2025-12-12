@@ -107,6 +107,14 @@ export const exportUsuariosRolesExcelPublic = async (_req, res) => {
       "Content-Disposition",
       "attachment; filename=\"usuarios_roles.xlsx\""
     );
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+    res.removeHeader("ETag");
 
     return res.status(200).send(buffer);
   } catch (error) {
