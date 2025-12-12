@@ -587,12 +587,6 @@ export const actualizarFalloSupervisor = async (req, res) => {
       fechaFalloPayload || formatDate(existingFallo?.fecha) || null;
     const horaFalloValue = horaFalloPayload || existingFallo?.hora || null;
 
-    const rawTipoAfectacion = tipo_afectacion ?? affectationType;
-    const tipoAfectacionValue =
-      rawTipoAfectacion === undefined || rawTipoAfectacion === null
-        ? existingFallo.tipo_afectacion || null
-        : String(rawTipoAfectacion).trim() || null;
-
     const departamentoFinalId =
       departamentoId ?? existingFallo.departamento_id ?? null;
 
@@ -614,16 +608,14 @@ export const actualizarFalloSupervisor = async (req, res) => {
          SET fecha = $1,
              hora = $2,
              departamento_id = $3,
-             tipo_afectacion = $4,
-             fecha_resolucion = $5,
-             hora_resolucion = $6,
+             fecha_resolucion = $4,
+             hora_resolucion = $5,
              fecha_actualizacion = NOW()
-        WHERE id = $7`,
+        WHERE id = $6`,
       [
         fechaFalloValue,
         horaFalloValue,
         departamentoFinalId,
-        tipoAfectacionValue,
         fechaResolucionValue,
         horaResolucionValue,
         id,
