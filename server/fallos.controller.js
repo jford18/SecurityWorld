@@ -278,7 +278,7 @@ export const getFallos = async (req, res) => {
 
 export const guardarCambiosFallo = async (req, res) => {
   const { id } = req.params;
-  const { departamento_id, novedad_detectada } = req.body || {};
+  const { departamento_id } = req.body || {};
 
   if (!id) {
     return res
@@ -313,11 +313,6 @@ export const guardarCambiosFallo = async (req, res) => {
       return Number.isFinite(parsed) ? parsed : null;
     })();
 
-    const novedad =
-      typeof novedad_detectada === "string"
-        ? novedad_detectada.trim() || null
-        : null;
-
     const updateResult = await client.query(
       `UPDATE fallos_tecnicos
           SET departamento_id = $1,
@@ -339,11 +334,9 @@ export const guardarCambiosFallo = async (req, res) => {
     await client.query(
       `INSERT INTO seguimiento_fallos (
          fallo_id,
-         verificacion_apertura_id,
-         novedad_detectada,
-         fecha_creacion
-       ) VALUES ($1, $2, $3, NOW())`,
-      [id, usuarioId, novedad]
+         verificacion_apertura_id
+       ) VALUES ($1, $2)`,
+      [id, usuarioId]
     );
 
     await client.query("COMMIT");
@@ -420,9 +413,8 @@ export const cerrarFalloTecnico = async (req, res) => {
     await client.query(
       `INSERT INTO seguimiento_fallos (
          fallo_id,
-         verificacion_cierre_id,
-         fecha_creacion
-       ) VALUES ($1, $2, NOW())`,
+         verificacion_cierre_id
+       ) VALUES ($1, $2)`,
       [id, usuarioId]
     );
 
@@ -648,9 +640,8 @@ export const createFallo = async (req, res) => {
     await client.query(
       `INSERT INTO seguimiento_fallos (
         fallo_id,
-        verificacion_apertura_id,
-        fecha_creacion
-      ) VALUES ($1, $2, NOW())`,
+        verificacion_apertura_id
+      ) VALUES ($1, $2)`,
       [falloId, usuarioId]
     );
 
@@ -794,9 +785,8 @@ export const actualizarFalloSupervisor = async (req, res) => {
       `INSERT INTO seguimiento_fallos (
         fallo_id,
         verificacion_supervisor_id,
-        novedad_detectada,
-        fecha_creacion
-      ) VALUES ($1, $2, $3, NOW())`,
+        novedad_detectada
+      ) VALUES ($1, $2, $3)`,
       [id, supervisorId, novedadDetectada || null]
     );
 
