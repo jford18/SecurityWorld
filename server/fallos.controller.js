@@ -128,6 +128,18 @@ const isAdminUser = (req) => {
   );
 };
 
+const isAdministratorRole = (req) => {
+  const roleName = normalizeRoleName(req);
+
+  if (!roleName) {
+    return Boolean(req.user?.es_admin || req.user?.is_admin);
+  }
+
+  return ["admin", "administrador", "administrator"].some((keyword) =>
+    roleName.includes(keyword)
+  );
+};
+
 const buildDateTime = (dateValue, timeValue) => {
   if (!dateValue) return null;
   const datePart = formatDate(dateValue);
@@ -836,6 +848,7 @@ export const eliminarFalloTecnico = async (req, res) => {
     }
 
     const fallo = falloResult.rows[0];
+    const esAdministrador = isAdministratorRole(req);
 
     if (!isAdminUser(req)) {
       return res.status(403).json({
@@ -843,7 +856,7 @@ export const eliminarFalloTecnico = async (req, res) => {
       });
     }
 
-    if (fallo.estado !== "CERRADO") {
+    if (!esAdministrador && fallo.estado !== "CERRADO") {
       return res.status(400).json({
         mensaje: "Solo se pueden eliminar fallos cerrados.",
       });
