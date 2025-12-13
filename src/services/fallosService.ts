@@ -50,7 +50,8 @@ export interface TechnicalFailurePayload {
 }
 
 export type SitioAsociado = {
-  id?: number;
+  id: number;
+  codigo?: string;
   nombre: string;
 };
 
@@ -190,9 +191,28 @@ export const getNodos = async (): Promise<CatalogoNodo[]> => {
   return nodos;
 };
 
-export const getNodoSitio = async (nodoId: string | number): Promise<SitioAsociado> => {
-  const { data } = await apiClient.get<SitioAsociado>(`/nodos/${nodoId}/sitio`);
-  return data;
+export const getNodoSitios = async (
+  nodoId: string | number,
+): Promise<SitioAsociado[]> => {
+  const { data } = await apiClient.get<SitioAsociado[]>(`/nodos/${nodoId}/sitio`);
+  if (Array.isArray(data)) {
+    return data.map((item) => ({
+      ...item,
+      id: Number(item.id),
+    })).filter((item) => Number.isFinite(item.id));
+  }
+
+  if (data && typeof data === 'object' && Array.isArray((data as { data?: unknown }).data)) {
+    const { data: nestedData } = data as { data: SitioAsociado[] };
+    return nestedData
+      .map((item) => ({
+        ...item,
+        id: Number(item.id),
+      }))
+      .filter((item) => Number.isFinite(item.id));
+  }
+
+  return [];
 };
 
 export const getDepartamentos = async (): Promise<CatalogoDepartamento[]> => {
