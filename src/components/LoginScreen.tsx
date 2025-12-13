@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RoleOption, RoleToken } from './context/SessionContext';
 import { Consola, getConsolas } from '../services/consolasService';
-import api from '../services/api';
+import { login as loginRequest } from '../services/authService';
 
 interface LoginScreenProps {
   onLogin: (payload: {
@@ -11,6 +11,7 @@ interface LoginScreenProps {
     token: string;
     roles: RoleOption[];
     roleTokens: RoleToken[];
+    requirePasswordChange: boolean;
   }) => void;
 }
 
@@ -28,6 +29,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [usuarioAutenticado, setUsuarioAutenticado] = useState<UsuarioAutenticado | null>(null);
   const [assignedRole, setAssignedRole] = useState<RoleOption | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [requirePasswordChange, setRequirePasswordChange] = useState(false);
   const [consolas, setConsolas] = useState<Consola[]>([]);
   const [selectedConsolaId, setSelectedConsolaId] = useState<number | null>(null);
   const [consolasError, setConsolasError] = useState<string | null>(null);
@@ -65,12 +68,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       setIsLoading(true); // FIX: Activar indicador de carga durante la fase de autenticación.
 
       try {
-        const response = await api.post('/login', {
-          nombre_usuario: username,
-          contrasena: password,
-        });
-
-        const data = response.data ?? {};
+        const data = await loginRequest(username, password);
 
         const roleId = Number(data.rol_id);
         const roleName =
@@ -78,13 +76,23 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
             ? data.rol_nombre.trim()
             : '';
 
+        const tokenFromResponse =
+          typeof data.token === 'string' && data.token.trim().length > 0 ? data.token.trim() : '';
+
         const userId = Number(data.usuario_id);
         const usernameFromResponse =
           typeof data.nombre_usuario === 'string' && data.nombre_usuario.trim().length > 0
             ? data.nombre_usuario.trim()
             : username;
 
-        if (!Number.isFinite(roleId) || roleId <= 0 || !roleName || !Number.isFinite(userId) || userId <= 0) {
+        if (
+          !Number.isFinite(roleId) ||
+          roleId <= 0 ||
+          !roleName ||
+          !Number.isFinite(userId) ||
+          userId <= 0 ||
+          !tokenFromResponse
+        ) {
           throw new Error('Respuesta inválida del servidor.');
         }
 
@@ -102,6 +110,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
         setUsuarioAutenticado(usuario);
         setAssignedRole(primaryRole);
+        setAuthToken(tokenFromResponse);
+        setRequirePasswordChange(Boolean(data.requirePasswordChange));
       } catch (caughtError: unknown) {
         console.error('Error al iniciar sesión:', caughtError);
         const possibleResponse = caughtError as {
@@ -122,6 +132,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
             : 'Error de autenticación';
 
         setError(messageToShow);
+        setAuthToken(null);
+        setRequirePasswordChange(false);
+        setUsuarioAutenticado(null);
+        setAssignedRole(null);
+        setSelectedConsolaId(null);
       } finally {
         setIsLoading(false); // FIX: Finalizar indicador de carga al concluir la fase de autenticación.
       }
@@ -130,6 +145,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     }
 
     const selectedConsoleName = consolas.find((consola) => consola.id === selectedConsolaId)?.nombre;
+
+    if (!authToken) {
+      setError('No se recibió un token de autenticación válido.');
+      return;
+    }
 
     if (!selectedConsolaId || !selectedConsoleName) {
       setError('Seleccione una consola para continuar.'); // FIX: Validar que el usuario elija una consola antes de continuar.
@@ -143,7 +163,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
     setIsLoading(true); // FIX: Mostrar carga durante el envío de la selección de consola.
     try {
-      const sessionToken = `session-${usuarioAutenticado.id}-${assignedRole.id}`;
+      const sessionToken = authToken;
       const roleTokens: RoleToken[] = [
         {
           roleId: assignedRole.id,
@@ -158,6 +178,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         token: sessionToken,
         roles: [assignedRole],
         roleTokens,
+        requirePasswordChange,
       }); // FIX: Completar la fase de selección de consola y navegar.
     } finally {
       setIsLoading(false); // FIX: Asegurar que el estado de carga se desactive tras finalizar la fase de consola.

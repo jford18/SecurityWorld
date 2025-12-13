@@ -20,6 +20,7 @@ interface SessionData {
   roles: RoleOption[];
   roleTokens: RoleToken[];
   token: string | null;
+  requirePasswordChange: boolean;
 }
 
 interface SessionContextType {
@@ -39,6 +40,7 @@ const initialSession: SessionData = {
   roles: [],
   roleTokens: [],
   token: null,
+  requirePasswordChange: false,
 };
 
 export const SessionProvider: React.FC<{ children: ReactNode }> = ({ children }) => {

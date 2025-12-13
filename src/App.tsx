@@ -4,6 +4,7 @@ import {
   Navigate,
   Route,
   Routes,
+  useLocation,
 } from 'react-router-dom';
 import LoginScreen from './components/LoginScreen';
 import Dashboard from './components/Dashboard';
@@ -44,6 +45,7 @@ import HaciendaPage from './pages/administracion/HaciendaPage.tsx';
 
 import Unauthorized from './pages/Unauthorized';
 import NotFound from './pages/NotFound';
+import ChangePasswordForced from './pages/ChangePasswordForced';
 
 interface GuardedRouteProps {
   path: string;
@@ -73,9 +75,14 @@ const GuardedRoute: React.FC<GuardedRouteProps> = ({
 
 const RequireAuth: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { session } = useSession();
+  const location = useLocation();
 
   if (!session.token) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (session.requirePasswordChange && location.pathname !== '/cambiar-clave') {
+    return <Navigate to="/cambiar-clave" replace />;
   }
 
   return children;
@@ -211,6 +218,7 @@ const AppContent: React.FC = () => {
     const storedTokens = localStorage.getItem('roleTokens');
     const storedRoleId = localStorage.getItem('activeRoleId');
     const storedConsole = localStorage.getItem('selectedConsole');
+    const storedRequirePasswordChange = localStorage.getItem('requirePasswordChange');
 
     if (!storedUser || !storedToken) {
       return;
@@ -242,6 +250,7 @@ const AppContent: React.FC = () => {
         roles,
         roleTokens: tokens,
         token: activeToken ?? null,
+        requirePasswordChange: storedRequirePasswordChange === 'true',
       });
     } catch (error) {
       console.error('No se pudo restaurar la sesión almacenada:', error);
@@ -250,6 +259,7 @@ const AppContent: React.FC = () => {
       localStorage.removeItem('roleTokens');
       localStorage.removeItem('activeRoleId');
       localStorage.removeItem('selectedConsole');
+      localStorage.removeItem('requirePasswordChange');
     }
   }, [session.token, setSession]);
 
@@ -260,8 +270,10 @@ const AppContent: React.FC = () => {
     token: string;
     roles: RoleOption[];
     roleTokens: RoleToken[];
+    requirePasswordChange: boolean;
   }) => {
-    const { user, selectedRole, consoleName, token, roles, roleTokens } = payload;
+    const { user, selectedRole, consoleName, token, roles, roleTokens, requirePasswordChange } =
+      payload;
 
     setSession({
       userId: user.id,
@@ -272,6 +284,7 @@ const AppContent: React.FC = () => {
       roles,
       roleTokens,
       token,
+      requirePasswordChange,
     });
 
     localStorage.setItem('token', token);
@@ -294,6 +307,7 @@ const AppContent: React.FC = () => {
     } else {
       localStorage.removeItem('selectedConsole');
     }
+    localStorage.setItem('requirePasswordChange', requirePasswordChange ? 'true' : 'false');
   };
 
   const isAuthenticated = Boolean(session.token);
@@ -306,13 +320,25 @@ const AppContent: React.FC = () => {
           path={loginPath}
           element={
             isAuthenticated ? (
-              <Navigate to={defaultAuthorizedPath} replace />
+              session.requirePasswordChange ? (
+                <Navigate to="/cambiar-clave" replace />
+              ) : (
+                <Navigate to={defaultAuthorizedPath} replace />
+              )
             ) : (
               <LoginScreen onLogin={handleLogin} />
             )
           }
         />
       ))}
+      <Route
+        path="/cambiar-clave"
+        element={
+          <RequireAuth>
+            <ChangePasswordForced redirectPath={defaultAuthorizedPath} />
+          </RequireAuth>
+        }
+      />
       <Route
         path="/"
         element={
