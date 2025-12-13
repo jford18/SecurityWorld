@@ -366,7 +366,6 @@ export const cerrarFalloTecnico = async (req, res) => {
   const {
     fecha_resolucion: fechaResolucion,
     hora_resolucion: horaResolucion,
-    novedad_detectada: novedadDetectada,
   } = req.body || {};
 
   if (!id) {
@@ -401,11 +400,6 @@ export const cerrarFalloTecnico = async (req, res) => {
       return res.status(400).json({ mensaje: "Ya está cerrado." });
     }
 
-    const novedad =
-      typeof novedadDetectada === "string"
-        ? novedadDetectada.trim() || null
-        : null;
-
     const updateResult = await client.query(
       `UPDATE fallos_tecnicos
           SET fecha_resolucion = $1,
@@ -427,11 +421,9 @@ export const cerrarFalloTecnico = async (req, res) => {
       `INSERT INTO seguimiento_fallos (
          fallo_id,
          verificacion_cierre_id,
-         responsable_verificacion_cierre_id,
-         novedad_detectada,
          fecha_creacion
-       ) VALUES ($1, $2, $3, $4, NOW())`,
-      [id, usuarioId, usuarioId, novedad]
+       ) VALUES ($1, $2, NOW())`,
+      [id, usuarioId]
     );
 
     await client.query("COMMIT");
@@ -467,9 +459,6 @@ export const createFallo = async (req, res) => {
     fechaHoraFallo,
     tipo_afectacion,
     affectationType,
-    verificacionApertura,
-    verificacionCierre,
-    novedadDetectada,
     sitio_id: rawSitioId,
     sitioId: rawSitioIdCamel,
     nodo,
@@ -654,30 +643,16 @@ export const createFallo = async (req, res) => {
       throw new Error("No se pudo crear el fallo técnico.");
     }
 
-    const verificacionAperturaId = findUserId(usuarios, verificacionApertura);
-    const verificacionCierreId = findUserId(usuarios, verificacionCierre);
+    const usuarioId = getAuthenticatedUserId(req);
 
-    if (
-      verificacionAperturaId ||
-      verificacionCierreId ||
-      novedadDetectada
-    ) {
-      await client.query(
-        `INSERT INTO seguimiento_fallos (
-          fallo_id,
-          verificacion_apertura_id,
-          verificacion_cierre_id,
-          novedad_detectada,
-          fecha_creacion
-        ) VALUES ($1, $2, $3, $4, NOW())`,
-        [
-          falloId,
-          verificacionAperturaId ?? null,
-          verificacionCierreId ?? null,
-          novedadDetectada || null,
-        ]
-      );
-    }
+    await client.query(
+      `INSERT INTO seguimiento_fallos (
+        fallo_id,
+        verificacion_apertura_id,
+        fecha_creacion
+      ) VALUES ($1, $2, NOW())`,
+      [falloId, usuarioId]
+    );
 
     await client.query("COMMIT");
 
@@ -705,11 +680,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
     horaResolucion,
     horaFallo,
     fechaHoraFallo,
-    verificacionApertura,
-    verificacionCierre,
     novedadDetectada,
-    ultimoUsuarioEditoId,
-    responsable_verificacion_cierre_id,
   } = req.body || {};
 
   if (!id) {
@@ -728,13 +699,6 @@ export const actualizarFalloSupervisor = async (req, res) => {
   }
 
   const client = await pool.connect();
-  const usuarioAutenticadoId = (() => {
-    const parsed = Number(ultimoUsuarioEditoId);
-    return Number.isFinite(parsed) ? parsed : null;
-  })();
-  const responsableVerificacionCierreId = toNullableUserId(
-    responsable_verificacion_cierre_id
-  );
 
   try {
     await client.query("BEGIN");
@@ -824,60 +788,17 @@ export const actualizarFalloSupervisor = async (req, res) => {
       ]
     );
 
-    const usuariosResult = await client.query(
-      "SELECT id, nombre_usuario, nombre_completo FROM usuarios WHERE activo = true"
+    const supervisorId = getAuthenticatedUserId(req);
+
+    await client.query(
+      `INSERT INTO seguimiento_fallos (
+        fallo_id,
+        verificacion_supervisor_id,
+        novedad_detectada,
+        fecha_creacion
+      ) VALUES ($1, $2, $3, NOW())`,
+      [id, supervisorId, novedadDetectada || null]
     );
-    const usuarios = usuariosResult.rows;
-
-    const verificacionAperturaId = findUserId(usuarios, verificacionApertura);
-    const verificacionCierreId = findUserId(usuarios, verificacionCierre);
-
-    const seguimientoResult = await client.query(
-      "SELECT id FROM seguimiento_fallos WHERE fallo_id = $1",
-      [id]
-    );
-
-    if (seguimientoResult.rowCount) {
-      await client.query(
-        `UPDATE seguimiento_fallos
-           SET verificacion_apertura_id = $1,
-               verificacion_cierre_id = $2,
-               novedad_detectada = $3,
-               ultimo_usuario_edito_id = $4,
-               responsable_verificacion_cierre_id = COALESCE($5, responsable_verificacion_cierre_id),
-               fecha_actualizacion = NOW()
-         WHERE fallo_id = $6`,
-        [
-          verificacionAperturaId || null,
-          verificacionCierreId || null,
-          novedadDetectada || null,
-          usuarioAutenticadoId,
-          responsableVerificacionCierreId,
-          id,
-        ]
-      );
-    } else {
-      await client.query(
-        `INSERT INTO seguimiento_fallos (
-          fallo_id,
-          verificacion_apertura_id,
-          verificacion_cierre_id,
-          novedad_detectada,
-          fecha_creacion,
-          fecha_actualizacion,
-          ultimo_usuario_edito_id,
-          responsable_verificacion_cierre_id
-        ) VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, $6)`,
-        [
-          id,
-          verificacionAperturaId || null,
-          verificacionCierreId || null,
-          novedadDetectada || null,
-          usuarioAutenticadoId,
-          responsableVerificacionCierreId,
-        ]
-      );
-    }
 
     await client.query("COMMIT");
 
@@ -970,17 +891,17 @@ export const getHistorialFallo = async (req, res) => {
     const fallo = falloResult.rows[0];
     const accionesResult = await client.query(
       `SELECT
-         sf.id,
-         sf.novedad_detectada,
          sf.fecha_creacion,
-         sf.fecha_actualizacion,
-       COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
-       COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre
+         ua.nombre_usuario AS verificacion_apertura,
+         us.nombre_usuario AS verificacion_supervisor,
+         uc.nombre_usuario AS verificacion_cierre,
+         sf.novedad_detectada
       FROM seguimiento_fallos sf
-      LEFT JOIN usuarios apertura ON apertura.id = sf.verificacion_apertura_id
-      LEFT JOIN usuarios cierre ON cierre.id = sf.verificacion_cierre_id
+      LEFT JOIN usuarios ua ON ua.id = sf.verificacion_apertura_id
+      LEFT JOIN usuarios us ON us.id = sf.verificacion_supervisor_id
+      LEFT JOIN usuarios uc ON uc.id = sf.verificacion_cierre_id
       WHERE sf.fallo_id = $1
-      ORDER BY sf.fecha_creacion DESC`,
+      ORDER BY sf.fecha_creacion ASC`,
       [id]
     );
 
