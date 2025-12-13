@@ -148,6 +148,34 @@ export const updateFallo = async (
   return data;
 };
 
+export const guardarCambiosFallo = async (
+  id: string,
+  payload: { departamento_id?: number | string | null; novedad_detectada?: string | null },
+  context?: RequestContext,
+) => {
+  const { data } = await apiClient.patch<TechnicalFailure>(
+    `/fallos/${id}/guardar-cambios`,
+    payload,
+    {
+      headers: buildRoleHeaders(context),
+    },
+  );
+
+  return data;
+};
+
+export const cerrarFallo = async (
+  id: string,
+  payload: { fecha_resolucion: string; hora_resolucion: string; novedad_detectada?: string | null },
+  context?: RequestContext,
+) => {
+  const { data } = await apiClient.post<TechnicalFailure>(`/fallos/${id}/cerrar`, payload, {
+    headers: buildRoleHeaders(context),
+  });
+
+  return data;
+};
+
 export const getFalloDuration = async (
   id: string,
   context?: RequestContext,

@@ -6,6 +6,8 @@ import {
   getDuracionFallo,
   getHistorialFallo,
   eliminarFalloTecnico,
+  guardarCambiosFallo,
+  cerrarFalloTecnico,
 } from "./fallos.controller.js";
 
 const router = Router();
@@ -14,6 +16,8 @@ router.get("/", getFallos);
 router.post("/", createFallo);
 router.get("/:id/duracion", getDuracionFallo);
 router.get("/:id/historial", getHistorialFallo);
+router.patch("/:id/guardar-cambios", guardarCambiosFallo);
+router.post("/:id/cerrar", cerrarFalloTecnico);
 router.put("/:id", actualizarFalloSupervisor);
 router.delete("/:id", eliminarFalloTecnico);
 
