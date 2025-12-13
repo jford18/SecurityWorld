@@ -12,7 +12,7 @@ import {
   fetchCatalogos,
   TechnicalFailurePayload,
   getNodos,
-  getNodoSitio,
+  getNodoSitios,
   SitioAsociado,
 } from '../../services/fallosService';
 import TechnicalFailuresHistory from './TechnicalFailuresHistory';
@@ -117,7 +117,7 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [cliente, setCliente] = useState<string | null>(null);
   const [clienteFromConsole, setClienteFromConsole] = useState<string | null>(null);
   const [sitios, setSitios] = useState<Sitio[]>([]);
-  const [sitio, setSitio] = useState<SitioAsociado | null>(null);
+  const [sitiosNodo, setSitiosNodo] = useState<SitioAsociado[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [nodos, setNodos] = useState<CatalogoNodo[]>([]);
@@ -475,28 +475,32 @@ const TechnicalFailuresOperador: React.FC = () => {
 
     setFormData(newValues);
     validate(newValues);
-    setSitio(null);
+    setSitiosNodo([]);
     setNodoSitioError(null);
 
     if (normalizedId) {
       try {
-        const data = await getNodoSitio(normalizedId);
-        setSitio(data);
-        setNodoSitioError(null);
+        const data = await getNodoSitios(normalizedId);
+        setSitiosNodo(data);
+        setNodoSitioError(
+          data.length === 0
+            ? "El nodo seleccionado no tiene un sitio asignado. Primero asigne el nodo a un sitio en la opción 'Asignación Nodos-Sitios'."
+            : null,
+        );
       } catch (error) {
         if (hasHttpStatusResponse(error) && error.response?.status === 404) {
-          setSitio(null);
+          setSitiosNodo([]);
           setNodoSitioError(
             "El nodo seleccionado no tiene un sitio asignado. Primero asigne el nodo a un sitio en la opción 'Asignación Nodos-Sitios'."
           );
           return;
         }
         console.error('No se pudo obtener el sitio asociado al nodo seleccionado:', error);
-        setSitio(null);
+        setSitiosNodo([]);
         setNodoSitioError('No se pudo obtener el sitio asociado al nodo seleccionado.');
       }
     } else {
-      setSitio(null);
+      setSitiosNodo([]);
       setNodoSitioError(null);
     }
   };
@@ -552,7 +556,7 @@ const TechnicalFailuresOperador: React.FC = () => {
     setErrors({});
     setCliente(null);
     setClienteFromConsole(null);
-    setSitio(null);
+    setSitiosNodo([]);
     setNodoSitioError(null);
   };
 
@@ -642,7 +646,7 @@ const TechnicalFailuresOperador: React.FC = () => {
         return;
       }
 
-      if (nodoSitioError || !sitio) {
+      if (nodoSitioError || sitiosNodo.length === 0) {
         alert(
           nodoSitioError ??
             "El nodo seleccionado no tiene un sitio asignado. Primero asigne el nodo a un sitio en la opción 'Asignación Nodos-Sitios'."
@@ -663,7 +667,12 @@ const TechnicalFailuresOperador: React.FC = () => {
     let equipo_afectado = 'N/A';
     const sitioNombre =
       formData.affectationType === 'Nodo'
-        ? sitio?.nombre ?? ''
+        ? sitiosNodo
+            .map((s) => {
+              const parts = [s.codigo, s.nombre].filter(Boolean);
+              return parts.length > 0 ? parts.join(' - ') : String(s.id);
+            })
+            .join(', ')
         : selectedSitio?.nombre ?? '';
     if (formData.affectationType === 'Nodo') {
       equipo_afectado = selectedNodo?.nombre || 'N/A';
@@ -732,7 +741,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       sitio: sitioNombre,
       sitio_id:
         formData.affectationType === 'Nodo'
-          ? sitio?.id
+          ? sitiosNodo[0]?.id
           : selectedSitio
             ? selectedSitio.id
             : undefined,
@@ -751,7 +760,8 @@ const TechnicalFailuresOperador: React.FC = () => {
       setErrors({});
       setCliente(null);
       setClienteFromConsole(null);
-      setSitio(null);
+      setSitiosNodo([]);
+      setNodoSitioError(null);
     } catch (error) {
       console.error('Error al registrar el fallo técnico:', error);
       alert('No se pudo registrar el fallo técnico. Intente nuevamente.');
@@ -848,12 +858,17 @@ const TechnicalFailuresOperador: React.FC = () => {
               {nodoSitioError && (
                 <p className="text-red-500 text-sm mt-2">{nodoSitioError}</p>
               )}
-              {sitio && !nodoSitioError && (
-                <div className="mt-2">
-                  <span className="text-sm font-medium text-gray-700">
-                    → Sitio: {sitio.id ? `${sitio.id} - ` : ''}
-                    {sitio.nombre}
-                  </span>
+              {sitiosNodo.length > 0 && !nodoSitioError && (
+                <div className="mt-2 text-sm text-gray-700">
+                  <span className="font-semibold">→ Sitios:</span>
+                  <ul className="list-disc list-inside">
+                    {sitiosNodo.map((s) => (
+                      <li key={s.id}>
+                        {s.id} – {s.codigo ? `${s.codigo} – ` : ''}
+                        {s.nombre}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
