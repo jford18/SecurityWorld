@@ -77,14 +77,21 @@ export const updateUsuario = async (req, res) => {
     if (trimmedPassword && trimmedPassword !== "") {
       updateQuery = `
         UPDATE public.usuarios
-        SET nombre_usuario  = $1,
-            nombre_completo = $2,
-            activo          = $3,
-            contrasena      = $4
+        SET nombre_usuario     = $1,
+            nombre_completo    = $2,
+            activo             = $3,
+            contrasena         = $4,
+            debe_cambiar_clave = TRUE
         WHERE id = $5
         RETURNING id, nombre_usuario, nombre_completo, activo, fecha_creacion;
       `;
-      values = [trimmedUsername, nombre_completo?.trim() || null, Boolean(activo), trimmedPassword, id];
+      values = [
+        trimmedUsername,
+        nombre_completo?.trim() || null,
+        Boolean(activo),
+        trimmedPassword,
+        id,
+      ];
     } else {
       updateQuery = `
         UPDATE public.usuarios
