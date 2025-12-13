@@ -102,6 +102,16 @@ const toNullableUserId = (v) => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
+const getAuthenticatedUserId = (req) =>
+  toNullableUserId(
+    req.user?.id ||
+      req.user?.userId ||
+      req.user?.usuario_id ||
+      req.headers["x-user-id"] ||
+      req.headers["x-usuario-id"] ||
+      req.body?.ultimoUsuarioEditoId
+  );
+
 const normalizeRoleName = (req) => {
   const candidate =
     req.user?.rol_nombre ||
@@ -124,18 +134,6 @@ const isAdminUser = (req) => {
   }
 
   return ["admin", "administrador", "administrator", "supervisor"].some((keyword) =>
-    roleName.includes(keyword)
-  );
-};
-
-const isAdministratorRole = (req) => {
-  const roleName = normalizeRoleName(req);
-
-  if (!roleName) {
-    return Boolean(req.user?.es_admin || req.user?.is_admin);
-  }
-
-  return ["admin", "administrador", "administrator"].some((keyword) =>
     roleName.includes(keyword)
   );
 };
@@ -273,6 +271,179 @@ export const getFallos = async (req, res) => {
       message: "Error interno del servidor",
       error: error.message,
     }); // FIX: respond with a consistent 500 payload that the frontend can handle gracefully.
+  } finally {
+    client.release();
+  }
+};
+
+export const guardarCambiosFallo = async (req, res) => {
+  const { id } = req.params;
+  const { departamento_id, novedad_detectada } = req.body || {};
+
+  if (!id) {
+    return res
+      .status(400)
+      .json({ mensaje: "El identificador del fallo es obligatorio." });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const existingResult = await client.query(
+      "SELECT estado FROM fallos_tecnicos WHERE id = $1",
+      [id]
+    );
+
+    if (!existingResult.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ mensaje: "El fallo técnico no existe." });
+    }
+
+    if (existingResult.rows[0].estado === "CERRADO") {
+      await client.query("ROLLBACK");
+      return res
+        .status(409)
+        .json({ mensaje: "Fallo cerrado, no editable." });
+    }
+
+    const departamentoId = (() => {
+      const parsed = Number(departamento_id);
+      return Number.isFinite(parsed) ? parsed : null;
+    })();
+
+    const novedad =
+      typeof novedad_detectada === "string"
+        ? novedad_detectada.trim() || null
+        : null;
+
+    const updateResult = await client.query(
+      `UPDATE fallos_tecnicos
+          SET departamento_id = $1,
+              fecha_actualizacion = NOW()
+        WHERE id = $2
+          AND (estado IS NULL OR estado <> 'CERRADO')`,
+      [departamentoId, id]
+    );
+
+    if (!updateResult.rowCount) {
+      await client.query("ROLLBACK");
+      return res
+        .status(409)
+        .json({ mensaje: "Fallo cerrado, no editable." });
+    }
+
+    const usuarioId = getAuthenticatedUserId(req);
+
+    await client.query(
+      `INSERT INTO seguimiento_fallos (
+         fallo_id,
+         verificacion_apertura_id,
+         novedad_detectada,
+         fecha_creacion
+       ) VALUES ($1, $2, $3, NOW())`,
+      [id, usuarioId, novedad]
+    );
+
+    await client.query("COMMIT");
+
+    const fallo = await fetchFalloById(client, id);
+    return res.json(fallo);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error al guardar cambios del fallo:", error);
+    return res
+      .status(500)
+      .json({ mensaje: "Ocurrió un error al guardar los cambios." });
+  } finally {
+    client.release();
+  }
+};
+
+export const cerrarFalloTecnico = async (req, res) => {
+  const { id } = req.params;
+  const {
+    fecha_resolucion: fechaResolucion,
+    hora_resolucion: horaResolucion,
+    novedad_detectada: novedadDetectada,
+  } = req.body || {};
+
+  if (!id) {
+    return res
+      .status(400)
+      .json({ mensaje: "El identificador del fallo es obligatorio." });
+  }
+
+  if (!fechaResolucion || !horaResolucion) {
+    return res.status(400).json({
+      mensaje: "Debe ingresar la fecha y hora de resolución para cerrar el fallo.",
+    });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const existingResult = await client.query(
+      "SELECT estado FROM fallos_tecnicos WHERE id = $1",
+      [id]
+    );
+
+    if (!existingResult.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ mensaje: "El fallo técnico no existe." });
+    }
+
+    if (existingResult.rows[0].estado === "CERRADO") {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ mensaje: "Ya está cerrado." });
+    }
+
+    const novedad =
+      typeof novedadDetectada === "string"
+        ? novedadDetectada.trim() || null
+        : null;
+
+    const updateResult = await client.query(
+      `UPDATE fallos_tecnicos
+          SET fecha_resolucion = $1,
+              hora_resolucion = $2,
+              estado = 'CERRADO',
+              fecha_actualizacion = NOW()
+        WHERE id = $3
+          AND (estado IS NULL OR estado <> 'CERRADO')`,
+      [fechaResolucion, horaResolucion, id]
+    );
+
+    if (!updateResult.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ mensaje: "Ya está cerrado." });
+    }
+
+    const usuarioId = getAuthenticatedUserId(req);
+
+    await client.query(
+      `INSERT INTO seguimiento_fallos (
+         fallo_id,
+         verificacion_cierre_id,
+         novedad_detectada,
+         fecha_creacion
+       ) VALUES ($1, $2, $3, NOW())`,
+      [id, usuarioId, novedad]
+    );
+
+    await client.query("COMMIT");
+
+    const fallo = await fetchFalloById(client, id);
+    return res.json(fallo);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error al cerrar el fallo técnico:", error);
+    return res
+      .status(500)
+      .json({ mensaje: "Ocurrió un error al cerrar el fallo técnico." });
   } finally {
     client.release();
   }
@@ -803,13 +974,13 @@ export const getHistorialFallo = async (req, res) => {
          sf.novedad_detectada,
          sf.fecha_creacion,
          sf.fecha_actualizacion,
-         COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
-         COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre
-       FROM seguimiento_fallos sf
-       LEFT JOIN usuarios apertura ON apertura.id = sf.verificacion_apertura_id
-       LEFT JOIN usuarios cierre ON cierre.id = sf.verificacion_cierre_id
-       WHERE sf.fallo_id = $1
-       ORDER BY sf.fecha_creacion ASC`,
+       COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
+       COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre
+      FROM seguimiento_fallos sf
+      LEFT JOIN usuarios apertura ON apertura.id = sf.verificacion_apertura_id
+      LEFT JOIN usuarios cierre ON cierre.id = sf.verificacion_cierre_id
+      WHERE sf.fallo_id = $1
+      ORDER BY sf.fecha_creacion DESC`,
       [id]
     );
 
@@ -862,18 +1033,9 @@ export const eliminarFalloTecnico = async (req, res) => {
       return res.status(404).json({ mensaje: "El fallo técnico no existe." });
     }
 
-    const fallo = falloResult.rows[0];
-    const esAdministrador = isAdministratorRole(req);
-
     if (!isAdminUser(req)) {
       return res.status(403).json({
-        mensaje: "Solo un usuario administrador puede eliminar fallos cerrados.",
-      });
-    }
-
-    if (!esAdministrador && fallo.estado !== "CERRADO") {
-      return res.status(400).json({
-        mensaje: "Solo se pueden eliminar fallos cerrados.",
+        mensaje: "Solo un usuario administrador puede eliminar fallos técnicos.",
       });
     }
 
