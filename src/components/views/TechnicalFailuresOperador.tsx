@@ -126,6 +126,7 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [tiposEquipoAfectado, setTiposEquipoAfectado] = useState<
     Array<{ id: number; nombre: string }>
   >([]);
+  const [nodoSitioError, setNodoSitioError] = useState<string | null>(null);
 
   const getSelectedDispositivo = (camaraValue: string) => {
     if (!camaraValue) return null;
@@ -475,21 +476,28 @@ const TechnicalFailuresOperador: React.FC = () => {
     setFormData(newValues);
     validate(newValues);
     setSitio(null);
+    setNodoSitioError(null);
 
     if (normalizedId) {
       try {
         const data = await getNodoSitio(normalizedId);
         setSitio(data);
+        setNodoSitioError(null);
       } catch (error) {
         if (hasHttpStatusResponse(error) && error.response?.status === 404) {
-          setSitio({ nombre: 'No asignado' });
+          setSitio(null);
+          setNodoSitioError(
+            "El nodo seleccionado no tiene un sitio asignado. Primero asigne el nodo a un sitio en la opción 'Asignación Nodos-Sitios'."
+          );
           return;
         }
         console.error('No se pudo obtener el sitio asociado al nodo seleccionado:', error);
         setSitio(null);
+        setNodoSitioError('No se pudo obtener el sitio asociado al nodo seleccionado.');
       }
     } else {
       setSitio(null);
+      setNodoSitioError(null);
     }
   };
 
@@ -545,6 +553,7 @@ const TechnicalFailuresOperador: React.FC = () => {
     setCliente(null);
     setClienteFromConsole(null);
     setSitio(null);
+    setNodoSitioError(null);
   };
 
   const handleSitioChange = (selected: string) => {
@@ -627,13 +636,35 @@ const TechnicalFailuresOperador: React.FC = () => {
       return;
     }
 
-    if (formData.affectationType === 'Nodo' && (!cliente || cliente === 'Cliente no encontrado')) {
-      alert('Debe seleccionar un nodo válido vinculado a un cliente.');
-      return;
+    if (formData.affectationType === 'Nodo') {
+      if (!formData.nodo) {
+        alert('Debe seleccionar un nodo.');
+        return;
+      }
+
+      if (nodoSitioError || !sitio) {
+        alert(
+          nodoSitioError ??
+            "El nodo seleccionado no tiene un sitio asignado. Primero asigne el nodo a un sitio en la opción 'Asignación Nodos-Sitios'."
+        );
+        return;
+      }
+
+      if (!cliente || cliente === 'Cliente no encontrado') {
+        alert('Debe seleccionar un nodo válido vinculado a un cliente.');
+        return;
+      }
+    }
+
+    if (formData.affectationType !== 'Nodo') {
+      setNodoSitioError(null);
     }
 
     let equipo_afectado = 'N/A';
-    const sitioNombre = selectedSitio?.nombre ?? '';
+    const sitioNombre =
+      formData.affectationType === 'Nodo'
+        ? sitio?.nombre ?? ''
+        : selectedSitio?.nombre ?? '';
     if (formData.affectationType === 'Nodo') {
       equipo_afectado = selectedNodo?.nombre || 'N/A';
     } else if (formData.affectationType === 'Equipo') {
@@ -699,7 +730,12 @@ const TechnicalFailuresOperador: React.FC = () => {
       tipo_equipo_afectado_id: tipoEquipoAfectadoIdPayload,
       nodo: formData.nodo,
       sitio: sitioNombre,
-      sitio_id: selectedSitio ? selectedSitio.id : undefined,
+      sitio_id:
+        formData.affectationType === 'Nodo'
+          ? sitio?.id
+          : selectedSitio
+            ? selectedSitio.id
+            : undefined,
       consola: session.console,
       reportadoCliente: formData.reportadoCliente,
       camara: formData.camara,
@@ -809,13 +845,14 @@ const TechnicalFailuresOperador: React.FC = () => {
               {nodosError && (
                 <p className="text-red-500 text-xs mt-1">{nodosError}</p>
               )}
-              {sitio && (
-                <div className="d-flex justify-content-end mt-2">
-                  <span
-                    className="badge bg-primary-subtle text-primary fw-semibold px-3 py-2 rounded-pill"
-                    style={{ fontSize: '0.9rem' }}
-                  >
-                    → Sitio: {sitio.nombre}
+              {nodoSitioError && (
+                <p className="text-red-500 text-sm mt-2">{nodoSitioError}</p>
+              )}
+              {sitio && !nodoSitioError && (
+                <div className="mt-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    → Sitio: {sitio.id ? `${sitio.id} - ` : ''}
+                    {sitio.nombre}
                   </span>
                 </div>
               )}
