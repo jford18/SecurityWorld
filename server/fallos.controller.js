@@ -410,7 +410,6 @@ export const cerrarFalloTecnico = async (req, res) => {
       `UPDATE fallos_tecnicos
           SET fecha_resolucion = $1,
               hora_resolucion = $2,
-              estado = 'CERRADO',
               fecha_actualizacion = NOW()
         WHERE id = $3
           AND (estado IS NULL OR estado <> 'CERRADO')`,
