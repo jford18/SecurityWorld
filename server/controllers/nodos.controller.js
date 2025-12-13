@@ -46,14 +46,14 @@ export const getSitioByNodo = async (req, res) => {
     const query = `
       SELECT
         S.id,
-        S.codigo,
-        S.nombre
+        S.nombre,
+        S.descripcion,
+        S.cliente_id
       FROM nodos_sitios NS
       INNER JOIN sitios S ON (S.id = NS.sitio_id)
       WHERE NS.nodo_id = $1
-        AND NS.activo = TRUE
         AND S.activo = TRUE
-      ORDER BY S.codigo;
+      ORDER BY S.nombre;
     `;
     const result = await pool.query(query, [id]);
     res.json(result.rows);
