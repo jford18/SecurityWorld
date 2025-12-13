@@ -653,11 +653,6 @@ const TechnicalFailuresOperador: React.FC = () => {
         );
         return;
       }
-
-      if (!cliente || cliente === 'Cliente no encontrado') {
-        alert('Debe seleccionar un nodo válido vinculado a un cliente.');
-        return;
-      }
     }
 
     if (formData.affectationType !== 'Nodo') {
