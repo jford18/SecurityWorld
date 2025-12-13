@@ -427,10 +427,11 @@ export const cerrarFalloTecnico = async (req, res) => {
       `INSERT INTO seguimiento_fallos (
          fallo_id,
          verificacion_cierre_id,
+         responsable_verificacion_cierre_id,
          novedad_detectada,
          fecha_creacion
-       ) VALUES ($1, $2, $3, NOW())`,
-      [id, usuarioId, novedad]
+       ) VALUES ($1, $2, $3, $4, NOW())`,
+      [id, usuarioId, usuarioId, novedad]
     );
 
     await client.query("COMMIT");
