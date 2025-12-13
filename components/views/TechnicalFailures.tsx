@@ -305,8 +305,8 @@ const TechnicalFailures: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (validate()) {
-       if(formData.affectationType === 'Nodo' && (!cliente || cliente === 'Cliente no encontrado')) {
-         alert('Debe seleccionar un nodo válido vinculado a un cliente.');
+       if(formData.affectationType === 'Nodo' && !formData.nodo) {
+         alert('Debe seleccionar un nodo.');
          return;
        }
 

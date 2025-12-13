@@ -301,6 +301,9 @@ export const createFallo = async (req, res) => {
     novedadDetectada,
     sitio_id: rawSitioId,
     sitioId: rawSitioIdCamel,
+    nodo,
+    nodoId,
+    nodo_id: nodoIdSnake,
   } = req.body || {};
 
   const { fecha: fechaFalloValue, hora: horaFalloValue } = resolveFechaHoraFallo({
@@ -373,6 +376,18 @@ export const createFallo = async (req, res) => {
     rawTipoAfectacion === undefined || rawTipoAfectacion === null
       ? null
       : String(rawTipoAfectacion).trim() || null;
+
+  const nodoIdentificador =
+    nodo === undefined || nodo === null || nodo === ""
+      ? nodoId ?? nodoIdSnake
+      : nodo;
+
+  if (
+    tipoAfectacionValue?.toLowerCase() === "nodo" &&
+    (nodoIdentificador === undefined || nodoIdentificador === null || nodoIdentificador === "")
+  ) {
+    return res.status(400).json({ mensaje: "Debe seleccionar un nodo." });
+  }
 
   const client = await pool.connect();
 
