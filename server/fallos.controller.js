@@ -657,27 +657,21 @@ export const createFallo = async (req, res) => {
     const verificacionAperturaId = toNullableUserId(usuarioId);
     const verificacionCierreId = findUserId(usuarios, verificacionCierre);
 
-    if (
-      verificacionAperturaId ||
-      verificacionCierreId ||
-      novedadDetectada
-    ) {
-      await client.query(
-        `INSERT INTO seguimiento_fallos (
-          fallo_id,
-          verificacion_apertura_id,
-          verificacion_cierre_id,
-          novedad_detectada,
-          fecha_creacion
-        ) VALUES ($1, $2, $3, $4, NOW())`,
-        [
-          falloId,
-          verificacionAperturaId ?? null,
-          verificacionCierreId ?? null,
-          novedadDetectada || null,
-        ]
-      );
-    }
+    await client.query(
+      `INSERT INTO seguimiento_fallos (
+        fallo_id,
+        verificacion_apertura_id,
+        verificacion_cierre_id,
+        novedad_detectada,
+        fecha_creacion
+      ) VALUES ($1, $2, $3, $4, NOW())`,
+      [
+        falloId,
+        verificacionAperturaId ?? null,
+        verificacionCierreId ?? null,
+        novedadDetectada || null,
+      ]
+    );
 
     await client.query("COMMIT");
 
