@@ -635,7 +635,20 @@ export const createFallo = async (req, res) => {
       throw new Error("No se pudo crear el fallo técnico.");
     }
 
-    const usuarioId = getAuthenticatedUserId(req);
+    const usuarioId = toNullableUserId(
+      req.user?.id ||
+        req.user?.userId ||
+        req.user?.usuario_id ||
+        req.usuario?.id ||
+        req.usuario?.usuario_id
+    );
+
+    if (!usuarioId) {
+      await client.query("ROLLBACK");
+      return res.status(401).json({
+        mensaje: "No hay un usuario autenticado para registrar el fallo técnico.",
+      });
+    }
 
     await client.query(
       `INSERT INTO seguimiento_fallos (
