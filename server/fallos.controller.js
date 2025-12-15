@@ -104,14 +104,12 @@ const toNullableUserId = (v) => {
 
 const getAuthenticatedUserId = (req) =>
   toNullableUserId(
-    req.user?.id ||
+    req.user?.usuario_id ||
+      req.user?.id ||
       req.user?.userId ||
-      req.user?.usuario_id ||
-      req.usuario?.id ||
       req.usuario?.usuario_id ||
-      req.headers["x-user-id"] ||
-      req.headers["x-usuario-id"] ||
-      req.body?.ultimoUsuarioEditoId
+      req.usuario?.id ||
+      req.usuario?.userId
   );
 
 const normalizeRoleName = (req) => {
@@ -640,10 +638,10 @@ export const createFallo = async (req, res) => {
     const usuarioId = getAuthenticatedUserId(req);
 
     if (!usuarioId) {
-      await client.query("ROLLBACK");
-      return res.status(401).json({
-        mensaje: "No hay un usuario autenticado para registrar el fallo técnico.",
-      });
+      console.warn(
+        "[FALLOS] Solicitud pasó autenticación pero no se pudo determinar el usuario.",
+        { headers: req.headers }
+      );
     }
 
     await client.query(

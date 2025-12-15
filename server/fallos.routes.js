@@ -9,11 +9,12 @@ import {
   guardarCambiosFallo,
   cerrarFalloTecnico,
 } from "./fallos.controller.js";
+import verifyToken from "./middlewares/auth.middleware.js";
 
 const router = Router();
 
 router.get("/", getFallos);
-router.post("/", createFallo);
+router.post("/", verifyToken, createFallo);
 router.get("/:id/duracion", getDuracionFallo);
 router.get("/:id/historial", getHistorialFallo);
 router.patch("/:id/guardar-cambios", guardarCambiosFallo);
