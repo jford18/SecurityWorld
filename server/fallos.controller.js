@@ -107,6 +107,8 @@ const getAuthenticatedUserId = (req) =>
     req.user?.id ||
       req.user?.userId ||
       req.user?.usuario_id ||
+      req.usuario?.id ||
+      req.usuario?.usuario_id ||
       req.headers["x-user-id"] ||
       req.headers["x-usuario-id"] ||
       req.body?.ultimoUsuarioEditoId
@@ -635,13 +637,7 @@ export const createFallo = async (req, res) => {
       throw new Error("No se pudo crear el fallo técnico.");
     }
 
-    const usuarioId = toNullableUserId(
-      req.user?.id ||
-        req.user?.userId ||
-        req.user?.usuario_id ||
-        req.usuario?.id ||
-        req.usuario?.usuario_id
-    );
+    const usuarioId = getAuthenticatedUserId(req);
 
     if (!usuarioId) {
       await client.query("ROLLBACK");
