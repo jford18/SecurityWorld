@@ -474,6 +474,7 @@ export const createFallo = async (req, res) => {
     nodo,
     nodoId,
     nodo_id: nodoIdSnake,
+    usuarioId,
   } = req.body || {};
 
   const { fecha: fechaFalloValue, hora: horaFalloValue } = resolveFechaHoraFallo({
@@ -653,7 +654,7 @@ export const createFallo = async (req, res) => {
       throw new Error("No se pudo crear el fallo técnico.");
     }
 
-    const verificacionAperturaId = findUserId(usuarios, verificacionApertura);
+    const verificacionAperturaId = toNullableUserId(usuarioId);
     const verificacionCierreId = findUserId(usuarios, verificacionCierre);
 
     if (

@@ -35,6 +35,7 @@ export interface TechnicalFailurePayload {
   verificacionCierre?: string;
   verificacionCierreId?: string | number | null;
   novedadDetectada?: string;
+  usuarioId?: number | string | null;
   ultimoUsuarioEditoId?: number | string | null;
   responsable_verificacion_cierre_id?: number | string | null;
   reportadoCliente?: boolean;
@@ -131,7 +132,16 @@ export const createFallo = async (
   payload: TechnicalFailurePayload,
   context?: RequestContext,
 ): Promise<TechnicalFailure> => {
-  const { data } = await apiClient.post<TechnicalFailure>('/fallos', payload, {
+  const storedUser = localStorage.getItem('user');
+  const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+  const usuarioId = parsedUser?.usuario_id ?? parsedUser?.id ?? null;
+
+  const body = {
+    ...payload,
+    usuarioId,
+  };
+
+  const { data } = await apiClient.post<TechnicalFailure>('/fallos', body, {
     headers: buildRoleHeaders(context),
   });
   return data;
