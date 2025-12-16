@@ -771,15 +771,18 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       }
 
       const novedad = updatedFailure.novedadDetectada?.trim() || null;
+      const responsableVerificacionCierreId =
+        updatedFailure.responsable_verificacion_cierre_id ??
+        (updatedFailure as any).responsableVerificacionCierreId ??
+        null;
 
       try {
         setIsSubmitting(true);
-        console.log("[Supervisor] Cerrar fallo, payload enviado:", {
+        console.log("[Supervisor] Payload cerrar fallo:", {
           fecha_resolucion: resolutionDate,
           hora_resolucion: resolutionTime,
           novedad_detectada: novedad,
-          responsable_verificacion_cierre_id:
-            updatedFailure.responsable_verificacion_cierre_id,
+          responsable_verificacion_cierre_id: responsableVerificacionCierreId,
         });
         const saved = await cerrarFallo(
           updatedFailure.id,
@@ -787,8 +790,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
             fecha_resolucion: resolutionDate,
             hora_resolucion: resolutionTime,
             novedad_detectada: novedad,
-            responsable_verificacion_cierre_id:
-              updatedFailure.responsable_verificacion_cierre_id,
+            responsable_verificacion_cierre_id: responsableVerificacionCierreId,
           },
           roleContext,
         );
