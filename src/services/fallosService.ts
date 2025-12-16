@@ -212,9 +212,21 @@ export const guardarCambiosFallo = async (
   payload: { departamento_id?: number | string | null; novedad_detectada?: string | null },
   context?: RequestContext,
 ) => {
+  const ultimoUsuarioEditoId = resolveAuthenticatedUserIdFromLocalStorage();
+
+  console.log(
+    "[fallosService] ultimoUsuarioEditoId que se envía:",
+    ultimoUsuarioEditoId,
+  );
+
+  const body = {
+    ...payload,
+    ultimoUsuarioEditoId,
+  };
+
   const { data } = await apiClient.patch<TechnicalFailure>(
     `/fallos/${id}/guardar-cambios`,
-    payload,
+    body,
     {
       headers: buildRoleHeaders(context),
     },
@@ -225,10 +237,27 @@ export const guardarCambiosFallo = async (
 
 export const cerrarFallo = async (
   id: string,
-  payload: { fecha_resolucion: string; hora_resolucion: string; novedad_detectada?: string | null },
+  payload: {
+    fecha_resolucion: string;
+    hora_resolucion: string;
+    novedad_detectada?: string | null;
+    responsable_verificacion_cierre_id?: number | string | null;
+  },
   context?: RequestContext,
 ) => {
-  const { data } = await apiClient.post<TechnicalFailure>(`/fallos/${id}/cerrar`, payload, {
+  const ultimoUsuarioEditoId = resolveAuthenticatedUserIdFromLocalStorage();
+
+  console.log(
+    "[fallosService] ultimoUsuarioEditoId que se envía:",
+    ultimoUsuarioEditoId,
+  );
+
+  const body = {
+    ...payload,
+    ultimoUsuarioEditoId,
+  };
+
+  const { data } = await apiClient.post<TechnicalFailure>(`/fallos/${id}/cerrar`, body, {
     headers: buildRoleHeaders(context),
   });
 

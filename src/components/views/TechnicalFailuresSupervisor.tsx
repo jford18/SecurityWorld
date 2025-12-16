@@ -733,6 +733,10 @@ const TechnicalFailuresSupervisor: React.FC = () => {
 
       try {
         setIsSubmitting(true);
+        console.log("[Supervisor] Guardar cambios, payload enviado:", {
+          departamento_id: departamentoId,
+          novedad_detectada: novedad,
+        });
         const saved = await guardarCambiosFallo(
           updatedFailure.id,
           {
@@ -770,12 +774,21 @@ const TechnicalFailuresSupervisor: React.FC = () => {
 
       try {
         setIsSubmitting(true);
+        console.log("[Supervisor] Cerrar fallo, payload enviado:", {
+          fecha_resolucion: resolutionDate,
+          hora_resolucion: resolutionTime,
+          novedad_detectada: novedad,
+          responsable_verificacion_cierre_id:
+            updatedFailure.responsable_verificacion_cierre_id,
+        });
         const saved = await cerrarFallo(
           updatedFailure.id,
           {
             fecha_resolucion: resolutionDate,
             hora_resolucion: resolutionTime,
             novedad_detectada: novedad,
+            responsable_verificacion_cierre_id:
+              updatedFailure.responsable_verificacion_cierre_id,
           },
           roleContext,
         );
