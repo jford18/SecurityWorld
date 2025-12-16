@@ -32,6 +32,9 @@ const IntrusionsAdministrador: React.FC = () => {
   }, [loadIntrusions]);
 
   const handleDelete = async (intrusionId: number | null) => {
+    const confirmado = window.confirm('¿Está seguro que desea eliminar esta intrusión?');
+    if (!confirmado) return;
+
     if (!intrusionId) return;
 
     try {
