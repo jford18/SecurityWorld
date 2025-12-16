@@ -666,6 +666,21 @@ export const createFallo = async (req, res) => {
       tipoAfectacionValue
     );
 
+    const usuarioDesdeBody = toNullableUserId(usuarioId);
+    const usuarioDesdeRequest = getAuthenticatedUserId(req); // puede venir en 0/null si no hay auth
+    let verificacionAperturaId = usuarioDesdeBody || usuarioDesdeRequest || null;
+
+    // Fallback final: si no se pudo determinar el usuario autenticado,
+    // usa el mismo responsableId (mejor que dejar NULL).
+    if (!verificacionAperturaId && responsableId) {
+      verificacionAperturaId = responsableId;
+    }
+
+    console.log("[createFallo] usuarioDesdeBody:", usuarioDesdeBody);
+    console.log("[createFallo] usuarioDesdeRequest:", usuarioDesdeRequest);
+    console.log("[createFallo] responsableId:", responsableId);
+    console.log("[createFallo] verificacionAperturaId FINAL:", verificacionAperturaId);
+
     const insertResult = await client.query(
       `INSERT INTO fallos_tecnicos (
         fecha,
@@ -708,12 +723,6 @@ export const createFallo = async (req, res) => {
     if (!falloId) {
       throw new Error("No se pudo crear el fallo técnico.");
     }
-
-    const verificacionAperturaId = toNullableUserId(usuarioId);
-    console.log(
-      "[createFallo] verificacionAperturaId (desde usuarioId):",
-      verificacionAperturaId
-    );
 
     const seguimientoInsert = await client.query(
       `

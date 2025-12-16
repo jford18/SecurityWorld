@@ -128,17 +128,55 @@ const buildRoleHeaders = (context?: RequestContext) => {
   return headers;
 };
 
+const resolveAuthenticatedUserIdFromLocalStorage = (): number | null => {
+  const storedUser = localStorage.getItem("user");
+  if (!storedUser) {
+    console.warn("[fallosService] No hay nada en localStorage['user']");
+    return null;
+  }
+
+  try {
+    const parsed: any = JSON.parse(storedUser);
+
+    const candidateValues = [
+      parsed.usuario_id,
+      parsed.id,
+      parsed.usuarioId,
+      parsed.user?.id,
+      parsed.usuario?.id,
+      parsed.usuario?.usuario_id,
+    ];
+
+    for (const value of candidateValues) {
+      const n = Number(value);
+      if (Number.isFinite(n) && n > 0) {
+        console.log(
+          "[fallosService] Usuario autenticado resuelto desde localStorage:",
+          n,
+        );
+        return n;
+      }
+    }
+
+    console.warn(
+      "[fallosService] No se pudo resolver un usuarioId válido desde localStorage['user']:",
+      parsed,
+    );
+    return null;
+  } catch (error) {
+    console.error("[fallosService] Error al parsear localStorage['user']:", error, storedUser);
+    return null;
+  }
+};
+
 export const createFallo = async (
   payload: TechnicalFailurePayload,
   context?: RequestContext,
 ): Promise<TechnicalFailure> => {
-  console.log('[fallosService.createFallo] payload recibido:', payload);
-  const storedUser = localStorage.getItem('user');
-  console.log('[fallosService.createFallo] storedUser (localStorage):', storedUser);
-  const parsedUser = storedUser ? JSON.parse(storedUser) : null;
-  console.log('[fallosService.createFallo] parsedUser:', parsedUser);
-  const usuarioId = parsedUser?.usuario_id ?? parsedUser?.id ?? null;
-  console.log('[fallosService.createFallo] usuarioId que viaja al backend:', usuarioId);
+  const usuarioId = resolveAuthenticatedUserIdFromLocalStorage();
+
+  console.log('[fallosService.createFallo] payload:', payload);
+  console.log('[fallosService.createFallo] usuarioId que se enviará:', usuarioId);
 
   const body = {
     ...payload,
