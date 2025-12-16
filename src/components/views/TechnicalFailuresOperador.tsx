@@ -509,9 +509,11 @@ const TechnicalFailuresOperador: React.FC = () => {
     value: string | null,
     helpers: { isoString: string | null; dateValue: Date | null },
   ) => {
+    const updatedValue = value ?? '';
+    setFormData((prev) => ({ ...prev, fechaHoraFallo: updatedValue }));
+
     if (!value) {
       setErrors((prev) => ({ ...prev, fechaHoraFallo: 'La fecha y hora son obligatorias.' }));
-      setFormData((prev) => ({ ...prev, fechaHoraFallo: '' }));
       return;
     }
 
