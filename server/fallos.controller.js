@@ -336,19 +336,26 @@ export const guardarCambiosFallo = async (req, res) => {
         .json({ mensaje: "Fallo cerrado, no editable." });
     }
 
-    const usuarioId = getAuthenticatedUserId(req);
+    const supervisorId = getAuthenticatedUserId(req);
 
-    console.log("[guardarCambiosFallo] usuarioId autenticado:", usuarioId);
+    console.log("[guardarCambiosFallo] supervisorId:", supervisorId);
 
     await client.query(
       `INSERT INTO seguimiento_fallos (
          fallo_id,
          verificacion_apertura_id,
+         verificacion_cierre_id,
          novedad_detectada,
          fecha_creacion,
-         ultimo_usuario_edito_id
-       ) VALUES ($1, $2, $3, NOW(), $4)`,
-      [id, usuarioId, novedad, usuarioId]
+         ultimo_usuario_edito_id,
+         responsable_verificacion_cierre_id,
+         verificacion_supervisor_id
+       ) VALUES ($1, NULL, NULL, $2, NOW(), $3, NULL, $3)`,
+      [
+        id,
+        novedad,
+        supervisorId,
+      ]
     );
 
     console.log(
@@ -377,6 +384,7 @@ export const cerrarFalloTecnico = async (req, res) => {
     fecha_resolucion: fechaResolucion,
     hora_resolucion: horaResolucion,
     novedad_detectada: novedadDetectada,
+    responsable_verificacion_cierre_id: responsableVerificacionCierreIdRaw,
   } = req.body || {};
 
   console.log("[cerrarFalloTecnico] body:", req.body);
@@ -433,9 +441,16 @@ export const cerrarFalloTecnico = async (req, res) => {
       return res.status(400).json({ mensaje: "Ya está cerrado." });
     }
 
-    const usuarioId = getAuthenticatedUserId(req);
+    const usuarioCierreId = getAuthenticatedUserId(req);
+    const responsableVerificacionCierreId = toNullableUserId(
+      responsableVerificacionCierreIdRaw
+    );
 
-    console.log("[cerrarFalloTecnico] usuarioId autenticado:", usuarioId);
+    console.log("[cerrarFalloTecnico] usuarioCierreId:", usuarioCierreId);
+    console.log(
+      "[cerrarFalloTecnico] responsableVerificacionCierreId:",
+      responsableVerificacionCierreId
+    );
 
     await client.query(
       `INSERT INTO seguimiento_fallos (
@@ -445,14 +460,14 @@ export const cerrarFalloTecnico = async (req, res) => {
          novedad_detectada,
          fecha_creacion,
          ultimo_usuario_edito_id,
-        responsable_verificacion_cierre_id
-      ) VALUES ($1, NULL, $2, $3, NOW(), $4, $5)`,
+         responsable_verificacion_cierre_id,
+         verificacion_supervisor_id
+       ) VALUES ($1, NULL, $2, $3, NOW(), $2, $4, NULL)`,
       [
         id,
-        usuarioId, // verificacion_cierre_id
-        novedad, // novedad_detectada
-        usuarioId, // ultimo_usuario_edito_id
-        usuarioId, // responsable_verificacion_cierre_id
+        usuarioCierreId,
+        novedad,
+        responsableVerificacionCierreId,
       ]
     );
 
@@ -804,10 +819,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
   }
 
   const client = await pool.connect();
-  const usuarioAutenticadoId = (() => {
-    const parsed = Number(ultimoUsuarioEditoId);
-    return Number.isFinite(parsed) ? parsed : null;
-  })();
+  const usuarioAutenticadoId = getAuthenticatedUserId(req);
   const responsableVerificacionCierreId = toNullableUserId(
     responsable_verificacion_cierre_id
   );
