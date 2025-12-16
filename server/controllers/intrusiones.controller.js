@@ -560,6 +560,33 @@ export const updateIntrusion = async (req, res) => {
   }
 };
 
+export const deleteIntrusion = async (req, res) => {
+  const { id } = req.params;
+  const parsedId = Number(id);
+
+  if (!Number.isInteger(parsedId)) {
+    return res
+      .status(400)
+      .json({ mensaje: "El identificador de la intrusión no es válido." });
+  }
+
+  try {
+    const result = await pool.query(
+      "DELETE FROM public.intrusiones WHERE id = $1",
+      [parsedId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ mensaje: "Intrusión no encontrada" });
+    }
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error("Error al eliminar intrusión:", error);
+    return res.status(500).json({ mensaje: "Error al eliminar la intrusión." });
+  }
+};
+
 export const getConsolidadoIntrusiones = async (req, res) => {
   const {
     fechaDesde,

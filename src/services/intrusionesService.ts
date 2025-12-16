@@ -248,6 +248,7 @@ export const updateIntrusion = async (
   return normalized;
 };
 
-export const deleteIntrusion = async (id: number | string): Promise<void> => {
-  await apiClient.delete(`/intrusiones/${id}`);
+export const deleteIntrusion = async (id: number): Promise<unknown> => {
+  const response = await apiClient.delete(`/intrusiones/${id}`);
+  return response.data;
 };
