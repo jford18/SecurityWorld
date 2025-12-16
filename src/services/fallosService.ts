@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import { getCurrentUserIdFromStorage } from '../utils/currentUser';
 import {
   CatalogoDepartamento,
   CatalogoNodo,
@@ -128,52 +129,11 @@ const buildRoleHeaders = (context?: RequestContext) => {
   return headers;
 };
 
-const resolveAuthenticatedUserIdFromLocalStorage = (): number | null => {
-  const storedUser = localStorage.getItem("user");
-  if (!storedUser) {
-    console.warn("[fallosService] No hay nada en localStorage['user']");
-    return null;
-  }
-
-  try {
-    const parsed: any = JSON.parse(storedUser);
-
-    const candidateValues = [
-      parsed.usuario_id,
-      parsed.id,
-      parsed.usuarioId,
-      parsed.user?.id,
-      parsed.usuario?.id,
-      parsed.usuario?.usuario_id,
-    ];
-
-    for (const value of candidateValues) {
-      const n = Number(value);
-      if (Number.isFinite(n) && n > 0) {
-        console.log(
-          "[fallosService] Usuario autenticado resuelto desde localStorage:",
-          n,
-        );
-        return n;
-      }
-    }
-
-    console.warn(
-      "[fallosService] No se pudo resolver un usuarioId válido desde localStorage['user']:",
-      parsed,
-    );
-    return null;
-  } catch (error) {
-    console.error("[fallosService] Error al parsear localStorage['user']:", error, storedUser);
-    return null;
-  }
-};
-
 export const createFallo = async (
   payload: TechnicalFailurePayload,
   context?: RequestContext,
 ): Promise<TechnicalFailure> => {
-  const usuarioId = resolveAuthenticatedUserIdFromLocalStorage();
+  const usuarioId = getCurrentUserIdFromStorage();
 
   console.log('[fallosService.createFallo] payload:', payload);
   console.log('[fallosService.createFallo] usuarioId que se enviará:', usuarioId);
@@ -212,7 +172,7 @@ export const guardarCambiosFallo = async (
   payload: { departamento_id?: number | string | null; novedad_detectada?: string | null },
   context?: RequestContext,
 ) => {
-  const ultimoUsuarioEditoId = resolveAuthenticatedUserIdFromLocalStorage();
+  const ultimoUsuarioEditoId = getCurrentUserIdFromStorage();
 
   console.log("[fallosService.updateSupervisor] payload original:", payload);
 
@@ -251,14 +211,14 @@ export const cerrarFallo = async (
   },
   context?: RequestContext,
 ) => {
-  const ultimoUsuarioEditoId = resolveAuthenticatedUserIdFromLocalStorage();
+  const ultimoUsuarioEditoId = getCurrentUserIdFromStorage();
 
   const body = {
     ...payload,
     ultimoUsuarioEditoId,
     responsable_verificacion_cierre_id:
-      (payload as any).responsableVerificacionCierreId ??
       (payload as any).responsable_verificacion_cierre_id ??
+      (payload as any).responsableVerificacionCierreId ??
       null,
   };
 
