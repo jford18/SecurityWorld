@@ -280,7 +280,7 @@ export const guardarCambiosFallo = async (req, res) => {
   const { id } = req.params;
   const { departamento_id, novedad_detectada } = req.body || {};
 
-  console.log("[guardarCambiosFallo] body:", req.body);
+  console.log("[guardarCambiosFallo] BODY COMPLETO:", req.body);
 
   if (!id) {
     return res
@@ -339,6 +339,7 @@ export const guardarCambiosFallo = async (req, res) => {
     const supervisorId = getAuthenticatedUserId(req);
 
     console.log("[guardarCambiosFallo] supervisorId:", supervisorId);
+    console.log("[guardarCambiosFallo] novedad:", novedad);
 
     await client.query(
       `INSERT INTO seguimiento_fallos (
@@ -360,7 +361,9 @@ export const guardarCambiosFallo = async (req, res) => {
 
     console.log(
       "[guardarCambiosFallo] seguimiento_fallos insertado para fallo_id:",
-      id
+      id,
+      "con verificacion_supervisor_id:",
+      supervisorId,
     );
 
     await client.query("COMMIT");
@@ -387,7 +390,7 @@ export const cerrarFalloTecnico = async (req, res) => {
     responsable_verificacion_cierre_id: responsableVerificacionCierreIdRaw,
   } = req.body || {};
 
-  console.log("[cerrarFalloTecnico] body:", req.body);
+  console.log("[cerrarFalloTecnico] BODY COMPLETO:", req.body);
 
   if (!id) {
     return res
@@ -448,7 +451,11 @@ export const cerrarFalloTecnico = async (req, res) => {
 
     console.log("[cerrarFalloTecnico] usuarioCierreId:", usuarioCierreId);
     console.log(
-      "[cerrarFalloTecnico] responsableVerificacionCierreId:",
+      "[cerrarFalloTecnico] responsableVerificacionCierreIdRaw:",
+      responsableVerificacionCierreIdRaw
+    );
+    console.log(
+      "[cerrarFalloTecnico] responsableVerificacionCierreId (normalizado):",
       responsableVerificacionCierreId
     );
 
@@ -473,7 +480,11 @@ export const cerrarFalloTecnico = async (req, res) => {
 
     console.log(
       "[cerrarFalloTecnico] seguimiento_fallos insertado para fallo_id:",
-      id
+      id,
+      "con verificacion_cierre_id:",
+      usuarioCierreId,
+      "y responsable_verificacion_cierre_id:",
+      responsableVerificacionCierreId
     );
 
     await client.query("COMMIT");
