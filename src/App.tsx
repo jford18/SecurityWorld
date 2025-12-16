@@ -93,6 +93,7 @@ import TechnicalFailuresSupervisor from './components/views/TechnicalFailuresSup
 import TechnicalFailuresConsultas from './components/views/TechnicalFailuresConsultas';
 import TechnicalFailuresAdministrador from './components/views/TechnicalFailuresAdministrador';
 import IntrusionsConsolidated from './components/views/IntrusionsConsolidated';
+import IntrusionsAdministrador from './components/views/IntrusionsAdministrador';
 
 interface RouteDefinition {
   path: string;
@@ -122,6 +123,7 @@ const routeConfig: RouteDefinition[] = [
     element: <IntrusionsConsolidated />,
   },
   { path: '/intrusiones', element: <Intrusions /> },
+  { path: '/intrusiones-administrador', element: <IntrusionsAdministrador /> },
   { path: '/reportes/alertas-turno', element: <AlertsReportByShift /> },
   { path: '/reportes/informe-eventos', element: <InformeEventosScreen /> },
   { path: '/administracion/sitios', element: <Sitios /> },
