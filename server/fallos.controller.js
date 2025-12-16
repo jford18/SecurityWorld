@@ -341,9 +341,10 @@ export const guardarCambiosFallo = async (req, res) => {
          fallo_id,
          verificacion_apertura_id,
          novedad_detectada,
-         fecha_creacion
-       ) VALUES ($1, $2, $3, NOW())`,
-      [id, usuarioId, novedad]
+         fecha_creacion,
+         ultimo_usuario_edito_id
+       ) VALUES ($1, $2, $3, NOW(), $4)`,
+      [id, usuarioId, novedad, usuarioId]
     );
 
     await client.query("COMMIT");
@@ -426,11 +427,20 @@ export const cerrarFalloTecnico = async (req, res) => {
     await client.query(
       `INSERT INTO seguimiento_fallos (
          fallo_id,
+         verificacion_apertura_id,
          verificacion_cierre_id,
          novedad_detectada,
-         fecha_creacion
-       ) VALUES ($1, $2, $3, NOW())`,
-      [id, usuarioId, novedad]
+         fecha_creacion,
+         ultimo_usuario_edito_id,
+        responsable_verificacion_cierre_id
+      ) VALUES ($1, NULL, $2, $3, NOW(), $4, $5)`,
+      [
+        id,
+        usuarioId, // verificacion_cierre_id
+        novedad, // novedad_detectada
+        usuarioId, // ultimo_usuario_edito_id
+        usuarioId, // responsable_verificacion_cierre_id
+      ]
     );
 
     await client.query("COMMIT");
@@ -846,14 +856,16 @@ export const actualizarFalloSupervisor = async (req, res) => {
                novedad_detectada = $3,
                ultimo_usuario_edito_id = $4,
                responsable_verificacion_cierre_id = COALESCE($5, responsable_verificacion_cierre_id),
+               verificacion_supervisor_id = COALESCE($6, verificacion_supervisor_id),
                fecha_actualizacion = NOW()
-         WHERE fallo_id = $6`,
+         WHERE fallo_id = $7`,
         [
           verificacionAperturaId || null,
           verificacionCierreId || null,
           novedadDetectada || null,
           usuarioAutenticadoId,
           responsableVerificacionCierreId,
+          usuarioAutenticadoId, // supervisor actual
           id,
         ]
       );
@@ -867,8 +879,9 @@ export const actualizarFalloSupervisor = async (req, res) => {
           fecha_creacion,
           fecha_actualizacion,
           ultimo_usuario_edito_id,
-          responsable_verificacion_cierre_id
-        ) VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, $6)`,
+          responsable_verificacion_cierre_id,
+          verificacion_supervisor_id
+        ) VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, $6, $7)`,
         [
           id,
           verificacionAperturaId || null,
@@ -876,6 +889,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
           novedadDetectada || null,
           usuarioAutenticadoId,
           responsableVerificacionCierreId,
+          usuarioAutenticadoId, // supervisor
         ]
       );
     }
