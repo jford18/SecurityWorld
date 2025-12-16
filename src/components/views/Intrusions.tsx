@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import FechaHoraFalloPicker from '../ui/FechaHoraFalloPicker';
+import DateTimeInput, { normalizeDateTimeLocalString } from '../ui/DateTimeInput';
 import { intrusionsData as mockIntrusions } from '../../data/mockData';
 import { Intrusion, IntrusionConsolidadoRow } from '../../types';
 import {
@@ -130,6 +130,8 @@ const getInitialDateTimeValue = () => {
   now.setSeconds(0, 0);
   return now.toISOString();
 };
+
+const getDateTimeInputLimit = () => normalizeDateTimeLocalString(new Date().toISOString());
 
 const buildInitialFormData = (): IntrusionFormData => ({
   fecha_evento: getInitialDateTimeValue(),
@@ -414,24 +416,33 @@ const Intrusions: React.FC = () => {
     };
   }, []);
 
-  const handleFechaEventoChange = (isoValue: string) => {
+  const handleFechaEventoChange = (
+    _value: string | null,
+    helpers: { isoString: string | null },
+  ) => {
     setFormData((prev) => ({
       ...prev,
-      fecha_evento: isoValue,
+      fecha_evento: helpers.isoString ?? '',
     }));
   };
 
-  const handleFechaReaccionChange = (isoValue: string) => {
+  const handleFechaReaccionChange = (
+    _value: string | null,
+    helpers: { isoString: string | null },
+  ) => {
     setFormData((prev) => ({
       ...prev,
-      fecha_reaccion: isoValue,
+      fecha_reaccion: helpers.isoString ?? '',
     }));
   };
 
-  const handleFechaReaccionFueraChange = (isoValue: string) => {
+  const handleFechaReaccionFueraChange = (
+    _value: string | null,
+    helpers: { isoString: string | null },
+  ) => {
     setFormData((prev) => ({
       ...prev,
-      fecha_reaccion_fuera: isoValue,
+      fecha_reaccion_fuera: helpers.isoString ?? '',
     }));
   };
 
@@ -863,23 +874,23 @@ const Intrusions: React.FC = () => {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-4">
-                <FechaHoraFalloPicker
+                <DateTimeInput
                   id="fecha_evento"
                   name="fecha_evento"
                   label="Fecha y hora del evento"
                   value={formData.fecha_evento}
                   onChange={handleFechaEventoChange}
-                  timeIntervalMinutes={1} /* Intervalo de minutos a 1 para Intrusiones */
                   required
+                  max={getDateTimeInputLimit() || undefined}
                 />
-                <FechaHoraFalloPicker
+                <DateTimeInput
                   id="fecha_reaccion"
                   name="fecha_reaccion"
                   label="Fecha hora reacción"
                   value={formData.fecha_reaccion}
                   onChange={handleFechaReaccionChange}
-                  timeIntervalMinutes={1} /* Intervalo de minutos a 1 para Intrusiones */
                   error={fechaReaccionError}
+                  max={getDateTimeInputLimit() || undefined}
                 />
                 <div>
                   <label htmlFor="medio_comunicacion_id" className="block text-sm font-medium text-gray-700">
@@ -1025,14 +1036,14 @@ const Intrusions: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-4">
-                    <FechaHoraFalloPicker
+                    <DateTimeInput
                       id="fecha_reaccion_fuera"
                       name="fecha_reaccion_fuera"
                       label="FECHA Y HORA DE LLEGADA FUERZA DE REACCION"
                       value={formData.fecha_reaccion_fuera}
                       onChange={handleFechaReaccionFueraChange}
-                      timeIntervalMinutes={1}
                       error={fechaReaccionFueraError}
+                      max={getDateTimeInputLimit() || undefined}
                     />
                     <div className="flex items-center gap-3">
                       <input

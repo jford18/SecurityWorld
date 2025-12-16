@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSession } from '../context/SessionContext';
-import FechaHoraFalloPicker from '../ui/FechaHoraFalloPicker';
+import DateTimeInput, { normalizeDateTimeLocalString } from '../ui/DateTimeInput';
 import AutocompleteComboBox from '../ui/AutocompleteComboBox';
 import { TechnicalFailure, TechnicalFailureCatalogs, CatalogoNodo } from '../../types';
 import { Sitio, getSitios } from '../../services/sitiosService';
@@ -505,16 +505,19 @@ const TechnicalFailuresOperador: React.FC = () => {
     }
   };
 
-  const handleFechaHoraFalloChange = (value: string) => {
+  const handleFechaHoraFalloChange = (
+    value: string | null,
+    helpers: { isoString: string | null; dateValue: Date | null },
+  ) => {
     if (!value) {
       setErrors((prev) => ({ ...prev, fechaHoraFallo: 'La fecha y hora son obligatorias.' }));
       setFormData((prev) => ({ ...prev, fechaHoraFallo: '' }));
       return;
     }
 
-    const parsedDateTime = new Date(value);
+    const parsedDateTime = helpers.dateValue ?? new Date(value);
 
-    if (Number.isNaN(parsedDateTime.getTime())) {
+    if (!parsedDateTime || Number.isNaN(parsedDateTime.getTime())) {
       setErrors((prev) => ({ ...prev, fechaHoraFallo: 'Seleccione una fecha y hora válidas.' }));
       return;
     }
@@ -525,12 +528,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       return;
     }
 
-    const [fechaParte, horaParteRaw] = value.split('T');
-    const sanitizedHora = horaParteRaw?.replace('Z', '').split('.')[0] ?? '';
-    const normalizedValue =
-      fechaParte && sanitizedHora
-        ? `${fechaParte}T${sanitizedHora}`
-        : toLocalDateTimeString(parsedDateTime);
+    const normalizedValue = normalizeDateTimeLocalString(value) || toLocalDateTimeString(parsedDateTime);
 
     const newValues: FailureFormData = {
       ...formData,
@@ -1042,13 +1040,15 @@ const TechnicalFailuresOperador: React.FC = () => {
       <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
         <h4 className="text-[#1C2E4A] text-lg font-semibold mb-4">Registrar Nuevo Fallo</h4>
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <FechaHoraFalloPicker
+          <DateTimeInput
             id="fechaHoraFallo"
             name="fechaHoraFallo"
+            label="Fecha y hora del fallo *"
             value={formData.fechaHoraFallo}
             onChange={handleFechaHoraFalloChange}
             required
             error={errors.fechaHoraFallo}
+            max={getLocalDateTimeValue()}
           />
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700">Tipo de Afectación *</label>
