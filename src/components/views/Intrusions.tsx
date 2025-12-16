@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import DateTimeInput, { normalizeDateTimeLocalString } from '../ui/DateTimeInput';
+import DateTimeInput, { normalizeDateTimeLocalString, toIsoString } from '../ui/DateTimeInput';
 import { intrusionsData as mockIntrusions } from '../../data/mockData';
 import { Intrusion, IntrusionConsolidadoRow } from '../../types';
 import {
@@ -128,7 +128,7 @@ type PersonaOption = {
 const getInitialDateTimeValue = () => {
   const now = new Date();
   now.setSeconds(0, 0);
-  return now.toISOString();
+  return normalizeDateTimeLocalString(now.toISOString());
 };
 
 const getDateTimeInputLimit = () => normalizeDateTimeLocalString(new Date().toISOString());
@@ -416,33 +416,24 @@ const Intrusions: React.FC = () => {
     };
   }, []);
 
-  const handleFechaEventoChange = (
-    _value: string | null,
-    helpers: { isoString: string | null },
-  ) => {
+  const handleFechaEventoChange = (value: string | null) => {
     setFormData((prev) => ({
       ...prev,
-      fecha_evento: helpers.isoString ?? '',
+      fecha_evento: value ?? '',
     }));
   };
 
-  const handleFechaReaccionChange = (
-    _value: string | null,
-    helpers: { isoString: string | null },
-  ) => {
+  const handleFechaReaccionChange = (value: string | null) => {
     setFormData((prev) => ({
       ...prev,
-      fecha_reaccion: helpers.isoString ?? '',
+      fecha_reaccion: value ?? '',
     }));
   };
 
-  const handleFechaReaccionFueraChange = (
-    _value: string | null,
-    helpers: { isoString: string | null },
-  ) => {
+  const handleFechaReaccionFueraChange = (value: string | null) => {
     setFormData((prev) => ({
       ...prev,
-      fecha_reaccion_fuera: helpers.isoString ?? '',
+      fecha_reaccion_fuera: value ?? '',
     }));
   };
 
@@ -818,12 +809,16 @@ const Intrusions: React.FC = () => {
         ? null
         : fuerzaReaccionId;
 
+    const fechaEventoIso = toIsoString(formData.fecha_evento);
+    const fechaReaccionIso = toIsoString(formData.fecha_reaccion);
+    const fechaReaccionFueraIso = toIsoString(formData.fecha_reaccion_fuera);
+
     const payload: IntrusionPayload = {
-      fecha_evento: formData.fecha_evento,
-      fecha_reaccion: formData.fecha_reaccion || null,
+      fecha_evento: fechaEventoIso || formData.fecha_evento,
+      fecha_reaccion: fechaReaccionIso || null,
       fecha_reaccion_fuera:
         requiereProtocolo && formData.fecha_reaccion_fuera
-          ? formData.fecha_reaccion_fuera
+          ? fechaReaccionFueraIso || formData.fecha_reaccion_fuera
           : null,
       ubicacion: '',
       tipo: tipoValue,

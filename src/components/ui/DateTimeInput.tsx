@@ -56,6 +56,8 @@ interface DateTimeInputProps
   ) => void;
 }
 
+const isDateTimeLocalFormat = (val: string) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(val);
+
 const DateTimeInput: React.FC<DateTimeInputProps> = ({
   label,
   value,
@@ -64,9 +66,19 @@ const DateTimeInput: React.FC<DateTimeInputProps> = ({
   id,
   name,
   className = '',
+  readOnly = false,
+  disabled = false,
   ...inputProps
 }) => {
-  const normalizedValue = normalizeDateTimeLocalString(value);
+  const normalizedValue = React.useMemo(() => {
+    if (!value) return '';
+
+    if (isDateTimeLocalFormat(value)) {
+      return value;
+    }
+
+    return normalizeDateTimeLocalString(value);
+  }, [value]);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = event.target.value || null;
@@ -105,6 +117,8 @@ const DateTimeInput: React.FC<DateTimeInputProps> = ({
           placeholder="mm/dd/yyyy --:--"
           className={`block w-full rounded-md border-gray-300 pl-10 pr-3 py-2 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm ${className}`.trim()}
           aria-invalid={Boolean(error)}
+          readOnly={readOnly}
+          disabled={disabled}
           {...inputProps}
         />
       </div>
