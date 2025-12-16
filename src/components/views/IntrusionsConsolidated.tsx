@@ -13,6 +13,7 @@ import {
   formatIntrusionDateTime,
   intrusionesColumns,
 } from '@/components/intrusiones/intrusionesColumns';
+import DateTimeInput from '../ui/DateTimeInput';
 
 interface TipoIntrusionItem {
   id: number;
@@ -140,6 +141,15 @@ const IntrusionsConsolidated: React.FC = () => {
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
+  const handleDateFilterChange = (
+    field: 'fechaDesde' | 'fechaHasta',
+    _: string | null,
+    helpers: { isoString: string | null; dateValue?: Date | null },
+  ) => {
+    const sanitizedValue = helpers.isoString || undefined;
+    handleFilterChange(field, sanitizedValue);
+  };
+
   const handlePageChange = (nextPage: number) => {
     setPagination((prev) => ({ ...prev, page: nextPage }));
   };
@@ -230,24 +240,18 @@ const IntrusionsConsolidated: React.FC = () => {
 
       <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Fecha desde</label>
-            <input
-              type="datetime-local"
-              value={filters.fechaDesde ?? ''}
-              onChange={(e) => handleFilterChange('fechaDesde', e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Fecha hasta</label>
-            <input
-              type="datetime-local"
-              value={filters.fechaHasta ?? ''}
-              onChange={(e) => handleFilterChange('fechaHasta', e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
+          <DateTimeInput
+            label="Fecha desde"
+            value={filters.fechaDesde ?? ''}
+            onChange={(value, helpers) => handleDateFilterChange('fechaDesde', value, helpers)}
+            className="focus:border-blue-500 focus:ring-blue-500"
+          />
+          <DateTimeInput
+            label="Fecha hasta"
+            value={filters.fechaHasta ?? ''}
+            onChange={(value, helpers) => handleDateFilterChange('fechaHasta', value, helpers)}
+            className="focus:border-blue-500 focus:ring-blue-500"
+          />
           <div>
             <label className="block text-sm font-medium text-gray-700">Sitio</label>
             <select

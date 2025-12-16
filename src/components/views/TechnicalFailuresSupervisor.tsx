@@ -5,6 +5,11 @@ import {
   CatalogoDepartamento,
   CatalogoResponsable,
 } from '../../types';
+import DateTimeInput, {
+  buildDateTimeLocalValue,
+  normalizeDateTimeLocalString,
+  splitDateTimeLocalValue,
+} from '../ui/DateTimeInput';
 import {
   fetchFallos,
   fetchCatalogos,
@@ -28,26 +33,6 @@ const emptyCatalogos: TechnicalFailureCatalogs = {
   tiposProblemaEquipo: [],
   dispositivos: [],
   sitiosPorConsola: [],
-};
-
-const toDateTimeLocalValue = (date?: string, time?: string) => {
-  if (!date) {
-    return '';
-  }
-  const sanitizedTime = (time ?? '00:00').slice(0, 5);
-  return `${date}T${sanitizedTime}`;
-};
-
-const splitDateTimeLocalValue = (value?: string) => {
-  if (!value) {
-    return { date: undefined, time: undefined };
-  }
-  const [datePart, timePartRaw] = value.split('T');
-  const timePart = timePartRaw ? timePartRaw.slice(0, 5) : undefined;
-  return {
-    date: datePart || undefined,
-    time: timePart || undefined,
-  };
 };
 
 const findDepartamentoIdByName = (
@@ -192,12 +177,12 @@ const formatFechaHoraDisplay = (
 
       return {
         ...failureToNormalize,
-        fechaHoraResolucion:
-          failureToNormalize.fechaHoraResolucion ??
-          toDateTimeLocalValue(
-            failureToNormalize.fechaResolucion,
-            failureToNormalize.horaResolucion,
-          ),
+      fechaHoraResolucion:
+        failureToNormalize.fechaHoraResolucion ??
+        buildDateTimeLocalValue(
+          failureToNormalize.fechaResolucion,
+          failureToNormalize.horaResolucion,
+        ),
         fechaHoraFallo:
           failureToNormalize.fechaHoraFallo ??
           buildFailureDateTimeValue(failureToNormalize) ??
@@ -243,16 +228,17 @@ const formatFechaHoraDisplay = (
     updateField(name as keyof TechnicalFailure, value);
   };
 
-  const handleResolutionChange = (value: string) => {
+  const handleResolutionChange = (isoValue: string | null) => {
     if (isReadOnly) return;
-    const { date, time } = splitDateTimeLocalValue(value);
+    const normalizedValue = normalizeDateTimeLocalString(isoValue);
+    const { date, time } = splitDateTimeLocalValue(normalizedValue);
     setEditData((prev) => ({
       ...prev,
-      fechaHoraResolucion: value,
+      fechaHoraResolucion: isoValue || undefined,
       fechaResolucion: date,
       horaResolucion: time,
       responsable_verificacion_cierre_nombre:
-        value && currentUserName ? currentUserName : prev.responsable_verificacion_cierre_nombre,
+        isoValue && currentUserName ? currentUserName : prev.responsable_verificacion_cierre_nombre,
     }));
   };
 
@@ -482,16 +468,15 @@ const formatFechaHoraDisplay = (
       {activeTab === 'cierre' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Fecha y Hora Resolución</label>
-            <input
-                type="datetime-local"
-                name="fechaHoraResolucion"
-                value={editData.fechaHoraResolucion || ''}
-                onChange={(e) => handleResolutionChange(e.target.value)}
-                max={nowForInput}
-                disabled={isReadOnly}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm disabled:bg-gray-100 disabled:text-gray-500"
-              />
+            <DateTimeInput
+              label="Fecha y Hora Resolución"
+              name="fechaHoraResolucion"
+              value={editData.fechaHoraResolucion || ''}
+              onChange={(_, helpers) => handleResolutionChange(helpers.isoString)}
+              max={nowForInput}
+              disabled={isReadOnly}
+              className="disabled:bg-gray-100 disabled:text-gray-500"
+            />
           </div>
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700">Responsable Verificación Cierre</label>

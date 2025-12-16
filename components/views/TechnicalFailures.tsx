@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { technicalFailuresData, technicalFailureMocks, supervisorData, sitiosPorConsola } from '../../data/mockData';
 import { useSession } from '../context/SessionContext';
 import { TechnicalFailure } from '../../types';
+import DateTimeInput, { normalizeDateTimeLocalString, splitDateTimeLocalValue, toIsoString } from '../ui/DateTimeInput';
 
 type AffectationType = 'Nodo' | 'Punto' | 'Equipo' | 'Masivo' | '';
 
 const initialFormData = {
-  fechaFallo: '',
-  horaFallo: '',
+  fechaHoraFallo: '' as string | null,
   affectationType: '' as AffectationType,
   tipoProblema: '',
   reportadoCliente: false,
@@ -30,10 +30,31 @@ const EditFailureModal: React.FC<{
     setEditData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleResolutionDateChange = (
+    _: string | null,
+    helpers: { isoString: string | null; dateValue?: Date | null },
+  ) => {
+    const normalizedValue = normalizeDateTimeLocalString(helpers.isoString);
+    const { date, time } = splitDateTimeLocalValue(normalizedValue);
+
+    setEditData(prev => ({
+      ...prev,
+      fechaHoraResolucion: helpers.isoString || undefined,
+      fechaResolucion: date,
+      horaResolucion: time,
+    }));
+  };
+
   const handleSave = () => {
     onSave(editData);
   };
-  
+
+  const resolutionValue =
+    editData.fechaHoraResolucion ||
+    (editData.fechaResolucion && editData.horaResolucion
+      ? `${editData.fechaResolucion}T${editData.horaResolucion}`
+      : editData.fechaResolucion || '');
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
       <div className="bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full">
@@ -47,12 +68,13 @@ const EditFailureModal: React.FC<{
                 </select>
             </div>
             <div>
-                <label className="block text-sm font-medium text-gray-700">Fecha Resolución</label>
-                <input type="date" name="fechaResolucion" value={editData.fechaResolucion || ''} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm" />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700">Hora Resolución</label>
-                <input type="time" name="horaResolucion" value={editData.horaResolucion || ''} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm" />
+                <DateTimeInput
+                  label="Fecha y Hora Resolución"
+                  name="fechaHoraResolucion"
+                  value={resolutionValue}
+                  onChange={handleResolutionDateChange}
+                  className="focus:border-[#F9C300] focus:ring-[#F9C300]"
+                />
             </div>
              <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700">Responsable Verificación Apertura</label>
@@ -165,20 +187,21 @@ const TechnicalFailures: React.FC = () => {
   const validate = (fieldValues = formData) => {
     let tempErrors: Partial<typeof initialFormData> = { ...errors };
 
-    if ('fechaFallo' in fieldValues) {
-        if (!fieldValues.fechaFallo) {
-            tempErrors.fechaFallo = 'La fecha es obligatoria.';
+    if ('fechaHoraFallo' in fieldValues) {
+      if (!fieldValues.fechaHoraFallo) {
+        tempErrors.fechaHoraFallo = 'La fecha y hora son obligatorias.';
+      } else {
+        const inputDate = new Date(fieldValues.fechaHoraFallo);
+        const now = new Date();
+
+        if (Number.isNaN(inputDate.getTime())) {
+          tempErrors.fechaHoraFallo = 'La fecha y hora no son válidas.';
+        } else if (inputDate > now) {
+          tempErrors.fechaHoraFallo = 'La fecha no puede ser posterior a la actual.';
         } else {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const inputDate = new Date(`${fieldValues.fechaFallo}T00:00:00`);
-            
-            if (inputDate > today) {
-                tempErrors.fechaFallo = 'La fecha no puede ser posterior a la actual.';
-            } else {
-                delete tempErrors.fechaFallo;
-            }
+          delete tempErrors.fechaHoraFallo;
         }
+      }
     }
     
     if (fieldValues.affectationType === 'Nodo') {
@@ -247,12 +270,20 @@ const TechnicalFailures: React.FC = () => {
     validate(newValues);
   };
 
+  const handleFailureDateChange = (
+    _: string | null,
+    helpers: { isoString: string | null; dateValue?: Date | null },
+  ) => {
+    const updatedValues = { ...formData, fechaHoraFallo: helpers.isoString || '' };
+    setFormData(updatedValues);
+    validate(updatedValues);
+  };
+
   const handleAffectationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newType = e.target.value as AffectationType;
     setFormData({
         ...initialFormData,
-        fechaFallo: formData.fechaFallo,
-        horaFallo: formData.horaFallo,
+        fechaHoraFallo: formData.fechaHoraFallo,
         affectationType: newType,
     });
     setErrors({});
@@ -325,13 +356,18 @@ const TechnicalFailures: React.FC = () => {
        if (formData.affectationType === 'Nodo' || formData.affectationType === 'Punto') {
            descripcion_fallo = formData.tipoProblema;
        } else if (formData.affectationType === 'Equipo') {
-           descripcion_fallo = formData.tipoProblemaEquipo;
-       } else if (formData.affectationType === 'Masivo') {
-           descripcion_fallo = 'Fallo masivo reportado.';
-       }
+       descripcion_fallo = formData.tipoProblemaEquipo;
+      } else if (formData.affectationType === 'Masivo') {
+          descripcion_fallo = 'Fallo masivo reportado.';
+      }
+
+       const { date: fechaFallo, time: horaFallo } = splitDateTimeLocalValue(formData.fechaHoraFallo);
+       const fechaHoraIso = toIsoString(formData.fechaHoraFallo);
 
        const newFailure: Omit<TechnicalFailure, 'id'> = {
-         fecha: formData.fechaFallo,
+         fecha: fechaFallo || '',
+         hora: horaFallo,
+         fechaHoraFallo: fechaHoraIso || undefined,
          equipo_afectado: equipo_afectado || "No especificado",
          descripcion_fallo: descripcion_fallo || "Sin descripción",
          responsable: session.user || 'Operador',
@@ -386,8 +422,18 @@ const TechnicalFailures: React.FC = () => {
       <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
         <h4 className="text-[#1C2E4A] text-lg font-semibold mb-4">Registrar Nuevo Fallo</h4>
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div> <label htmlFor="fechaFallo" className="block text-sm font-medium text-gray-700">Fecha de Fallo *</label> <input type="date" name="fechaFallo" id="fechaFallo" value={formData.fechaFallo} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm" /> {errors.fechaFallo && <p className="text-red-500 text-xs mt-1">{errors.fechaFallo}</p>} </div>
-            <div> <label htmlFor="horaFallo" className="block text-sm font-medium text-gray-700">Hora de Fallo</label> <input type="time" name="horaFallo" id="horaFallo" value={formData.horaFallo} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300] sm:text-sm" /> </div>
+          <div>
+            <DateTimeInput
+              label="Fecha y Hora de Fallo *"
+              name="fechaHoraFallo"
+              value={formData.fechaHoraFallo}
+              onChange={handleFailureDateChange}
+              className="focus:border-[#F9C300] focus:ring-[#F9C300]"
+            />
+            {errors.fechaHoraFallo && (
+              <p className="text-red-500 text-xs mt-1">{errors.fechaHoraFallo}</p>
+            )}
+          </div>
             <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-700">Tipo de Afectación *</label> <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2"> {(['Nodo', 'Punto', 'Equipo', 'Masivo'] as AffectationType[]).map(type => ( <div key={type} className="flex items-center"> <input id={type} name="affectationType" type="radio" value={type} checked={formData.affectationType === type} onChange={handleAffectationChange} className="focus:ring-[#F9C300] h-4 w-4 text-[#F9C300] border-gray-300" /> <label htmlFor={type} className="ml-2 block text-sm text-gray-900">{type}</label> </div> ))} </div> </div>
             {renderConditionalFields()}
             <div className="md:col-span-2 flex justify-end"> <button type="submit" className="px-6 py-2 bg-[#F9C300] text-[#1C2E4A] font-semibold rounded-md hover:bg-yellow-400 transition-colors duration-300"> Guardar Reporte </button> </div>
