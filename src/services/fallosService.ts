@@ -248,14 +248,20 @@ export const cerrarFallo = async (
   const ultimoUsuarioEditoId = resolveAuthenticatedUserIdFromLocalStorage();
 
   console.log(
-    "[fallosService] ultimoUsuarioEditoId que se envía:",
+    "[fallosService.cerrarFallo] ultimoUsuarioEditoId que se enviará:",
     ultimoUsuarioEditoId,
   );
 
   const body = {
     ...payload,
     ultimoUsuarioEditoId,
+    responsable_verificacion_cierre_id:
+      (payload as any).responsableVerificacionCierreId ??
+      (payload as any).responsable_verificacion_cierre_id ??
+      null,
   };
+
+  console.log("[fallosService.cerrarFallo] body que se envía:", body);
 
   const { data } = await apiClient.post<TechnicalFailure>(`/fallos/${id}/cerrar`, body, {
     headers: buildRoleHeaders(context),
