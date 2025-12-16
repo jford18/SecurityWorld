@@ -732,6 +732,19 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       const novedad = updatedFailure.novedadDetectada?.trim() || null;
 
       try {
+        const values = updatedFailure as any;
+        console.log(
+          "[Supervisor Edit] Guardar cambios - valores del formulario:",
+          values,
+        );
+        console.log(
+          "[Supervisor Edit] Guardar cambios - responsableVerificacionCierreId:",
+          values.responsableVerificacionCierreId,
+        );
+        console.log(
+          "[Supervisor Edit] Guardar cambios - usuario en localStorage['user']:",
+          localStorage.getItem("user"),
+        );
         setIsSubmitting(true);
         console.log("[Supervisor] Guardar cambios, payload enviado:", {
           departamento_id: departamentoId,
@@ -777,6 +790,19 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         null;
 
       try {
+        const values = updatedFailure as any;
+        console.log(
+          "[Supervisor Edit] Cerrar fallo - valores del formulario:",
+          values,
+        );
+        console.log(
+          "[Supervisor Edit] Cerrar fallo - responsableVerificacionCierreId:",
+          values.responsableVerificacionCierreId,
+        );
+        console.log(
+          "[Supervisor Edit] Cerrar fallo - usuario en localStorage['user']:",
+          localStorage.getItem("user"),
+        );
         setIsSubmitting(true);
         console.log("[Supervisor] Payload cerrar fallo:", {
           fecha_resolucion: resolutionDate,

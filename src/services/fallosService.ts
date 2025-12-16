@@ -214,15 +214,21 @@ export const guardarCambiosFallo = async (
 ) => {
   const ultimoUsuarioEditoId = resolveAuthenticatedUserIdFromLocalStorage();
 
-  console.log(
-    "[fallosService] ultimoUsuarioEditoId que se envía:",
-    ultimoUsuarioEditoId,
-  );
+  console.log("[fallosService.updateSupervisor] payload original:", payload);
 
   const body = {
     ...payload,
     ultimoUsuarioEditoId,
   };
+
+  console.log(
+    "[fallosService.updateSupervisor] ultimoUsuarioEditoId que se envía:",
+    body.ultimoUsuarioEditoId,
+  );
+  console.log(
+    "[fallosService.updateSupervisor] body final que se envía al backend:",
+    body,
+  );
 
   const { data } = await apiClient.patch<TechnicalFailure>(
     `/fallos/${id}/guardar-cambios`,
@@ -247,11 +253,6 @@ export const cerrarFallo = async (
 ) => {
   const ultimoUsuarioEditoId = resolveAuthenticatedUserIdFromLocalStorage();
 
-  console.log(
-    "[fallosService.cerrarFallo] ultimoUsuarioEditoId que se enviará:",
-    ultimoUsuarioEditoId,
-  );
-
   const body = {
     ...payload,
     ultimoUsuarioEditoId,
@@ -261,13 +262,30 @@ export const cerrarFallo = async (
       null,
   };
 
-  console.log("[fallosService.cerrarFallo] body que se envía:", body);
+  console.log("[fallosService.cerrarFallo] payload original:", payload);
+  console.log(
+    "[fallosService.cerrarFallo] ultimoUsuarioEditoId que se envía:",
+    body.ultimoUsuarioEditoId,
+  );
+  console.log(
+    "[fallosService.cerrarFallo] responsable_verificacion_cierre_id que se envía:",
+    body.responsable_verificacion_cierre_id,
+  );
+  console.log("[fallosService.cerrarFallo] body final que se envía al backend:", body);
 
-  const { data } = await apiClient.post<TechnicalFailure>(`/fallos/${id}/cerrar`, body, {
-    headers: buildRoleHeaders(context),
-  });
+  try {
+    const { data } = await apiClient.post<TechnicalFailure>(`/fallos/${id}/cerrar`, body, {
+      headers: buildRoleHeaders(context),
+    });
 
-  return data;
+    return data;
+  } catch (error: any) {
+    console.error(
+      "[fallosService.cerrarFallo] Error en llamada al backend:",
+      error?.response?.data || error,
+    );
+    throw error;
+  }
 };
 
 export const getFalloDuration = async (
