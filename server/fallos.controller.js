@@ -654,6 +654,8 @@ export const createFallo = async (req, res) => {
       throw new Error("No se pudo crear el fallo técnico.");
     }
 
+    const verificacionAperturaId = toNullableUserId(usuarioId);
+
     await client.query(
       `
       INSERT INTO seguimiento_fallos (
@@ -669,10 +671,10 @@ export const createFallo = async (req, res) => {
       `,
       [
         falloId, // FALLO_ID
-        usuarioId || null, // VERIFICACION_APERTURA_ID (usuario que registra el fallo)
+        verificacionAperturaId, // VERIFICACION_APERTURA_ID (usuario que registra el fallo)
         null, // VERIFICACION_CIERRE_ID (todavía no aplica)
         novedadDetectada || null, // NOVEDAD_DETECTADA
-        usuarioId || null, // ULTIMO_USUARIO_EDITO_ID
+        verificacionAperturaId, // ULTIMO_USUARIO_EDITO_ID
         null, // RESPONSABLE_VERIFICACION_CIERRE_ID
         null, // VERIFICACION_SUPERVISOR_ID
       ]
