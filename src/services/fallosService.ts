@@ -132,19 +132,30 @@ export const createFallo = async (
   payload: TechnicalFailurePayload,
   context?: RequestContext,
 ): Promise<TechnicalFailure> => {
+  console.log('[fallosService.createFallo] payload recibido:', payload);
   const storedUser = localStorage.getItem('user');
+  console.log('[fallosService.createFallo] storedUser (localStorage):', storedUser);
   const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+  console.log('[fallosService.createFallo] parsedUser:', parsedUser);
   const usuarioId = parsedUser?.usuario_id ?? parsedUser?.id ?? null;
+  console.log('[fallosService.createFallo] usuarioId que viaja al backend:', usuarioId);
 
   const body = {
     ...payload,
     usuarioId,
   };
 
-  const { data } = await apiClient.post<TechnicalFailure>('/fallos', body, {
-    headers: buildRoleHeaders(context),
-  });
-  return data;
+  console.log('[fallosService.createFallo] body final que se envía a /fallos:', body);
+
+  try {
+    const { data } = await apiClient.post<TechnicalFailure>('/fallos', body, {
+      headers: buildRoleHeaders(context),
+    });
+    return data;
+  } catch (error: any) {
+    console.error('[fallosService.createFallo] error:', error?.response?.data || error);
+    throw error;
+  }
 };
 
 export const updateFallo = async (

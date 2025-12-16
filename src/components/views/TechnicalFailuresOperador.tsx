@@ -747,6 +747,7 @@ const TechnicalFailuresOperador: React.FC = () => {
     };
 
     try {
+      console.log("[TechnicalFailuresOperador] valores del formulario:", payload);
       setIsSubmitting(true);
       const created = await createFallo(payload);
       setFailures((prev) => [created, ...prev]);
@@ -758,7 +759,10 @@ const TechnicalFailuresOperador: React.FC = () => {
       setSitiosNodo([]);
       setNodoSitioError(null);
     } catch (error) {
-      console.error('Error al registrar el fallo técnico:', error);
+      console.error(
+        "[TechnicalFailuresOperador] Error al registrar fallo técnico:",
+        (error as any)?.response?.data || error
+      );
       alert('No se pudo registrar el fallo técnico. Intente nuevamente.');
     } finally {
       setIsSubmitting(false);

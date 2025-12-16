@@ -280,6 +280,8 @@ export const guardarCambiosFallo = async (req, res) => {
   const { id } = req.params;
   const { departamento_id, novedad_detectada } = req.body || {};
 
+  console.log("[guardarCambiosFallo] body:", req.body);
+
   if (!id) {
     return res
       .status(400)
@@ -336,6 +338,8 @@ export const guardarCambiosFallo = async (req, res) => {
 
     const usuarioId = getAuthenticatedUserId(req);
 
+    console.log("[guardarCambiosFallo] usuarioId autenticado:", usuarioId);
+
     await client.query(
       `INSERT INTO seguimiento_fallos (
          fallo_id,
@@ -345,6 +349,11 @@ export const guardarCambiosFallo = async (req, res) => {
          ultimo_usuario_edito_id
        ) VALUES ($1, $2, $3, NOW(), $4)`,
       [id, usuarioId, novedad, usuarioId]
+    );
+
+    console.log(
+      "[guardarCambiosFallo] seguimiento_fallos insertado para fallo_id:",
+      id
     );
 
     await client.query("COMMIT");
@@ -369,6 +378,8 @@ export const cerrarFalloTecnico = async (req, res) => {
     hora_resolucion: horaResolucion,
     novedad_detectada: novedadDetectada,
   } = req.body || {};
+
+  console.log("[cerrarFalloTecnico] body:", req.body);
 
   if (!id) {
     return res
@@ -424,6 +435,8 @@ export const cerrarFalloTecnico = async (req, res) => {
 
     const usuarioId = getAuthenticatedUserId(req);
 
+    console.log("[cerrarFalloTecnico] usuarioId autenticado:", usuarioId);
+
     await client.query(
       `INSERT INTO seguimiento_fallos (
          fallo_id,
@@ -441,6 +454,11 @@ export const cerrarFalloTecnico = async (req, res) => {
         usuarioId, // ultimo_usuario_edito_id
         usuarioId, // responsable_verificacion_cierre_id
       ]
+    );
+
+    console.log(
+      "[cerrarFalloTecnico] seguimiento_fallos insertado para fallo_id:",
+      id
     );
 
     await client.query("COMMIT");
@@ -487,12 +505,22 @@ export const createFallo = async (req, res) => {
     usuarioId,
   } = req.body || {};
 
+  console.log("[createFallo] BODY COMPLETO:", JSON.stringify(req.body, null, 2));
+  console.log("[createFallo] usuarioId recibido en body:", usuarioId);
+
   const { fecha: fechaFalloValue, hora: horaFalloValue } = resolveFechaHoraFallo({
     fecha,
     hora,
     horaFallo,
     fechaHoraFallo,
   });
+
+  console.log(
+    "[createFallo] fechaFalloValue:",
+    fechaFalloValue,
+    "horaFalloValue:",
+    horaFalloValue
+  );
 
   if (
     !fechaFalloValue ||
@@ -623,6 +651,21 @@ export const createFallo = async (req, res) => {
         String(consola || "").trim().toLowerCase();
     })?.id ?? null;
 
+    console.log(
+      "[createFallo] IDs resueltos => responsableId:",
+      responsableId,
+      "departamentoId:",
+      departamentoId,
+      "tipoProblemaId:",
+      tipoProblemaId,
+      "consolaId:",
+      consolaId,
+      "sitioIdValue:",
+      sitioIdValue,
+      "tipoAfectacionValue:",
+      tipoAfectacionValue
+    );
+
     const insertResult = await client.query(
       `INSERT INTO fallos_tecnicos (
         fecha,
@@ -658,15 +701,21 @@ export const createFallo = async (req, res) => {
       ]
     );
 
+    console.log("[createFallo] Resultado INSERT fallos_tecnicos:", insertResult.rows);
     const falloId = insertResult.rows[0]?.id;
+    console.log("[createFallo] falloId generado:", falloId);
 
     if (!falloId) {
       throw new Error("No se pudo crear el fallo técnico.");
     }
 
     const verificacionAperturaId = toNullableUserId(usuarioId);
+    console.log(
+      "[createFallo] verificacionAperturaId (desde usuarioId):",
+      verificacionAperturaId
+    );
 
-    await client.query(
+    const seguimientoInsert = await client.query(
       `
       INSERT INTO seguimiento_fallos (
           fallo_id,
@@ -690,13 +739,18 @@ export const createFallo = async (req, res) => {
       ]
     );
 
+    console.log(
+      "[createFallo] seguimiento_fallos INSERT rowCount:",
+      seguimientoInsert.rowCount
+    );
+
     await client.query("COMMIT");
 
     const fallo = await fetchFalloById(client, falloId);
     return res.status(201).json(fallo);
   } catch (error) {
     await client.query("ROLLBACK");
-    console.error("Error al crear el fallo técnico:", error);
+    console.error("Error al crear el fallo técnico (DEBUG):", error);
     return res
       .status(500)
       .json({ mensaje: "Ocurrió un error al crear el fallo técnico." });
@@ -723,6 +777,8 @@ export const actualizarFalloSupervisor = async (req, res) => {
     responsable_verificacion_cierre_id,
   } = req.body || {};
 
+  console.log("[actualizarFalloSupervisor] body:", req.body);
+
   if (!id) {
     return res
       .status(400)
@@ -746,6 +802,8 @@ export const actualizarFalloSupervisor = async (req, res) => {
   const responsableVerificacionCierreId = toNullableUserId(
     responsable_verificacion_cierre_id
   );
+
+  console.log("[actualizarFalloSupervisor] usuarioAutenticadoId:", usuarioAutenticadoId);
 
   try {
     await client.query("BEGIN");
@@ -843,6 +901,13 @@ export const actualizarFalloSupervisor = async (req, res) => {
     const verificacionAperturaId = findUserId(usuarios, verificacionApertura);
     const verificacionCierreId = findUserId(usuarios, verificacionCierre);
 
+    console.log(
+      "[actualizarFalloSupervisor] verificacionAperturaId:",
+      verificacionAperturaId,
+      "verificacionCierreId:",
+      verificacionCierreId
+    );
+
     const seguimientoResult = await client.query(
       "SELECT id FROM seguimiento_fallos WHERE fallo_id = $1",
       [id]
@@ -869,6 +934,10 @@ export const actualizarFalloSupervisor = async (req, res) => {
           id,
         ]
       );
+      console.log(
+        "[actualizarFalloSupervisor] seguimiento_fallos actualizado/insertado para fallo_id:",
+        id
+      );
     } else {
       await client.query(
         `INSERT INTO seguimiento_fallos (
@@ -891,6 +960,10 @@ export const actualizarFalloSupervisor = async (req, res) => {
           responsableVerificacionCierreId,
           usuarioAutenticadoId, // supervisor
         ]
+      );
+      console.log(
+        "[actualizarFalloSupervisor] seguimiento_fallos actualizado/insertado para fallo_id:",
+        id
       );
     }
 
