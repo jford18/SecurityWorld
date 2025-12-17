@@ -830,65 +830,50 @@ def abrir_menu_resource_status(driver, wait):
     except TimeoutException:
         raise Exception("No se pudo hacer clic en el menú 'Resource Status'")
 
-
 def seleccionar_opcion_resource_status(driver, wait, opcion: str):
     """
-    Abre el menú flotante 'Resource Status' del panel izquierdo y hace clic
-    en la opción indicada (Camera, Encoding Device, IP Speaker, etc.).
+    Selecciona una opción de Resource Status usando el panel 'Recently Viewed'.
+    Las opciones (Camera, Encoding Device, IP Speaker, etc.) aparecen como
+    <div class="recently-visited-menu" title="OPCION">OPCION</div>.
     """
+
+    opcion_normalizada = opcion.strip()
+
+    # Primero intentamos localizar por el atributo title en la tarjeta 'recently-visited-menu'
+    css_selector = f"div.recently-visited-menu[title='{opcion_normalizada}']"
+
     try:
-        # 1) Hover sobre el icono de Resource Status para desplegar el menú flotante
-        icono_resource_status = wait.until(
-            EC.visibility_of_element_located(
-                (By.CSS_SELECTOR, "i.el-menu-icon.icon-svg-nav_realtime_status_resources")
-            )
+        elemento = wait.until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, css_selector))
         )
-        ActionChains(driver).move_to_element(icono_resource_status).perform()
-
-        # 2) Esperar a que se muestre el contenedor del menú colapsado "Resource Status"
-        contenedor_menu = wait.until(
-            EC.visibility_of_element_located(
-                (
-                    By.XPATH,
-                    "//div[contains(@class,'el-menu-collapse-wrap')]"
-                    "[.//li[contains(@class,'el-submenu__collpase-title') "
-                    "and normalize-space()='Resource Status']]"
-                )
+    except TimeoutException:
+        # Fallback: buscar por texto visible dentro de recently-visited-menu
+        try:
+            xpath = (
+                "//div[contains(@class,'recently-visited-menu') "
+                f"and normalize-space()='{opcion_normalizada}']"
             )
-        )
+            elemento = wait.until(
+                EC.element_to_be_clickable((By.XPATH, xpath))
+            )
+        except TimeoutException as e:
+            raise Exception(
+                f"No se encontró la opción '{opcion}' en el panel 'Recently Viewed' de Resource Status"
+            ) from e
 
-        # 3) Localizar la opción dentro de ese menú (Camera, Encoding Device, IP Speaker, etc.)
-        #    Nos basamos en el texto del span con clase 'el-menu-item--text'
-        opcion_xpath_relativa = (
-            ".//li[contains(@class,'el-menu-item') and "
-            ".//span[@class='el-menu-item--text' and normalize-space()=$texto]]"
-        ).replace("$texto", opcion)
-
-        opcion_elemento = contenedor_menu.find_element(By.XPATH, opcion_xpath_relativa)
-
-        # 4) Asegurarnos de que la opción esté visible y clickable
+    # Asegurarnos de que está a la vista y hacer clic
+    try:
         driver.execute_script(
-            "arguments[0].scrollIntoView({block: 'center'});",
-            opcion_elemento,
+            "arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});",
+            elemento,
         )
+    except Exception:
+        pass
 
-        # Esperar a que sea clickable (anclado en el mismo menú de Resource Status)
-        opcion_xpath_global = (
-            "//div[contains(@class,'el-menu-collapse-wrap')]"
-            "[.//li[contains(@class,'el-submenu__collpase-title') "
-            "and normalize-space()='Resource Status']]"
-            f"//span[@class='el-menu-item--text' and normalize-space()='{opcion}']"
-        )
-
-        wait.until(EC.element_to_be_clickable((By.XPATH, opcion_xpath_global)))
-
-        opcion_elemento.click()
-
-    except (TimeoutException, NoSuchElementException, ElementClickInterceptedException) as e:
-        # Mantener el mismo mensaje de error que se usa actualmente
-        raise Exception(
-            f"No se pudo hacer clic en la opción '{opcion}' del menú Resource Status"
-        ) from e
+    try:
+        ActionChains(driver).move_to_element(elemento).click().perform()
+    except Exception:
+        driver.execute_script("arguments[0].click();", elemento)
 
 
 def seleccionar_camera(driver, wait):
