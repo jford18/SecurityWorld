@@ -130,7 +130,7 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [sitios, setSitios] = useState<Sitio[]>([]);
   const [selectedSite, setSelectedSite] = useState('');
   const [cameras, setCameras] = useState<
-    { id: number; camera_name: string; ip_adress: string | null }[]
+    { id: number; camera_name: string; ip_address: string | null }[]
   >([]);
   const [selectedCameraId, setSelectedCameraId] = useState('');
   const [selectedProblem, setSelectedProblem] = useState<any>(null);
@@ -884,8 +884,8 @@ const TechnicalFailuresOperador: React.FC = () => {
             >
               <option value="">Seleccione una cámara</option>
               {cameras.map((cam) => {
-                const label = cam.ip_adress
-                  ? `${cam.camera_name} - ${cam.ip_adress}`
+                const label = cam.ip_address
+                  ? `${cam.camera_name} - ${cam.ip_address}`
                   : cam.camera_name;
                 return (
                   <option key={cam.id} value={cam.id}>

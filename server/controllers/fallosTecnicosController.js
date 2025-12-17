@@ -8,7 +8,7 @@ export const getCamerasBySite = async (req, res) => {
       SELECT
         id,
         camera_name,
-        ip_adress
+        ip_address
       FROM hik_camera_resource_status
       WHERE site_name = $1
       ORDER BY camera_name;
