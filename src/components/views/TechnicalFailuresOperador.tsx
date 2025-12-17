@@ -173,9 +173,10 @@ const TechnicalFailuresOperador: React.FC = () => {
     normalizeText(problemaDescripcion),
   );
   const isGrabadorSelected =
-    normalizeText(selectedTipoEquipoAfectado?.nombre || '') === normalizeText('Grabador');
+    normalizeText(selectedTipoEquipoAfectado?.nombre || '') === normalizeText('Grabador') ||
+    normalizeText(String(formData.tipoEquipoAfectadoId || '')) === normalizeText('Grabador');
   const showEncodingDeviceField =
-    formData.affectationType === 'Equipo' && isGrabadorSelected;
+    normalizeText(formData.affectationType) === normalizeText('Equipo') && isGrabadorSelected;
 
   const sitioItems = useMemo(
     () => [
@@ -294,13 +295,20 @@ const TechnicalFailuresOperador: React.FC = () => {
     [catalogos.tiposProblemaEquipo]
   );
 
-  const selectedTipoEquipoAfectado = useMemo(
-    () =>
+  const selectedTipoEquipoAfectado = useMemo(() => {
+    const rawValue = formData.tipoEquipoAfectadoId || '';
+    const normalizedValue = normalizeText(String(rawValue));
+
+    return (
       tiposEquipoAfectado.find(
-        (tipo) => String(tipo.id ?? tipo.nombre ?? '') === formData.tipoEquipoAfectadoId
-      ) ?? null,
-    [tiposEquipoAfectado, formData.tipoEquipoAfectadoId]
-  );
+        (tipo) => String(tipo.id ?? tipo.nombre ?? '') === String(rawValue)
+      ) ||
+      tiposEquipoAfectado.find(
+        (tipo) => normalizeText(tipo.nombre || '') === normalizedValue
+      ) ||
+      null
+    );
+  }, [tiposEquipoAfectado, formData.tipoEquipoAfectadoId]);
 
   const camaraItems = useMemo(
     () => [
@@ -709,20 +717,16 @@ const TechnicalFailuresOperador: React.FC = () => {
   }, [selectedSite, showCameraField]);
 
   useEffect(() => {
-    if (!showEncodingDeviceField) {
-      setEncodingDevices([]);
-      setEncodingDeviceId('');
-      return;
-    }
+    const trimmedSite = selectedSite.trim();
 
-    if (!selectedSite) {
+    if (!showEncodingDeviceField || !trimmedSite) {
       setEncodingDevices([]);
       setEncodingDeviceId('');
       return;
     }
 
     setEncodingDeviceId('');
-    getEncodingDevicesBySite(selectedSite)
+    getEncodingDevicesBySite(trimmedSite)
       .then((data) => setEncodingDevices(data))
       .catch((error) => {
         console.error('Error al cargar grabadores:', error);
