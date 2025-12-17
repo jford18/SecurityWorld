@@ -383,6 +383,116 @@ def process_camera_resource_status(excel_path: str) -> None:
             conn.close()
 
 
+def process_encoding_device_status(excel_path: str) -> None:
+    import pandas as pd
+    import numpy as np
+
+    df = pd.read_excel(excel_path, sheet_name="Encoding Device", header=6)
+    df = df[df["Name"].notna()].copy()
+
+    df.rename(
+        columns={
+            "Name": "name",
+            "Address": "address",
+            "Serial No.": "serial_no",
+            "Version": "version",
+            "Network Status": "network_status",
+            "Time Sync Status": "time_sync_status",
+            "HDD Status": "hdd_status",
+            "HDD Usage": "hdd_usage",
+            "RAID": "raid",
+            "Recording Status": "recording_status",
+            "Hot Spare Status": "hot_spare_status",
+            "Arming Status": "arming_status",
+            "Manufacturer": "manufacturer",
+            "First Added Time": "first_added_time",
+            "Auto-Check Time": "auto_check_time",
+        },
+        inplace=True,
+    )
+
+    df["first_added_time"] = pd.to_datetime(df["first_added_time"], errors="coerce")
+    df["auto_check_time"] = pd.to_datetime(df["auto_check_time"], errors="coerce")
+
+    df = df.replace({np.nan: None})
+    df["first_added_time"] = df["first_added_time"].where(
+        df["first_added_time"].notna(), None
+    )
+    df["auto_check_time"] = df["auto_check_time"].where(
+        df["auto_check_time"].notna(), None
+    )
+
+    records = df.to_dict(orient="records")
+    if not records:
+        print("[INFO] No hay registros de Encoding Device para procesar.")
+        return
+
+    conn = get_pg_connection()
+    from psycopg2.extras import execute_batch
+
+    sql = """
+        INSERT INTO public.hik_encoding_device_status (
+            name,
+            address,
+            serial_no,
+            version,
+            network_status,
+            time_sync_status,
+            hdd_status,
+            hdd_usage,
+            raid,
+            recording_status,
+            hot_spare_status,
+            arming_status,
+            manufacturer,
+            first_added_time,
+            auto_check_time,
+            updated_at
+        ) VALUES (
+            %(name)s,
+            %(address)s,
+            %(serial_no)s,
+            %(version)s,
+            %(network_status)s,
+            %(time_sync_status)s,
+            %(hdd_status)s,
+            %(hdd_usage)s,
+            %(raid)s,
+            %(recording_status)s,
+            %(hot_spare_status)s,
+            %(arming_status)s,
+            %(manufacturer)s,
+            %(first_added_time)s,
+            %(auto_check_time)s,
+            NOW()
+        )
+        ON CONFLICT (name, address)
+        DO UPDATE SET
+            serial_no        = EXCLUDED.serial_no,
+            version          = EXCLUDED.version,
+            network_status   = EXCLUDED.network_status,
+            time_sync_status = EXCLUDED.time_sync_status,
+            hdd_status       = EXCLUDED.hdd_status,
+            hdd_usage        = EXCLUDED.hdd_usage,
+            raid             = EXCLUDED.raid,
+            recording_status = EXCLUDED.recording_status,
+            hot_spare_status = EXCLUDED.hot_spare_status,
+            arming_status    = EXCLUDED.arming_status,
+            manufacturer     = EXCLUDED.manufacturer,
+            first_added_time = EXCLUDED.first_added_time,
+            auto_check_time  = EXCLUDED.auto_check_time,
+            updated_at       = NOW();
+    """
+
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                execute_batch(cur, sql, records, page_size=500)
+        print(f"[INFO] Encoding Devices insertados/actualizados: {len(records)}")
+    finally:
+        conn.close()
+
+
 def crear_driver() -> webdriver.Chrome:
     """Configura y devuelve un driver de Chrome listo para descargar archivos."""
 
@@ -461,6 +571,17 @@ def esperar_descarga(download_dir: Path, archivos_previos, timeout: int = 120) -
             raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
 
         time.sleep(2)
+
+
+def encontrar_ultimo_archivo(
+    prefijo: str, extension: str, download_dir: Path = DOWNLOAD_DIR
+) -> Path | None:
+    archivos = list(download_dir.glob(f"{prefijo}*{extension}"))
+    return (
+        max(archivos, key=lambda p: p.stat().st_mtime)
+        if archivos
+        else None
+    )
 
 
 def click_menu_item_by_title(driver, title: str) -> bool:
@@ -916,16 +1037,25 @@ def run():
 
             print(f"[OK] Export de '{opcion}' completado.")
 
+            archivo_procesar = None
+
             if opcion.lower() == "camera":
-                ultimo_archivo = max(
-                    DOWNLOAD_DIR.glob("Camera_*.xlsx"),
-                    key=lambda p: p.stat().st_mtime,
-                    default=None,
-                )
+                ultimo_archivo = encontrar_ultimo_archivo("Camera_", ".xlsx")
                 archivo_procesar = ultimo_archivo or archivo_descargado
 
                 if archivo_procesar:
                     process_camera_resource_status(str(archivo_procesar))
+
+            elif opcion.lower() == "encoding device":
+                archivo_procesar = encontrar_ultimo_archivo(
+                    "Encoding Device_", ".xlsx"
+                )
+                if archivo_procesar:
+                    process_encoding_device_status(str(archivo_procesar))
+                else:
+                    print(
+                        "[ERROR] No se encontró archivo de Encoding Device para procesar."
+                    )
 
             if timer:
                 timer.mark("[FIN] Script completo")
