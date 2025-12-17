@@ -83,6 +83,15 @@ const UsuariosScreen: React.FC = () => {
   const [createForm, setCreateForm] = useState<UsuarioPayload>(initialCreateState);
   const [updateForm, setUpdateForm] = useState<UsuarioUpdatePayload>(initialUpdateState);
   const [selectedUsuario, setSelectedUsuario] = useState<Usuario | null>(null);
+  const [searchUsuario, setSearchUsuario] = useState('');
+  const [searchNombreCompleto, setSearchNombreCompleto] = useState('');
+  const [filterEstado, setFilterEstado] = useState('');
+  const [filterFechaDesde, setFilterFechaDesde] = useState('');
+  const [filterFechaHasta, setFilterFechaHasta] = useState('');
+  const [sortField, setSortField] = useState<
+    'id' | 'usuario' | 'nombreCompleto' | 'estado' | 'fechaCreacion' | null
+  >(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // FIX: Centralizamos la carga de usuarios y capturamos errores del backend.
   const fetchUsuarios = useCallback(async () => {
@@ -226,10 +235,114 @@ const UsuariosScreen: React.FC = () => {
     }
   };
 
-  const usuariosOrdenados = useMemo(
-    () => [...usuarios].sort((a, b) => a.id - b.id),
-    [usuarios]
-  );
+  const handleSort = (field: 'id' | 'usuario' | 'nombreCompleto' | 'estado' | 'fechaCreacion') => {
+    setSortField((currentField) => {
+      if (currentField === field) {
+        setSortDirection((currentDirection) => (currentDirection === 'asc' ? 'desc' : 'asc'));
+        return currentField;
+      }
+
+      setSortDirection('asc');
+      return field;
+    });
+  };
+
+  const renderSortIndicator = (
+    field: 'id' | 'usuario' | 'nombreCompleto' | 'estado' | 'fechaCreacion'
+  ) => {
+    if (sortField !== field) {
+      return null;
+    }
+
+    return sortDirection === 'asc' ? '▲' : '▼';
+  };
+
+  const usuariosFiltradosOrdenados = useMemo(() => {
+    const filtered = usuarios.filter((usuario) => {
+      const usuarioLower = usuario.nombre_usuario.toLowerCase();
+      const nombreCompletoLower = (usuario.nombre_completo ?? '').toLowerCase();
+      const searchUsuarioLower = searchUsuario.trim().toLowerCase();
+      const searchNombreLower = searchNombreCompleto.trim().toLowerCase();
+
+      if (searchUsuarioLower && !usuarioLower.includes(searchUsuarioLower)) {
+        return false;
+      }
+
+      if (searchNombreLower && !nombreCompletoLower.includes(searchNombreLower)) {
+        return false;
+      }
+
+      if (filterEstado === 'Activo' && !usuario.activo) {
+        return false;
+      }
+
+      if (filterEstado === 'Inactivo' && usuario.activo) {
+        return false;
+      }
+
+      if (filterFechaDesde) {
+        const desde = new Date(filterFechaDesde);
+        desde.setHours(0, 0, 0, 0);
+        const fechaUsuario = new Date(usuario.fecha_creacion);
+        if (!Number.isNaN(desde.getTime()) && fechaUsuario < desde) {
+          return false;
+        }
+      }
+
+      if (filterFechaHasta) {
+        const hasta = new Date(filterFechaHasta);
+        hasta.setHours(23, 59, 59, 999);
+        const fechaUsuario = new Date(usuario.fecha_creacion);
+        if (!Number.isNaN(hasta.getTime()) && fechaUsuario > hasta) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    if (!sortField) {
+      return filtered;
+    }
+
+    const directionMultiplier = sortDirection === 'asc' ? 1 : -1;
+
+    return [...filtered].sort((a, b) => {
+      let comparison = 0;
+
+      if (sortField === 'id') {
+        comparison = a.id - b.id;
+      } else if (sortField === 'usuario') {
+        comparison = a.nombre_usuario.localeCompare(b.nombre_usuario, 'es', {
+          sensitivity: 'accent',
+        });
+      } else if (sortField === 'nombreCompleto') {
+        comparison = (a.nombre_completo ?? '').localeCompare(b.nombre_completo ?? '', 'es', {
+          sensitivity: 'accent',
+        });
+      } else if (sortField === 'estado') {
+        comparison = Number(a.activo) - Number(b.activo);
+      } else if (sortField === 'fechaCreacion') {
+        comparison =
+          new Date(a.fecha_creacion).getTime() - new Date(b.fecha_creacion).getTime();
+      }
+
+      return comparison * directionMultiplier;
+    });
+  }, [filterEstado, filterFechaDesde, filterFechaHasta, searchNombreCompleto, searchUsuario, sortDirection, sortField, usuarios]);
+
+  const handleResetFilters = () => {
+    setSearchUsuario('');
+    setSearchNombreCompleto('');
+    setFilterEstado('');
+    setFilterFechaDesde('');
+    setFilterFechaHasta('');
+  };
+
+  const handleApplyFilters = () => {
+    setSearchUsuario((value) => value.trim());
+    setSearchNombreCompleto((value) => value.trim());
+  };
 
   return (
     <div className="space-y-6">
@@ -251,70 +364,196 @@ const UsuariosScreen: React.FC = () => {
         <div className="rounded-md border border-green-200 bg-green-50 p-4 text-green-700">{successMessage}</div>
       )}
 
-      <div className="overflow-x-auto rounded-lg bg-white shadow">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">ID</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Usuario</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                Nombre completo
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Estado</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                Fecha creación
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 bg-white">
-            {loading ? (
+      <div className="rounded-lg bg-white p-6 shadow">
+        <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700" htmlFor="search_usuario">
+              Usuario
+            </label>
+            <input
+              id="search_usuario"
+              type="text"
+              value={searchUsuario}
+              onChange={(event) => setSearchUsuario(event.target.value)}
+              placeholder="Buscar usuario..."
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700" htmlFor="search_nombre_completo">
+              Nombre completo
+            </label>
+            <input
+              id="search_nombre_completo"
+              type="text"
+              value={searchNombreCompleto}
+              onChange={(event) => setSearchNombreCompleto(event.target.value)}
+              placeholder="Buscar nombre completo..."
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700" htmlFor="filter_estado">
+              Estado
+            </label>
+            <select
+              id="filter_estado"
+              value={filterEstado}
+              onChange={(event) => setFilterEstado(event.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+            >
+              <option value="">Todos</option>
+              <option value="Activo">Activo</option>
+              <option value="Inactivo">Inactivo</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700" htmlFor="filter_fecha_desde">
+              Fecha creación desde
+            </label>
+            <input
+              id="filter_fecha_desde"
+              type="date"
+              value={filterFechaDesde}
+              onChange={(event) => setFilterFechaDesde(event.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700" htmlFor="filter_fecha_hasta">
+              Fecha creación hasta
+            </label>
+            <input
+              id="filter_fecha_hasta"
+              type="date"
+              value={filterFechaHasta}
+              onChange={(event) => setFilterFechaHasta(event.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+            />
+          </div>
+        </div>
+        <div className="mb-4 flex flex-wrap gap-3">
+          <button type="button" className={primaryButtonClasses} onClick={handleApplyFilters}>
+            Buscar
+          </button>
+          <button type="button" className={secondaryButtonClasses} onClick={handleResetFilters}>
+            Limpiar
+          </button>
+        </div>
+        <div className="overflow-x-auto rounded-lg">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
-                  Cargando usuarios...
-                </td>
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                  onClick={() => handleSort('id')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <span className="flex items-center gap-2">
+                    ID
+                    {renderSortIndicator('id') && (
+                      <span className="text-gray-400">{renderSortIndicator('id')}</span>
+                    )}
+                  </span>
+                </th>
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                  onClick={() => handleSort('usuario')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <span className="flex items-center gap-2">
+                    Usuario
+                    {renderSortIndicator('usuario') && (
+                      <span className="text-gray-400">{renderSortIndicator('usuario')}</span>
+                    )}
+                  </span>
+                </th>
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                  onClick={() => handleSort('nombreCompleto')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <span className="flex items-center gap-2">
+                    Nombre completo
+                    {renderSortIndicator('nombreCompleto') && (
+                      <span className="text-gray-400">{renderSortIndicator('nombreCompleto')}</span>
+                    )}
+                  </span>
+                </th>
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                  onClick={() => handleSort('estado')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <span className="flex items-center gap-2">
+                    Estado
+                    {renderSortIndicator('estado') && (
+                      <span className="text-gray-400">{renderSortIndicator('estado')}</span>
+                    )}
+                  </span>
+                </th>
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                  onClick={() => handleSort('fechaCreacion')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <span className="flex items-center gap-2">
+                    Fecha creación
+                    {renderSortIndicator('fechaCreacion') && (
+                      <span className="text-gray-400">{renderSortIndicator('fechaCreacion')}</span>
+                    )}
+                  </span>
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Acciones</th>
               </tr>
-            ) : usuariosOrdenados.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
-                  No hay usuarios registrados.
-                </td>
-              </tr>
-            ) : (
-              usuariosOrdenados.map((usuario) => (
-                <tr key={usuario.id}>
-                  <td className="px-4 py-4 text-sm text-gray-700">{usuario.id}</td>
-                  <td className="px-4 py-4 text-sm font-medium text-gray-900">{usuario.nombre_usuario}</td>
-                  <td className="px-4 py-4 text-sm text-gray-700">{usuario.nombre_completo || '—'}</td>
-                  <td className="px-4 py-4 text-sm">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        usuario.activo
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {usuario.activo ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 text-sm text-gray-700">
-                    {new Date(usuario.fecha_creacion).toLocaleString()}
-                  </td>
-                  <td className="px-4 py-4 text-sm">
-                    <div className="flex gap-2">
-                      <button type="button" className={secondaryButtonClasses} onClick={() => openEditModal(usuario)}>
-                        Editar
-                      </button>
-                      <button type="button" className={dangerButtonClasses} onClick={() => handleDelete(usuario)}>
-                        Eliminar
-                      </button>
-                    </div>
+            </thead>
+            <tbody className="divide-y divide-gray-200 bg-white">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
+                    Cargando usuarios...
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : usuariosFiltradosOrdenados.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
+                    No se encontraron usuarios con los criterios seleccionados.
+                  </td>
+                </tr>
+              ) : (
+                usuariosFiltradosOrdenados.map((usuario) => (
+                  <tr key={usuario.id}>
+                    <td className="px-4 py-4 text-sm text-gray-700">{usuario.id}</td>
+                    <td className="px-4 py-4 text-sm font-medium text-gray-900">{usuario.nombre_usuario}</td>
+                    <td className="px-4 py-4 text-sm text-gray-700">{usuario.nombre_completo || '—'}</td>
+                    <td className="px-4 py-4 text-sm">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                          usuario.activo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {usuario.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-700">
+                      {new Date(usuario.fecha_creacion).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-4 text-sm">
+                      <div className="flex gap-2">
+                        <button type="button" className={secondaryButtonClasses} onClick={() => openEditModal(usuario)}>
+                          Editar
+                        </button>
+                        <button type="button" className={dangerButtonClasses} onClick={() => handleDelete(usuario)}>
+                          Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {isModalOpen && modalMode === 'create' && (
