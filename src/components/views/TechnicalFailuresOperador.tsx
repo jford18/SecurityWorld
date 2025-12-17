@@ -192,11 +192,11 @@ const TechnicalFailuresOperador: React.FC = () => {
     return String(item?.nombre || item?.name || item?.label || '');
   }, [formData?.tipoEquipoAfectadoId, catalogos?.tiposEquipoAfectado, catalogos?.tiposEquipo]);
 
+  const isEquipoAfectacion =
+    normalizeText(String(formData?.affectationType || '')) === normalizeText('Equipo');
   const isGrabadorSelected =
-    normalizeText(tipoEquipoAfectadoNombre) === normalizeText('Grabador');
-  const showEncodingDeviceField =
-    normalizeText(formData?.affectationType || '') === normalizeText('Equipo') &&
-    isGrabadorSelected;
+    normalizeText(tipoEquipoAfectadoNombre || '') === normalizeText('Grabador');
+  const showEncodingDeviceField = isEquipoAfectacion && isGrabadorSelected;
 
   const sitiosItems = useMemo(
     () => [
@@ -241,7 +241,6 @@ const TechnicalFailuresOperador: React.FC = () => {
       return;
     }
 
-    setFormData((p: any) => ({ ...p, encodingDeviceId: '' }));
     getEncodingDevicesBySite(selectedSiteName)
       .then((data: any) => setEncodingDevices(Array.isArray(data) ? data : []))
       .catch(() => setEncodingDevices([]));
