@@ -83,11 +83,11 @@ const UsuariosScreen: React.FC = () => {
   const [createForm, setCreateForm] = useState<UsuarioPayload>(initialCreateState);
   const [updateForm, setUpdateForm] = useState<UsuarioUpdatePayload>(initialUpdateState);
   const [selectedUsuario, setSelectedUsuario] = useState<Usuario | null>(null);
-  const [searchUsuario, setSearchUsuario] = useState('');
-  const [searchNombreCompleto, setSearchNombreCompleto] = useState('');
+  const [filterId, setFilterId] = useState('');
+  const [filterUsuario, setFilterUsuario] = useState('');
+  const [filterNombreCompleto, setFilterNombreCompleto] = useState('');
   const [filterEstado, setFilterEstado] = useState('');
-  const [filterFechaDesde, setFilterFechaDesde] = useState('');
-  const [filterFechaHasta, setFilterFechaHasta] = useState('');
+  const [filterFechaCreacion, setFilterFechaCreacion] = useState('');
   const [sortField, setSortField] = useState<
     'id' | 'usuario' | 'nombreCompleto' | 'estado' | 'fechaCreacion' | null
   >(null);
@@ -259,46 +259,21 @@ const UsuariosScreen: React.FC = () => {
 
   const usuariosFiltradosOrdenados = useMemo(() => {
     const filtered = usuarios.filter((usuario) => {
-      const usuarioLower = usuario.nombre_usuario.toLowerCase();
-      const nombreCompletoLower = (usuario.nombre_completo ?? '').toLowerCase();
-      const searchUsuarioLower = searchUsuario.trim().toLowerCase();
-      const searchNombreLower = searchNombreCompleto.trim().toLowerCase();
+      const filterIdLower = filterId.trim().toLowerCase();
+      const filterUsuarioLower = filterUsuario.trim().toLowerCase();
+      const filterNombreLower = filterNombreCompleto.trim().toLowerCase();
+      const filterEstadoNormalized = filterEstado.trim().toLowerCase();
+      const filterFechaLower = filterFechaCreacion.trim().toLowerCase();
 
-      if (searchUsuarioLower && !usuarioLower.includes(searchUsuarioLower)) {
-        return false;
-      }
+      const idMatch = String(usuario.id).toLowerCase().includes(filterIdLower);
+      const usuarioMatch = usuario.nombre_usuario.toLowerCase().includes(filterUsuarioLower);
+      const nombreMatch = (usuario.nombre_completo ?? '').toLowerCase().includes(filterNombreLower);
+      const estadoLabel = usuario.activo ? 'activo' : 'inactivo';
+      const estadoMatch = filterEstadoNormalized === '' || estadoLabel.includes(filterEstadoNormalized);
+      const fechaFormateada = new Date(usuario.fecha_creacion).toLocaleString();
+      const fechaMatch = fechaFormateada.toLowerCase().includes(filterFechaLower);
 
-      if (searchNombreLower && !nombreCompletoLower.includes(searchNombreLower)) {
-        return false;
-      }
-
-      if (filterEstado === 'Activo' && !usuario.activo) {
-        return false;
-      }
-
-      if (filterEstado === 'Inactivo' && usuario.activo) {
-        return false;
-      }
-
-      if (filterFechaDesde) {
-        const desde = new Date(filterFechaDesde);
-        desde.setHours(0, 0, 0, 0);
-        const fechaUsuario = new Date(usuario.fecha_creacion);
-        if (!Number.isNaN(desde.getTime()) && fechaUsuario < desde) {
-          return false;
-        }
-      }
-
-      if (filterFechaHasta) {
-        const hasta = new Date(filterFechaHasta);
-        hasta.setHours(23, 59, 59, 999);
-        const fechaUsuario = new Date(usuario.fecha_creacion);
-        if (!Number.isNaN(hasta.getTime()) && fechaUsuario > hasta) {
-          return false;
-        }
-      }
-
-      return true;
+      return idMatch && usuarioMatch && nombreMatch && estadoMatch && fechaMatch;
     });
 
     if (!sortField) {
@@ -329,20 +304,7 @@ const UsuariosScreen: React.FC = () => {
 
       return comparison * directionMultiplier;
     });
-  }, [filterEstado, filterFechaDesde, filterFechaHasta, searchNombreCompleto, searchUsuario, sortDirection, sortField, usuarios]);
-
-  const handleResetFilters = () => {
-    setSearchUsuario('');
-    setSearchNombreCompleto('');
-    setFilterEstado('');
-    setFilterFechaDesde('');
-    setFilterFechaHasta('');
-  };
-
-  const handleApplyFilters = () => {
-    setSearchUsuario((value) => value.trim());
-    setSearchNombreCompleto((value) => value.trim());
-  };
+  }, [filterEstado, filterFechaCreacion, filterId, filterNombreCompleto, filterUsuario, sortDirection, sortField, usuarios]);
 
   return (
     <div className="space-y-6">
@@ -365,144 +327,106 @@ const UsuariosScreen: React.FC = () => {
       )}
 
       <div className="rounded-lg bg-white p-6 shadow">
-        <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700" htmlFor="search_usuario">
-              Usuario
-            </label>
-            <input
-              id="search_usuario"
-              type="text"
-              value={searchUsuario}
-              onChange={(event) => setSearchUsuario(event.target.value)}
-              placeholder="Buscar usuario..."
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700" htmlFor="search_nombre_completo">
-              Nombre completo
-            </label>
-            <input
-              id="search_nombre_completo"
-              type="text"
-              value={searchNombreCompleto}
-              onChange={(event) => setSearchNombreCompleto(event.target.value)}
-              placeholder="Buscar nombre completo..."
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700" htmlFor="filter_estado">
-              Estado
-            </label>
-            <select
-              id="filter_estado"
-              value={filterEstado}
-              onChange={(event) => setFilterEstado(event.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-            >
-              <option value="">Todos</option>
-              <option value="Activo">Activo</option>
-              <option value="Inactivo">Inactivo</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700" htmlFor="filter_fecha_desde">
-              Fecha creación desde
-            </label>
-            <input
-              id="filter_fecha_desde"
-              type="date"
-              value={filterFechaDesde}
-              onChange={(event) => setFilterFechaDesde(event.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700" htmlFor="filter_fecha_hasta">
-              Fecha creación hasta
-            </label>
-            <input
-              id="filter_fecha_hasta"
-              type="date"
-              value={filterFechaHasta}
-              onChange={(event) => setFilterFechaHasta(event.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-            />
-          </div>
-        </div>
-        <div className="mb-4 flex flex-wrap gap-3">
-          <button type="button" className={primaryButtonClasses} onClick={handleApplyFilters}>
-            Buscar
-          </button>
-          <button type="button" className={secondaryButtonClasses} onClick={handleResetFilters}>
-            Limpiar
-          </button>
-        </div>
         <div className="overflow-x-auto rounded-lg">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th
-                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
-                  onClick={() => handleSort('id')}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <span className="flex items-center gap-2">
-                    ID
-                    {renderSortIndicator('id') && (
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSort('id')}
+                      className="flex items-center gap-2 font-semibold text-gray-700"
+                    >
+                      <span>ID</span>
                       <span className="text-gray-400">{renderSortIndicator('id')}</span>
-                    )}
-                  </span>
+                    </button>
+                    <input
+                      type="text"
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                      placeholder="Filtrar…"
+                      value={filterId}
+                      onChange={(event) => setFilterId(event.target.value)}
+                    />
+                  </div>
                 </th>
-                <th
-                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
-                  onClick={() => handleSort('usuario')}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <span className="flex items-center gap-2">
-                    Usuario
-                    {renderSortIndicator('usuario') && (
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSort('usuario')}
+                      className="flex items-center gap-2 font-semibold text-gray-700"
+                    >
+                      <span>Usuario</span>
                       <span className="text-gray-400">{renderSortIndicator('usuario')}</span>
-                    )}
-                  </span>
+                    </button>
+                    <input
+                      type="text"
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                      placeholder="Filtrar…"
+                      value={filterUsuario}
+                      onChange={(event) => setFilterUsuario(event.target.value)}
+                    />
+                  </div>
                 </th>
-                <th
-                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
-                  onClick={() => handleSort('nombreCompleto')}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <span className="flex items-center gap-2">
-                    Nombre completo
-                    {renderSortIndicator('nombreCompleto') && (
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSort('nombreCompleto')}
+                      className="flex items-center gap-2 font-semibold text-gray-700"
+                    >
+                      <span>Nombre completo</span>
                       <span className="text-gray-400">{renderSortIndicator('nombreCompleto')}</span>
-                    )}
-                  </span>
+                    </button>
+                    <input
+                      type="text"
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                      placeholder="Filtrar…"
+                      value={filterNombreCompleto}
+                      onChange={(event) => setFilterNombreCompleto(event.target.value)}
+                    />
+                  </div>
                 </th>
-                <th
-                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
-                  onClick={() => handleSort('estado')}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <span className="flex items-center gap-2">
-                    Estado
-                    {renderSortIndicator('estado') && (
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSort('estado')}
+                      className="flex items-center gap-2 font-semibold text-gray-700"
+                    >
+                      <span>Estado</span>
                       <span className="text-gray-400">{renderSortIndicator('estado')}</span>
-                    )}
-                  </span>
+                    </button>
+                    <select
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                      value={filterEstado}
+                      onChange={(event) => setFilterEstado(event.target.value)}
+                    >
+                      <option value="">Todos</option>
+                      <option value="activo">Activo</option>
+                      <option value="inactivo">Inactivo</option>
+                    </select>
+                  </div>
                 </th>
-                <th
-                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
-                  onClick={() => handleSort('fechaCreacion')}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <span className="flex items-center gap-2">
-                    Fecha creación
-                    {renderSortIndicator('fechaCreacion') && (
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSort('fechaCreacion')}
+                      className="flex items-center gap-2 font-semibold text-gray-700"
+                    >
+                      <span>Fecha creación</span>
                       <span className="text-gray-400">{renderSortIndicator('fechaCreacion')}</span>
-                    )}
-                  </span>
+                    </button>
+                    <input
+                      type="text"
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-800"
+                      placeholder="Filtrar…"
+                      value={filterFechaCreacion}
+                      onChange={(event) => setFilterFechaCreacion(event.target.value)}
+                    />
+                  </div>
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Acciones</th>
               </tr>
