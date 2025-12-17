@@ -28,6 +28,7 @@ type FailureFormData = {
   reportadoCliente: boolean;
   nodo: string;
   tipoEquipoAfectadoId: string;
+  tipoEquipoAfectadoNombre: string;
   camara: string;
   tipoProblemaEquipo: string;
   sitioId: string;
@@ -57,6 +58,7 @@ const buildInitialFormData = (): FailureFormData => ({
   reportadoCliente: false,
   nodo: '',
   tipoEquipoAfectadoId: '',
+  tipoEquipoAfectadoNombre: '',
   camara: '',
   tipoProblemaEquipo: '',
   sitioId: '',
@@ -184,6 +186,10 @@ const TechnicalFailuresOperador: React.FC = () => {
   }, [formData?.tipoEquipoAfectadoId, tiposEquipoAfectado]);
 
   const tipoEquipoAfectadoNombre = useMemo(() => {
+    if (formData?.tipoEquipoAfectadoNombre) {
+      return formData.tipoEquipoAfectadoNombre;
+    }
+
     const id = String(formData?.tipoEquipoAfectadoId || '');
     if (!id) return '';
 
@@ -194,12 +200,17 @@ const TechnicalFailuresOperador: React.FC = () => {
       list.find((x) => String(x.value) === id);
 
     return String(item?.nombre || item?.name || item?.label || '');
-  }, [formData?.tipoEquipoAfectadoId, catalogos?.tiposEquipoAfectado, catalogos?.tiposEquipo]);
+  }, [
+    formData?.tipoEquipoAfectadoId,
+    formData?.tipoEquipoAfectadoNombre,
+    catalogos?.tiposEquipoAfectado,
+    catalogos?.tiposEquipo,
+  ]);
 
+  const isGrabadorSelected =
+    normalizeText(String(formData?.tipoEquipoAfectadoNombre || '')) === normalizeText('Grabador');
   const isEquipoAfectacion =
     normalizeText(String(formData?.affectationType || '')) === normalizeText('Equipo');
-  const isGrabadorSelected =
-    normalizeText(tipoEquipoAfectadoNombre || '') === normalizeText('Grabador');
   const showEncodingDeviceField = isEquipoAfectacion && isGrabadorSelected;
 
   const sitiosItems = useMemo(
@@ -578,6 +589,24 @@ const TechnicalFailuresOperador: React.FC = () => {
     applyFieldUpdate(fieldName, value);
   };
 
+  const handleTipoEquipoAfectadoChange = (item: any) => {
+    const tipoEquipoAfectadoId = String(item?.value ?? item?.id ?? '');
+    const tipoEquipoAfectadoNombre = String(item?.nombre ?? item?.name ?? item?.label ?? '');
+
+    const newValues: FailureFormData = {
+      ...formData,
+      tipoEquipoAfectadoId,
+      tipoEquipoAfectadoNombre,
+      camara: '',
+      tipoProblemaEquipo: '',
+      encodingDeviceId: '',
+    };
+
+    setEncodingDevices([]);
+    setFormData(newValues);
+    validate(newValues);
+  };
+
   const handleNodoChange = async (nodoId: string) => {
     const normalizedId = nodoId ?? '';
     const newValues: FailureFormData = {
@@ -741,7 +770,7 @@ const TechnicalFailuresOperador: React.FC = () => {
 
   useEffect(() => {
     if (formData.affectationType !== 'Equipo' && formData.tipoEquipoAfectadoId) {
-      setFormData((prev) => ({ ...prev, tipoEquipoAfectadoId: '' }));
+      setFormData((prev) => ({ ...prev, tipoEquipoAfectadoId: '', tipoEquipoAfectadoNombre: '' }));
       setErrors((prev) => {
         const { tipoEquipoAfectadoId, ...rest } = prev;
         return rest;
@@ -1135,8 +1164,11 @@ const TechnicalFailuresOperador: React.FC = () => {
                   label="Tipo de Equipo Afectado *"
                   value={formData.tipoEquipoAfectadoId}
                   onChange={(selected: string) =>
-                    applyFieldUpdate('tipoEquipoAfectadoId', selected)
+                    handleTipoEquipoAfectadoChange(
+                      tipoEquipoAfectadoItems.find((item) => item.value === selected),
+                    )
                   }
+                  onItemSelect={handleTipoEquipoAfectadoChange}
                   items={tipoEquipoAfectadoItems}
                   displayField="label"
                   valueField="value"
