@@ -248,6 +248,8 @@ def process_camera_resource_status(excel_path: str) -> None:
         return
 
     try:
+        conn = None
+        cur = None
         df = pd.read_excel(excel_file, sheet_name="Camera", header=7)
         df = df[df["Name"].notna()].copy()
         df = df[
@@ -279,77 +281,100 @@ def process_camera_resource_status(excel_path: str) -> None:
             inplace=True,
         )
 
-        df_bd = df[
-            [
-                "camera_name",
-                "device_code",
-                "device_address",
-                "site_name",
-                "network_status",
-                "video_signal",
-                "auto_check_time",
-            ]
-        ].copy()
+        df["auto_check_time"] = pd.to_datetime(df["auto_check_time"], errors="coerce")
 
-        df_bd["auto_check_time"] = pd.to_datetime(
-            df_bd["auto_check_time"], errors="coerce"
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name   = 'hik_camera_resource_status'
+            """
         )
+        db_columns = {row[0] for row in cur.fetchall()}
+        cur.close()
+        cur = None
 
-        records = df_bd.to_dict(orient="records")
+        possible_mappings = {
+            "camera_name": ["camera_name"],
+            "device_code": ["device_code"],
+            "device_address": ["device_address", "ip_address"],
+            "site_name": ["site_name"],
+            "network_status": ["network_status", "online_status"],
+            "video_signal": ["video_signal", "signal_status"],
+            "recording_status": ["recording_status", "record_status"],
+            "auto_check_time": ["auto_check_time", "last_online_time"],
+            "device_model": ["device_model"],
+        }
+
+        insert_columns: list[str] = []
+        df_columns: list[str] = []
+
+        for df_col, candidates in possible_mappings.items():
+            if df_col not in df.columns:
+                continue
+            target = next((c for c in candidates if c in db_columns), None)
+            if target:
+                insert_columns.append(target)
+                df_columns.append(df_col)
+
+        for key in ("camera_name", "device_code"):
+            if key not in df_columns and key in df.columns and key in db_columns:
+                insert_columns.insert(0, key)
+                df_columns.insert(0, key)
+
+        if "camera_name" not in insert_columns or "device_code" not in insert_columns:
+            print(
+                "[ERROR] La tabla hik_camera_resource_status no tiene columnas camera_name y device_code compatibles."
+            )
+            return
+
+        df_for_db = df[df_columns].copy()
+        records = df_for_db.to_dict(orient="records")
 
         if not records:
             print("[INFO] No hay registros de cámaras para insertar/actualizar.")
             return
 
-        conn = get_pg_connection()
+        cols_sql = ", ".join(insert_columns + ["updated_at"])
+        vals_sql = ", ".join([f"%({c})s" for c in df_columns] + ["NOW()"])
+
+        update_cols = [c for c in insert_columns if c not in ("camera_name", "device_code")]
+        set_sql = ", ".join([f"{c} = EXCLUDED.{c}" for c in update_cols] + ["updated_at = NOW()"])
+
+        sql = f"""
+            INSERT INTO hik_camera_resource_status (
+                {cols_sql}
+            )
+            VALUES (
+                {vals_sql}
+            )
+            ON CONFLICT (camera_name, device_code)
+            DO UPDATE SET
+                {set_sql};
+        """
+
         try:
             with conn:
-                with conn.cursor() as cur:
-                    sql = """
-                        INSERT INTO hik_camera_resource_status (
-                            camera_name,
-                            device_code,
-                            site_name,
-                            network_status,
-                            video_signal,
-                            auto_check_time,
-                            device_address,
-                            updated_at
-                        )
-                        VALUES (
-                            %(camera_name)s,
-                            %(device_code)s,
-                            %(site_name)s,
-                            %(network_status)s,
-                            %(video_signal)s,
-                            %(auto_check_time)s,
-                            %(device_address)s,
-                            NOW()
-                        )
-                        ON CONFLICT (camera_name, device_code)
-                        DO UPDATE SET
-                            site_name       = EXCLUDED.site_name,
-                            network_status  = EXCLUDED.network_status,
-                            video_signal    = EXCLUDED.video_signal,
-                            auto_check_time = EXCLUDED.auto_check_time,
-                            device_address  = EXCLUDED.device_address,
-                            updated_at      = NOW();
-                    """
-
-                    execute_batch(cur, sql, records, page_size=500)
-
+                with conn.cursor() as cur_db:
+                    execute_batch(cur_db, sql, records, page_size=500)
         except Exception as db_error:
             print(f"[ERROR] No se pudieron insertar/actualizar las cámaras: {db_error}")
             traceback.print_exc()
             return
-        finally:
-            conn.close()
 
         print(f"[INFO] Cámaras insertadas/actualizadas: {len(records)}")
 
     except Exception as e:
         print(f"[ERROR] Error al procesar el archivo de cámaras: {e}")
         traceback.print_exc()
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 def crear_driver() -> webdriver.Chrome:
