@@ -139,6 +139,7 @@ const TechnicalFailuresOperador: React.FC = () => {
   >([]);
   const [encodingDeviceId, setEncodingDeviceId] = useState('');
   const [selectedProblem, setSelectedProblem] = useState<any>(null);
+  const [selectedTipoEquipoAfectado, setSelectedTipoEquipoAfectado] = useState<any>(null);
   const [sitiosNodo, setSitiosNodo] = useState<SitioAsociado[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -173,8 +174,7 @@ const TechnicalFailuresOperador: React.FC = () => {
     normalizeText(problemaDescripcion),
   );
   const isGrabadorSelected =
-    normalizeText(selectedTipoEquipoAfectado?.nombre || '') === normalizeText('Grabador') ||
-    normalizeText(String(formData.tipoEquipoAfectadoId || '')) === normalizeText('Grabador');
+    normalizeText(selectedTipoEquipoAfectado?.nombre || '') === normalizeText('Grabador');
   const showEncodingDeviceField =
     normalizeText(formData.affectationType) === normalizeText('Equipo') && isGrabadorSelected;
 
@@ -295,19 +295,20 @@ const TechnicalFailuresOperador: React.FC = () => {
     [catalogos.tiposProblemaEquipo]
   );
 
-  const selectedTipoEquipoAfectado = useMemo(() => {
+  useEffect(() => {
     const rawValue = formData.tipoEquipoAfectadoId || '';
     const normalizedValue = normalizeText(String(rawValue));
 
-    return (
+    const selected =
       tiposEquipoAfectado.find(
         (tipo) => String(tipo.id ?? tipo.nombre ?? '') === String(rawValue)
       ) ||
       tiposEquipoAfectado.find(
         (tipo) => normalizeText(tipo.nombre || '') === normalizedValue
       ) ||
-      null
-    );
+      null;
+
+    setSelectedTipoEquipoAfectado(selected);
   }, [tiposEquipoAfectado, formData.tipoEquipoAfectadoId]);
 
   const camaraItems = useMemo(
