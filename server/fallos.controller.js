@@ -69,6 +69,8 @@ const mapFalloRowToDto = (row) => ({
   problema: row.problema || row.tipo_problema_descripcion || undefined,
   equipo_afectado: row.equipo_afectado ?? "",
   descripcion_fallo: row.descripcion_fallo ?? "",
+  encoding_device_id: row.encoding_device_id ?? null,
+  encodingDeviceId: row.encoding_device_id ?? null,
   responsable: row.responsable || "",
   deptResponsable: row.departamento || undefined,
   departamento_responsable: row.departamento_responsable || undefined,
@@ -177,6 +179,7 @@ const fetchFalloById = async (client, id) => {
         ft.hora,
         ft.equipo_afectado,
         ft.descripcion_fallo,
+        ft.encoding_device_id,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
         dept.id AS departamento_id,
@@ -229,6 +232,7 @@ export const getFallos = async (req, res) => {
         TO_CHAR(ft.fecha::timestamp + ft.hora, 'YYYY-MM-DD HH24:MI') AS fecha_hora_fallo,
         ft.equipo_afectado,
         ft.descripcion_fallo,
+        ft.encoding_device_id,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
         dept.id AS departamento_id,
@@ -530,6 +534,8 @@ export const createFallo = async (req, res) => {
     nodo_id: nodoIdSnake,
     usuarioId,
     camera_id,
+    encodingDeviceId,
+    encoding_device_id: encodingDeviceIdSnake,
   } = req.body || {};
 
   console.log("[createFallo] BODY COMPLETO:", JSON.stringify(req.body, null, 2));
@@ -579,6 +585,23 @@ export const createFallo = async (req, res) => {
     return Number.isNaN(parsed) ? null : parsed;
   })();
 
+  const encodingDeviceIdSource =
+    encodingDeviceId !== undefined && encodingDeviceId !== null && encodingDeviceId !== ""
+      ? encodingDeviceId
+      : encodingDeviceIdSnake;
+
+  const parsedEncodingDeviceId = (() => {
+    if (
+      encodingDeviceIdSource === undefined ||
+      encodingDeviceIdSource === null ||
+      encodingDeviceIdSource === ""
+    ) {
+      return null;
+    }
+    const parsed = Number(encodingDeviceIdSource);
+    return Number.isNaN(parsed) ? null : parsed;
+  })();
+
   if (
     sitioIdSource !== undefined &&
     sitioIdSource !== null &&
@@ -620,6 +643,11 @@ export const createFallo = async (req, res) => {
     rawTipoAfectacion === undefined || rawTipoAfectacion === null
       ? null
       : String(rawTipoAfectacion).trim() || null;
+
+  const encodingDeviceIdValue =
+    tipoAfectacionValue && tipoAfectacionValue.toLowerCase() === "equipo"
+      ? parsedEncodingDeviceId
+      : null;
 
   const nodoIdentificador =
     nodo === undefined || nodo === null || nodo === ""
@@ -728,13 +756,14 @@ export const createFallo = async (req, res) => {
         consola_id,
         sitio_id,
         camera_id,
+        encoding_device_id,
         tipo_afectacion,
         fecha_resolucion,
         hora_resolucion,
         fecha_creacion,
         fecha_actualizacion
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW()
       ) RETURNING id`,
       [
         fechaFalloValue,
@@ -747,6 +776,7 @@ export const createFallo = async (req, res) => {
         consolaId,
         sitioIdValue,
         cameraIdValue,
+        encodingDeviceIdValue,
         tipoAfectacionValue,
         fechaResolucion || null,
         horaResolucion || null, // FIX: exclude estado so the generated column is calculated by PostgreSQL during inserts.
@@ -821,6 +851,10 @@ export const actualizarFalloSupervisor = async (req, res) => {
     novedadDetectada,
     ultimoUsuarioEditoId,
     responsable_verificacion_cierre_id,
+    affectationType,
+    tipo_afectacion,
+    encodingDeviceId,
+    encoding_device_id: encodingDeviceIdSnake,
   } = req.body || {};
 
   console.log("[actualizarFalloSupervisor] body:", req.body);
@@ -909,6 +943,31 @@ export const actualizarFalloSupervisor = async (req, res) => {
     const horaResolucionValue =
       horaResolucion ?? existingFallo.hora_resolucion ?? null;
 
+    const tipoAfectacionFinal =
+      tipo_afectacion ?? affectationType ?? existingFallo.tipo_afectacion ?? null;
+
+    const encodingDeviceIdSource =
+      encodingDeviceId !== undefined && encodingDeviceId !== null && encodingDeviceId !== ""
+        ? encodingDeviceId
+        : encodingDeviceIdSnake;
+
+    const parsedEncodingDeviceId = (() => {
+      if (
+        encodingDeviceIdSource === undefined ||
+        encodingDeviceIdSource === null ||
+        encodingDeviceIdSource === ""
+      ) {
+        return null;
+      }
+      const parsed = Number(encodingDeviceIdSource);
+      return Number.isNaN(parsed) ? null : parsed;
+    })();
+
+    const encodingDeviceIdValue =
+      tipoAfectacionFinal && tipoAfectacionFinal.toLowerCase() === "equipo"
+        ? parsedEncodingDeviceId
+        : null;
+
     if (fechaResolucionValue && !departamentoFinalId) {
       await client.query("ROLLBACK");
       return res.status(400).json({
@@ -924,14 +983,16 @@ export const actualizarFalloSupervisor = async (req, res) => {
              departamento_id = $3,
              fecha_resolucion = $4,
              hora_resolucion = $5,
+             encoding_device_id = $6,
              fecha_actualizacion = NOW()
-        WHERE id = $6`,
+       WHERE id = $7`,
       [
         fechaFalloValue,
         horaFalloValue,
         departamentoFinalId,
         fechaResolucionValue,
         horaResolucionValue,
+        encodingDeviceIdValue,
         id,
       ]
     );

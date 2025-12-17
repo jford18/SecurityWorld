@@ -8,6 +8,8 @@ export interface TechnicalFailure {
   // Campos nuevos (solo supervisor)
   deptResponsable?: string;
   departamentoResponsableId?: string | number | null;
+  encoding_device_id?: number | null;
+  encodingDeviceId?: number | null;
   sitio_nombre?: string;
   sitioNombre?: string;
   sitio?: string;

@@ -49,6 +49,7 @@ export interface TechnicalFailurePayload {
   cliente?: string | null;
   sitio_id?: number | string | null;
   tipo_equipo_afectado_id?: number | string | null;
+  encodingDeviceId?: number | string | null;
 }
 
 export type SitioAsociado = {
