@@ -839,39 +839,49 @@ def seleccionar_opcion_resource_status(driver, wait, opcion: str):
     print(f"[6] Seleccionando {opcion}...")
 
     try:
+        # 1) Mantener la lógica existente que abre/ubica el menú Resource Status
         menu = wait.until(
             EC.visibility_of_element_located(
                 (By.CSS_SELECTOR, "div.el-menu--popup, div.el-dropdown-menu")
             )
         )
 
-        items = menu.find_elements(By.XPATH, ".//li[.//span]")
-        opcion_normalizada = opcion.strip().lower()
-
-        target = None
-        for item in items:
-            texto = item.text.strip()
-            if not texto:
-                continue
-            if texto.strip().lower() == opcion_normalizada:
-                target = item
-                break
-
-        if not target:
-            textos = [i.text.strip() for i in items if i.text.strip()]
-            raise Exception(
-                f"No se encontró la opción '{opcion}' en Resource Status. Opciones encontradas: {textos}"
-            )
-
-        driver.execute_script(
-            "arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});", target
+        # 2) Buscar directamente la opción por texto normalizado usando un XPath robusto
+        texto_busqueda = opcion.strip()
+        xpath = (
+            f"//li[.//span[normalize-space()='{texto_busqueda}']]"
+            f" | //span[normalize-space()='{texto_busqueda}']/ancestor::li[1]"
         )
 
         try:
-            wait.until(EC.element_to_be_clickable(target))
-            ActionChains(driver).move_to_element(target).click().perform()
+            elemento = wait.until(
+                EC.presence_of_element_located((By.XPATH, xpath))
+            )
+        except Exception as e:
+            raise Exception(
+                f"No se encontró la opción '{opcion}' en el menú Resource Status"
+            ) from e
+
+        # 3) Asegurar que la opción sea visible realizando scroll hasta ella
+        try:
+            driver.execute_script(
+                "arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});",
+                elemento,
+            )
         except Exception:
-            driver.execute_script("arguments[0].click();", target)
+            pass
+
+        # 4) Intentar clic normal y, si falla, usar clic por JavaScript
+        try:
+            wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+            ActionChains(driver).move_to_element(elemento).click().perform()
+        except Exception:
+            try:
+                driver.execute_script("arguments[0].click();", elemento)
+            except Exception as e:
+                raise Exception(
+                    f"No se pudo hacer clic en la opción '{opcion}' del menú Resource Status"
+                ) from e
 
         if step_timer:
             step_timer.mark(f"[6] Opción '{opcion}'")
