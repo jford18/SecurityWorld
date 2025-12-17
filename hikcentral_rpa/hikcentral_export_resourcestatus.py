@@ -6,6 +6,7 @@ import traceback
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 import psutil
 import psycopg2
 from dotenv import load_dotenv
@@ -282,6 +283,9 @@ def process_camera_resource_status(excel_path: str) -> None:
         )
 
         df["auto_check_time"] = pd.to_datetime(df["auto_check_time"], errors="coerce")
+        df["auto_check_time"] = df["auto_check_time"].where(
+            df["auto_check_time"].notna(), None
+        )
 
         conn = get_pg_connection()
         cur = conn.cursor()
@@ -332,6 +336,8 @@ def process_camera_resource_status(excel_path: str) -> None:
             return
 
         df_for_db = df[df_columns].copy()
+        df_for_db = df_for_db.replace({np.nan: None})
+        df_for_db = df_for_db.where(df_for_db.notna(), None)
         records = df_for_db.to_dict(orient="records")
 
         if not records:
