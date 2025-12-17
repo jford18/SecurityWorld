@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import api from './api';
 import { getCurrentUserIdFromStorage } from '../utils/currentUser';
 import {
   CatalogoDepartamento,
@@ -115,6 +116,11 @@ export const getFallos = async (): Promise<TechnicalFailure[]> => {
 };
 
 export const fetchFallos = getFallos;
+
+export const getEncodingDevicesBySite = async (siteName: string) => {
+  const res = await api.get('/hik/encoding-devices', { params: { siteName } });
+  return res.data;
+};
 
 const buildRoleHeaders = (context?: RequestContext) => {
   const headers: Record<string, string> = {};
