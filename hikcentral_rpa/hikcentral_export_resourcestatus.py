@@ -839,35 +839,47 @@ def seleccionar_opcion_resource_status(driver, wait, opcion: str):
     print(f"[6] Seleccionando {opcion}...")
 
     try:
-        # Intento principal: li con title = opcion
-        try:
-            item = wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        f"//li[contains(@class,'el-menu-item') and @title='{opcion}']",
-                    )
-                )
+        menu = wait.until(
+            EC.visibility_of_element_located(
+                (By.CSS_SELECTOR, "div.el-menu--popup, div.el-dropdown-menu")
             )
-        except TimeoutException:
-            # Fallback por texto visible
-            item = wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        f"//span[@title='{opcion}' or normalize-space(text())='{opcion}']/ancestor::li[contains(@class,'el-menu-item')]",
-                    )
-                )
+        )
+
+        items = menu.find_elements(By.XPATH, ".//li[.//span]")
+        opcion_normalizada = opcion.strip().lower()
+
+        target = None
+        for item in items:
+            texto = item.text.strip()
+            if not texto:
+                continue
+            if texto.strip().lower() == opcion_normalizada:
+                target = item
+                break
+
+        if not target:
+            textos = [i.text.strip() for i in items if i.text.strip()]
+            raise Exception(
+                f"No se encontró la opción '{opcion}' en Resource Status. Opciones encontradas: {textos}"
             )
 
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", item)
-        driver.execute_script("arguments[0].click();", item)
+        driver.execute_script(
+            "arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});", target
+        )
+
+        try:
+            wait.until(EC.element_to_be_clickable(target))
+            ActionChains(driver).move_to_element(target).click().perform()
+        except Exception:
+            driver.execute_script("arguments[0].click();", target)
 
         if step_timer:
             step_timer.mark(f"[6] Opción '{opcion}'")
 
-    except TimeoutException:
-        raise Exception(f"No se pudo hacer clic en la opción '{opcion}' del menú Resource Status")
+    except Exception as e:
+        raise Exception(
+            f"No se pudo hacer clic en la opción '{opcion}' del menú Resource Status"
+        ) from e
 
 
 def seleccionar_camera(driver, wait):
