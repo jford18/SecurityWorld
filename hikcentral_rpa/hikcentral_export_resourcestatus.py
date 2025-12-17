@@ -575,6 +575,108 @@ def process_ip_speaker_status(excel_path: str) -> None:
         conn.close()
 
 
+def process_alarm_input_status(excel_path: str) -> None:
+    import pandas as pd
+    import numpy as np
+    from psycopg2.extras import execute_batch
+
+    df = pd.read_excel(excel_path, sheet_name="Alarm Input", header=7)
+    df = df[df["Name"].notna()].copy()
+
+    df.rename(
+        columns={
+            "Name": "name",
+            "Device": "device",
+            "Area": "area",
+            "Partition (Area)": "partition_area",
+            "Network Status": "network_status",
+            "Arming Status": "arming_status",
+            "Bypass Status": "bypass_status",
+            "Fault Status": "fault_status",
+            "Alarm Status": "alarm_status",
+            "Detector Connection Status": "detector_connection_status",
+            "Battery Status": "battery_status",
+            "Device Battery Capacity": "device_battery_capacity",
+            "Zone Tampering Status": "zone_tampering_status",
+            "Auto-Check Time": "auto_check_time",
+        },
+        inplace=True,
+    )
+
+    df["auto_check_time"] = pd.to_datetime(df["auto_check_time"], errors="coerce")
+
+    df = df.replace({np.nan: None})
+    df["auto_check_time"] = df["auto_check_time"].where(
+        df["auto_check_time"].notna(), None
+    )
+
+    records = df.to_dict(orient="records")
+    if not records:
+        print("[INFO] No hay registros de Alarm Input para procesar.")
+        return
+
+    conn = get_pg_connection()
+
+    sql = """
+        INSERT INTO public.hik_alarm_input_status (
+            name,
+            device,
+            area,
+            partition_area,
+            network_status,
+            arming_status,
+            bypass_status,
+            fault_status,
+            alarm_status,
+            detector_connection_status,
+            battery_status,
+            device_battery_capacity,
+            zone_tampering_status,
+            auto_check_time,
+            updated_at
+        ) VALUES (
+            %(name)s,
+            %(device)s,
+            %(area)s,
+            %(partition_area)s,
+            %(network_status)s,
+            %(arming_status)s,
+            %(bypass_status)s,
+            %(fault_status)s,
+            %(alarm_status)s,
+            %(detector_connection_status)s,
+            %(battery_status)s,
+            %(device_battery_capacity)s,
+            %(zone_tampering_status)s,
+            %(auto_check_time)s,
+            NOW()
+        )
+        ON CONFLICT (name, device)
+        DO UPDATE SET
+            area                       = EXCLUDED.area,
+            partition_area             = EXCLUDED.partition_area,
+            network_status             = EXCLUDED.network_status,
+            arming_status              = EXCLUDED.arming_status,
+            bypass_status              = EXCLUDED.bypass_status,
+            fault_status               = EXCLUDED.fault_status,
+            alarm_status               = EXCLUDED.alarm_status,
+            detector_connection_status = EXCLUDED.detector_connection_status,
+            battery_status             = EXCLUDED.battery_status,
+            device_battery_capacity    = EXCLUDED.device_battery_capacity,
+            zone_tampering_status      = EXCLUDED.zone_tampering_status,
+            auto_check_time            = EXCLUDED.auto_check_time,
+            updated_at                 = NOW();
+    """
+
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                execute_batch(cur, sql, records, page_size=500)
+        print(f"[INFO] Alarm Inputs insertados/actualizados: {len(records)}")
+    finally:
+        conn.close()
+
+
 def crear_driver() -> webdriver.Chrome:
     """Configura y devuelve un driver de Chrome listo para descargar archivos."""
 
@@ -1148,6 +1250,17 @@ def run():
                 else:
                     print(
                         "[ERROR] No se encontró archivo de IP Speaker para procesar."
+                    )
+
+            elif opcion.lower() == "alarm input":
+                archivo_procesar = encontrar_ultimo_archivo(
+                    "Alarm Input_", ".xlsx"
+                )
+                if archivo_procesar:
+                    process_alarm_input_status(str(archivo_procesar))
+                else:
+                    print(
+                        "[ERROR] No se encontró archivo de Alarm Input para procesar."
                     )
 
             if timer:
