@@ -493,6 +493,88 @@ def process_encoding_device_status(excel_path: str) -> None:
         conn.close()
 
 
+def process_ip_speaker_status(excel_path: str) -> None:
+    import pandas as pd
+    import numpy as np
+    from psycopg2.extras import execute_batch
+
+    df = pd.read_excel(excel_path, sheet_name="IP Speaker", header=6)
+    df = df[df["Name"].notna()].copy()
+
+    df.rename(
+        columns={
+            "Name": "name",
+            "Address": "address",
+            "Serial No.": "serial_no",
+            "Version": "version",
+            "Network Status": "network_status",
+            "Time Sync Status": "time_sync_status",
+            "First Added Time": "first_added_time",
+            "Auto-Check Time": "auto_check_time",
+        },
+        inplace=True,
+    )
+
+    df["first_added_time"] = pd.to_datetime(df["first_added_time"], errors="coerce")
+    df["auto_check_time"] = pd.to_datetime(df["auto_check_time"], errors="coerce")
+
+    df = df.replace({np.nan: None})
+    df["first_added_time"] = df["first_added_time"].where(
+        df["first_added_time"].notna(), None
+    )
+    df["auto_check_time"] = df["auto_check_time"].where(
+        df["auto_check_time"].notna(), None
+    )
+
+    records = df.to_dict(orient="records")
+    if not records:
+        print("[INFO] No hay registros de IP Speaker para procesar.")
+        return
+
+    conn = get_pg_connection()
+
+    sql = """
+        INSERT INTO public.hik_ip_speaker_status (
+            name,
+            address,
+            serial_no,
+            version,
+            network_status,
+            time_sync_status,
+            first_added_time,
+            auto_check_time,
+            updated_at
+        ) VALUES (
+            %(name)s,
+            %(address)s,
+            %(serial_no)s,
+            %(version)s,
+            %(network_status)s,
+            %(time_sync_status)s,
+            %(first_added_time)s,
+            %(auto_check_time)s,
+            NOW()
+        )
+        ON CONFLICT (name, address)
+        DO UPDATE SET
+            serial_no        = EXCLUDED.serial_no,
+            version          = EXCLUDED.version,
+            network_status   = EXCLUDED.network_status,
+            time_sync_status = EXCLUDED.time_sync_status,
+            first_added_time = EXCLUDED.first_added_time,
+            auto_check_time  = EXCLUDED.auto_check_time,
+            updated_at       = NOW();
+    """
+
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                execute_batch(cur, sql, records, page_size=500)
+        print(f"[INFO] IP Speakers insertados/actualizados: {len(records)}")
+    finally:
+        conn.close()
+
+
 def crear_driver() -> webdriver.Chrome:
     """Configura y devuelve un driver de Chrome listo para descargar archivos."""
 
@@ -1055,6 +1137,17 @@ def run():
                 else:
                     print(
                         "[ERROR] No se encontró archivo de Encoding Device para procesar."
+                    )
+
+            elif opcion.lower() == "ip speaker":
+                archivo_procesar = encontrar_ultimo_archivo(
+                    "IP Speaker_", ".xlsx"
+                )
+                if archivo_procesar:
+                    process_ip_speaker_status(str(archivo_procesar))
+                else:
+                    print(
+                        "[ERROR] No se encontró archivo de IP Speaker para procesar."
                     )
 
             if timer:
