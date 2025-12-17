@@ -5,9 +5,11 @@ import time
 import traceback
 from pathlib import Path
 
+import pandas as pd
 import psutil
 import psycopg2
-
+from dotenv import load_dotenv
+from psycopg2.extras import execute_batch
 from selenium import webdriver
 from selenium.common.exceptions import (
     ElementClickInterceptedException,
@@ -136,6 +138,9 @@ class StepTimer:
 # ========================
 # CONFIGURACIÓN GENERAL
 # ========================
+BASE_DIR = Path(__file__).resolve().parents[1]
+ENV_PATH = BASE_DIR / ".env"
+load_dotenv(ENV_PATH)
 URL = "https://172.16.9.253/#"
 SCRIPT_NAME = "hikcentral_export_resourcestatus.py"
 HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
@@ -150,6 +155,16 @@ performance_recorder: PerformanceRecorder | None = None
 
 def registrar_cpu(medicion: float):
     cpu_measurements.append(medicion)
+
+
+def get_pg_connection():
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST", "localhost"),
+        port=os.getenv("DB_PORT", "5432"),
+        dbname=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASS"),
+    )
 
 
 def registrar_ejecucion_y_pasos(
@@ -221,6 +236,131 @@ def registrar_ejecucion_y_pasos(
         print("[INFO] Registro de rendimiento y pasos insertado correctamente.")
     except Exception as e:
         print(f"[ERROR] No se pudo registrar el rendimiento en la base de datos: {e}")
+
+
+def process_camera_resource_status(excel_path: str):
+    excel_file = Path(excel_path)
+    if not excel_file.exists():
+        excel_file = max(
+            DOWNLOAD_DIR.glob("Camera_*.xlsx"),
+            key=lambda p: p.stat().st_mtime,
+            default=None,
+        )
+
+    if not excel_file or not excel_file.exists():
+        raise FileNotFoundError("No se encontró un archivo de cámara para procesar.")
+
+    df_raw = pd.read_excel(excel_file, header=None)
+    headers = df_raw.iloc[6]
+    data = df_raw.iloc[7:].copy()
+    data.columns = headers
+    data = data.dropna(how="all")
+
+    column_mapping = {
+        "Name": "camera_name",
+        "Channel Address": "device_code",
+        "Device Address": "device_address",
+        "Area": "site_name",
+        "Device Model": "device_model",
+        "Network Status": "network_status",
+        "Video Signal": "video_signal",
+        "Recording Status": "recording_status",
+        "Auto-Check Time": "auto_check_time",
+    }
+
+    cleaned_df = data.rename(columns=column_mapping)
+    cleaned_df = cleaned_df[list(column_mapping.values())]
+    cleaned_df["auto_check_time"] = pd.to_datetime(
+        cleaned_df["auto_check_time"], errors="coerce"
+    )
+
+    records = cleaned_df.to_dict(orient="records")
+    total_rows = len(records)
+
+    if not records:
+        print(f"[INFO] El archivo {excel_file.name} no contiene filas para procesar.")
+        return {"file": excel_file.name, "total": 0, "processed": 0}
+
+    conn = None
+    cur = None
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS hik_camera_resource_status (
+                id                      SERIAL PRIMARY KEY,
+                camera_name             VARCHAR(255) NOT NULL,
+                device_code             VARCHAR(100),
+                site_name               VARCHAR(255),
+                device_model            VARCHAR(100),
+                network_status          VARCHAR(50),
+                recording_status        VARCHAR(50),
+                video_signal            VARCHAR(50),
+                auto_check_time         TIMESTAMP,
+                device_address          VARCHAR(50),
+                created_at              TIMESTAMP DEFAULT NOW(),
+                updated_at              TIMESTAMP DEFAULT NOW(),
+                CONSTRAINT uq_camera_device UNIQUE (camera_name, device_code)
+            );
+            """
+        )
+
+        upsert_sql = """
+            INSERT INTO hik_camera_resource_status (
+                camera_name,
+                device_code,
+                site_name,
+                device_model,
+                network_status,
+                recording_status,
+                video_signal,
+                auto_check_time,
+                device_address,
+                updated_at
+            )
+            VALUES (
+                %(camera_name)s,
+                %(device_code)s,
+                %(site_name)s,
+                %(device_model)s,
+                %(network_status)s,
+                %(recording_status)s,
+                %(video_signal)s,
+                %(auto_check_time)s,
+                %(device_address)s,
+                NOW()
+            )
+            ON CONFLICT (camera_name, device_code)
+            DO UPDATE SET
+                site_name        = EXCLUDED.site_name,
+                device_model     = EXCLUDED.device_model,
+                network_status   = EXCLUDED.network_status,
+                recording_status = EXCLUDED.recording_status,
+                video_signal     = EXCLUDED.video_signal,
+                auto_check_time  = EXCLUDED.auto_check_time,
+                device_address   = EXCLUDED.device_address,
+                updated_at       = NOW();
+        """
+
+        execute_batch(cur, upsert_sql, records)
+        conn.commit()
+
+        processed_rows = len(records)
+        print(
+            f"[INFO] Archivo procesado: {excel_file.name} | "
+            f"Filas totales: {total_rows} | Filas insertadas/actualizadas: {processed_rows}"
+        )
+        return {"file": excel_file.name, "total": total_rows, "processed": processed_rows}
+    except Exception:
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 def crear_driver() -> webdriver.Chrome:
@@ -747,12 +887,26 @@ def run():
 
         try:
             limpiar_descargas(DOWNLOAD_DIR)
-            export_resource_status_to_excel(driver, wait, DOWNLOAD_DIR, opcion)
+            archivo_descargado = export_resource_status_to_excel(
+                driver, wait, DOWNLOAD_DIR, opcion
+            )
 
             if timer:
                 timer.mark("[8] Export completado")
 
             print(f"[OK] Export de '{opcion}' completado.")
+
+            if opcion.lower() == "camera":
+                ultimo_archivo = max(
+                    DOWNLOAD_DIR.glob("Camera_*.xlsx"),
+                    key=lambda p: p.stat().st_mtime,
+                    default=None,
+                )
+                archivo_procesar = ultimo_archivo or archivo_descargado
+
+                if archivo_procesar:
+                    process_camera_resource_status(str(archivo_procesar))
+
             if timer:
                 timer.mark("[FIN] Script completo")
         except Exception as e:
