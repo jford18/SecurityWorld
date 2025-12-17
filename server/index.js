@@ -35,6 +35,7 @@ import conclusionEventoRoutes from "./routes/conclusionEvento.routes.js";
 import reportesEventosRoutes from "./routes/reportesEventos.routes.js";
 import tipoServicioRoutes from "./routes/tipoServicio.routes.js";
 import catalogoTipoEquipoAfectadoRoutes from "./routes/catalogoTipoEquipoAfectadoRoutes.js";
+import fallosTecnicosRoutes from "./routes/fallosTecnicosRoutes.js";
 
 dotenv.config();
 
@@ -54,6 +55,7 @@ const knownApiPrefixes = [
   "/api/catalogos",
   "/api/catalogo-tipo-equipo-afectado",
   "/api/auth",
+  "/api/fallos-tecnicos",
   "/api/asignar-cliente-sitio",
   "/api/fallos",
   "/api/consolas",
@@ -124,6 +126,7 @@ app.use("/api/catalogos", catalogosRoutes);
 app.use("/api/v1/catalogo-tipo-problema", catalogoTipoProblemaRoutes);
 app.use("/api/tipo-intrusion", tipoIntrusionRoutes);
 app.use("/api/intrusiones", intrusionesRoutes);
+app.use("/api/fallos-tecnicos", fallosTecnicosRoutes);
 app.use("/api/usuarios", usuariosRoutes);
 app.use("/api/roles", rolesRoutes);
 app.use("/api/usuario-roles", usuarioRolesRoutes);

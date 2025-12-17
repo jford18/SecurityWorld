@@ -529,6 +529,7 @@ export const createFallo = async (req, res) => {
     nodoId,
     nodo_id: nodoIdSnake,
     usuarioId,
+    camera_id,
   } = req.body || {};
 
   console.log("[createFallo] BODY COMPLETO:", JSON.stringify(req.body, null, 2));
@@ -569,6 +570,14 @@ export const createFallo = async (req, res) => {
     sitioIdSource === undefined || sitioIdSource === null || sitioIdSource === ""
       ? null
       : Number(sitioIdSource);
+
+  const cameraIdValue = (() => {
+    if (camera_id === undefined || camera_id === null || camera_id === "") {
+      return null;
+    }
+    const parsed = Number(camera_id);
+    return Number.isNaN(parsed) ? null : parsed;
+  })();
 
   if (
     sitioIdSource !== undefined &&
@@ -718,13 +727,14 @@ export const createFallo = async (req, res) => {
         tipo_problema_id,
         consola_id,
         sitio_id,
+        camera_id,
         tipo_afectacion,
         fecha_resolucion,
         hora_resolucion,
         fecha_creacion,
         fecha_actualizacion
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW()
       ) RETURNING id`,
       [
         fechaFalloValue,
@@ -736,6 +746,7 @@ export const createFallo = async (req, res) => {
         tipoProblemaId,
         consolaId,
         sitioIdValue,
+        cameraIdValue,
         tipoAfectacionValue,
         fechaResolucion || null,
         horaResolucion || null, // FIX: exclude estado so the generated column is calculated by PostgreSQL during inserts.

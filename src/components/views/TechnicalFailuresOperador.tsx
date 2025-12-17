@@ -1,3 +1,4 @@
+import axios from 'axios';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSession } from '../context/SessionContext';
 import DateTimeInput, { normalizeDateTimeLocalString } from '../ui/DateTimeInput';
@@ -108,6 +109,16 @@ const isDeviceFromHC = (dispositivo: unknown): boolean => {
   return true;
 };
 
+const normalizeText = (text: string) =>
+  (text || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const PROBLEMAS_REQUIEREN_CAMARA = ['camara descuadrada', 'camara sucia'];
+
 const TechnicalFailuresOperador: React.FC = () => {
   const { session } = useSession();
   const [failures, setFailures] = useState<TechnicalFailure[]>([]);
@@ -117,6 +128,12 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [cliente, setCliente] = useState<string | null>(null);
   const [clienteFromConsole, setClienteFromConsole] = useState<string | null>(null);
   const [sitios, setSitios] = useState<Sitio[]>([]);
+  const [selectedSite, setSelectedSite] = useState('');
+  const [cameras, setCameras] = useState<
+    { id: number; camera_name: string; device_address: string | null }[]
+  >([]);
+  const [selectedCameraId, setSelectedCameraId] = useState('');
+  const [selectedProblem, setSelectedProblem] = useState<any>(null);
   const [sitiosNodo, setSitiosNodo] = useState<SitioAsociado[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -144,6 +161,12 @@ const TechnicalFailuresOperador: React.FC = () => {
   );
 
   const equipoEsHC = useMemo(() => isDeviceFromHC(selectedDispositivo), [selectedDispositivo]);
+
+  const problemaDescripcion =
+    selectedProblem?.descripcion || selectedProblem?.nombre || formData.tipoProblema || '';
+  const showCameraField = PROBLEMAS_REQUIEREN_CAMARA.includes(
+    normalizeText(problemaDescripcion),
+  );
 
   const sitioItems = useMemo(
     () => [
@@ -556,8 +579,31 @@ const TechnicalFailuresOperador: React.FC = () => {
     setErrors({});
     setCliente(null);
     setClienteFromConsole(null);
+    setSelectedProblem(null);
+    setSelectedSite('');
+    setCameras([]);
+    setSelectedCameraId('');
     setSitiosNodo([]);
     setNodoSitioError(null);
+  };
+
+  const handleTipoProblemaChange = (selected: string) => {
+    applyFieldUpdate('tipoProblema', selected);
+
+    const problema = catalogos.tiposProblema.find(
+      (tp) => normalizeText(tp.descripcion || tp.nombre || '') === normalizeText(selected),
+    );
+    setSelectedProblem(problema || null);
+
+    if (
+      !problema ||
+      !PROBLEMAS_REQUIEREN_CAMARA.includes(
+        normalizeText(problema.descripcion || problema.nombre || selected),
+      )
+    ) {
+      setSelectedCameraId('');
+      setCameras([]);
+    }
   };
 
   const handleSitioChange = (selected: string) => {
@@ -565,12 +611,14 @@ const TechnicalFailuresOperador: React.FC = () => {
 
     if (!selected) {
       setClienteFromConsole(null);
+      setSelectedSite('');
       return;
     }
 
     const sitioSeleccionado = sitios.find(
       (sitioItem) => String(sitioItem.id) === selected
     );
+    setSelectedSite(sitioSeleccionado?.nombre ?? '');
     setClienteFromConsole(resolveSitioClienteNombre(sitioSeleccionado));
   };
 
@@ -627,6 +675,27 @@ const TechnicalFailuresOperador: React.FC = () => {
       return rest;
     });
   }, [equipoEsHC, formData.affectationType, formData.tipoProblemaEquipo]);
+
+  useEffect(() => {
+    if (selectedSite && showCameraField) {
+      axios
+        .get(
+          `${import.meta.env.VITE_API_URL}/api/fallos-tecnicos/camaras/${encodeURIComponent(
+            selectedSite,
+          )}`,
+        )
+        .then((res) => {
+          setCameras(res.data || []);
+        })
+        .catch((err) => {
+          console.error('Error al cargar cámaras:', err);
+          setCameras([]);
+        });
+    } else {
+      setCameras([]);
+      setSelectedCameraId('');
+    }
+  }, [selectedSite, showCameraField]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -740,6 +809,7 @@ const TechnicalFailuresOperador: React.FC = () => {
           : selectedSitio
             ? selectedSitio.id
             : undefined,
+      camera_id: showCameraField && selectedCameraId ? Number(selectedCameraId) : null,
       consola: session.console,
       reportadoCliente: formData.reportadoCliente,
       camara: formData.camara,
@@ -756,6 +826,10 @@ const TechnicalFailuresOperador: React.FC = () => {
       setErrors({});
       setCliente(null);
       setClienteFromConsole(null);
+      setSelectedProblem(null);
+      setSelectedSite('');
+      setSelectedCameraId('');
+      setCameras([]);
       setSitiosNodo([]);
       setNodoSitioError(null);
     } catch (error) {
@@ -796,6 +870,32 @@ const TechnicalFailuresOperador: React.FC = () => {
             className="mt-1 block w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-gray-700 focus:border-[#F9C300] focus:ring-[#F9C300]"
           />
         </div>
+        {showCameraField && (
+          <div className="md:col-span-2">
+            <label htmlFor="camera_id" className="block text-sm font-medium text-gray-700">
+              Cámara
+            </label>
+            <select
+              id="camera_id"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300]"
+              value={selectedCameraId}
+              onChange={(e) => setSelectedCameraId(e.target.value)}
+              disabled={!selectedSite || cameras.length === 0}
+            >
+              <option value="">Seleccione una cámara</option>
+              {cameras.map((cam) => {
+                const label = cam.device_address
+                  ? `${cam.camera_name} - ${cam.device_address}`
+                  : cam.camera_name;
+                return (
+                  <option key={cam.id} value={cam.id}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
       </div>
     );
 
@@ -808,7 +908,7 @@ const TechnicalFailuresOperador: React.FC = () => {
                 <AutocompleteComboBox
                   label="Tipo de Problema *"
                   value={formData.tipoProblema}
-                  onChange={(selected: string) => applyFieldUpdate('tipoProblema', selected)}
+                  onChange={(selected: string) => handleTipoProblemaChange(selected)}
                   items={tipoProblemaItems}
                   displayField="descripcion"
                   valueField="value"
@@ -881,7 +981,7 @@ const TechnicalFailuresOperador: React.FC = () => {
                 <AutocompleteComboBox
                   label="Tipo de Problema *"
                   value={formData.tipoProblema}
-                  onChange={(selected: string) => applyFieldUpdate('tipoProblema', selected)}
+                  onChange={(selected: string) => handleTipoProblemaChange(selected)}
                   items={tipoProblemaItems}
                   displayField="descripcion"
                   valueField="value"
@@ -950,13 +1050,13 @@ const TechnicalFailuresOperador: React.FC = () => {
               </div>
             </div>
             <div className="md:col-span-2">
-              <AutocompleteComboBox
-                label="Tipo de Problema *"
-                value={formData.tipoProblema}
-                onChange={(selected: string) => applyFieldUpdate('tipoProblema', selected)}
-                items={tipoProblemaItems}
-                displayField="descripcion"
-                valueField="value"
+                <AutocompleteComboBox
+                  label="Tipo de Problema *"
+                  value={formData.tipoProblema}
+                  onChange={(selected: string) => handleTipoProblemaChange(selected)}
+                  items={tipoProblemaItems}
+                  displayField="descripcion"
+                  valueField="value"
                 placeholder="Buscar tipo de problema..."
                 error={errors.tipoProblema}
               />
@@ -1000,7 +1100,7 @@ const TechnicalFailuresOperador: React.FC = () => {
                 <AutocompleteComboBox
                   label="Tipo de Problema *"
                   value={formData.tipoProblema}
-                  onChange={(selected: string) => applyFieldUpdate('tipoProblema', selected)}
+                  onChange={(selected: string) => handleTipoProblemaChange(selected)}
                   items={tipoProblemaItems}
                   displayField="descripcion"
                   valueField="value"
