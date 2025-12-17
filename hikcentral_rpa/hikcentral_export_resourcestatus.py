@@ -279,14 +279,26 @@ def process_camera_resource_status(excel_path: str) -> None:
             inplace=True,
         )
 
-        df["auto_check_time"] = pd.to_datetime(
-            df["auto_check_time"], errors="coerce"
+        df_bd = df[
+            [
+                "camera_name",
+                "device_code",
+                "device_address",
+                "site_name",
+                "network_status",
+                "video_signal",
+                "auto_check_time",
+            ]
+        ].copy()
+
+        df_bd["auto_check_time"] = pd.to_datetime(
+            df_bd["auto_check_time"], errors="coerce"
         )
 
-        records = df.to_dict(orient="records")
+        records = df_bd.to_dict(orient="records")
 
         if not records:
-            print("[INFO] No hay registros de cámaras para procesar.")
+            print("[INFO] No hay registros de cámaras para insertar/actualizar.")
             return
 
         conn = get_pg_connection()
@@ -298,9 +310,7 @@ def process_camera_resource_status(excel_path: str) -> None:
                             camera_name,
                             device_code,
                             site_name,
-                            device_model,
                             network_status,
-                            recording_status,
                             video_signal,
                             auto_check_time,
                             device_address,
@@ -310,9 +320,7 @@ def process_camera_resource_status(excel_path: str) -> None:
                             %(camera_name)s,
                             %(device_code)s,
                             %(site_name)s,
-                            %(device_model)s,
                             %(network_status)s,
-                            %(recording_status)s,
                             %(video_signal)s,
                             %(auto_check_time)s,
                             %(device_address)s,
@@ -320,14 +328,12 @@ def process_camera_resource_status(excel_path: str) -> None:
                         )
                         ON CONFLICT (camera_name, device_code)
                         DO UPDATE SET
-                            site_name        = EXCLUDED.site_name,
-                            device_model     = EXCLUDED.device_model,
-                            network_status   = EXCLUDED.network_status,
-                            recording_status = EXCLUDED.recording_status,
-                            video_signal     = EXCLUDED.video_signal,
-                            auto_check_time  = EXCLUDED.auto_check_time,
-                            device_address   = EXCLUDED.device_address,
-                            updated_at       = NOW();
+                            site_name       = EXCLUDED.site_name,
+                            network_status  = EXCLUDED.network_status,
+                            video_signal    = EXCLUDED.video_signal,
+                            auto_check_time = EXCLUDED.auto_check_time,
+                            device_address  = EXCLUDED.device_address,
+                            updated_at      = NOW();
                     """
 
                     execute_batch(cur, sql, records, page_size=500)
@@ -339,7 +345,7 @@ def process_camera_resource_status(excel_path: str) -> None:
         finally:
             conn.close()
 
-        print(f"[INFO] Cámaras procesadas e insertadas/actualizadas: {len(records)}")
+        print(f"[INFO] Cámaras insertadas/actualizadas: {len(records)}")
 
     except Exception as e:
         print(f"[ERROR] Error al procesar el archivo de cámaras: {e}")
