@@ -161,9 +161,9 @@ def get_pg_connection():
     return psycopg2.connect(
         host=os.getenv("DB_HOST", "localhost"),
         port=os.getenv("DB_PORT", "5432"),
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASS"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASS", "123456"),
+        dbname=os.getenv("DB_NAME", "securityworld"),
     )
 
 
@@ -175,13 +175,7 @@ def registrar_ejecucion_y_pasos(
     recorder: PerformanceRecorder | None,
 ):
     try:
-        conn = psycopg2.connect(
-            host=os.getenv("DB_HOST", "localhost"),
-            port=os.getenv("DB_PORT", "5432"),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASS", "123456"),
-            dbname=os.getenv("DB_NAME", "securityworld"),
-        )
+        conn = get_pg_connection()
 
         cpu_max_value = recorder.cpu_max if recorder and recorder.cpu_max is not None else 0.0
         observacion = (
@@ -297,49 +291,48 @@ def process_camera_resource_status(excel_path: str) -> None:
 
         conn = get_pg_connection()
         try:
-            with conn.cursor() as cur:
-                sql = """
-                    INSERT INTO hik_camera_resource_status (
-                        camera_name,
-                        device_code,
-                        site_name,
-                        device_model,
-                        network_status,
-                        recording_status,
-                        video_signal,
-                        auto_check_time,
-                        device_address,
-                        updated_at
-                    )
-                    VALUES (
-                        %(camera_name)s,
-                        %(device_code)s,
-                        %(site_name)s,
-                        %(device_model)s,
-                        %(network_status)s,
-                        %(recording_status)s,
-                        %(video_signal)s,
-                        %(auto_check_time)s,
-                        %(device_address)s,
-                        NOW()
-                    )
-                    ON CONFLICT (camera_name, device_code)
-                    DO UPDATE SET
-                        site_name        = EXCLUDED.site_name,
-                        device_model     = EXCLUDED.device_model,
-                        network_status   = EXCLUDED.network_status,
-                        recording_status = EXCLUDED.recording_status,
-                        video_signal     = EXCLUDED.video_signal,
-                        auto_check_time  = EXCLUDED.auto_check_time,
-                        device_address   = EXCLUDED.device_address,
-                        updated_at       = NOW();
-                """
+            with conn:
+                with conn.cursor() as cur:
+                    sql = """
+                        INSERT INTO hik_camera_resource_status (
+                            camera_name,
+                            device_code,
+                            site_name,
+                            device_model,
+                            network_status,
+                            recording_status,
+                            video_signal,
+                            auto_check_time,
+                            device_address,
+                            updated_at
+                        )
+                        VALUES (
+                            %(camera_name)s,
+                            %(device_code)s,
+                            %(site_name)s,
+                            %(device_model)s,
+                            %(network_status)s,
+                            %(recording_status)s,
+                            %(video_signal)s,
+                            %(auto_check_time)s,
+                            %(device_address)s,
+                            NOW()
+                        )
+                        ON CONFLICT (camera_name, device_code)
+                        DO UPDATE SET
+                            site_name        = EXCLUDED.site_name,
+                            device_model     = EXCLUDED.device_model,
+                            network_status   = EXCLUDED.network_status,
+                            recording_status = EXCLUDED.recording_status,
+                            video_signal     = EXCLUDED.video_signal,
+                            auto_check_time  = EXCLUDED.auto_check_time,
+                            device_address   = EXCLUDED.device_address,
+                            updated_at       = NOW();
+                    """
 
-                execute_batch(cur, sql, records, page_size=500)
-            conn.commit()
+                    execute_batch(cur, sql, records, page_size=500)
 
         except Exception as db_error:
-            conn.rollback()
             print(f"[ERROR] No se pudieron insertar/actualizar las cámaras: {db_error}")
             traceback.print_exc()
             return
