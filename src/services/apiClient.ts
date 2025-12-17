@@ -1,6 +1,11 @@
 import axios from "axios";
 
-export const API_BASE_URL = "/api";
+const envApiUrl = (import.meta as any)?.env?.VITE_API_URL as string | undefined;
+const sanitizedEnvApiUrl =
+  envApiUrl && typeof envApiUrl === "string" ? envApiUrl.replace(/\/$/, "") : null;
+export const API_BASE_URL = sanitizedEnvApiUrl
+  ? `${sanitizedEnvApiUrl}${sanitizedEnvApiUrl.endsWith("/api") ? "" : "/api"}`
+  : "/api";
 
 const FRONTEND_SOURCE_REGEX = /(\/(?:src)\/|\\src\\|\.(?:ts|tsx|js|jsx)$)/i;
 
