@@ -1,4 +1,3 @@
-import axios from 'axios';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSession } from '../context/SessionContext';
 import DateTimeInput, { normalizeDateTimeLocalString } from '../ui/DateTimeInput';
@@ -17,6 +16,7 @@ import {
   SitioAsociado,
   getEncodingDevicesBySite,
 } from '../../services/fallosService';
+import api from '../../services/api';
 import TechnicalFailuresHistory from './TechnicalFailuresHistory';
 
 type AffectationType = 'Nodo' | 'Punto' | 'Equipo' | 'Masivo' | '';
@@ -151,6 +151,10 @@ const TechnicalFailuresOperador: React.FC = () => {
   >([]);
   const [nodoSitioError, setNodoSitioError] = useState<string | null>(null);
 
+  useEffect(() => {
+    console.log('[GRABADOR] api.baseURL:', api?.defaults?.baseURL);
+  }, []);
+
   const getSelectedDispositivo = (camaraValue: string) => {
     if (!camaraValue) return null;
 
@@ -210,6 +214,15 @@ const TechnicalFailuresOperador: React.FC = () => {
     [sitios]
   );
 
+  console.log('[GRABADOR] affectationType:', formData?.affectationType);
+  console.log('[GRABADOR] tipoEquipoAfectadoId:', formData?.tipoEquipoAfectadoId);
+  console.log('[GRABADOR] tipoEquipoAfectadoNombre:', tipoEquipoAfectadoNombre);
+  console.log('[GRABADOR] isEquipoAfectacion:', isEquipoAfectacion);
+  console.log('[GRABADOR] isGrabadorSelected:', isGrabadorSelected);
+  console.log('[GRABADOR] showEncodingDeviceField:', showEncodingDeviceField);
+  console.log('[GRABADOR] sitioId:', formData?.sitioId);
+  console.log('[GRABADOR] sitiosItems length:', (sitiosItems || []).length);
+
   const encodingDeviceItems = useMemo(() => {
     return [
       { id: 'empty', nombre: 'Seleccione...', value: '' },
@@ -228,7 +241,15 @@ const TechnicalFailuresOperador: React.FC = () => {
     return String(site?.nombre || '');
   }, [formData?.sitioId, sitiosItems]);
 
+  console.log('[GRABADOR] selectedSiteName:', selectedSiteName);
+
   useEffect(() => {
+    console.log('[GRABADOR] useEffect triggered', {
+      showEncodingDeviceField,
+      selectedSiteName,
+      sitioId: formData?.sitioId,
+    });
+
     if (!showEncodingDeviceField) {
       setEncodingDevices([]);
       setFormData((p: any) => ({ ...p, encodingDeviceId: '' }));
@@ -241,9 +262,17 @@ const TechnicalFailuresOperador: React.FC = () => {
       return;
     }
 
+    console.log('[GRABADOR] calling API getEncodingDevicesBySite with siteName:', selectedSiteName);
+
     getEncodingDevicesBySite(selectedSiteName)
-      .then((data: any) => setEncodingDevices(Array.isArray(data) ? data : []))
-      .catch(() => setEncodingDevices([]));
+      .then((data: any) => {
+        console.log('[GRABADOR] API response:', data);
+        setEncodingDevices(Array.isArray(data) ? data : []);
+      })
+      .catch((err: any) => {
+        console.error('[GRABADOR] API error:', err);
+        setEncodingDevices([]);
+      });
   }, [showEncodingDeviceField, selectedSiteName]);
 
   useEffect(() => {
