@@ -16,6 +16,7 @@ import {
   getNodoSitios,
   SitioAsociado,
 } from '../../services/fallosService';
+import { getEncodingDevicesBySite } from '../../services/hikEncodingDevicesService';
 import TechnicalFailuresHistory from './TechnicalFailuresHistory';
 
 type AffectationType = 'Nodo' | 'Punto' | 'Equipo' | 'Masivo' | '';
@@ -133,6 +134,10 @@ const TechnicalFailuresOperador: React.FC = () => {
     { id: number; camera_name: string; ip_address: string | null }[]
   >([]);
   const [selectedCameraId, setSelectedCameraId] = useState('');
+  const [encodingDevices, setEncodingDevices] = useState<
+    { id: number; name: string }[]
+  >([]);
+  const [encodingDeviceId, setEncodingDeviceId] = useState('');
   const [selectedProblem, setSelectedProblem] = useState<any>(null);
   const [sitiosNodo, setSitiosNodo] = useState<SitioAsociado[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -167,6 +172,10 @@ const TechnicalFailuresOperador: React.FC = () => {
   const showCameraField = PROBLEMAS_REQUIEREN_CAMARA.includes(
     normalizeText(problemaDescripcion),
   );
+  const isGrabadorSelected =
+    normalizeText(selectedTipoEquipoAfectado?.nombre || '') === normalizeText('Grabador');
+  const showEncodingDeviceField =
+    formData.affectationType === 'Equipo' && isGrabadorSelected;
 
   const sitioItems = useMemo(
     () => [
@@ -473,6 +482,8 @@ const TechnicalFailuresOperador: React.FC = () => {
     if (name === 'tipoEquipoAfectadoId') {
       newValues.camara = '';
       newValues.tipoProblemaEquipo = '';
+      setEncodingDevices([]);
+      setEncodingDeviceId('');
     }
 
     setFormData(newValues);
@@ -697,6 +708,28 @@ const TechnicalFailuresOperador: React.FC = () => {
     }
   }, [selectedSite, showCameraField]);
 
+  useEffect(() => {
+    if (!showEncodingDeviceField) {
+      setEncodingDevices([]);
+      setEncodingDeviceId('');
+      return;
+    }
+
+    if (!selectedSite) {
+      setEncodingDevices([]);
+      setEncodingDeviceId('');
+      return;
+    }
+
+    setEncodingDeviceId('');
+    getEncodingDevicesBySite(selectedSite)
+      .then((data) => setEncodingDevices(data))
+      .catch((error) => {
+        console.error('Error al cargar grabadores:', error);
+        setEncodingDevices([]);
+      });
+  }, [selectedSite, showEncodingDeviceField]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -810,6 +843,10 @@ const TechnicalFailuresOperador: React.FC = () => {
             ? selectedSitio.id
             : undefined,
       camera_id: showCameraField && selectedCameraId ? Number(selectedCameraId) : null,
+      encodingDeviceId:
+        showEncodingDeviceField && encodingDeviceId
+          ? Number(encodingDeviceId)
+          : null,
       consola: session.console,
       reportadoCliente: formData.reportadoCliente,
       camara: formData.camara,
@@ -830,6 +867,8 @@ const TechnicalFailuresOperador: React.FC = () => {
       setSelectedSite('');
       setSelectedCameraId('');
       setCameras([]);
+      setEncodingDeviceId('');
+      setEncodingDevices([]);
       setSitiosNodo([]);
       setNodoSitioError(null);
     } catch (error) {
@@ -893,6 +932,24 @@ const TechnicalFailuresOperador: React.FC = () => {
                   </option>
                 );
               })}
+            </select>
+          </div>
+        )}
+        {showEncodingDeviceField && (
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700">Grabador</label>
+            <select
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300]"
+              value={encodingDeviceId}
+              onChange={(e) => setEncodingDeviceId(e.target.value)}
+              disabled={!selectedSite || encodingDevices.length === 0}
+            >
+              <option value="">Seleccione un grabador</option>
+              {encodingDevices.map((device) => (
+                <option key={device.id} value={device.id}>
+                  {device.name}
+                </option>
+              ))}
             </select>
           </div>
         )}
