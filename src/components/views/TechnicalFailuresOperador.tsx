@@ -16,7 +16,7 @@ import {
   getNodoSitios,
   SitioAsociado,
 } from '../../services/fallosService';
-import { getEncodingDevicesBySite } from '../../services/hikEncodingDevicesService';
+import api from '../../services/api';
 import TechnicalFailuresHistory from './TechnicalFailuresHistory';
 
 type AffectationType = 'Nodo' | 'Punto' | 'Equipo' | 'Masivo' | '';
@@ -139,7 +139,6 @@ const TechnicalFailuresOperador: React.FC = () => {
   >([]);
   const [encodingDeviceId, setEncodingDeviceId] = useState('');
   const [selectedProblem, setSelectedProblem] = useState<any>(null);
-  const [selectedTipoEquipoAfectado, setSelectedTipoEquipoAfectado] = useState<any>(null);
   const [sitiosNodo, setSitiosNodo] = useState<SitioAsociado[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -173,12 +172,20 @@ const TechnicalFailuresOperador: React.FC = () => {
   const showCameraField = PROBLEMAS_REQUIEREN_CAMARA.includes(
     normalizeText(problemaDescripcion),
   );
-  const isGrabadorSelected =
-    normalizeText(selectedTipoEquipoAfectado?.nombre || '') === normalizeText('Grabador');
-  const showEncodingDeviceField =
-    normalizeText(formData.affectationType) === normalizeText('Equipo') && isGrabadorSelected;
+  const tipoEquipoAfectadoSel = useMemo(() => {
+    const id = formData?.tipoEquipoAfectadoId;
+    if (!id) return null;
+    return (tiposEquipoAfectado || []).find((x: any) => String(x.id) === String(id)) ?? null;
+  }, [formData?.tipoEquipoAfectadoId, tiposEquipoAfectado]);
 
-  const sitioItems = useMemo(
+  const isGrabadorSelected =
+    normalizeText(tipoEquipoAfectadoSel?.nombre || tipoEquipoAfectadoSel?.name || '') ===
+    normalizeText('Grabador');
+  const showEncodingDeviceField =
+    normalizeText(formData?.affectationType || '') === normalizeText('Equipo') &&
+    isGrabadorSelected;
+
+  const sitiosItems = useMemo(
     () => [
       { id: 'empty', nombre: 'Seleccione...', value: '' },
       ...sitios.map((sitioItem) => ({
@@ -294,22 +301,6 @@ const TechnicalFailuresOperador: React.FC = () => {
     ],
     [catalogos.tiposProblemaEquipo]
   );
-
-  useEffect(() => {
-    const rawValue = formData.tipoEquipoAfectadoId || '';
-    const normalizedValue = normalizeText(String(rawValue));
-
-    const selected =
-      tiposEquipoAfectado.find(
-        (tipo) => String(tipo.id ?? tipo.nombre ?? '') === String(rawValue)
-      ) ||
-      tiposEquipoAfectado.find(
-        (tipo) => normalizeText(tipo.nombre || '') === normalizedValue
-      ) ||
-      null;
-
-    setSelectedTipoEquipoAfectado(selected);
-  }, [tiposEquipoAfectado, formData.tipoEquipoAfectadoId]);
 
   const camaraItems = useMemo(
     () => [
@@ -453,7 +444,7 @@ const TechnicalFailuresOperador: React.FC = () => {
 
       const equipoHcActual = isDeviceFromHC(getSelectedDispositivo(fieldValues.camara));
 
-      if (selectedTipoEquipoAfectado?.nombre === 'Cámara') {
+      if (tipoEquipoAfectadoSel?.nombre === 'Cámara') {
         if (!fieldValues.camara) {
           tempErrors.camara = 'La cámara es obligatoria.';
         } else {
@@ -718,22 +709,32 @@ const TechnicalFailuresOperador: React.FC = () => {
   }, [selectedSite, showCameraField]);
 
   useEffect(() => {
-    const trimmedSite = selectedSite.trim();
-
-    if (!showEncodingDeviceField || !trimmedSite) {
+    if (!showEncodingDeviceField) {
       setEncodingDevices([]);
       setEncodingDeviceId('');
       return;
     }
 
-    setEncodingDeviceId('');
-    getEncodingDevicesBySite(trimmedSite)
-      .then((data) => setEncodingDevices(data))
-      .catch((error) => {
-        console.error('Error al cargar grabadores:', error);
-        setEncodingDevices([]);
-      });
-  }, [selectedSite, showEncodingDeviceField]);
+    if (!formData?.sitioId) {
+      setEncodingDevices([]);
+      setEncodingDeviceId('');
+      return;
+    }
+
+    const siteName = sitiosItems?.find(
+      (x: any) => String(x.value) === String(formData?.sitioId)
+    )?.nombre;
+    if (!siteName) {
+      setEncodingDevices([]);
+      setEncodingDeviceId('');
+      return;
+    }
+
+    api
+      .get('/api/hik/encoding-devices', { params: { siteName } })
+      .then((r: any) => setEncodingDevices(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setEncodingDevices([]));
+  }, [showEncodingDeviceField, formData?.sitioId, sitiosItems]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -779,7 +780,7 @@ const TechnicalFailuresOperador: React.FC = () => {
     if (formData.affectationType === 'Nodo') {
       equipo_afectado = selectedNodo?.nombre || 'N/A';
     } else if (formData.affectationType === 'Equipo') {
-      const equipo = formData.camara || selectedTipoEquipoAfectado?.nombre || 'Equipo';
+      const equipo = formData.camara || tipoEquipoAfectadoSel?.nombre || 'Equipo';
       equipo_afectado = `${equipo} en ${sitioNombre}`;
     } else if (formData.affectationType === 'Punto') {
       equipo_afectado = `Punto en ${sitioNombre}`;
@@ -850,7 +851,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       camera_id: showCameraField && selectedCameraId ? Number(selectedCameraId) : null,
       encodingDeviceId:
         showEncodingDeviceField && encodingDeviceId
-          ? Number(encodingDeviceId)
+          ? encodingDeviceId
           : null,
       consola: session.console,
       reportadoCliente: formData.reportadoCliente,
@@ -895,7 +896,7 @@ const TechnicalFailuresOperador: React.FC = () => {
             label="Sitio *"
             value={formData.sitioId}
             onChange={handleSitioChange}
-            items={sitioItems}
+            items={sitiosItems}
             displayField="nombre"
             valueField="value"
             placeholder="Buscar sitio..."
@@ -947,7 +948,7 @@ const TechnicalFailuresOperador: React.FC = () => {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300]"
               value={encodingDeviceId}
               onChange={(e) => setEncodingDeviceId(e.target.value)}
-              disabled={!selectedSite || encodingDevices.length === 0}
+              disabled={!formData.sitioId || encodingDevices.length === 0}
             >
               <option value="">Seleccione un grabador</option>
               {encodingDevices.map((device) => (
@@ -1138,7 +1139,7 @@ const TechnicalFailuresOperador: React.FC = () => {
                 />
               </div>
             )}
-            {selectedTipoEquipoAfectado?.nombre === 'Cámara' && (
+            {tipoEquipoAfectadoSel?.nombre === 'Cámara' && (
               <div className="md:col-span-2">
                 <AutocompleteComboBox
                   label="Cámara *"
