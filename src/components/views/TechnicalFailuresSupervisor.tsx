@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { format as formatDate } from 'date-fns';
 import {
   TechnicalFailure,
   TechnicalFailureCatalogs,
@@ -7,8 +8,8 @@ import {
 } from '../../types';
 import DateTimeInput, {
   buildDateTimeLocalValue,
+  parseLocalDateTime,
   normalizeDateTimeLocalString,
-  splitDateTimeLocalValue,
 } from '../ui/DateTimeInput';
 import {
   fetchFallos,
@@ -117,6 +118,28 @@ const formatFechaHoraDisplay = (
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 };
 
+const parseResolutionDateTimeValue = (
+  fechaHoraResolucion?: string | null,
+  fechaResolucion?: string | null,
+  horaResolucion?: string | null,
+): Date | null => {
+  const candidates: Array<string | undefined | null> = [
+    fechaHoraResolucion,
+    fechaHoraResolucion ? fechaHoraResolucion.replace(' ', 'T') : null,
+    fechaResolucion && horaResolucion ? `${fechaResolucion}T${horaResolucion}` : null,
+    fechaResolucion,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = parseLocalDateTime(candidate ?? undefined);
+    if (parsed && parsed.isValid()) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
   const EditFailureModal: React.FC<{
     failure: TechnicalFailure;
     departamentos: CatalogoDepartamento[];
@@ -205,13 +228,44 @@ const formatFechaHoraDisplay = (
   const [activeTab, setActiveTab] = useState<
     'general' | 'supervisor' | 'cierre'
   >('general');
+  const [resolutionDateTime, setResolutionDateTime] = useState<Date | null>(null);
 
   const isClosed = (failure.estado || '').toUpperCase() === 'CERRADO';
   const isReadOnly = isClosed;
   const canDelete = isReadOnly && isAdmin;
 
   useEffect(() => {
-    setEditData(normalizeFailure(failure));
+    console.log("[LOAD] Resolución desde API:", {
+      fechaHoraResolucion: failure.fechaHoraResolucion,
+      fechaResolucion: failure.fechaResolucion,
+      horaResolucion: failure.horaResolucion,
+    });
+
+    const normalized = normalizeFailure(failure);
+    const parsedResolution = parseResolutionDateTimeValue(
+      normalized.fechaHoraResolucion,
+      normalized.fechaResolucion,
+      normalized.horaResolucion,
+    );
+
+    console.log(
+      "[LOAD] Resolución parseada para UI:",
+      parsedResolution ? formatDate(parsedResolution, "yyyy-MM-dd HH:mm:ss") : null,
+    );
+
+    setEditData({
+      ...normalized,
+      fechaHoraResolucion: parsedResolution
+        ? formatDate(parsedResolution, "yyyy-MM-dd'T'HH:mm:ss")
+        : normalized.fechaHoraResolucion,
+      fechaResolucion: parsedResolution
+        ? formatDate(parsedResolution, "yyyy-MM-dd")
+        : normalized.fechaResolucion,
+      horaResolucion: parsedResolution
+        ? formatDate(parsedResolution, "HH:mm:ss")
+        : normalized.horaResolucion,
+    });
+    setResolutionDateTime(parsedResolution);
     setActiveTab('general');
   }, [failure, normalizeFailure]);
 
@@ -228,17 +282,22 @@ const formatFechaHoraDisplay = (
     updateField(name as keyof TechnicalFailure, value);
   };
 
-  const handleResolutionChange = (isoValue: string | null) => {
+  const handleResolutionChange = (rawValue: string | null) => {
     if (isReadOnly) return;
-    const normalizedValue = normalizeDateTimeLocalString(isoValue);
-    const { date, time } = splitDateTimeLocalValue(normalizedValue);
+    console.log("[DT PICKER] raw NEW_VALUE:", rawValue);
+    const parsed = parseLocalDateTime(rawValue ?? undefined);
+    console.log(
+      "[DT PICKER] format:",
+      parsed ? formatDate(parsed, "yyyy-MM-dd HH:mm:ss") : null,
+    );
+    setResolutionDateTime(parsed);
     setEditData((prev) => ({
       ...prev,
-      fechaHoraResolucion: isoValue || undefined,
-      fechaResolucion: date,
-      horaResolucion: time,
+      fechaHoraResolucion: parsed ? formatDate(parsed, "yyyy-MM-dd'T'HH:mm:ss") : undefined,
+      fechaResolucion: parsed ? formatDate(parsed, "yyyy-MM-dd") : undefined,
+      horaResolucion: parsed ? formatDate(parsed, "HH:mm:ss") : undefined,
       responsable_verificacion_cierre_nombre:
-        isoValue && currentUserName ? currentUserName : prev.responsable_verificacion_cierre_nombre,
+        parsed && currentUserName ? currentUserName : prev.responsable_verificacion_cierre_nombre,
     }));
   };
 
@@ -257,6 +316,35 @@ const formatFechaHoraDisplay = (
   }, [editData.fechaHoraFallo, editData.fecha, editData.hora, editData.horaFallo]);
 
   const fechaHoraFalloDisplay = fechaHoraReporte || 'Sin información';
+
+  const resolutionInputValue = useMemo(() => {
+    if (resolutionDateTime) {
+      return formatDate(resolutionDateTime, "yyyy-MM-dd'T'HH:mm");
+    }
+
+    const parsed = parseResolutionDateTimeValue(
+      editData.fechaHoraResolucion,
+      editData.fechaResolucion,
+      editData.horaResolucion,
+    );
+
+    if (parsed) {
+      return formatDate(parsed, "yyyy-MM-dd'T'HH:mm");
+    }
+
+    const combined =
+      editData.fechaHoraResolucion ||
+      (editData.fechaResolucion && editData.horaResolucion
+        ? `${editData.fechaResolucion}T${editData.horaResolucion}`
+        : editData.fechaResolucion || '');
+
+    return normalizeDateTimeLocalString(combined);
+  }, [
+    editData.fechaHoraResolucion,
+    editData.fechaResolucion,
+    editData.horaResolucion,
+    resolutionDateTime,
+  ]);
 
   const departamentoResponsableNombre = useMemo(() => {
     return (
@@ -471,8 +559,8 @@ const formatFechaHoraDisplay = (
             <DateTimeInput
               label="Fecha y Hora Resolución"
               name="fechaHoraResolucion"
-              value={editData.fechaHoraResolucion || ''}
-              onChange={(_, helpers) => handleResolutionChange(helpers.isoString)}
+              value={resolutionInputValue}
+              onChange={(newValue) => handleResolutionChange(newValue)}
               max={nowForInput}
               disabled={isReadOnly}
               className="disabled:bg-gray-100 disabled:text-gray-500"
@@ -717,19 +805,28 @@ const TechnicalFailuresSupervisor: React.FC = () => {
   );
 
   const resolveResolutionDateTime = (updatedFailure: TechnicalFailure) => {
-    const resolutionSource =
-      updatedFailure.fechaHoraResolucion ||
-      (updatedFailure.fechaResolucion && updatedFailure.horaResolucion
-        ? `${updatedFailure.fechaResolucion}T${updatedFailure.horaResolucion}`
-        : undefined);
+    const parsed = parseResolutionDateTimeValue(
+      updatedFailure.fechaHoraResolucion,
+      updatedFailure.fechaResolucion,
+      updatedFailure.horaResolucion,
+    );
 
-    return splitDateTimeLocalValue(resolutionSource);
+    const fallbackDate = updatedFailure.fechaResolucion || null;
+    const fallbackTime = updatedFailure.horaResolucion || null;
+
+    return {
+      date: parsed ? formatDate(parsed, 'yyyy-MM-dd') : fallbackDate || undefined,
+      time: parsed ? formatDate(parsed, 'HH:mm:ss') : fallbackTime || undefined,
+      formatted: parsed ? formatDate(parsed, 'yyyy-MM-dd HH:mm:ss') : undefined,
+    };
   };
 
   const handleUpdateFailure = useCallback(
     async (updatedFailure: TechnicalFailure) => {
       const departamentoId = resolveDepartamentoId(updatedFailure);
       const novedad = updatedFailure.novedadDetectada?.trim() || null;
+      const resolutionParts = resolveResolutionDateTime(updatedFailure);
+      const resolutionDateValue = parseLocalDateTime(resolutionParts.formatted ?? null);
 
       try {
         const values = updatedFailure as any;
@@ -744,6 +841,17 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         console.log(
           "[Supervisor Edit] Guardar cambios - usuario en localStorage['user']:",
           localStorage.getItem("user"),
+        );
+        console.log(
+          "[SAVE] FECHA_HORA_RESOLUCION UI:",
+          resolutionDateValue ? formatDate(resolutionDateValue, "yyyy-MM-dd hh:mm a") : null,
+        );
+        console.log(
+          "[SAVE] FECHA_HORA_RESOLUCION PAYLOAD:",
+          resolutionParts.formatted ??
+            (resolutionParts.date && resolutionParts.time
+              ? `${resolutionParts.date} ${resolutionParts.time}`
+              : null),
         );
         setIsSubmitting(true);
         console.log("[Supervisor] Guardar cambios, payload enviado:", {
@@ -775,8 +883,10 @@ const TechnicalFailuresSupervisor: React.FC = () => {
 
   const handleCloseFailure = useCallback(
     async (updatedFailure: TechnicalFailure) => {
-      const { date: resolutionDate, time: resolutionTime } =
-        resolveResolutionDateTime(updatedFailure);
+      const resolutionParts = resolveResolutionDateTime(updatedFailure);
+      const resolutionDate = resolutionParts.date;
+      const resolutionTime = resolutionParts.time;
+      const resolutionDateValue = parseLocalDateTime(resolutionParts.formatted ?? null);
 
       if (!resolutionDate || !resolutionTime) {
         alert('Debe ingresar la fecha y hora de resolución antes de cerrar el fallo.');
@@ -802,6 +912,15 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         console.log(
           "[Supervisor Edit] Cerrar fallo - usuario en localStorage['user']:",
           localStorage.getItem("user"),
+        );
+        console.log(
+          "[SAVE] FECHA_HORA_RESOLUCION UI:",
+          resolutionDateValue ? formatDate(resolutionDateValue, "yyyy-MM-dd hh:mm a") : null,
+        );
+        console.log(
+          "[SAVE] FECHA_HORA_RESOLUCION PAYLOAD:",
+          resolutionParts.formatted ??
+            (resolutionDate && resolutionTime ? `${resolutionDate} ${resolutionTime}` : null),
         );
         setIsSubmitting(true);
         console.log("[Supervisor] Payload cerrar fallo:", {

@@ -1,9 +1,18 @@
 import React from 'react';
+import { format as formatDate, isValid, parse } from 'date-fns';
 
 export type DateTimeParts = {
   date?: string;
   time?: string;
 };
+
+const DATE_TIME_FORMATS = [
+  "yyyy-MM-dd'T'HH:mm:ss.SSS",
+  "yyyy-MM-dd'T'HH:mm:ss",
+  "yyyy-MM-dd'T'HH:mm",
+  'yyyy-MM-dd HH:mm:ss',
+  'yyyy-MM-dd HH:mm',
+];
 
 export const buildDateTimeLocalValue = (date?: string, time?: string) => {
   if (!date) return '';
@@ -11,38 +20,45 @@ export const buildDateTimeLocalValue = (date?: string, time?: string) => {
   return `${date}T${sanitizedTime}`;
 };
 
-export const normalizeDateTimeLocalString = (value?: string | null) => {
-  if (!value) return '';
+export const parseLocalDateTime = (value?: string | null): Date | null => {
+  if (!value) return null;
 
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return '';
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const cleanedValue = trimmed.endsWith('Z') ? trimmed.slice(0, -1) : trimmed;
+
+  for (const format of DATE_TIME_FORMATS) {
+    const parsedValue = parse(cleanedValue, format, new Date());
+    if (isValid(parsedValue)) {
+      return parsedValue;
+    }
   }
 
-  const withOffset = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
-  return withOffset.toISOString().slice(0, 16);
+  const fallback = new Date(cleanedValue);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+};
+
+export const normalizeDateTimeLocalString = (value?: string | null) => {
+  const parsed = parseLocalDateTime(value);
+  return parsed ? formatDate(parsed, "yyyy-MM-dd'T'HH:mm") : '';
 };
 
 export const splitDateTimeLocalValue = (value?: string | null): DateTimeParts => {
-  const normalizedValue = normalizeDateTimeLocalString(value);
-  if (!normalizedValue) {
+  const parsed = parseLocalDateTime(value);
+  if (!parsed) {
     return { date: undefined, time: undefined };
   }
-  const [datePart, timePartRaw] = normalizedValue.split('T');
-  const timePart = timePartRaw ? timePartRaw.slice(0, 5) : undefined;
-  return { date: datePart || undefined, time: timePart || undefined };
+
+  return {
+    date: formatDate(parsed, 'yyyy-MM-dd'),
+    time: formatDate(parsed, 'HH:mm'),
+  };
 };
 
 export const toIsoString = (value?: string | null) => {
-  if (!value) return null;
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  const utcDate = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
-  return utcDate.toISOString();
+  const parsed = parseLocalDateTime(value);
+  return parsed ? formatDate(parsed, 'yyyy-MM-dd HH:mm:ss') : null;
 };
 
 interface DateTimeInputProps
@@ -82,9 +98,12 @@ const DateTimeInput: React.FC<DateTimeInputProps> = ({
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = event.target.value || null;
-    const parsedDate = newValue ? new Date(newValue) : null;
-    const isoString = parsedDate && !Number.isNaN(parsedDate.getTime()) ? toIsoString(newValue) : null;
-    onChange(newValue, { isoString, dateValue: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null });
+    const parsedDate = parseLocalDateTime(newValue);
+    const isoString = parsedDate ? toIsoString(newValue) : null;
+    onChange(newValue, {
+      isoString,
+      dateValue: parsedDate,
+    });
   };
 
   return (
