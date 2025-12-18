@@ -1,7 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
-import { create, deleteNodo, getAll, update } from '../../services/nodos.service';
+import { create, deleteNodo, exportNodosExcel, getAll, update } from '../../services/nodos.service';
 import { getProveedores } from '../../services/proveedoresService';
 
 const ITEMS_PER_PAGE = 10;
@@ -49,6 +48,7 @@ const Nodos = () => {
     fechaCreacion: '',
   });
   const [sortConfig, setSortConfig] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   const fetchNodos = async () => {
     try {
@@ -202,26 +202,31 @@ const Nodos = () => {
     return sortedNodos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [sortedNodos, currentPage]);
 
-  const handleExportToExcel = () => {
-    if (loading || currentItems.length === 0) return;
+  const triggerBlobDownload = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
 
-    const formattedRows = currentItems.map((nodo) => ({
-      ID: nodo.id ?? '—',
-      Nombre: nodo.nombre ?? '—',
-      IP: nodo.ip || '—',
-      Proveedor: getClienteNombre(nodo) || '—',
-      Activo: nodo.activo ? 'Sí' : 'No',
-      'Fecha creación': nodo.fecha_creacion
-        ? new Date(nodo.fecha_creacion).toLocaleString()
-        : '—',
-    }));
+  const handleExportToExcel = async () => {
+    if (loading || exporting) return;
 
-    const worksheet = XLSX.utils.json_to_sheet(formattedRows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Nodos');
-
-    const filename = `mantenimiento_nodos_${formatTimestamp()}.xlsx`;
-    XLSX.writeFile(workbook, filename);
+    try {
+      setExporting(true);
+      const { blob, filename } = await exportNodosExcel();
+      const resolvedFilename = filename || `mantenimiento_nodos_${formatTimestamp()}.xlsx`;
+      triggerBlobDownload(blob, resolvedFilename);
+    } catch (err) {
+      console.error('Error al exportar nodos:', err);
+      alert(err?.message || 'No se pudo exportar nodos');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const openCreateModal = () => {
@@ -372,7 +377,7 @@ const Nodos = () => {
             type="button"
             className={secondaryButtonClasses}
             onClick={handleExportToExcel}
-            disabled={loading || currentItems.length === 0}
+            disabled={loading || exporting}
           >
             Exportar a Excel
           </button>
