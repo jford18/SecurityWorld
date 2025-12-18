@@ -933,43 +933,89 @@ def abrir_menu_resource_status(driver, wait):
         raise Exception("No se pudo hacer clic en el menú 'Resource Status'")
 
 
-def seleccionar_opcion_resource_status(driver, wait, opcion: str):
+def seleccionar_opcion_resource_status(driver, wait, opcion: str) -> None:
     """
-    Asume que el submenú 'Resource Status' ya está expandido.
-    Hace clic en la opción indicada (por ejemplo 'Camera' o 'Encoding Device').
+    Abre la opción indicada (por ejemplo: "Camera", "Encoding Device", "IP Speaker")
+    dentro de Resource Status.
+
+    Estrategia:
+      1) Intentar usar el menú lateral "Resource Status".
+      2) Si no se encuentra la opción ahí, usar el panel de "Recently visited"
+         con elementos <div class="recently-visited-menu" title="...">.
     """
     print(f"[6] Seleccionando {opcion}...")
 
     try:
-        # Intento principal: li con title = opcion
+        # 1) Intentar expandir el menú lateral "Resource Status"
+        submenu_li = None
         try:
-            item = wait.until(
+            span_resource = wait.until(
                 EC.element_to_be_clickable(
                     (
                         By.XPATH,
-                        f"//li[contains(@class,'el-menu-item') and @title='{opcion}']",
+                        "//span[@id='subMenuTitle2' and normalize-space()='Resource Status']",
                     )
                 )
             )
+            submenu_li = span_resource.find_element(
+                By.XPATH, "./ancestor::li[contains(@class,'el-submenu')]"
+            )
+
+            # Si el submenú no está abierto, haz clic para expandirlo
+            submenu_classes = submenu_li.get_attribute("class") or ""
+            if "is-opened" not in submenu_classes:
+                span_resource.click()
         except TimeoutException:
-            # Fallback por texto visible
-            item = wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        f"//span[@title='{opcion}' or normalize-space(text())='{opcion}']/ancestor::li[contains(@class,'el-menu-item')]",
+            # Si no se encuentra el menú lateral, pasamos al plan B
+            submenu_li = None
+
+        # 2) Buscar la opción en el menú lateral expandido
+        if submenu_li is not None:
+            try:
+                opcion_element = wait.until(
+                    EC.element_to_be_clickable(
+                        (
+                            By.XPATH,
+                            (
+                                "//li[contains(@class,'el-submenu')"
+                                "  and .//span[@id='subMenuTitle2']]"
+                                f"//li[contains(@class,'el-menu-item') and @title='{opcion}']"
+                            ),
+                        )
                     )
                 )
+                driver.execute_script(
+                    "arguments[0].scrollIntoView({block: 'center'});",
+                    opcion_element,
+                )
+                ActionChains(driver).move_to_element(opcion_element).click().perform()
+                print(f"[5] Opción Resource Status seleccionada (menú lateral): {opcion}")
+                return
+            except TimeoutException:
+                # Si la opción no está en el menú lateral, seguir al plan B
+                pass
+
+        # 3) Plan B: usar el panel "Recently visited" / Quick Start
+        #    Usa los <div class="recently-visited-menu" title="...">
+        opcion_quick = wait.until(
+            EC.element_to_be_clickable(
+                (
+                    By.CSS_SELECTOR,
+                    f"div.recently-visited-menu[title='{opcion}']",
+                )
             )
+        )
+        driver.execute_script(
+            "arguments[0].scrollIntoView({block: 'center'});", opcion_quick
+        )
+        ActionChains(driver).move_to_element(opcion_quick).click().perform()
+        print(f"[5] Opción Resource Status seleccionada (Quick Start): {opcion}")
 
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", item)
-        driver.execute_script("arguments[0].click();", item)
-
-        if step_timer:
-            step_timer.mark(f"[6] Opción '{opcion}'")
-
-    except TimeoutException:
-        raise Exception(f"No se pudo hacer clic en la opción '{opcion}' del menú Resource Status")
+    except Exception as exc:
+        # Mantén el mismo mensaje de error que usa el script actualmente
+        raise Exception(
+            f"No se pudo hacer clic en la opción '{opcion}' del menú Resource Status"
+        ) from exc
 
 
 def seleccionar_camera(driver, wait):
