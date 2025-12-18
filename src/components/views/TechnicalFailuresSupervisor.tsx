@@ -1,6 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import dayjs, { Dayjs } from 'dayjs';
-import customParseFormat from 'dayjs/plugin/customParseFormat';
 import {
   TechnicalFailure,
   TechnicalFailureCatalogs,
@@ -9,9 +7,9 @@ import {
 } from '../../types';
 import DateTimeInput, {
   buildDateTimeLocalValue,
-  parseLocalDateTime,
   normalizeDateTimeLocalString,
-  toDayjsSafe,
+  formatLocalYMDHMS,
+  parseLocalYMDHMS,
 } from '../ui/DateTimeInput';
 import {
   fetchFallos,
@@ -25,8 +23,6 @@ import { useSession } from '../context/SessionContext';
 import { getAllDepartamentosResponsables } from '../../services/departamentosResponsablesService';
 import TechnicalFailuresHistory from './TechnicalFailuresHistory';
 import { FailureHistory, FailureHistoryEntry } from '../../types';
-
-dayjs.extend(customParseFormat);
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
   departamentos: [],
@@ -79,6 +75,14 @@ const toPositiveIntegerOrNull = (value?: string | number | null) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
+const pad2 = (value: number) => String(value).padStart(2, '0');
+
+const formatDatePart = (value?: Date | null) =>
+  value ? `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}` : undefined;
+
+const formatTimePart = (value?: Date | null) =>
+  value ? `${pad2(value.getHours())}:${pad2(value.getMinutes())}:${pad2(value.getSeconds())}` : undefined;
+
 const buildFailureDateTimeValue = (failure: TechnicalFailure) => {
   if (failure.fechaHoraFallo) {
     return failure.fechaHoraFallo;
@@ -126,7 +130,7 @@ const parseResolutionDateTimeValue = (
   fechaHoraResolucion?: string | null,
   fechaResolucion?: string | null,
   horaResolucion?: string | null,
-): Dayjs | null => {
+): Date | null => {
   const candidates: Array<string | undefined | null> = [
     fechaHoraResolucion,
     fechaHoraResolucion ? fechaHoraResolucion.replace(' ', 'T') : null,
@@ -135,21 +139,17 @@ const parseResolutionDateTimeValue = (
   ];
 
   for (const candidate of candidates) {
-    const parsed = toDayjsSafe(candidate ?? undefined);
+    const parsed = parseLocalYMDHMS(candidate);
     if (import.meta.env.DEV) {
       console.log("[parseResolutionDateTimeValue] candidate:", candidate);
       console.log(
         "[parseResolutionDateTimeValue] parsed:",
-        parsed?.format?.("YYYY-MM-DD HH:mm:ss"),
+        parsed ? formatLocalYMDHMS(parsed) : null,
         parsed,
       );
     }
-    if (
-      parsed &&
-      typeof (parsed as any).isValid === 'function' &&
-      parsed.isValid()
-    ) {
-      return parsed as Dayjs;
+    if (parsed) {
+      return parsed;
     }
   }
 
@@ -244,18 +244,20 @@ const parseResolutionDateTimeValue = (
   const [activeTab, setActiveTab] = useState<
     'general' | 'supervisor' | 'cierre'
   >('general');
-  const [resolutionDateTime, setResolutionDateTime] = useState<Dayjs | null>(null);
+  const [resolutionDateTime, setResolutionDateTime] = useState<Date | null>(null);
 
   const isClosed = (failure.estado || '').toUpperCase() === 'CERRADO';
   const isReadOnly = isClosed;
   const canDelete = isReadOnly && isAdmin;
 
   useEffect(() => {
-    console.log("[LOAD] Resolución desde API:", {
-      fechaHoraResolucion: failure.fechaHoraResolucion,
-      fechaResolucion: failure.fechaResolucion,
-      horaResolucion: failure.horaResolucion,
-    });
+    if (import.meta.env.DEV) {
+      console.log("[LOAD] Resolución desde API:", {
+        fechaHoraResolucion: failure.fechaHoraResolucion,
+        fechaResolucion: failure.fechaResolucion,
+        horaResolucion: failure.horaResolucion,
+      });
+    }
 
     const normalized = normalizeFailure(failure);
     const parsedResolution = parseResolutionDateTimeValue(
@@ -264,22 +266,19 @@ const parseResolutionDateTimeValue = (
       normalized.horaResolucion,
     );
 
-    console.log(
-      "[LOAD] Resolución parseada para UI:",
-      parsedResolution ? parsedResolution.format("YYYY-MM-DD HH:mm:ss") : null,
-    );
+    if (import.meta.env.DEV) {
+      console.log(
+        "[LOAD] Resolución parseada para UI:",
+        parsedResolution ? formatLocalYMDHMS(parsedResolution) : null,
+        parsedResolution,
+      );
+    }
 
     setEditData({
       ...normalized,
-      fechaHoraResolucion: parsedResolution
-        ? parsedResolution.format("YYYY-MM-DD'T'HH:mm:ss")
-        : normalized.fechaHoraResolucion,
-      fechaResolucion: parsedResolution
-        ? parsedResolution.format("YYYY-MM-DD")
-        : normalized.fechaResolucion,
-      horaResolucion: parsedResolution
-        ? parsedResolution.format("HH:mm:ss")
-        : normalized.horaResolucion,
+      fechaHoraResolucion: formatLocalYMDHMS(parsedResolution) ?? normalized.fechaHoraResolucion,
+      fechaResolucion: formatDatePart(parsedResolution) ?? normalized.fechaResolucion,
+      horaResolucion: formatTimePart(parsedResolution) ?? normalized.horaResolucion,
     });
     setResolutionDateTime(parsedResolution);
     setActiveTab('general');
@@ -298,20 +297,24 @@ const parseResolutionDateTimeValue = (
     updateField(name as keyof TechnicalFailure, value);
   };
 
-  const handleResolutionChange = (rawValue: string | null) => {
+  const handleResolutionChange = (
+    _value: Date | null,
+    helpers: { parsedDate?: Date | null; isoString: string | null; dateValue: unknown },
+  ) => {
     if (isReadOnly) return;
-    console.log("[DT PICKER] raw NEW_VALUE:", rawValue);
-    const parsed = parseLocalDateTime(rawValue ?? undefined);
-    console.log(
-      "[DT PICKER] format:",
-      parsed ? parsed.format("YYYY-MM-DD HH:mm:ss") : null,
-    );
+    const parsed = helpers.parsedDate ?? null;
+
+    if (import.meta.env.DEV) {
+      console.log("[DT PICKER] raw NEW_VALUE:", _value, helpers);
+      console.log("[DT PICKER] parsed (Date):", parsed, parsed ? parsed.toString() : null);
+    }
+
     setResolutionDateTime(parsed);
     setEditData((prev) => ({
       ...prev,
-      fechaHoraResolucion: parsed ? parsed.format("YYYY-MM-DD'T'HH:mm:ss") : undefined,
-      fechaResolucion: parsed ? parsed.format("YYYY-MM-DD") : undefined,
-      horaResolucion: parsed ? parsed.format("HH:mm:ss") : undefined,
+      fechaHoraResolucion: formatLocalYMDHMS(parsed) ?? undefined,
+      fechaResolucion: formatDatePart(parsed),
+      horaResolucion: formatTimePart(parsed),
       responsable_verificacion_cierre_nombre:
         parsed && currentUserName ? currentUserName : prev.responsable_verificacion_cierre_nombre,
     }));
@@ -333,9 +336,9 @@ const parseResolutionDateTimeValue = (
 
   const fechaHoraFalloDisplay = fechaHoraReporte || 'Sin información';
 
-  const resolutionInputValue = useMemo(() => {
+  const resolutionInputDate = useMemo(() => {
     if (resolutionDateTime) {
-      return resolutionDateTime.format("YYYY-MM-DD'T'HH:mm");
+      return resolutionDateTime;
     }
 
     const parsed = parseResolutionDateTimeValue(
@@ -345,7 +348,7 @@ const parseResolutionDateTimeValue = (
     );
 
     if (parsed) {
-      return parsed.format("YYYY-MM-DD'T'HH:mm");
+      return parsed;
     }
 
     const combined =
@@ -354,7 +357,7 @@ const parseResolutionDateTimeValue = (
         ? `${editData.fechaResolucion}T${editData.horaResolucion}`
         : editData.fechaResolucion || '');
 
-    return normalizeDateTimeLocalString(combined);
+    return parseLocalYMDHMS(normalizeDateTimeLocalString(combined));
   }, [
     editData.fechaHoraResolucion,
     editData.fechaResolucion,
@@ -575,8 +578,9 @@ const parseResolutionDateTimeValue = (
             <DateTimeInput
               label="Fecha y Hora Resolución"
               name="fechaHoraResolucion"
-              value={resolutionInputValue}
-              onChange={(newValue) => handleResolutionChange(newValue)}
+              valueAsDate
+              value={resolutionInputDate}
+              onChange={(newValue, helpers) => handleResolutionChange(newValue, helpers)}
               max={nowForInput}
               disabled={isReadOnly}
               className="disabled:bg-gray-100 disabled:text-gray-500"
@@ -831,9 +835,11 @@ const TechnicalFailuresSupervisor: React.FC = () => {
     const fallbackTime = updatedFailure.horaResolucion || null;
 
     return {
-      date: parsed ? parsed.format('YYYY-MM-DD') : fallbackDate || undefined,
-      time: parsed ? parsed.format('HH:mm:ss') : fallbackTime || undefined,
-      formatted: parsed ? parsed.format('YYYY-MM-DD HH:mm:ss') : undefined,
+      date: formatDatePart(parsed) ?? fallbackDate || undefined,
+      time: formatTimePart(parsed) ?? fallbackTime || undefined,
+      formatted:
+        formatLocalYMDHMS(parsed) ??
+        (fallbackDate && fallbackTime ? `${fallbackDate} ${fallbackTime}` : undefined),
     };
   };
 
@@ -842,33 +848,35 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       const departamentoId = resolveDepartamentoId(updatedFailure);
       const novedad = updatedFailure.novedadDetectada?.trim() || null;
       const resolutionParts = resolveResolutionDateTime(updatedFailure);
-      const resolutionDateValue = parseLocalDateTime(resolutionParts.formatted ?? null);
+      const resolutionDateValue = parseLocalYMDHMS(resolutionParts.formatted ?? null);
 
       try {
-        const values = updatedFailure as any;
-        console.log(
-          "[Supervisor Edit] Guardar cambios - valores del formulario:",
-          values,
-        );
-        console.log(
-          "[Supervisor Edit] Guardar cambios - responsableVerificacionCierreId:",
-          values.responsableVerificacionCierreId,
-        );
-        console.log(
-          "[Supervisor Edit] Guardar cambios - usuario en localStorage['user']:",
-          localStorage.getItem("user"),
-        );
-        console.log(
-          "[SAVE] FECHA_HORA_RESOLUCION UI:",
-          resolutionDateValue ? resolutionDateValue.format("YYYY-MM-DD hh:mm a") : null,
-        );
-        console.log(
-          "[SAVE] FECHA_HORA_RESOLUCION PAYLOAD:",
-          resolutionParts.formatted ??
-            (resolutionParts.date && resolutionParts.time
-              ? `${resolutionParts.date} ${resolutionParts.time}`
-              : null),
-        );
+        if (import.meta.env.DEV) {
+          const values = updatedFailure as any;
+          console.log(
+            "[Supervisor Edit] Guardar cambios - valores del formulario:",
+            values,
+          );
+          console.log(
+            "[Supervisor Edit] Guardar cambios - responsableVerificacionCierreId:",
+            values.responsableVerificacionCierreId,
+          );
+          console.log(
+            "[Supervisor Edit] Guardar cambios - usuario en localStorage['user']:",
+            localStorage.getItem("user"),
+          );
+          console.log(
+            "[SAVE] FECHA_HORA_RESOLUCION UI:",
+            resolutionDateValue ? formatLocalYMDHMS(resolutionDateValue) : null,
+          );
+          console.log(
+            "[SAVE] FECHA_HORA_RESOLUCION PAYLOAD:",
+            resolutionParts.formatted ??
+              (resolutionParts.date && resolutionParts.time
+                ? `${resolutionParts.date} ${resolutionParts.time}`
+                : null),
+          );
+        }
         setIsSubmitting(true);
         console.log("[Supervisor] Guardar cambios, payload enviado:", {
           departamento_id: departamentoId,
@@ -902,7 +910,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       const resolutionParts = resolveResolutionDateTime(updatedFailure);
       const resolutionDate = resolutionParts.date;
       const resolutionTime = resolutionParts.time;
-      const resolutionDateValue = parseLocalDateTime(resolutionParts.formatted ?? null);
+      const resolutionDateValue = parseLocalYMDHMS(resolutionParts.formatted ?? null);
 
       if (!resolutionDate || !resolutionTime) {
         alert('Debe ingresar la fecha y hora de resolución antes de cerrar el fallo.');
@@ -916,28 +924,30 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         null;
 
       try {
-        const values = updatedFailure as any;
-        console.log(
-          "[Supervisor Edit] Cerrar fallo - valores del formulario:",
-          values,
-        );
-        console.log(
-          "[Supervisor Edit] Cerrar fallo - responsableVerificacionCierreId:",
-          values.responsableVerificacionCierreId,
-        );
-        console.log(
-          "[Supervisor Edit] Cerrar fallo - usuario en localStorage['user']:",
-          localStorage.getItem("user"),
-        );
-        console.log(
-          "[SAVE] FECHA_HORA_RESOLUCION UI:",
-          resolutionDateValue ? resolutionDateValue.format("YYYY-MM-DD hh:mm a") : null,
-        );
-        console.log(
-          "[SAVE] FECHA_HORA_RESOLUCION PAYLOAD:",
-          resolutionParts.formatted ??
-            (resolutionDate && resolutionTime ? `${resolutionDate} ${resolutionTime}` : null),
-        );
+        if (import.meta.env.DEV) {
+          const values = updatedFailure as any;
+          console.log(
+            "[Supervisor Edit] Cerrar fallo - valores del formulario:",
+            values,
+          );
+          console.log(
+            "[Supervisor Edit] Cerrar fallo - responsableVerificacionCierreId:",
+            values.responsableVerificacionCierreId,
+          );
+          console.log(
+            "[Supervisor Edit] Cerrar fallo - usuario en localStorage['user']:",
+            localStorage.getItem("user"),
+          );
+          console.log(
+            "[SAVE] FECHA_HORA_RESOLUCION UI:",
+            resolutionDateValue ? formatLocalYMDHMS(resolutionDateValue) : null,
+          );
+          console.log(
+            "[SAVE] FECHA_HORA_RESOLUCION PAYLOAD:",
+            resolutionParts.formatted ??
+              (resolutionDate && resolutionTime ? `${resolutionDate} ${resolutionTime}` : null),
+          );
+        }
         setIsSubmitting(true);
         console.log("[Supervisor] Payload cerrar fallo:", {
           fecha_resolucion: resolutionDate,
