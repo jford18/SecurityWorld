@@ -6,6 +6,7 @@ export interface AxiosRequestConfig {
   params?: Record<string, string | number | boolean>;
   data?: any;
   withCredentials?: boolean;
+  responseType?: "json" | "text" | "blob" | "arraybuffer";
 }
 
 export interface AxiosResponse<T = any> {
@@ -21,6 +22,7 @@ export interface AxiosInstance {
     baseURL: string;
     headers: Record<string, string>;
     withCredentials: boolean;
+    responseType?: AxiosRequestConfig["responseType"];
   };
   get<T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>>;
   delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>>;

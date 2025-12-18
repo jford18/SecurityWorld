@@ -2,6 +2,7 @@ import api from "./api";
 import apiClient from "./apiClient";
 
 const CLIENTES_ENDPOINT = "/clientes";
+const EXCEL_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 export type ClientePayload = {
   nombre: string;
@@ -102,6 +103,86 @@ const buildExportErrorMessage = (error: unknown): string => {
   return EXPORT_ERROR_MESSAGE;
 };
 
+const extractMessageFromText = (text: string): string | null => {
+  if (!text || typeof text !== "string") {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(text);
+    const message = (parsed as any)?.message ?? (parsed as any)?.error;
+    const detail = (parsed as any)?.detail;
+
+    if (message && detail) {
+      return `${message}. Detalle: ${detail}`;
+    }
+
+    if (message) {
+      return message;
+    }
+
+    if (detail) {
+      return detail;
+    }
+  } catch (parseError) {
+    if (text.trim().length > 0) {
+      return text.trim();
+    }
+    return (parseError as Error)?.message ?? null;
+  }
+
+  return null;
+};
+
+const extractErrorFromBlob = async (blob?: Blob | null): Promise<string | null> => {
+  if (!blob) {
+    return null;
+  }
+
+  try {
+    const text = await blob.text();
+    return extractMessageFromText(text);
+  } catch (error) {
+    return (error as Error)?.message ?? null;
+  }
+};
+
+const parseContentDispositionFilename = (headerValue?: string): string | null => {
+  if (!headerValue || typeof headerValue !== "string") {
+    return null;
+  }
+
+  const utf8Match = headerValue.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch (error) {
+      return utf8Match[1];
+    }
+  }
+
+  const asciiMatch = headerValue.match(/filename="?([^";]+)"?/i);
+  return asciiMatch?.[1] ?? null;
+};
+
+const normalizeHeaderValue = (value: unknown): string =>
+  typeof value === "string" ? value.toLowerCase() : "";
+
+const resolveExportErrorMessage = async (error: unknown): Promise<string> => {
+  if (error && typeof error === "object" && "response" in error) {
+    const responseData = (error as { response?: { data?: unknown } }).response?.data;
+
+    if (responseData instanceof Blob) {
+      const parsedMessage = await extractErrorFromBlob(responseData);
+      if (parsedMessage) {
+        return parsedMessage;
+      }
+    }
+  }
+
+  return buildExportErrorMessage(error);
+};
+
 const buildRequestConfig = (params?: ClienteQueryParamsInput) => {
   const sanitized = sanitizeParams(params);
   return sanitized ? { params: sanitized } : undefined;
@@ -132,31 +213,45 @@ export const updateCliente = async (
   return response?.data;
 };
 
-export const exportPersonasClientesExcel = async (): Promise<Blob> => {
+export const exportPersonasClientesExcel = async (): Promise<{
+  blob: Blob;
+  filename: string;
+}> => {
   try {
-    const response = await apiClient.get<ArrayBuffer>(
+    const response = await apiClient.get<Blob>(
       `${CLIENTES_ENDPOINT}/export-personas`,
       {
-        responseType: "arraybuffer",
+        responseType: "blob",
         headers: {
-          Accept:
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          Accept: EXCEL_MIME_TYPE,
           "Cache-Control": "no-cache",
           Pragma: "no-cache",
         },
       }
     );
 
+    const contentType = normalizeHeaderValue(response.headers?.["content-type"]);
+
+    if (!contentType.includes("spreadsheetml.sheet")) {
+      const backendError = await extractErrorFromBlob(response.data);
+      throw new Error(backendError ?? EXPORT_ERROR_MESSAGE);
+    }
+
+    const filename =
+      parseContentDispositionFilename(response.headers?.["content-disposition"] as string) ??
+      "CLIENTES_PERSONAS.xlsx";
+
     const blob = new Blob([response.data], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      type: contentType || EXCEL_MIME_TYPE,
     });
 
     if (!blob || blob.size === 0) {
       throw new Error("Export inválido: archivo vacío");
     }
 
-    return blob;
+    return { blob, filename };
   } catch (error) {
-    throw new Error(buildExportErrorMessage(error));
+    const errorMessage = await resolveExportErrorMessage(error);
+    throw new Error(errorMessage);
   }
 };

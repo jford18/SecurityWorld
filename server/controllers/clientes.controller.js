@@ -24,6 +24,15 @@ const formatPersonaEstado = (estado) => {
   return "";
 };
 
+const formatExcelTimestamp = () => {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(
+    now.getHours()
+  )}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+};
+
 const formatFechaLegible = (value) => {
   if (!value) {
     return "";
@@ -42,6 +51,24 @@ const formatFechaLegible = (value) => {
     minute: "2-digit",
   });
 };
+
+const PERSONAS_CLIENTES_EXPORT_QUERY = `
+  SELECT
+    A.id AS cliente_id,
+    A.nombre AS cliente_nombre,
+    A.identificacion AS cliente_identificacion,
+    B.fecha_asignacion AS fecha_asignacion,
+    C.id AS persona_id,
+    C.nombre AS nombre,
+    C.apellido AS apellido,
+    D.descripcion AS cargo,
+    C.estado AS estado
+  FROM public.clientes A
+  JOIN public.cliente_persona B ON (B.cliente_id = A.id)
+  JOIN public.persona C ON (C.id = B.persona_id)
+  LEFT JOIN public.catalogo_cargo D ON (D.id = C.cargo_id)
+  ORDER BY A.nombre, C.apellido, C.nombre;
+`;
 
 const CLIENTES_BASE_QUERY = `
   SELECT c.id,
@@ -354,46 +381,30 @@ export const deleteCliente = async (req, res) => {
 
 export const exportPersonasClientesExcel = async (_req, res) => {
   try {
-    const { rows } = await pool.query(`
-      SELECT
-        c.id AS cliente_id,
-        c.nombre AS cliente_nombre,
-        c.identificacion AS cliente_identificacion,
-        cp.fecha_asignacion,
-        p.id AS persona_id,
-        p.nombre,
-        p.apellido,
-        cc.descripcion AS cargo,
-        p.estado
-      FROM public.clientes c
-      INNER JOIN public.cliente_persona cp ON cp.cliente_id = c.id
-      INNER JOIN persona p ON p.id = cp.persona_id
-      LEFT JOIN catalogo_cargo cc ON cc.id = p.cargo_id
-      ORDER BY c.nombre ASC, p.apellido ASC, p.nombre ASC
-    `);
+    const { rows } = await pool.query(PERSONAS_CLIENTES_EXPORT_QUERY);
 
     const worksheetData = [
       [
         "CLIENTE_ID",
         "CLIENTE_NOMBRE",
         "CLIENTE_IDENTIFICACION",
+        "FECHA_ASIGNACION",
         "PERSONA_ID",
         "NOMBRE",
         "APELLIDO",
         "CARGO",
         "ESTADO",
-        "FECHA_ASIGNACION",
       ],
       ...(rows ?? []).map((row) => [
         row.cliente_id ?? "",
         row.cliente_nombre ?? "",
         row.cliente_identificacion ?? "",
+        formatFechaLegible(row.fecha_asignacion),
         row.persona_id ?? "",
         row.nombre ?? "",
         row.apellido ?? "",
         row.cargo ?? "",
         formatPersonaEstado(row.estado),
-        formatFechaLegible(row.fecha_asignacion),
       ]),
     ];
 
@@ -409,7 +420,7 @@ export const exportPersonasClientesExcel = async (_req, res) => {
     );
     res.setHeader(
       "Content-Disposition",
-      'attachment; filename="CLIENTES_PERSONAS.xlsx"'
+      `attachment; filename="CLIENTES_PERSONAS_${formatExcelTimestamp()}.xlsx"`
     );
     res.setHeader(
       "Cache-Control",
@@ -420,7 +431,7 @@ export const exportPersonasClientesExcel = async (_req, res) => {
     res.setHeader("Surrogate-Control", "no-store");
     res.removeHeader("ETag");
 
-    return res.status(200).send(buffer);
+    return res.status(200).end(Buffer.from(buffer));
   } catch (error) {
     console.error("[CLIENTES] Error al exportar personas por cliente:", error);
     return res.status(500).json({
