@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import dayjs, { Dayjs } from 'dayjs';
 import { useSession } from '../context/SessionContext';
-import DateTimeInput, { normalizeDateTimeLocalString } from '../ui/DateTimeInput';
+import DateTimeInput, { normalizeDateTimeLocalString, toDayjsSafe } from '../ui/DateTimeInput';
 import AutocompleteComboBox from '../ui/AutocompleteComboBox';
 import { TechnicalFailure, TechnicalFailureCatalogs, CatalogoNodo } from '../../types';
 import { Sitio, getSitios } from '../../services/sitiosService';
@@ -648,7 +649,7 @@ const TechnicalFailuresOperador: React.FC = () => {
 
   const handleFechaHoraFalloChange = (
     value: string | null,
-    helpers: { isoString: string | null; dateValue: Date | null },
+    helpers: { isoString: string | null; dateValue: Dayjs | null },
   ) => {
     const updatedValue = value ?? '';
     setFormData((prev) => ({ ...prev, fechaHoraFallo: updatedValue }));
@@ -658,20 +659,21 @@ const TechnicalFailuresOperador: React.FC = () => {
       return;
     }
 
-    const parsedDateTime = helpers.dateValue ?? new Date(value);
+    const parsedDateTime = helpers.dateValue ?? toDayjsSafe(value);
 
-    if (!parsedDateTime || Number.isNaN(parsedDateTime.getTime())) {
+    if (!parsedDateTime || !parsedDateTime.isValid()) {
       setErrors((prev) => ({ ...prev, fechaHoraFallo: 'Seleccione una fecha y hora válidas.' }));
       return;
     }
 
-    const now = new Date();
-    if (parsedDateTime > now) {
+    const now = dayjs();
+    if (parsedDateTime.isAfter(now)) {
       setErrors((prev) => ({ ...prev, fechaHoraFallo: 'La fecha y hora no pueden ser posteriores a la actual.' }));
       return;
     }
 
-    const normalizedValue = normalizeDateTimeLocalString(value) || toLocalDateTimeString(parsedDateTime);
+    const normalizedValue =
+      normalizeDateTimeLocalString(value) || parsedDateTime.format('YYYY-MM-DDTHH:mm');
 
     const newValues: FailureFormData = {
       ...formData,
