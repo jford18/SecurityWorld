@@ -622,13 +622,16 @@ const Intrusions: React.FC = () => {
       const intrusion = new Date(formData.fecha_evento);
       const reaccion = new Date(formData.fecha_reaccion);
 
+      const intrusionTime = intrusion.getTime();
+      const reaccionTime = reaccion.getTime();
+
       if (
-        !Number.isNaN(intrusion.getTime()) &&
-        !Number.isNaN(reaccion.getTime()) &&
-        reaccion <= intrusion
+        !Number.isNaN(intrusionTime) &&
+        !Number.isNaN(reaccionTime) &&
+        reaccionTime < intrusionTime
       ) {
         setFechaReaccionError(
-          'La fecha y hora de reacción debe ser mayor que la fecha y hora de intrusión.'
+          'La fecha y hora de reacción debe ser mayor o igual a la fecha y hora de intrusión.'
         );
         return;
       }
