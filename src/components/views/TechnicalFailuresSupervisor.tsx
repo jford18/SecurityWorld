@@ -369,7 +369,8 @@ const parseResolutionDateTimeValue = (
     return (
       editData.deptResponsable ||
       departamentos.find(
-        (departamento) => String(departamento.id) === editData.departamentoResponsableId,
+        (departamento) =>
+          String(departamento.id) === String(editData.departamentoResponsableId),
       )?.nombre ||
       ''
     );
@@ -377,7 +378,11 @@ const parseResolutionDateTimeValue = (
 
   const tieneDepartamentoResponsable = useMemo(() => {
     if (editData.departamentoResponsableId) return true;
-    if (editData.deptResponsable && editData.deptResponsable.trim() !== '') return true;
+
+    if (editData.deptResponsable && editData.deptResponsable.trim() !== '') {
+      return true;
+    }
+
     return false;
   }, [editData.departamentoResponsableId, editData.deptResponsable]);
 
@@ -835,8 +840,8 @@ const TechnicalFailuresSupervisor: React.FC = () => {
     const fallbackTime = updatedFailure.horaResolucion || null;
 
     return {
-      date: formatDatePart(parsed) ?? fallbackDate || undefined,
-      time: formatTimePart(parsed) ?? fallbackTime || undefined,
+      date: (formatDatePart(parsed) ?? fallbackDate) || undefined,
+      time: (formatTimePart(parsed) ?? fallbackTime) || undefined,
       formatted:
         formatLocalYMDHMS(parsed) ??
         (fallbackDate && fallbackTime ? `${fallbackDate} ${fallbackTime}` : undefined),
@@ -855,7 +860,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
           const values = updatedFailure as any;
           console.log(
             "[Supervisor Edit] Guardar cambios - valores del formulario:",
-            values,
+            values
           );
           console.log(
             "[Supervisor Edit] Guardar cambios - responsableVerificacionCierreId:",
