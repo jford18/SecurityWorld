@@ -1,3 +1,4 @@
+import XLSX from "xlsx";
 import pool from "../db.js";
 
 const sanitizeText = (value) => (typeof value === "string" ? value.trim() : "");
@@ -18,6 +19,17 @@ const formatError = (message) => ({
   message,
 });
 
+const formatTimestamp = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+
+  return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+};
+
 export const listNodos = async (_req, res) => {
   try {
     const result = await pool.query(
@@ -37,6 +49,72 @@ export const listNodos = async (_req, res) => {
   } catch (error) {
     console.error("Error al listar nodos:", error);
     res.status(500).json(formatError("Error al listar los nodos"));
+  }
+};
+
+export const exportNodosExcel = async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+        N.id,
+        N.nombre,
+        N.ip,
+        N.activo,
+        N.fecha_creacion,
+        COALESCE(P.nombre, '') AS proveedor_nombre
+      FROM nodos N
+      LEFT JOIN proveedores P ON P.id = N.proveedor_id
+      ORDER BY N.id;`
+    );
+
+    const worksheetData = [
+      ["ID", "NOMBRE", "IP", "PROVEEDOR", "ACTIVO", "FECHA_CREACION"],
+      ...rows.map((row) => [
+        row.id ?? "",
+        row.nombre ?? "",
+        row.ip ?? "",
+        row.proveedor_nombre ?? "",
+        row.activo ? "Sí" : "No",
+        row.fecha_creacion
+          ? new Date(row.fecha_creacion)
+              .toISOString()
+              .replace("T", " ")
+              .replace("Z", "")
+          : "",
+      ]),
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Nodos");
+
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+    const timestamp = formatTimestamp();
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="NODOS_${timestamp}.xlsx"`
+    );
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+    res.removeHeader("ETag");
+
+    return res.status(200).send(buffer);
+  } catch (error) {
+    console.error("Error al exportar nodos:", error);
+    return res.status(500).json({
+      message: "No se pudo exportar nodos",
+      detail: error?.message,
+    });
   }
 };
 
@@ -270,4 +348,3 @@ export const deleteNodo = async (req, res) => {
     res.status(500).json(formatError("Error al eliminar el nodo"));
   }
 };
-

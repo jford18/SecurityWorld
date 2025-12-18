@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createNodo,
   deleteNodo,
+  exportNodosExcel,
   getSitioByNodo,
   getNodoById,
   listNodos,
@@ -11,6 +12,7 @@ import {
 const router = Router();
 
 router.get("/", listNodos);
+router.get("/export-excel", exportNodosExcel);
 router.get("/:id/sitio", getSitioByNodo);
 router.get("/:id", getNodoById);
 router.post("/", createNodo);
