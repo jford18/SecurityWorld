@@ -57,6 +57,7 @@ const createAxiosInstance = (defaults = {}) => {
     baseURL: defaults.baseURL || "",
     headers: defaults.headers ? { ...defaults.headers } : {},
     withCredentials: Boolean(defaults.withCredentials),
+    responseType: defaults.responseType || "json",
   };
 
   const requestInterceptors = createInterceptorManager();
@@ -93,6 +94,7 @@ const createAxiosInstance = (defaults = {}) => {
       params: config.params,
       baseURL: config.baseURL || instanceDefaults.baseURL,
       withCredentials: config.withCredentials ?? instanceDefaults.withCredentials,
+      responseType: config.responseType || instanceDefaults.responseType || "json",
     };
 
     requestConfig = await requestInterceptors.runFulfilled(requestConfig);
@@ -120,13 +122,22 @@ const createAxiosInstance = (defaults = {}) => {
     }
 
     const response = await fetch(finalURL, fetchConfig);
-    const text = await response.text();
+    const desiredResponseType = requestConfig.responseType || "json";
     let parsed;
 
-    try {
-      parsed = text ? JSON.parse(text) : null;
-    } catch (error) {
-      parsed = text;
+    if (desiredResponseType === "blob") {
+      parsed = await response.blob();
+    } else if (desiredResponseType === "arraybuffer") {
+      parsed = await response.arrayBuffer();
+    } else if (desiredResponseType === "text") {
+      parsed = await response.text();
+    } else {
+      const text = await response.text();
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch (error) {
+        parsed = text;
+      }
     }
 
     let axiosResponse = {

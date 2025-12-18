@@ -281,11 +281,11 @@ const Clientes = () => {
 
     try {
       setExportingPersonas(true);
-      const blob = await exportPersonasClientesExcel();
+      const { blob, filename } = await exportPersonasClientesExcel();
       const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = downloadUrl;
-      link.download = `CLIENTES_PERSONAS_${formatTimestamp()}.xlsx`;
+      link.download = filename || `CLIENTES_PERSONAS_${formatTimestamp()}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
