@@ -1,0 +1,11 @@
+[
+  { "order": 1, "title": "Login", "path": "/login" },
+  { "order": 2, "title": "Intrusiones", "path": "/intrusiones" },
+  { "order": 3, "title": "Fallos Técnicos Operador", "path": "/fallos/operador" },
+  { "order": 4, "title": "Fallos Técnicos Supervisor", "path": "/fallos/supervisor" },
+  { "order": 5, "title": "Fallos Técnicos Administrador", "path": "/fallos/administrador" },
+  { "order": 6, "title": "Mantenimiento Nodos", "path": "/administracion/nodos" },
+  { "order": 7, "title": "Mantenimiento Clientes", "path": "/administracion/clientes" },
+  { "order": 8, "title": "Mantenimiento Personas", "path": "/administracion/persona" },
+  { "order": 9, "title": "Mantenimiento Sitios", "path": "/administracion/sitios" }
+]
