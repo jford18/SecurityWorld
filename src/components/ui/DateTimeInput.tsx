@@ -1,8 +1,5 @@
 import React from 'react';
 import dayjs, { Dayjs } from 'dayjs';
-import customParseFormat from 'dayjs/plugin/customParseFormat';
-
-dayjs.extend(customParseFormat);
 
 export type DateTimeParts = {
   date?: string;
@@ -17,6 +14,71 @@ const DATE_TIME_FORMATS = [
   'YYYY-MM-DD HH:mm',
 ];
 
+const pad2 = (value: number) => String(value).padStart(2, '0');
+
+export const parseLocalYMDHMS = (value?: string | Date | null): Date | null => {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    const copy = new Date(
+      value.getFullYear(),
+      value.getMonth(),
+      value.getDate(),
+      value.getHours(),
+      value.getMinutes(),
+      value.getSeconds(),
+      0,
+    );
+    return Number.isNaN(copy.getTime()) ? null : copy;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const sanitized = trimmed.endsWith('Z') ? trimmed.slice(0, -1) : trimmed;
+
+  const match = sanitized.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/,
+  );
+
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const hours = Number(match[4] ?? 0);
+  const minutes = Number(match[5] ?? 0);
+  const seconds = Number(match[6] ?? 0);
+
+  const parsed = new Date(year, month, day, hours, minutes, seconds, 0);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+export const formatLocalYMDHMS = (value?: Date | null): string | null => {
+  if (!value) return null;
+  const year = value.getFullYear();
+  const month = pad2(value.getMonth() + 1);
+  const day = pad2(value.getDate());
+  const hours = pad2(value.getHours());
+  const minutes = pad2(value.getMinutes());
+  const seconds = pad2(value.getSeconds());
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
+export const formatInputLocalValue = (value?: Date | null) => {
+  if (!value) return '';
+  const year = value.getFullYear();
+  const month = pad2(value.getMonth() + 1);
+  const day = pad2(value.getDate());
+  const hours = pad2(value.getHours());
+  const minutes = pad2(value.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
 export const buildDateTimeLocalValue = (date?: string, time?: string) => {
   if (!date) return '';
   const sanitizedTime = (time ?? '00:00').slice(0, 5);
@@ -28,8 +90,9 @@ export const toDayjsSafe = (value: unknown): Dayjs | null => {
 
   if (dayjs.isDayjs(value)) return value as Dayjs;
 
-  if (value instanceof Date) {
-    const d = dayjs(value);
+  const parsedDate = parseLocalYMDHMS(value as string | Date | null);
+  if (parsedDate) {
+    const d = dayjs(parsedDate);
     return d.isValid() ? d : null;
   }
 
@@ -37,19 +100,11 @@ export const toDayjsSafe = (value: unknown): Dayjs | null => {
     const raw = value.trim();
     if (!raw) return null;
 
-    let d = dayjs(raw);
-    if (d.isValid()) return d;
-
-    d = dayjs(raw, DATE_TIME_FORMATS, true);
-    if (d.isValid()) return d;
-
-    d = dayjs(raw, ["MM/DD/YYYY hh:mm A", "M/D/YYYY hh:mm A"], true);
+    let d = dayjs(raw, DATE_TIME_FORMATS, true);
     if (d.isValid()) return d;
 
     d = dayjs(raw.replace(' ', 'T'));
     if (d.isValid()) return d;
-
-    return null;
   }
 
   return null;
@@ -58,42 +113,69 @@ export const toDayjsSafe = (value: unknown): Dayjs | null => {
 export const parseLocalDateTime = (value?: unknown): Dayjs | null => toDayjsSafe(value);
 
 export const normalizeDateTimeLocalString = (value?: string | null) => {
-  const parsed = parseLocalDateTime(value);
-  return parsed ? parsed.format("YYYY-MM-DD'T'HH:mm") : '';
+  const parsed = parseLocalYMDHMS(value);
+  return parsed ? formatInputLocalValue(parsed) : '';
 };
 
 export const splitDateTimeLocalValue = (value?: string | null): DateTimeParts => {
-  const parsed = parseLocalDateTime(value);
+  const parsed = parseLocalYMDHMS(value);
   if (!parsed) {
     return { date: undefined, time: undefined };
   }
 
   return {
-    date: parsed.format('YYYY-MM-DD'),
-    time: parsed.format('HH:mm'),
+    date: `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}`,
+    time: `${pad2(parsed.getHours())}:${pad2(parsed.getMinutes())}`,
   };
 };
 
 export const toIsoString = (value?: string | null) => {
-  const parsed = parseLocalDateTime(value);
-  return parsed ? parsed.format('YYYY-MM-DD HH:mm:ss') : null;
+  const parsed = parseLocalYMDHMS(value);
+  return formatLocalYMDHMS(parsed);
 };
 
-interface DateTimeInputProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange'> {
+type BaseDateTimeInputProps = Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  'type' | 'value' | 'onChange'
+> & {
   label?: string;
-  value?: string | null;
   error?: string;
+  valueAsDate?: boolean;
+};
+
+type DateValueProps = {
+  valueAsDate?: true;
+  value?: Date | null;
+  onChange: (
+    value: Date | null,
+    helpers: {
+      isoString: string | null;
+      dateValue: Dayjs | null;
+      parsedDate?: Date | null;
+    },
+  ) => void;
+};
+
+type StringValueProps = {
+  valueAsDate?: false;
+  value?: string | null;
   onChange: (
     value: string | null,
-    helpers: { isoString: string | null; dateValue: Dayjs | null },
+    helpers: {
+      isoString: string | null;
+      dateValue: Dayjs | null;
+      parsedDate?: Date | null;
+    },
   ) => void;
-}
+};
+
+type DateTimeInputProps = BaseDateTimeInputProps & (DateValueProps | StringValueProps);
 
 const DateTimeInput: React.FC<DateTimeInputProps> = ({
   label,
   value,
   error,
+  valueAsDate = false,
   onChange,
   id,
   name,
@@ -105,17 +187,29 @@ const DateTimeInput: React.FC<DateTimeInputProps> = ({
   const normalizedValue = React.useMemo(() => {
     if (!value) return '';
 
-    const parsed = parseLocalDateTime(value);
-    return parsed ? parsed.format("YYYY-MM-DD'T'HH:mm") : '';
+    const parsed = parseLocalYMDHMS(value as string | Date | null);
+    return formatInputLocalValue(parsed);
   }, [value]);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = event.target.value || null;
-    const parsedDate = parseLocalDateTime(newValue);
-    const isoString = parsedDate ? toIsoString(newValue) : null;
-    onChange(newValue, {
+    const rawValue = event.target.value || null;
+    const parsedDate = parseLocalYMDHMS(rawValue);
+    const isoString = formatLocalYMDHMS(parsedDate);
+    const dayjsValue = parsedDate ? toDayjsSafe(parsedDate) : toDayjsSafe(rawValue ?? undefined);
+
+    if (valueAsDate) {
+      (onChange as DateValueProps['onChange'])(parsedDate, {
+        isoString,
+        dateValue: dayjsValue,
+        parsedDate,
+      });
+      return;
+    }
+
+    (onChange as StringValueProps['onChange'])(rawValue, {
       isoString,
-      dateValue: parsedDate,
+      dateValue: dayjsValue,
+      parsedDate,
     });
   };
 
