@@ -14,6 +14,7 @@ import {
   intrusionesColumns,
 } from '@/components/intrusiones/intrusionesColumns';
 import DateTimeInput from '../ui/DateTimeInput';
+import type { Dayjs } from 'dayjs';
 
 interface TipoIntrusionItem {
   id: number;
@@ -144,7 +145,7 @@ const IntrusionsConsolidated: React.FC = () => {
   const handleDateFilterChange = (
     field: 'fechaDesde' | 'fechaHasta',
     _: string | null,
-    helpers: { isoString: string | null; dateValue?: Date | null },
+    helpers: { isoString: string | null; dateValue?: Dayjs | null },
   ) => {
     const sanitizedValue = helpers.isoString || undefined;
     handleFilterChange(field, sanitizedValue);

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { format as formatDate } from 'date-fns';
+import dayjs, { Dayjs } from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
 import {
   TechnicalFailure,
   TechnicalFailureCatalogs,
@@ -10,6 +11,7 @@ import DateTimeInput, {
   buildDateTimeLocalValue,
   parseLocalDateTime,
   normalizeDateTimeLocalString,
+  toDayjsSafe,
 } from '../ui/DateTimeInput';
 import {
   fetchFallos,
@@ -23,6 +25,8 @@ import { useSession } from '../context/SessionContext';
 import { getAllDepartamentosResponsables } from '../../services/departamentosResponsablesService';
 import TechnicalFailuresHistory from './TechnicalFailuresHistory';
 import { FailureHistory, FailureHistoryEntry } from '../../types';
+
+dayjs.extend(customParseFormat);
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
   departamentos: [],
@@ -122,7 +126,7 @@ const parseResolutionDateTimeValue = (
   fechaHoraResolucion?: string | null,
   fechaResolucion?: string | null,
   horaResolucion?: string | null,
-): Date | null => {
+): Dayjs | null => {
   const candidates: Array<string | undefined | null> = [
     fechaHoraResolucion,
     fechaHoraResolucion ? fechaHoraResolucion.replace(' ', 'T') : null,
@@ -131,9 +135,21 @@ const parseResolutionDateTimeValue = (
   ];
 
   for (const candidate of candidates) {
-    const parsed = parseLocalDateTime(candidate ?? undefined);
-    if (parsed && parsed.isValid()) {
-      return parsed;
+    const parsed = toDayjsSafe(candidate ?? undefined);
+    if (import.meta.env.DEV) {
+      console.log("[parseResolutionDateTimeValue] candidate:", candidate);
+      console.log(
+        "[parseResolutionDateTimeValue] parsed:",
+        parsed?.format?.("YYYY-MM-DD HH:mm:ss"),
+        parsed,
+      );
+    }
+    if (
+      parsed &&
+      typeof (parsed as any).isValid === 'function' &&
+      parsed.isValid()
+    ) {
+      return parsed as Dayjs;
     }
   }
 
@@ -228,7 +244,7 @@ const parseResolutionDateTimeValue = (
   const [activeTab, setActiveTab] = useState<
     'general' | 'supervisor' | 'cierre'
   >('general');
-  const [resolutionDateTime, setResolutionDateTime] = useState<Date | null>(null);
+  const [resolutionDateTime, setResolutionDateTime] = useState<Dayjs | null>(null);
 
   const isClosed = (failure.estado || '').toUpperCase() === 'CERRADO';
   const isReadOnly = isClosed;
@@ -250,19 +266,19 @@ const parseResolutionDateTimeValue = (
 
     console.log(
       "[LOAD] Resolución parseada para UI:",
-      parsedResolution ? formatDate(parsedResolution, "yyyy-MM-dd HH:mm:ss") : null,
+      parsedResolution ? parsedResolution.format("YYYY-MM-DD HH:mm:ss") : null,
     );
 
     setEditData({
       ...normalized,
       fechaHoraResolucion: parsedResolution
-        ? formatDate(parsedResolution, "yyyy-MM-dd'T'HH:mm:ss")
+        ? parsedResolution.format("YYYY-MM-DD'T'HH:mm:ss")
         : normalized.fechaHoraResolucion,
       fechaResolucion: parsedResolution
-        ? formatDate(parsedResolution, "yyyy-MM-dd")
+        ? parsedResolution.format("YYYY-MM-DD")
         : normalized.fechaResolucion,
       horaResolucion: parsedResolution
-        ? formatDate(parsedResolution, "HH:mm:ss")
+        ? parsedResolution.format("HH:mm:ss")
         : normalized.horaResolucion,
     });
     setResolutionDateTime(parsedResolution);
@@ -288,14 +304,14 @@ const parseResolutionDateTimeValue = (
     const parsed = parseLocalDateTime(rawValue ?? undefined);
     console.log(
       "[DT PICKER] format:",
-      parsed ? formatDate(parsed, "yyyy-MM-dd HH:mm:ss") : null,
+      parsed ? parsed.format("YYYY-MM-DD HH:mm:ss") : null,
     );
     setResolutionDateTime(parsed);
     setEditData((prev) => ({
       ...prev,
-      fechaHoraResolucion: parsed ? formatDate(parsed, "yyyy-MM-dd'T'HH:mm:ss") : undefined,
-      fechaResolucion: parsed ? formatDate(parsed, "yyyy-MM-dd") : undefined,
-      horaResolucion: parsed ? formatDate(parsed, "HH:mm:ss") : undefined,
+      fechaHoraResolucion: parsed ? parsed.format("YYYY-MM-DD'T'HH:mm:ss") : undefined,
+      fechaResolucion: parsed ? parsed.format("YYYY-MM-DD") : undefined,
+      horaResolucion: parsed ? parsed.format("HH:mm:ss") : undefined,
       responsable_verificacion_cierre_nombre:
         parsed && currentUserName ? currentUserName : prev.responsable_verificacion_cierre_nombre,
     }));
@@ -319,7 +335,7 @@ const parseResolutionDateTimeValue = (
 
   const resolutionInputValue = useMemo(() => {
     if (resolutionDateTime) {
-      return formatDate(resolutionDateTime, "yyyy-MM-dd'T'HH:mm");
+      return resolutionDateTime.format("YYYY-MM-DD'T'HH:mm");
     }
 
     const parsed = parseResolutionDateTimeValue(
@@ -329,7 +345,7 @@ const parseResolutionDateTimeValue = (
     );
 
     if (parsed) {
-      return formatDate(parsed, "yyyy-MM-dd'T'HH:mm");
+      return parsed.format("YYYY-MM-DD'T'HH:mm");
     }
 
     const combined =
@@ -815,9 +831,9 @@ const TechnicalFailuresSupervisor: React.FC = () => {
     const fallbackTime = updatedFailure.horaResolucion || null;
 
     return {
-      date: parsed ? formatDate(parsed, 'yyyy-MM-dd') : fallbackDate || undefined,
-      time: parsed ? formatDate(parsed, 'HH:mm:ss') : fallbackTime || undefined,
-      formatted: parsed ? formatDate(parsed, 'yyyy-MM-dd HH:mm:ss') : undefined,
+      date: parsed ? parsed.format('YYYY-MM-DD') : fallbackDate || undefined,
+      time: parsed ? parsed.format('HH:mm:ss') : fallbackTime || undefined,
+      formatted: parsed ? parsed.format('YYYY-MM-DD HH:mm:ss') : undefined,
     };
   };
 
@@ -844,7 +860,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         );
         console.log(
           "[SAVE] FECHA_HORA_RESOLUCION UI:",
-          resolutionDateValue ? formatDate(resolutionDateValue, "yyyy-MM-dd hh:mm a") : null,
+          resolutionDateValue ? resolutionDateValue.format("YYYY-MM-DD hh:mm a") : null,
         );
         console.log(
           "[SAVE] FECHA_HORA_RESOLUCION PAYLOAD:",
@@ -915,7 +931,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         );
         console.log(
           "[SAVE] FECHA_HORA_RESOLUCION UI:",
-          resolutionDateValue ? formatDate(resolutionDateValue, "yyyy-MM-dd hh:mm a") : null,
+          resolutionDateValue ? resolutionDateValue.format("YYYY-MM-DD hh:mm a") : null,
         );
         console.log(
           "[SAVE] FECHA_HORA_RESOLUCION PAYLOAD:",
