@@ -148,6 +148,16 @@ const formatFechaHoraDisplay = (
 }) => {
   const normalizeFailure = useCallback(
     (failureToNormalize: TechnicalFailure) => {
+      const fechaHoraResolucionInicial =
+        failureToNormalize.fechaHoraResolucion ??
+        buildDateTimeLocalValue(
+          failureToNormalize.fechaResolucion,
+          failureToNormalize.horaResolucion,
+        );
+      const fechaHoraResolucionNormalizada =
+        normalizeDateTimeLocalString(fechaHoraResolucionInicial) ||
+        fechaHoraResolucionInicial;
+
       const departamentoId =
         failureToNormalize.departamentoResponsableId ??
         findDepartamentoIdByName(departamentos, failureToNormalize.deptResponsable);
@@ -177,12 +187,7 @@ const formatFechaHoraDisplay = (
 
       return {
         ...failureToNormalize,
-      fechaHoraResolucion:
-        failureToNormalize.fechaHoraResolucion ??
-        buildDateTimeLocalValue(
-          failureToNormalize.fechaResolucion,
-          failureToNormalize.horaResolucion,
-        ),
+        fechaHoraResolucion: fechaHoraResolucionNormalizada,
         fechaHoraFallo:
           failureToNormalize.fechaHoraFallo ??
           buildFailureDateTimeValue(failureToNormalize) ??
@@ -228,22 +233,33 @@ const formatFechaHoraDisplay = (
     updateField(name as keyof TechnicalFailure, value);
   };
 
-  const handleResolutionChange = (isoValue: string | null) => {
+  const handleResolutionChange = (
+    value: string | null,
+    helpers: { isoString: string | null; dateValue: Date | null },
+  ) => {
     if (isReadOnly) return;
-    const normalizedValue = normalizeDateTimeLocalString(isoValue);
-    const { date, time } = splitDateTimeLocalValue(normalizedValue);
+    const updatedValue = value ?? '';
+    const parsedDateTime = helpers.dateValue ?? (updatedValue ? new Date(updatedValue) : null);
+    const normalizedValue =
+      normalizeDateTimeLocalString(updatedValue) ||
+      (parsedDateTime && !Number.isNaN(parsedDateTime.getTime())
+        ? normalizeDateTimeLocalString(parsedDateTime.toISOString())
+        : '');
+    const { date, time } = splitDateTimeLocalValue(normalizedValue || updatedValue);
     setEditData((prev) => ({
       ...prev,
-      fechaHoraResolucion: isoValue || undefined,
+      fechaHoraResolucion: normalizedValue || updatedValue || undefined,
       fechaResolucion: date,
       horaResolucion: time,
       responsable_verificacion_cierre_nombre:
-        isoValue && currentUserName ? currentUserName : prev.responsable_verificacion_cierre_nombre,
+        updatedValue && currentUserName
+          ? currentUserName
+          : prev.responsable_verificacion_cierre_nombre,
     }));
   };
 
   const nowForInput = useMemo(
-    () => new Date().toISOString().slice(0, 16),
+    () => normalizeDateTimeLocalString(new Date().toISOString()),
     [],
   );
 
@@ -472,7 +488,7 @@ const formatFechaHoraDisplay = (
               label="Fecha y Hora Resolución"
               name="fechaHoraResolucion"
               value={editData.fechaHoraResolucion || ''}
-              onChange={(_, helpers) => handleResolutionChange(helpers.isoString)}
+              onChange={handleResolutionChange}
               max={nowForInput}
               disabled={isReadOnly}
               className="disabled:bg-gray-100 disabled:text-gray-500"
