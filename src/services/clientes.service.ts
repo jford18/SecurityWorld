@@ -1,4 +1,5 @@
 import api from "./api";
+import apiClient from "./apiClient";
 
 const CLIENTES_ENDPOINT = "/clientes";
 
@@ -15,6 +16,8 @@ type ClienteQueryParamsInput = Record<
   string,
   string | number | boolean | undefined | null
 >;
+
+const EXPORT_ERROR_MESSAGE = "No se pudo exportar personas por cliente";
 
 const normalizeClientesPayload = (payload: unknown): any[] => {
   if (Array.isArray(payload)) {
@@ -73,6 +76,32 @@ const sanitizeParams = (
   return Object.keys(entries).length > 0 ? entries : undefined;
 };
 
+const buildExportErrorMessage = (error: unknown): string => {
+  if (error && typeof error === "object" && "response" in error) {
+    const responseData = (error as { response?: { data?: any } }).response?.data;
+    const message = responseData?.message;
+    const detail = responseData?.detail;
+
+    if (message && detail) {
+      return `${message}. Detalle: ${detail}`;
+    }
+
+    if (message) {
+      return message;
+    }
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error.trim();
+  }
+
+  return EXPORT_ERROR_MESSAGE;
+};
+
 const buildRequestConfig = (params?: ClienteQueryParamsInput) => {
   const sanitized = sanitizeParams(params);
   return sanitized ? { params: sanitized } : undefined;
@@ -101,4 +130,33 @@ export const updateCliente = async (
 ): Promise<any> => {
   const response = await api.put(`${CLIENTES_ENDPOINT}/${id}`, payload);
   return response?.data;
+};
+
+export const exportPersonasClientesExcel = async (): Promise<Blob> => {
+  try {
+    const response = await apiClient.get<ArrayBuffer>(
+      `${CLIENTES_ENDPOINT}/export-personas`,
+      {
+        responseType: "arraybuffer",
+        headers: {
+          Accept:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      }
+    );
+
+    const blob = new Blob([response.data], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    if (!blob || blob.size === 0) {
+      throw new Error("Export inválido: archivo vacío");
+    }
+
+    return blob;
+  } catch (error) {
+    throw new Error(buildExportErrorMessage(error));
+  }
 };

@@ -7,11 +7,13 @@ import {
   addPersonaToCliente,
   removePersonaFromCliente,
   updateCliente,
+  exportPersonasClientesExcel,
 } from "../controllers/clientes.controller.js";
 
 const router = express.Router();
 
 router.get("/", getClientes);
+router.get("/export-personas", exportPersonasClientesExcel);
 router.post("/", createCliente);
 router.put("/:id", updateCliente);
 router.delete("/:id", deleteCliente);

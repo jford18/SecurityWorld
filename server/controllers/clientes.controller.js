@@ -1,3 +1,4 @@
+import XLSX from "xlsx";
 import pool from "../db.js";
 
 console.log("[API] Controlador CLIENTES activo y conectado a la tabla public.clientes");
@@ -12,6 +13,35 @@ const formatError = (message) => ({
   status: "error",
   message,
 });
+
+const formatPersonaEstado = (estado) => {
+  if (estado === true || estado === "true" || estado === 1) {
+    return "Activo";
+  }
+  if (estado === false || estado === "false" || estado === 0) {
+    return "Inactivo";
+  }
+  return "";
+};
+
+const formatFechaLegible = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toLocaleString("es-EC", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
 const CLIENTES_BASE_QUERY = `
   SELECT c.id,
@@ -319,6 +349,84 @@ export const deleteCliente = async (req, res) => {
     res
       .status(500)
       .json(formatError("Ocurrió un error al eliminar el cliente"));
+  }
+};
+
+export const exportPersonasClientesExcel = async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        c.id AS cliente_id,
+        c.nombre AS cliente_nombre,
+        c.identificacion AS cliente_identificacion,
+        cp.fecha_asignacion,
+        p.id AS persona_id,
+        p.nombre,
+        p.apellido,
+        cc.descripcion AS cargo,
+        p.estado
+      FROM public.clientes c
+      INNER JOIN public.cliente_persona cp ON cp.cliente_id = c.id
+      INNER JOIN persona p ON p.id = cp.persona_id
+      LEFT JOIN catalogo_cargo cc ON cc.id = p.cargo_id
+      ORDER BY c.nombre ASC, p.apellido ASC, p.nombre ASC
+    `);
+
+    const worksheetData = [
+      [
+        "CLIENTE_ID",
+        "CLIENTE_NOMBRE",
+        "CLIENTE_IDENTIFICACION",
+        "PERSONA_ID",
+        "NOMBRE",
+        "APELLIDO",
+        "CARGO",
+        "ESTADO",
+        "FECHA_ASIGNACION",
+      ],
+      ...(rows ?? []).map((row) => [
+        row.cliente_id ?? "",
+        row.cliente_nombre ?? "",
+        row.cliente_identificacion ?? "",
+        row.persona_id ?? "",
+        row.nombre ?? "",
+        row.apellido ?? "",
+        row.cargo ?? "",
+        formatPersonaEstado(row.estado),
+        formatFechaLegible(row.fecha_asignacion),
+      ]),
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Personas por cliente");
+
+    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="CLIENTES_PERSONAS.xlsx"'
+    );
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+    res.removeHeader("ETag");
+
+    return res.status(200).send(buffer);
+  } catch (error) {
+    console.error("[CLIENTES] Error al exportar personas por cliente:", error);
+    return res.status(500).json({
+      message: "No se pudo exportar personas por cliente",
+      detail: error?.message ?? error,
+    });
   }
 };
 
