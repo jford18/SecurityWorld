@@ -357,25 +357,62 @@ export const updatePersona = async (req, res) => {
 
 export const deletePersona = async (req, res) => {
   const { id } = req.params;
+  const parsedId = Number(id);
+
+  if (!Number.isInteger(parsedId) || parsedId <= 0) {
+    return res.status(400).json({
+      status: "error",
+      error: "INVALID_ID",
+      message: "El identificador de la persona no es válido",
+    });
+  }
 
   try {
     const result = await pool.query(
-      "UPDATE persona SET estado = false WHERE id = $1 AND estado = true RETURNING id",
-      [id]
+      `DELETE FROM public.persona
+        WHERE id = $1
+        RETURNING id, nombre, apellido`,
+      [parsedId]
     );
 
     if (result.rowCount === 0) {
-      return res
-        .status(404)
-        .json(formatError("La persona ya estaba inactiva o no existe"));
+      return res.status(404).json({
+        status: "error",
+        error: "NOT_FOUND",
+        message: "La persona ya no existe o fue eliminada",
+      });
     }
 
-    res
-      .status(200)
-      .json(formatSuccess("Persona inactivada correctamente"));
+    const deleted = result.rows[0];
+
+    return res.status(200).json(
+      formatSuccess("Persona eliminada correctamente", {
+        id: deleted.id,
+        nombre: deleted.nombre,
+        apellido: deleted.apellido,
+      })
+    );
   } catch (error) {
     console.error("Error al eliminar persona:", error);
-    res.status(500).json(formatError("Error al eliminar la persona"));
+
+    if (error?.code === "23503" || error?.code === "ER_ROW_IS_REFERENCED_2" || error?.errno === 1451) {
+      return res.status(409).json({
+        status: "error",
+        error: "FK_CONSTRAINT",
+        message:
+          "No se puede eliminar la persona porque está relacionada con otros registros.",
+        detail:
+          error?.detail ||
+          "La persona está vinculada a otros registros como usuarios o asignaciones.",
+      });
+    }
+
+    return res.status(500).json({
+      status: "error",
+      error: "SERVER_ERROR",
+      message: "Error al eliminar la persona",
+      detail: error?.message,
+    });
   }
 };
 

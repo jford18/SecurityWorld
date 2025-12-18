@@ -67,6 +67,9 @@ const PersonaScreen: React.FC = () => {
   const [formState, setFormState] = useState<PersonaFormState>(initialFormState);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [actionFeedback, setActionFeedback] = useState<
+    { type: 'success' | 'error'; message: string } | null
+  >(null);
 
   const fetchPersonas = useCallback(async (search?: string) => {
     try {
@@ -236,9 +239,12 @@ const PersonaScreen: React.FC = () => {
   };
 
   const handleStatusChange = async (persona: Persona) => {
+    setActionFeedback(null);
+
     if (persona.estado) {
+      const nombreCompleto = `${persona.nombre ?? ''} ${persona.apellido ?? ''}`.trim();
       const confirmed = window.confirm(
-        `¿Deseas inactivar a ${persona.nombre} ${persona.apellido}?`
+        `¿Deseas eliminar a ${nombreCompleto || 'esta persona'}?`
       );
 
       if (!confirmed) {
@@ -247,22 +253,48 @@ const PersonaScreen: React.FC = () => {
 
       try {
         await removePersona(persona.id);
-        alert('Persona inactivada correctamente');
+        setActionFeedback({ type: 'success', message: 'Persona eliminada correctamente' });
         await fetchPersonas(searchTerm);
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
-        alert(err instanceof Error ? err.message : 'Error al inactivar la persona');
+
+        if (err?.status === 409 && (err?.code === 'FK_CONSTRAINT' || err?.code === '23503')) {
+          setActionFeedback({
+            type: 'error',
+            message:
+              'No se puede eliminar la persona porque está relacionada con otros registros (por ejemplo: usuarios, asignaciones, etc.). Primero elimina o desvincula esos registros.',
+          });
+          return;
+        }
+
+        if (err?.status === 404) {
+          setActionFeedback({
+            type: 'error',
+            message: 'La persona ya no existe o fue eliminada.',
+          });
+          await fetchPersonas(searchTerm);
+          return;
+        }
+
+        const detail = err?.detail || (err instanceof Error ? err.message : 'Error al eliminar la persona');
+        setActionFeedback({
+          type: 'error',
+          message: `Error al eliminar${detail ? `: ${detail}` : ''}`,
+        });
       }
       return;
     }
 
     try {
       await updatePersona(persona.id, { estado: true });
-      alert('Persona activada correctamente');
+      setActionFeedback({ type: 'success', message: 'Persona activada correctamente' });
       await fetchPersonas(searchTerm);
     } catch (err) {
       console.error(err);
-      alert(err instanceof Error ? err.message : 'Error al activar la persona');
+      setActionFeedback({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Error al activar la persona',
+      });
     }
   };
 
@@ -320,6 +352,18 @@ const PersonaScreen: React.FC = () => {
             />
           </label>
         </div>
+
+        {actionFeedback && (
+          <div
+            className={`rounded-md border px-4 py-3 text-sm ${
+              actionFeedback.type === 'error'
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : 'border-green-200 bg-green-50 text-green-700'
+            }`}
+          >
+            {actionFeedback.message}
+          </div>
+        )}
 
         {loading ? (
           <p className="text-sm text-gray-500">Cargando personas...</p>

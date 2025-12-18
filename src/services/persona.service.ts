@@ -108,7 +108,12 @@ export const remove = async (id: number | string) => {
     const errorData = await response
       .json()
       .catch(() => ({ message: 'Error al eliminar la persona' }));
-    throw new Error(errorData.message || 'Error al eliminar la persona');
+
+    const error: any = new Error(errorData.message || 'Error al eliminar la persona');
+    error.status = response.status;
+    error.code = errorData.code || errorData.error;
+    error.detail = errorData.detail;
+    throw error;
   }
 
   const data = await response.json();
