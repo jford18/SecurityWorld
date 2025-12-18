@@ -5,6 +5,7 @@ import {
   createCliente,
   getAllClientes,
   updateCliente,
+  exportPersonasClientesExcel,
 } from "@/services/clientes.service";
 import { getTiposServicio } from "@/services/tipoServicioService";
 import PersonasClienteSection from "./components/PersonasClienteSection";
@@ -129,6 +130,7 @@ const Clientes = () => {
   const [search, setSearch] = useState("");
   const [sortConfig, setSortConfig] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [exportingPersonas, setExportingPersonas] = useState(false);
 
   const [clienteId, setClienteId] = useState(null);
   const [nombre, setNombre] = useState("");
@@ -270,6 +272,34 @@ const Clientes = () => {
 
     const filename = `mantenimiento_clientes_${formatTimestamp()}.xlsx`;
     XLSX.writeFile(workbook, filename);
+  };
+
+  const handleExportPersonasToExcel = async () => {
+    if (exportingPersonas) {
+      return;
+    }
+
+    try {
+      setExportingPersonas(true);
+      const blob = await exportPersonasClientesExcel();
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = `CLIENTES_PERSONAS_${formatTimestamp()}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+      toast.success("Exportación de personas por cliente generada correctamente");
+    } catch (error) {
+      const message = resolveErrorMessage(
+        error,
+        "No se pudo exportar personas por cliente"
+      );
+      toast.error(message);
+    } finally {
+      setExportingPersonas(false);
+    }
   };
 
   const handleSave = async (event) => {
@@ -416,6 +446,14 @@ const Clientes = () => {
                 placeholder="Buscar por nombre, identificación o tipo de servicio"
               />
             </label>
+            <button
+              type="button"
+              className={secondaryButtonClasses}
+              onClick={handleExportPersonasToExcel}
+              disabled={exportingPersonas}
+            >
+              {exportingPersonas ? "Exportando personas..." : "Exportar Personas a Excel"}
+            </button>
             <button
               type="button"
               className={secondaryButtonClasses}
