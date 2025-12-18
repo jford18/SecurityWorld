@@ -19,7 +19,6 @@ from selenium.common.exceptions import (
 )
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -933,88 +932,311 @@ def abrir_menu_resource_status(driver, wait):
         raise Exception("No se pudo hacer clic en el menú 'Resource Status'")
 
 
-def seleccionar_opcion_resource_status(driver, wait, opcion: str) -> None:
-    """
-    Abre la opción indicada (por ejemplo: "Camera", "Encoding Device", "IP Speaker")
-    dentro de Resource Status.
+def _normalize_label(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip().lower()
 
-    Estrategia:
-      1) Intentar usar el menú lateral "Resource Status".
-      2) Si no se encuentra la opción ahí, usar el panel de "Recently visited"
-         con elementos <div class="recently-visited-menu" title="...">.
-    """
-    print(f"[6] Seleccionando {opcion}...")
+
+def _element_matches(element, target_normalized: str) -> bool:
+    textos = [
+        element.text,
+        element.get_attribute("title"),
+        element.get_attribute("aria-label"),
+        element.get_attribute("innerText"),
+    ]
+    return any(_normalize_label(t) == target_normalized for t in textos if t)
+
+
+def safe_click(driver, element):
+    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+    try:
+        element.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", element)
+
+
+def wait_loading_end(driver, timeout: int = 15):
+    overlays = [
+        (By.CSS_SELECTOR, ".el-loading-mask"),
+        (By.CSS_SELECTOR, ".el-loading-spinner"),
+        (By.CSS_SELECTOR, "div.loading-mask"),
+        (By.CSS_SELECTOR, "div.hik-loader, div.hik-loading"),
+    ]
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        visible = False
+        for by, selector in overlays:
+            try:
+                elems = driver.find_elements(by, selector)
+            except Exception:
+                continue
+            if any(e.is_displayed() for e in elems):
+                visible = True
+                break
+        if not visible:
+            return
+        time.sleep(0.5)
+
+
+def find_click_by_text(driver, wait, text: str):
+    normalized = _normalize_label(text)
+    condition = (
+        "contains(translate(normalize-space(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '"
+        + normalized
+        + "')"
+    )
+
+    xpaths = [
+        "//div[contains(@class,'tabs') or contains(@class,'tab')][.//*/text()]//*[self::div or self::button or self::span or self::a][{cond}]",
+        "//button[{cond}]",
+        "//li[{cond}]",
+        "//span[{cond}]",
+        "//div[{cond}]",
+        "//a[{cond}]",
+        "//div[contains(@class,'el-select-dropdown')]//li[{cond}]",
+        "//ul[contains(@class,'menu') or contains(@class,'list')]//li[{cond}]",
+        "//*[@role='tab' and {cond}]",
+    ]
+
+    candidates_texts: list[str] = []
+    for xpath in xpaths:
+        locator = xpath.format(cond=condition)
+        try:
+            elements = driver.find_elements(By.XPATH, locator)
+        except Exception:
+            continue
+
+        for elem in elements:
+            if not elem.is_displayed():
+                continue
+            texto_elem = _normalize_label(elem.text or elem.get_attribute("title") or "")
+            if texto_elem:
+                candidates_texts.append(elem.text.strip() or elem.get_attribute("title") or "")
+            try:
+                wait.until(EC.element_to_be_clickable(elem))
+            except Exception:
+                continue
+
+            if _element_matches(elem, normalized):
+                return elem, candidates_texts
+
+    return None, candidates_texts
+
+
+def _switch_to_resource_iframe(driver) -> bool:
+    switched = False
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
 
     try:
-        # 1) Intentar expandir el menú lateral "Resource Status"
-        submenu_li = None
+        frames = driver.find_elements(By.TAG_NAME, "iframe")
+    except Exception:
+        return False
+
+    visibles = []
+    for frame in frames:
         try:
-            span_resource = wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        "//span[@id='subMenuTitle2' and normalize-space()='Resource Status']",
-                    )
-                )
-            )
-            submenu_li = span_resource.find_element(
-                By.XPATH, "./ancestor::li[contains(@class,'el-submenu')]"
-            )
+            if not frame.is_displayed():
+                continue
+            rect = frame.rect or {}
+            area = rect.get("width", 0) * rect.get("height", 0)
+            visibles.append((area, frame))
+        except Exception:
+            continue
 
-            # Si el submenú no está abierto, haz clic para expandirlo
-            submenu_classes = submenu_li.get_attribute("class") or ""
-            if "is-opened" not in submenu_classes:
-                span_resource.click()
-        except TimeoutException:
-            # Si no se encuentra el menú lateral, pasamos al plan B
-            submenu_li = None
+    for _, frame in sorted(visibles, key=lambda x: x[0], reverse=True):
+        try:
+            driver.switch_to.frame(frame)
+            switched = True
+            break
+        except Exception:
+            continue
 
-        # 2) Buscar la opción en el menú lateral expandido
-        if submenu_li is not None:
+    return switched
+
+
+def _validar_recurso_seleccionado(driver, target_label: str) -> bool:
+    normalized = _normalize_label(target_label)
+    indicadores = [
+        "//div[contains(@class,'el-tabs__item') and contains(@class,'is-active')]",
+        "//li[contains(@class,'is-active') or contains(@class,'active')]",
+        "//button[contains(@class,'is-active') or contains(@class,'active')]",
+        "//div[contains(@class,'breadcrumb') or contains(@class,'crumb')]//span",
+        "//div[contains(@class,'el-select')]//span[contains(@class,'selected') or contains(@class,'el-select__selected')]",
+        "//div[contains(@class,'tab') and contains(@class,'active')]",
+    ]
+
+    for xp in indicadores:
+        try:
+            elems = driver.find_elements(By.XPATH, xp)
+        except Exception:
+            continue
+        for elem in elems:
+            if not elem.is_displayed():
+                continue
+            if _element_matches(elem, normalized):
+                return True
+    return False
+
+
+def _esperar_refresco_contenido(driver, previo=None, timeout: int = 10):
+    try:
+        if previo:
+            WebDriverWait(driver, timeout).until(EC.staleness_of(previo))
+            return True
+    except Exception:
+        pass
+
+    time.sleep(1.5)
+    try:
+        nuevo = driver.find_element(By.CSS_SELECTOR, ".el-table__body-wrapper")
+    except Exception:
+        return False
+
+    if previo and nuevo == previo:
+        try:
+            WebDriverWait(driver, timeout).until(lambda d: d.find_element(By.CSS_SELECTOR, ".el-table__body-wrapper") != previo)
+            return True
+        except Exception:
+            return False
+    return True
+
+
+def seleccionar_opcion_resource_status(driver, wait, opcion: str) -> None:
+    """
+    Selecciona Camera / IP Speaker / Encoding Device dentro de Resource Status
+    de forma robusta.
+    """
+
+    print(f"[6] Seleccionando {opcion}...")
+
+    opcion_normalizada = _normalize_label(opcion)
+    mapa_opciones = {
+        "camera": "Camera",
+        "ip speaker": "IP Speaker",
+        "encoding device": "Encoding Device",
+    }
+    etiqueta_objetivo = mapa_opciones.get(opcion_normalizada)
+    if etiqueta_objetivo is None:
+        raise Exception(f"Opción de recurso desconocida: {opcion}")
+
+    wait_loading_end(driver)
+    _switch_to_resource_iframe(driver)
+
+    tabla_previa = None
+    try:
+        tabla_previa = driver.find_element(By.CSS_SELECTOR, ".el-table__body-wrapper")
+    except Exception:
+        tabla_previa = None
+
+    encontrados: list[str] = []
+
+    def registrar_candidatos(elems):
+        for e in elems:
             try:
-                opcion_element = wait.until(
-                    EC.element_to_be_clickable(
-                        (
-                            By.XPATH,
-                            (
-                                "//li[contains(@class,'el-submenu')"
-                                "  and .//span[@id='subMenuTitle2']]"
-                                f"//li[contains(@class,'el-menu-item') and @title='{opcion}']"
-                            ),
-                        )
-                    )
-                )
-                driver.execute_script(
-                    "arguments[0].scrollIntoView({block: 'center'});",
-                    opcion_element,
-                )
-                ActionChains(driver).move_to_element(opcion_element).click().perform()
-                print(f"[5] Opción Resource Status seleccionada (menú lateral): {opcion}")
+                texto = e.text.strip() or e.get_attribute("title") or ""
+            except Exception:
+                texto = ""
+            if texto:
+                encontrados.append(texto)
+
+    try:
+        # Estrategia A: tabs/botones visibles
+        estrategias_tabs = [
+            "//div[contains(@class,'tab') or contains(@class,'tabs')]//div[contains(@class,'tab') or self::button]",
+            "//div[contains(@class,'el-tabs__header')]//div[contains(@class,'el-tabs__item')]",
+            "//button[contains(@class,'tab') or contains(@class,'el-button')]",
+        ]
+        for xp in estrategias_tabs:
+            try:
+                elems = driver.find_elements(By.XPATH, xp)
+            except Exception:
+                continue
+            elems = [e for e in elems if e.is_displayed()]
+            registrar_candidatos(elems)
+            for elem in elems:
+                if _element_matches(elem, _normalize_label(etiqueta_objetivo)):
+                    safe_click(driver, elem)
+                    wait_loading_end(driver)
+                    if _validar_recurso_seleccionado(driver, etiqueta_objetivo) or _esperar_refresco_contenido(driver, tabla_previa):
+                        print(f"[6] Recurso seleccionado por pestaña/botón: {etiqueta_objetivo}")
+                        return
+
+        # Estrategia B: dropdown de Resource Type / Resource
+        selectores_dropdown = [
+            "//label[contains(translate(normalize-space(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'resource')]/following::div[contains(@class,'el-select')][1]",
+            "//div[contains(@class,'el-select') and .//span[contains(translate(normalize-space(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'resource')]]",
+            "//div[contains(@class,'el-select') and not(contains(@class,'is-disabled'))]",
+        ]
+
+        for xp in selectores_dropdown:
+            try:
+                dropdowns = driver.find_elements(By.XPATH, xp)
+            except Exception:
+                continue
+            dropdowns = [d for d in dropdowns if d.is_displayed()]
+            registrar_candidatos(dropdowns)
+            for dd in dropdowns:
+                safe_click(driver, dd)
+                time.sleep(0.2)
+                wait_loading_end(driver)
+                opcion_elem, candidatos = find_click_by_text(driver, wait, etiqueta_objetivo)
+                encontrados.extend(candidatos)
+                if opcion_elem:
+                    safe_click(driver, opcion_elem)
+                    wait_loading_end(driver)
+                    if _validar_recurso_seleccionado(driver, etiqueta_objetivo) or _esperar_refresco_contenido(driver, tabla_previa):
+                        print(f"[6] Recurso seleccionado desde dropdown: {etiqueta_objetivo}")
+                        return
+
+        # Estrategia C: menú/lateral/lista
+        lista_selectores = [
+            "//ul[contains(@class,'menu') or contains(@class,'el-menu')]//li",
+            "//div[contains(@class,'list') or contains(@class,'menu')]//div[contains(@class,'item') or self::li]",
+            "//div[contains(@class,'side') or contains(@class,'left')]//li",
+        ]
+        for xp in lista_selectores:
+            try:
+                elems = driver.find_elements(By.XPATH, xp)
+            except Exception:
+                continue
+            elems = [e for e in elems if e.is_displayed()]
+            registrar_candidatos(elems)
+            for elem in elems:
+                if _element_matches(elem, _normalize_label(etiqueta_objetivo)):
+                    safe_click(driver, elem)
+                    wait_loading_end(driver)
+                    if _validar_recurso_seleccionado(driver, etiqueta_objetivo) or _esperar_refresco_contenido(driver, tabla_previa):
+                        print(f"[6] Recurso seleccionado desde menú/lateral: {etiqueta_objetivo}")
+                        return
+
+        opcion_elem, candidatos_extra = find_click_by_text(driver, wait, etiqueta_objetivo)
+        encontrados.extend(candidatos_extra)
+        if opcion_elem:
+            safe_click(driver, opcion_elem)
+            wait_loading_end(driver)
+            if _validar_recurso_seleccionado(driver, etiqueta_objetivo) or _esperar_refresco_contenido(driver, tabla_previa):
+                print(f"[6] Recurso seleccionado: {etiqueta_objetivo}")
                 return
-            except TimeoutException:
-                # Si la opción no está en el menú lateral, seguir al plan B
-                pass
 
-        # 3) Plan B: usar el panel "Recently visited" / Quick Start
-        #    Usa los <div class="recently-visited-menu" title="...">
-        opcion_quick = wait.until(
-            EC.element_to_be_clickable(
-                (
-                    By.CSS_SELECTOR,
-                    f"div.recently-visited-menu[title='{opcion}']",
-                )
-            )
-        )
-        driver.execute_script(
-            "arguments[0].scrollIntoView({block: 'center'});", opcion_quick
-        )
-        ActionChains(driver).move_to_element(opcion_quick).click().perform()
-        print(f"[5] Opción Resource Status seleccionada (Quick Start): {opcion}")
-
-    except Exception as exc:
-        # Mantén el mismo mensaje de error que usa el script actualmente
+        print(f"[ERROR] No se encontró la opción solicitada: {etiqueta_objetivo}")
+        if encontrados:
+            print("[DEBUG] Candidatos visibles:", encontrados[:10])
         raise Exception(
-            f"No se pudo hacer clic en la opción '{opcion}' del menú Resource Status"
+            f"No se pudo hacer clic en la opción '{etiqueta_objetivo}' del menú Resource Status"
+        )
+    except Exception as exc:
+        if encontrados:
+            print(f"[DEBUG] Opción solicitada: {etiqueta_objetivo}. Candidatos: {encontrados[:10]}")
+        try:
+            downloads_dir = DOWNLOAD_DIR
+            downloads_dir.mkdir(parents=True, exist_ok=True)
+            driver.save_screenshot(str(downloads_dir / "debug_select_resource_error.png"))
+        except Exception:
+            pass
+        raise Exception(
+            f"No se pudo hacer clic en la opción '{etiqueta_objetivo}' del menú Resource Status"
         ) from exc
 
 
