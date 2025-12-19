@@ -213,12 +213,13 @@ const normalizeSitioPayload = (body) => {
 
 export const getSitios = async (req, res) => {
   try {
-    const { soloDisponibles, sitioActualId, consolaId, consola_id } =
+    const { soloDisponibles, sitioActualId, consolaId, consola_id, clienteId } =
       req.query ?? {};
 
     const onlyAvailable = parseBoolean(soloDisponibles);
     const includeIds = parseSitioIds(sitioActualId);
     const consoleId = parseNullableId(consolaId ?? consola_id);
+    const clientId = parseNullableId(clienteId);
 
     const filters = [];
     const values = [];
@@ -234,6 +235,12 @@ export const getSitios = async (req, res) => {
     if (consoleId !== null) {
       values.push(consoleId);
       filters.push(`S.consola_id = $${values.length}`);
+      ensureActiveFilter();
+    }
+
+    if (clientId !== null) {
+      values.push(clientId);
+      filters.push(`S.cliente_id = $${values.length}`);
       ensureActiveFilter();
     }
 

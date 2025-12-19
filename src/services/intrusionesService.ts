@@ -172,6 +172,7 @@ const normalizeIntrusionArray = (payload: unknown): Intrusion[] => {
 export interface IntrusionConsolidadoFilters {
   fechaDesde?: string;
   fechaHasta?: string;
+  clienteId?: number | string;
   sitioId?: number | string;
   tipoIntrusionId?: number | string;
   tipoIntrusion?: string;

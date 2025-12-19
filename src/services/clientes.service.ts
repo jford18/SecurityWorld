@@ -4,6 +4,11 @@ import apiClient from "./apiClient";
 const CLIENTES_ENDPOINT = "/clientes";
 const EXCEL_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+export interface ClienteResumen {
+  id: number;
+  nombre: string;
+}
+
 export type ClientePayload = {
   nombre: string;
   identificacion: string;
@@ -75,6 +80,22 @@ const sanitizeParams = (
   );
 
   return Object.keys(entries).length > 0 ? entries : undefined;
+};
+
+export const getClientesActivos = async (): Promise<ClienteResumen[]> => {
+  const { data } = await api.get<ClienteResumen[] | { data?: ClienteResumen[] }>(
+    `${CLIENTES_ENDPOINT}/activos`
+  );
+
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (data && typeof data === "object" && Array.isArray((data as { data?: unknown }).data)) {
+    return (data as { data?: ClienteResumen[] }).data ?? [];
+  }
+
+  return [];
 };
 
 const buildExportErrorMessage = (error: unknown): string => {
