@@ -100,6 +100,41 @@ const mapFalloRowToDto = (row) => ({
     row.responsable_verificacion_cierre_nombre || null,
 });
 
+export const getCamarasPorSitio = async (req, res) => {
+  const { sitioId } = req.params;
+  const parsedSitioId = Number(sitioId);
+
+  if (!Number.isFinite(parsedSitioId)) {
+    return res.status(400).json({ message: "El identificador del sitio no es válido." });
+  }
+
+  try {
+    const query = `
+      SELECT
+          A.ID          AS CAMERA_ID,
+          A.CAMERA_NAME AS CAMERA_NAME,
+          A.IP_ADDRESS  AS IP_ADDRESS
+      FROM HIK_CAMERA_RESOURCE_STATUS A
+      JOIN SITIOS                  B ON (B.NOMBRE = A.SITE_NAME)
+      WHERE B.ID = $1
+      ORDER BY A.CAMERA_NAME;
+    `;
+
+    const { rows } = await pool.query(query, [parsedSitioId]);
+
+    const mapped = rows.map((row) => ({
+      id: row.camera_id ?? row.id ?? null,
+      camera_name: row.camera_name ?? row.cameraName ?? null,
+      ip_address: row.ip_address ?? null,
+    }));
+
+    return res.json(mapped);
+  } catch (error) {
+    console.error("[getCamarasPorSitio] Error al obtener cámaras por sitio:", error);
+    return res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
 const toNullableUserId = (v) => {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : null;

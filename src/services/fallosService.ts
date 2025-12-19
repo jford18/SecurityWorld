@@ -52,6 +52,13 @@ export interface TechnicalFailurePayload {
   tipo_equipo_afectado_id?: number | string | null;
   encodingDeviceId?: number | string | null;
   ipSpeakerId?: number | string | null;
+  camera_id?: number | string | null;
+}
+
+export interface CameraCatalogItem {
+  id: number;
+  camera_name: string;
+  ip_address: string | null;
 }
 
 export type SitioAsociado = {
@@ -126,6 +133,24 @@ export const getEncodingDevicesBySite = async (siteName: string) => {
 export const getIpSpeakersBySite = async (siteName: string) => {
   const res = await api.get('/hik/ip-speakers', { params: { siteName } });
   return res.data as Array<{ id: number; name: string }>;
+};
+
+export const getCamarasPorSitio = async (
+  sitioId: number | string,
+): Promise<CameraCatalogItem[]> => {
+  const { data } = await apiClient.get<CameraCatalogItem[]>(
+    `/catalogos/camaras-por-sitio/${sitioId}`,
+  );
+
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  return data.map((item) => ({
+    ...item,
+    id: Number(item.id),
+    ip_address: item.ip_address ?? null,
+  }));
 };
 
 const buildRoleHeaders = (context?: RequestContext) => {
