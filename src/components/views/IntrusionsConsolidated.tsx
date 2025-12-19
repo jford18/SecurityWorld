@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import {
   fetchIntrusionesConsolidado,
+  exportIntrusionesConsolidado,
   IntrusionConsolidadoFilters,
   IntrusionConsolidadoResponse,
 } from '../../services/intrusionesService';
@@ -50,6 +51,7 @@ const IntrusionsConsolidated: React.FC = () => {
   const [data, setData] = useState<IntrusionConsolidadoRow[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<keyof IntrusionConsolidadoRow | null>(
     'fechaHoraIntrusion'
@@ -218,49 +220,65 @@ const IntrusionsConsolidated: React.FC = () => {
     });
   };
 
-  const sortedData = useMemo(() => {
-    if (!sortField) return data;
+  const sortRows = useCallback(
+    (rows: IntrusionConsolidadoRow[]): IntrusionConsolidadoRow[] => {
+      if (!sortField) return rows;
 
-    const multiplier = sortDirection === 'asc' ? 1 : -1;
+      const multiplier = sortDirection === 'asc' ? 1 : -1;
 
-    return [...data].sort((a, b) => {
-      if (sortField === 'fechaHoraIntrusion') {
-        const aTime = a.fechaHoraIntrusion ? new Date(a.fechaHoraIntrusion).getTime() : 0;
-        const bTime = b.fechaHoraIntrusion ? new Date(b.fechaHoraIntrusion).getTime() : 0;
-        return (aTime - bTime) * multiplier;
-      }
+      return [...rows].sort((a, b) => {
+        if (sortField === 'fechaHoraIntrusion') {
+          const aTime = a.fechaHoraIntrusion ? new Date(a.fechaHoraIntrusion).getTime() : 0;
+          const bTime = b.fechaHoraIntrusion ? new Date(b.fechaHoraIntrusion).getTime() : 0;
+          return (aTime - bTime) * multiplier;
+        }
 
-      const aValue = a[sortField];
-      const bValue = b[sortField];
+        const aValue = a[sortField];
+        const bValue = b[sortField];
 
-      if (typeof aValue === 'boolean' || typeof bValue === 'boolean') {
-        const aBool = aValue ? 1 : 0;
-        const bBool = bValue ? 1 : 0;
-        return (aBool - bBool) * multiplier;
-      }
+        if (typeof aValue === 'boolean' || typeof bValue === 'boolean') {
+          const aBool = aValue ? 1 : 0;
+          const bBool = bValue ? 1 : 0;
+          return (aBool - bBool) * multiplier;
+        }
 
-      const aText = (aValue ?? '').toString().toLowerCase();
-      const bText = (bValue ?? '').toString().toLowerCase();
-      return aText.localeCompare(bText) * multiplier;
-    });
-  }, [data, sortDirection, sortField]);
+        const aText = (aValue ?? '').toString().toLowerCase();
+        const bText = (bValue ?? '').toString().toLowerCase();
+        return aText.localeCompare(bText) * multiplier;
+      });
+    },
+    [sortDirection, sortField]
+  );
+
+  const sortedData = useMemo(() => sortRows(data), [data, sortRows]);
 
   const renderSortIndicator = (field: keyof IntrusionConsolidadoRow) => {
     if (sortField !== field) return null;
     return sortDirection === 'asc' ? '▲' : '▼';
   };
 
-  const handleExportToExcel = () => {
-    if (isLoading || sortedData.length === 0) return;
+  const handleExportToExcel = async () => {
+    if (isLoading || isExporting || total === 0) return;
 
-    const formattedRows = sortedData.map((row) => ({
-      'Fecha y hora de intrusión':
-        formatIntrusionDateTime(row.fechaHoraIntrusion) || 'Sin información',
-      Sitio: row.sitio || 'Sin información',
-      'Tipo intrusión': row.tipoIntrusion || 'Sin información',
-      'Llegó alerta': row.llegoAlerta ? 'Sí' : 'No',
-      'Personal identificado (Cargo – Persona)': row.personalIdentificado?.trim() || 'N/A',
-    }));
+    setIsExporting(true);
+    setError(null);
+
+    try {
+      const { data: exportData } = await exportIntrusionesConsolidado(filters);
+      if (!exportData.length) {
+        return;
+      }
+
+      const rowsToExport = sortRows(exportData);
+
+      const formattedRows = rowsToExport.map((row) => ({
+        'Fecha y hora de intrusión':
+          formatIntrusionDateTime(row.fechaHoraIntrusion) || 'Sin información',
+        Sitio: row.sitio || 'Sin información',
+        'Tipo intrusión': row.tipoIntrusion || 'Sin información',
+        'Llegó alerta': row.llegoAlerta ? 'Sí' : 'No',
+        'Personal identificado (Cargo – Persona)': row.personalIdentificado?.trim() || 'N/A',
+      }));
 
     const worksheet = XLSX.utils.json_to_sheet(formattedRows);
     const workbook = XLSX.utils.book_new();
@@ -273,8 +291,14 @@ const IntrusionsConsolidated: React.FC = () => {
       now.getMinutes()
     ).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
 
-    const filename = `consolidado_intrusiones_${timestamp}.xlsx`;
-    XLSX.writeFile(workbook, filename);
+      const filename = `consolidado_intrusiones_${timestamp}.xlsx`;
+      XLSX.writeFile(workbook, filename);
+    } catch (exportError) {
+      console.error('Error al exportar el consolidado de intrusiones:', exportError);
+      setError('No se pudo exportar el consolidado de intrusiones.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -410,14 +434,14 @@ const IntrusionsConsolidated: React.FC = () => {
             <button
               type="button"
               onClick={handleExportToExcel}
-              disabled={isLoading || data.length === 0}
+              disabled={isLoading || isExporting || total === 0}
               className={`px-4 py-2 text-sm font-semibold text-white rounded-md ${
-                isLoading || data.length === 0
+                isLoading || isExporting || total === 0
                   ? 'bg-blue-300 cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700'
               }`}
             >
-              Exportar a Excel
+              {isExporting ? 'Exportando...' : 'Exportar a Excel'}
             </button>
 
             <div className="flex items-center gap-3 text-sm text-gray-600">
