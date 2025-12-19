@@ -3,6 +3,7 @@ import {
   createCliente,
   deleteCliente,
   getClientes,
+  getClientesActivos,
   getPersonasByCliente,
   addPersonaToCliente,
   removePersonaFromCliente,
@@ -13,6 +14,7 @@ import {
 const router = express.Router();
 
 router.get("/", getClientes);
+router.get("/activos", getClientesActivos);
 router.get("/export-personas", exportPersonasClientesExcel);
 router.post("/", createCliente);
 router.put("/:id", updateCliente);

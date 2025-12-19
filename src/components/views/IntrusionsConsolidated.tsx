@@ -6,6 +6,7 @@ import {
   IntrusionConsolidadoResponse,
 } from '../../services/intrusionesService';
 import { getSitios, Sitio } from '../../services/sitiosService';
+import { ClienteResumen, getClientesActivos } from '../../services/clientes.service';
 import * as tipoIntrusionService from '../../services/tipoIntrusion.service';
 import * as personaService from '../../services/persona.service';
 import { IntrusionConsolidadoRow } from '../../types';
@@ -55,6 +56,7 @@ const IntrusionsConsolidated: React.FC = () => {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const [sitios, setSitios] = useState<Sitio[]>([]);
+  const [clientes, setClientes] = useState<ClienteResumen[]>([]);
   const [tiposIntrusion, setTiposIntrusion] = useState<TipoIntrusionItem[]>([]);
   const [personas, setPersonas] = useState<PersonaItem[]>([]);
 
@@ -63,10 +65,23 @@ const IntrusionsConsolidated: React.FC = () => {
     return Math.max(1, Math.ceil(total / pagination.pageSize));
   }, [pagination.pageSize, total]);
 
+  const fetchSitiosByCliente = useCallback(async (clienteId?: number | string) => {
+    try {
+      const normalizedClienteId =
+        clienteId !== undefined && clienteId !== null && clienteId !== ''
+          ? { clienteId }
+          : undefined;
+      const sitiosData = await getSitios(normalizedClienteId);
+      setSitios(sitiosData ?? []);
+    } catch (catalogError) {
+      console.error('Error al cargar sitios para el consolidado de intrusiones:', catalogError);
+    }
+  }, []);
+
   const loadCatalogos = useCallback(async () => {
     try {
-      const [sitiosData, tiposDataRaw, personasRaw] = await Promise.all([
-        getSitios(),
+      const [clientesActivos, tiposDataRaw, personasRaw] = await Promise.all([
+        getClientesActivos(),
         tipoIntrusionService.getAll({ limit: 200 }),
         personaService.getAll(),
       ]);
@@ -81,13 +96,18 @@ const IntrusionsConsolidated: React.FC = () => {
         ? (rawPersonasData as PersonaItem[])
         : [];
 
-      setSitios(sitiosData ?? []);
+      setClientes(clientesActivos ?? []);
       setTiposIntrusion(tiposData ?? []);
       setPersonas(personasData ?? []);
+      await fetchSitiosByCliente();
     } catch (catalogError) {
       console.error('Error al cargar los catálogos para el consolidado de intrusiones:', catalogError);
     }
-  }, []);
+  }, [fetchSitiosByCliente]);
+
+  useEffect(() => {
+    void fetchSitiosByCliente(filters.clienteId);
+  }, [fetchSitiosByCliente, filters.clienteId]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -134,10 +154,18 @@ const IntrusionsConsolidated: React.FC = () => {
     field: keyof IntrusionConsolidadoFilters,
     value: string | number | boolean | undefined
   ) => {
-    setFilters((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setFilters((prev) => {
+      const updatedFilters: IntrusionConsolidadoFilters = {
+        ...prev,
+        [field]: value,
+      };
+
+      if (field === 'clienteId') {
+        updatedFilters.sitioId = '';
+      }
+
+      return updatedFilters;
+    });
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
@@ -252,6 +280,21 @@ const IntrusionsConsolidated: React.FC = () => {
             onChange={(value, helpers) => handleDateFilterChange('fechaHasta', value, helpers)}
             className="focus:border-blue-500 focus:ring-blue-500"
           />
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Cliente</label>
+            <select
+              value={filters.clienteId ?? ''}
+              onChange={(e) => handleFilterChange('clienteId', e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Todos</option>
+              {clientes.map((cliente) => (
+                <option key={cliente.id} value={cliente.id}>
+                  {cliente.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Sitio</label>
             <select

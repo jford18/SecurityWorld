@@ -592,6 +592,7 @@ export const getConsolidadoIntrusiones = async (req, res) => {
     fechaDesde,
     fechaHasta,
     sitioId,
+    clienteId,
     tipoIntrusionId,
     tipoIntrusion,
     llegoAlerta,
@@ -644,6 +645,17 @@ export const getConsolidadoIntrusiones = async (req, res) => {
     }
     values.push(parsedSitioId);
     filters.push(`i.sitio_id = $${values.length}`);
+  }
+
+  if (clienteId !== undefined && clienteId !== "") {
+    const parsedClienteId = Number(clienteId);
+    if (!Number.isInteger(parsedClienteId) || parsedClienteId <= 0) {
+      return res
+        .status(400)
+        .json({ mensaje: "El parámetro clienteId no es válido." });
+    }
+    values.push(parsedClienteId);
+    filters.push(`s.cliente_id = $${values.length}`);
   }
 
   if (metadata.hasTipoIntrusionId && tipoIntrusionId !== undefined && tipoIntrusionId !== "") {

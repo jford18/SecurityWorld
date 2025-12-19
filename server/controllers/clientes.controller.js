@@ -167,6 +167,21 @@ export const getClientes = async (req, res) => {
   }
 };
 
+export const getClientesActivos = async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, nombre FROM public.clientes WHERE COALESCE(activo, TRUE) = TRUE ORDER BY nombre ASC`
+    );
+
+    return res.json(result.rows ?? []);
+  } catch (error) {
+    console.error("[CLIENTES] Error al obtener clientes activos:", error);
+    return res
+      .status(500)
+      .json({ message: "Error al obtener clientes activos", detail: error?.message });
+  }
+};
+
 const normalizeBoolean = (value, fallback = true) => {
   if (typeof value === "boolean") {
     return value;
