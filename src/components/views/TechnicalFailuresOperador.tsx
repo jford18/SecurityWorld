@@ -16,6 +16,8 @@ import {
   SitioAsociado,
   getEncodingDevicesBySite,
   getIpSpeakersBySite,
+  getCamarasPorSitio,
+  CameraCatalogItem,
 } from '../../services/fallosService';
 import api from '../../services/api';
 import TechnicalFailuresHistory from './TechnicalFailuresHistory';
@@ -125,8 +127,6 @@ const normalizeText = (text: string) =>
     .toLowerCase()
     .trim();
 
-const PROBLEMAS_REQUIEREN_CAMARA = ['camara descuadrada', 'camara sucia'];
-
 const TechnicalFailuresOperador: React.FC = () => {
   const { session } = useSession();
   const [failures, setFailures] = useState<TechnicalFailure[]>([]);
@@ -137,15 +137,13 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [clienteFromConsole, setClienteFromConsole] = useState<string | null>(null);
   const [sitios, setSitios] = useState<Sitio[]>([]);
   const [selectedSite, setSelectedSite] = useState('');
-  const [cameras, setCameras] = useState<
-    { id: number; camera_name: string; ip_address: string | null }[]
-  >([]);
+  const [cameras, setCameras] = useState<CameraCatalogItem[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState('');
+  const [isLoadingCamaras, setIsLoadingCamaras] = useState(false);
   const [encodingDevices, setEncodingDevices] = useState<
     { id: number; name: string }[]
   >([]);
   const [ipSpeakers, setIpSpeakers] = useState<Array<{ id: number; name: string }>>([]);
-  const [selectedProblem, setSelectedProblem] = useState<any>(null);
   const [sitiosNodo, setSitiosNodo] = useState<SitioAsociado[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -178,11 +176,18 @@ const TechnicalFailuresOperador: React.FC = () => {
 
   const equipoEsHC = useMemo(() => isDeviceFromHC(selectedDispositivo), [selectedDispositivo]);
 
-  const problemaDescripcion =
-    selectedProblem?.descripcion || selectedProblem?.nombre || formData.tipoProblema || '';
-  const showCameraField = PROBLEMAS_REQUIEREN_CAMARA.includes(
-    normalizeText(problemaDescripcion),
-  );
+  const isCameraEquipmentSelected = useMemo(() => {
+    const normalizedNombre = normalizeText(tipoEquipoAfectadoNombreValue);
+
+    return (
+      isEquipoAfectacion &&
+      (normalizedNombre === normalizeText('cámaras') ||
+        normalizedNombre === normalizeText('camara') ||
+        normalizedNombre === 'camaras')
+    );
+  }, [isEquipoAfectacion, tipoEquipoAfectadoNombreValue]);
+
+  const showCameraField = isCameraEquipmentSelected;
   const tipoEquipoAfectadoNombreValue = String(formData?.tipoEquipoAfectadoNombre || '');
 
   const isEquipoAfectacion =
@@ -201,6 +206,11 @@ const TechnicalFailuresOperador: React.FC = () => {
   const isGrabadorSelected =
     normalizeText(String(formData?.tipoEquipoAfectadoNombre || '')) === normalizeText('Grabador');
   const showEncodingDeviceField = isEquipoAfectacion && isGrabadorSelected;
+
+  const selectedCamera = useMemo(
+    () => cameras.find((camera) => String(camera.id) === String(selectedCameraId)) ?? null,
+    [cameras, selectedCameraId],
+  );
 
   const sitiosItems = useMemo(
     () => [
@@ -380,18 +390,6 @@ const TechnicalFailuresOperador: React.FC = () => {
     [catalogos.tiposProblemaEquipo]
   );
 
-  const camaraItems = useMemo(
-    () => [
-      { id: 'empty', nombre: 'Seleccione...', value: '' },
-      ...catalogos.dispositivos.map((dispositivo) => ({
-        id: String(dispositivo.id ?? dispositivo.nombre ?? ''),
-        nombre: dispositivo.nombre,
-        value: dispositivo.nombre,
-      })),
-    ],
-    [catalogos.dispositivos]
-  );
-
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -522,8 +520,8 @@ const TechnicalFailuresOperador: React.FC = () => {
 
       const equipoHcActual = isDeviceFromHC(getSelectedDispositivo(fieldValues.camara));
 
-      if (tipoEquipoAfectadoSel?.nombre === 'Cámara') {
-        if (!fieldValues.camara) {
+      if (showCameraField) {
+        if (!selectedCameraId) {
           tempErrors.camara = 'La cámara es obligatoria.';
         } else {
           delete tempErrors.camara;
@@ -592,6 +590,9 @@ const TechnicalFailuresOperador: React.FC = () => {
     };
 
     setEncodingDevices([]);
+    setCameras([]);
+    setSelectedCameraId('');
+    setIsLoadingCamaras(false);
     setFormData(newValues);
     validate(newValues);
   };
@@ -686,7 +687,6 @@ const TechnicalFailuresOperador: React.FC = () => {
     setErrors({});
     setCliente(null);
     setClienteFromConsole(null);
-    setSelectedProblem(null);
     setSelectedSite('');
     setCameras([]);
     setSelectedCameraId('');
@@ -696,28 +696,16 @@ const TechnicalFailuresOperador: React.FC = () => {
 
   const handleTipoProblemaChange = (selected: string) => {
     applyFieldUpdate('tipoProblema', selected);
-
-    const problema = catalogos.tiposProblema.find(
-      (tp) => normalizeText(tp.descripcion || tp.nombre || '') === normalizeText(selected),
-    );
-    setSelectedProblem(problema || null);
-
-    if (
-      !problema ||
-      !PROBLEMAS_REQUIEREN_CAMARA.includes(
-        normalizeText(problema.descripcion || problema.nombre || selected),
-      )
-    ) {
-      setSelectedCameraId('');
-      setCameras([]);
-    }
   };
 
   const handleSitioChange = (selected: string) => {
     applyFieldUpdate('sitioId', selected);
 
     setIpSpeakers([]);
-    setFormData((prev) => ({ ...prev, ipSpeakerId: '' }));
+    setFormData((prev) => ({ ...prev, ipSpeakerId: '', camara: '' }));
+    setSelectedCameraId('');
+    setCameras([]);
+    setIsLoadingCamaras(false);
 
     if (!selected) {
       setClienteFromConsole(null);
@@ -787,25 +775,48 @@ const TechnicalFailuresOperador: React.FC = () => {
   }, [equipoEsHC, formData.affectationType, formData.tipoProblemaEquipo]);
 
   useEffect(() => {
-    if (selectedSite && showCameraField) {
-      axios
-        .get(
-          `${import.meta.env.VITE_API_URL}/api/fallos-tecnicos/camaras/${encodeURIComponent(
-            selectedSite,
-          )}`,
-        )
-        .then((res) => {
-          setCameras(res.data || []);
-        })
-        .catch((err) => {
-          console.error('Error al cargar cámaras:', err);
-          setCameras([]);
-        });
-    } else {
+    if (!showCameraField) {
       setCameras([]);
       setSelectedCameraId('');
+      setIsLoadingCamaras(false);
+      return;
     }
-  }, [selectedSite, showCameraField]);
+
+    if (!formData.sitioId) {
+      setCameras([]);
+      setSelectedCameraId('');
+      setIsLoadingCamaras(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoadingCamaras(true);
+
+    getCamarasPorSitio(formData.sitioId)
+      .then((data) => {
+        if (!isMounted) return;
+        setCameras(data);
+        if (data.length === 0) {
+          setSelectedCameraId('');
+        }
+      })
+      .catch((err) => {
+        console.error('Error al cargar cámaras:', err);
+        if (isMounted) {
+          setCameras([]);
+          setSelectedCameraId('');
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingCamaras(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [formData.sitioId, getCamarasPorSitio, showCameraField]);
 
   useEffect(() => {
     if (!showIpSpeakerField) {
@@ -873,7 +884,11 @@ const TechnicalFailuresOperador: React.FC = () => {
     if (formData.affectationType === 'Nodo') {
       equipo_afectado = selectedNodo?.nombre || 'N/A';
     } else if (formData.affectationType === 'Equipo') {
-      const equipo = formData.camara || tipoEquipoAfectadoSel?.nombre || 'Equipo';
+      const equipo =
+        (showCameraField && selectedCamera?.camera_name) ||
+        formData.camara ||
+        tipoEquipoAfectadoSel?.nombre ||
+        'Equipo';
       equipo_afectado = `${equipo} en ${sitioNombre}`;
     } else if (formData.affectationType === 'Punto') {
       equipo_afectado = `Punto en ${sitioNombre}`;
@@ -919,6 +934,14 @@ const TechnicalFailuresOperador: React.FC = () => {
       const parsed = Number(formData.tipoEquipoAfectadoId);
       return Number.isNaN(parsed) ? formData.tipoEquipoAfectadoId : parsed;
     })();
+    const cameraIdPayload = (() => {
+      if (!showCameraField || !selectedCameraId) {
+        return null;
+      }
+
+      const parsed = Number(selectedCameraId);
+      return Number.isNaN(parsed) ? null : parsed;
+    })();
     const encodingDeviceIdPayload = (() => {
       if (!showEncodingDeviceField || !formData.encodingDeviceId) {
         return null;
@@ -949,7 +972,7 @@ const TechnicalFailuresOperador: React.FC = () => {
           : selectedSitio
             ? selectedSitio.id
             : undefined,
-      camera_id: showCameraField && selectedCameraId ? Number(selectedCameraId) : null,
+      camera_id: cameraIdPayload,
       encodingDeviceId: encodingDeviceIdPayload,
       ipSpeakerId:
         showIpSpeakerField && formData.ipSpeakerId
@@ -1020,16 +1043,35 @@ const TechnicalFailuresOperador: React.FC = () => {
         {showCameraField && (
           <div className="md:col-span-2">
             <label htmlFor="camera_id" className="block text-sm font-medium text-gray-700">
-              Cámara
+              Cámara <span className="text-red-600">*</span>
             </label>
             <select
               id="camera_id"
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300]"
               value={selectedCameraId}
-              onChange={(e) => setSelectedCameraId(e.target.value)}
-              disabled={!selectedSite || cameras.length === 0}
+              onChange={(e) => {
+                const value = e.target.value;
+                setSelectedCameraId(value);
+
+                const cameraSelected = cameras.find((cam) => String(cam.id) === value);
+                setFormData((prev) => ({ ...prev, camara: cameraSelected?.camera_name || '' }));
+                setErrors((prev) => {
+                  const { camara, ...rest } = prev;
+                  return rest;
+                });
+              }}
+              disabled={!formData.sitioId || isLoadingCamaras}
+              required
             >
-              <option value="">Seleccione una cámara</option>
+              <option value="" disabled>
+                {!formData.sitioId
+                  ? 'Seleccione un sitio primero'
+                  : isLoadingCamaras
+                    ? 'Cargando cámaras...'
+                    : cameras.length === 0
+                      ? 'Sin cámaras para este sitio'
+                      : 'Seleccione una cámara'}
+              </option>
               {cameras.map((cam) => {
                 const label = cam.ip_address
                   ? `${cam.camera_name} - ${cam.ip_address}`
@@ -1041,6 +1083,9 @@ const TechnicalFailuresOperador: React.FC = () => {
                 );
               })}
             </select>
+            {errors.camara && (
+              <p className="mt-1 text-sm text-red-600">{errors.camara}</p>
+            )}
           </div>
         )}
         {showEncodingDeviceField && (
@@ -1259,20 +1304,6 @@ const TechnicalFailuresOperador: React.FC = () => {
                   valueField="value"
                   placeholder="Buscar tipo de problema..."
                   error={errors.tipoProblemaEquipo}
-                />
-              </div>
-            )}
-            {tipoEquipoAfectadoSel?.nombre === 'Cámara' && (
-              <div className="md:col-span-2">
-                <AutocompleteComboBox
-                  label="Cámara *"
-                  value={formData.camara}
-                  onChange={(selected: string) => applyFieldUpdate('camara', selected)}
-                  items={camaraItems}
-                  displayField="nombre"
-                  valueField="value"
-                  placeholder="Buscar cámara..."
-                  error={errors.camara}
                 />
               </div>
             )}
