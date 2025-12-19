@@ -16,7 +16,6 @@ import {
   SitioAsociado,
   getEncodingDevicesBySite,
   getIpSpeakersBySite,
-  getCamarasPorSitio,
   CameraCatalogItem,
 } from '../../services/fallosService';
 import api from '../../services/api';
@@ -790,33 +789,47 @@ const TechnicalFailuresOperador: React.FC = () => {
     }
 
     let isMounted = true;
-    setIsLoadingCamaras(true);
+    const loadCamaras = async () => {
+      setIsLoadingCamaras(true);
 
-    getCamarasPorSitio(formData.sitioId)
-      .then((data) => {
+      try {
+        const { data } = await api.get<CameraCatalogItem[]>(
+          `/catalogos/camaras-por-sitio/${formData.sitioId}`,
+        );
+
         if (!isMounted) return;
-        setCameras(data);
-        if (data.length === 0) {
+
+        const camaras = Array.isArray(data)
+          ? data.map((item) => ({
+            ...item,
+            id: Number(item.id),
+            ip_address: item.ip_address ?? null,
+          }))
+          : [];
+
+        setCameras(camaras);
+        if (camaras.length === 0) {
           setSelectedCameraId('');
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error('Error al cargar cámaras:', err);
         if (isMounted) {
           setCameras([]);
           setSelectedCameraId('');
         }
-      })
-      .finally(() => {
+      } finally {
         if (isMounted) {
           setIsLoadingCamaras(false);
         }
-      });
+      }
+    };
+
+    loadCamaras();
 
     return () => {
       isMounted = false;
     };
-  }, [formData.sitioId, getCamarasPorSitio, showCameraField]);
+  }, [formData.sitioId, showCameraField]);
 
   useEffect(() => {
     if (!showIpSpeakerField) {
