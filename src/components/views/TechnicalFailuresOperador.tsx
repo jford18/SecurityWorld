@@ -15,6 +15,7 @@ import {
   getNodoSitios,
   SitioAsociado,
   getEncodingDevicesBySite,
+  getIpSpeakersBySite,
 } from '../../services/fallosService';
 import api from '../../services/api';
 import TechnicalFailuresHistory from './TechnicalFailuresHistory';
@@ -33,6 +34,7 @@ type FailureFormData = {
   tipoProblemaEquipo: string;
   sitioId: string;
   encodingDeviceId: string;
+  ipSpeakerId: string;
 };
 
 const toLocalDateTimeString = (date: Date) => {
@@ -63,6 +65,7 @@ const buildInitialFormData = (): FailureFormData => ({
   tipoProblemaEquipo: '',
   sitioId: '',
   encodingDeviceId: '',
+  ipSpeakerId: '',
 });
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
@@ -141,6 +144,7 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [encodingDevices, setEncodingDevices] = useState<
     { id: number; name: string }[]
   >([]);
+  const [ipSpeakers, setIpSpeakers] = useState<Array<{ id: number; name: string }>>([]);
   const [selectedProblem, setSelectedProblem] = useState<any>(null);
   const [sitiosNodo, setSitiosNodo] = useState<SitioAsociado[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -179,6 +183,9 @@ const TechnicalFailuresOperador: React.FC = () => {
   const showCameraField = PROBLEMAS_REQUIEREN_CAMARA.includes(
     normalizeText(problemaDescripcion),
   );
+  const showIpSpeakerField =
+    formData.affectationType === 'Equipo' &&
+    normalizeText(tipoEquipoAfectadoNombre).includes('megafono ip');
   const tipoEquipoAfectadoSel = useMemo(() => {
     const id = formData?.tipoEquipoAfectadoId;
     if (!id) return null;
@@ -727,6 +734,9 @@ const TechnicalFailuresOperador: React.FC = () => {
   const handleSitioChange = (selected: string) => {
     applyFieldUpdate('sitioId', selected);
 
+    setIpSpeakers([]);
+    setFormData((prev) => ({ ...prev, ipSpeakerId: '' }));
+
     if (!selected) {
       setClienteFromConsole(null);
       setSelectedSite('');
@@ -814,6 +824,28 @@ const TechnicalFailuresOperador: React.FC = () => {
       setSelectedCameraId('');
     }
   }, [selectedSite, showCameraField]);
+
+  useEffect(() => {
+    if (!showIpSpeakerField) {
+      setIpSpeakers([]);
+      setFormData((prev) => ({ ...prev, ipSpeakerId: '' }));
+      return;
+    }
+
+    if (!selectedSite) {
+      setIpSpeakers([]);
+      return;
+    }
+
+    getIpSpeakersBySite(selectedSite)
+      .then((data) => {
+        setIpSpeakers(Array.isArray(data) ? data : []);
+      })
+      .catch((error) => {
+        console.error('Error al cargar megáfonos IP:', error);
+        setIpSpeakers([]);
+      });
+  }, [selectedSite, showIpSpeakerField]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -937,6 +969,10 @@ const TechnicalFailuresOperador: React.FC = () => {
             : undefined,
       camera_id: showCameraField && selectedCameraId ? Number(selectedCameraId) : null,
       encodingDeviceId: encodingDeviceIdPayload,
+      ipSpeakerId:
+        showIpSpeakerField && formData.ipSpeakerId
+          ? Number(formData.ipSpeakerId)
+          : null,
       consola: session.console,
       reportadoCliente: formData.reportadoCliente,
       camara: formData.camara,
@@ -958,6 +994,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       setSelectedCameraId('');
       setCameras([]);
       setEncodingDevices([]);
+      setIpSpeakers([]);
       setSitiosNodo([]);
       setNodoSitioError(null);
     } catch (error) {
@@ -1037,6 +1074,26 @@ const TechnicalFailuresOperador: React.FC = () => {
               valueField="value"
               placeholder="Buscar grabador..."
               disabled={!formData.sitioId || encodingDevices.length === 0}
+            />
+          </div>
+        )}
+        {showIpSpeakerField && (
+          <div className="md:col-span-2">
+            <AutocompleteComboBox
+              label="Megáfono"
+              items={ipSpeakers.map((speaker) => ({
+                ...speaker,
+                value: String(speaker.id),
+                nombre: speaker.name,
+              }))}
+              value={formData.ipSpeakerId}
+              onChange={(val: string) =>
+                setFormData((prev) => ({ ...prev, ipSpeakerId: val }))
+              }
+              displayField="nombre"
+              valueField="value"
+              placeholder="Buscar megáfono..."
+              disabled={!formData.sitioId || ipSpeakers.length === 0}
             />
           </div>
         )}

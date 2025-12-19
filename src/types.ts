@@ -10,6 +10,7 @@ export interface TechnicalFailure {
   departamentoResponsableId?: string | number | null;
   encoding_device_id?: number | null;
   encodingDeviceId?: number | null;
+  ipSpeakerId?: number | null;
   sitio_nombre?: string;
   sitioNombre?: string;
   sitio?: string;
