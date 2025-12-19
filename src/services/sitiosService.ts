@@ -53,6 +53,8 @@ export interface GetSitiosParams
   soloDisponibles?: boolean;
   sitioActualId?: number | number[];
   consolaId?: number | null;
+  clienteId?: number | string;
+  haciendaId?: number | string | null;
 }
 
 export const getSitios = async (params?: GetSitiosParams) => {

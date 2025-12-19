@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getHaciendas,
+  getHaciendasActivas,
   createHacienda,
   updateHacienda,
   deleteHacienda,
@@ -8,6 +9,7 @@ import {
 
 const router = express.Router();
 
+router.get("/haciendas/activas", getHaciendasActivas);
 router.get("/haciendas", getHaciendas);
 router.post("/haciendas", createHacienda);
 router.put("/haciendas/:id", updateHacienda);

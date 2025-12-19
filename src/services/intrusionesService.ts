@@ -173,6 +173,7 @@ export interface IntrusionConsolidadoFilters {
   fechaDesde?: string;
   fechaHasta?: string;
   clienteId?: number | string;
+  haciendaId?: number | string;
   sitioId?: number | string;
   tipoIntrusionId?: number | string;
   tipoIntrusion?: string;

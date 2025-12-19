@@ -7,6 +7,7 @@ import {
 } from '../../services/intrusionesService';
 import { getSitios, Sitio } from '../../services/sitiosService';
 import { ClienteResumen, getClientesActivos } from '../../services/clientes.service';
+import { HaciendaResumen, getHaciendasActivas } from '../../services/haciendas.service';
 import * as tipoIntrusionService from '../../services/tipoIntrusion.service';
 import * as personaService from '../../services/persona.service';
 import { IntrusionConsolidadoRow } from '../../types';
@@ -44,7 +45,7 @@ const buildPersonalLabel = (persona?: PersonaItem | null) => {
 };
 
 const IntrusionsConsolidated: React.FC = () => {
-  const [filters, setFilters] = useState<IntrusionConsolidadoFilters>({});
+  const [filters, setFilters] = useState<IntrusionConsolidadoFilters>({ haciendaId: '' });
   const [pagination, setPagination] = useState({ page: 1, pageSize: 10 });
   const [data, setData] = useState<IntrusionConsolidadoRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -57,6 +58,7 @@ const IntrusionsConsolidated: React.FC = () => {
 
   const [sitios, setSitios] = useState<Sitio[]>([]);
   const [clientes, setClientes] = useState<ClienteResumen[]>([]);
+  const [haciendas, setHaciendas] = useState<HaciendaResumen[]>([]);
   const [tiposIntrusion, setTiposIntrusion] = useState<TipoIntrusionItem[]>([]);
   const [personas, setPersonas] = useState<PersonaItem[]>([]);
 
@@ -65,23 +67,35 @@ const IntrusionsConsolidated: React.FC = () => {
     return Math.max(1, Math.ceil(total / pagination.pageSize));
   }, [pagination.pageSize, total]);
 
-  const fetchSitiosByCliente = useCallback(async (clienteId?: number | string) => {
-    try {
-      const normalizedClienteId =
-        clienteId !== undefined && clienteId !== null && clienteId !== ''
-          ? { clienteId }
-          : undefined;
-      const sitiosData = await getSitios(normalizedClienteId);
-      setSitios(sitiosData ?? []);
-    } catch (catalogError) {
-      console.error('Error al cargar sitios para el consolidado de intrusiones:', catalogError);
-    }
-  }, []);
+  const fetchSitiosByCliente = useCallback(
+    async (clienteId?: number | string, haciendaId?: number | string) => {
+      try {
+        const normalizedParams: { clienteId?: number | string; haciendaId?: number | string } = {};
+
+        if (clienteId !== undefined && clienteId !== null && clienteId !== '') {
+          normalizedParams.clienteId = clienteId;
+        }
+
+        if (haciendaId !== undefined && haciendaId !== null && haciendaId !== '') {
+          normalizedParams.haciendaId = haciendaId;
+        }
+
+        const sitiosData = await getSitios(
+          Object.keys(normalizedParams).length > 0 ? normalizedParams : undefined
+        );
+        setSitios(sitiosData ?? []);
+      } catch (catalogError) {
+        console.error('Error al cargar sitios para el consolidado de intrusiones:', catalogError);
+      }
+    },
+    []
+  );
 
   const loadCatalogos = useCallback(async () => {
     try {
-      const [clientesActivos, tiposDataRaw, personasRaw] = await Promise.all([
+      const [clientesActivos, haciendasActivas, tiposDataRaw, personasRaw] = await Promise.all([
         getClientesActivos(),
+        getHaciendasActivas(),
         tipoIntrusionService.getAll({ limit: 200 }),
         personaService.getAll(),
       ]);
@@ -97,6 +111,7 @@ const IntrusionsConsolidated: React.FC = () => {
         : [];
 
       setClientes(clientesActivos ?? []);
+      setHaciendas(haciendasActivas ?? []);
       setTiposIntrusion(tiposData ?? []);
       setPersonas(personasData ?? []);
       await fetchSitiosByCliente();
@@ -106,8 +121,8 @@ const IntrusionsConsolidated: React.FC = () => {
   }, [fetchSitiosByCliente]);
 
   useEffect(() => {
-    void fetchSitiosByCliente(filters.clienteId);
-  }, [fetchSitiosByCliente, filters.clienteId]);
+    void fetchSitiosByCliente(filters.clienteId, filters.haciendaId);
+  }, [fetchSitiosByCliente, filters.clienteId, filters.haciendaId]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -160,7 +175,7 @@ const IntrusionsConsolidated: React.FC = () => {
         [field]: value,
       };
 
-      if (field === 'clienteId') {
+      if (field === 'clienteId' || field === 'haciendaId') {
         updatedFilters.sitioId = '';
       }
 
@@ -188,7 +203,7 @@ const IntrusionsConsolidated: React.FC = () => {
   };
 
   const handleClearFilters = () => {
-    setFilters({});
+    setFilters({ haciendaId: '' });
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
@@ -280,6 +295,21 @@ const IntrusionsConsolidated: React.FC = () => {
             onChange={(value, helpers) => handleDateFilterChange('fechaHasta', value, helpers)}
             className="focus:border-blue-500 focus:ring-blue-500"
           />
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Hacienda</label>
+            <select
+              value={filters.haciendaId ?? ''}
+              onChange={(e) => handleFilterChange('haciendaId', e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Todas</option>
+              {haciendas.map((hacienda) => (
+                <option key={hacienda.id} value={hacienda.id}>
+                  {hacienda.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Cliente</label>
             <select
