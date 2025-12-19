@@ -590,23 +590,6 @@ export const createFallo = async (req, res) => {
     return Number.isNaN(parsed) ? null : parsed;
   })();
 
-  const encodingDeviceIdSource =
-    encodingDeviceId !== undefined && encodingDeviceId !== null && encodingDeviceId !== ""
-      ? encodingDeviceId
-      : encodingDeviceIdSnake;
-
-  const parsedEncodingDeviceId = (() => {
-    if (
-      encodingDeviceIdSource === undefined ||
-      encodingDeviceIdSource === null ||
-      encodingDeviceIdSource === ""
-    ) {
-      return null;
-    }
-    const parsed = Number(encodingDeviceIdSource);
-    return Number.isNaN(parsed) ? null : parsed;
-  })();
-
   if (
     sitioIdSource !== undefined &&
     sitioIdSource !== null &&
@@ -649,6 +632,20 @@ export const createFallo = async (req, res) => {
       ? null
       : String(rawTipoAfectacion).trim() || null;
 
+  const encodingDeviceIdSource =
+    encodingDeviceId !== undefined && encodingDeviceId !== null && encodingDeviceId !== ""
+      ? encodingDeviceId
+      : encodingDeviceIdSnake;
+
+  const parsedEncodingDeviceId = (() => {
+    const normalized = String(encodingDeviceIdSource ?? "").trim();
+    if (!normalized) {
+      return null;
+    }
+    const parsed = Number(normalized);
+    return Number.isNaN(parsed) ? null : parsed;
+  })();
+
   const encodingDeviceIdValue =
     tipoAfectacionValue && tipoAfectacionValue.toLowerCase() === "equipo"
       ? parsedEncodingDeviceId
@@ -660,14 +657,11 @@ export const createFallo = async (req, res) => {
       : ipSpeakerIdSnake;
 
   const parsedIpSpeakerId = (() => {
-    if (
-      ipSpeakerIdSource === undefined ||
-      ipSpeakerIdSource === null ||
-      ipSpeakerIdSource === ""
-    ) {
+    const normalized = String(ipSpeakerIdSource ?? "").trim();
+    if (!normalized) {
       return null;
     }
-    const parsed = Number(ipSpeakerIdSource);
+    const parsed = Number(normalized);
     return Number.isNaN(parsed) ? null : parsed;
   })();
 
@@ -791,7 +785,7 @@ export const createFallo = async (req, res) => {
         fecha_creacion,
         fecha_actualizacion
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW()
       ) RETURNING id`,
       [
         fechaFalloValue,
@@ -983,14 +977,11 @@ export const actualizarFalloSupervisor = async (req, res) => {
         : encodingDeviceIdSnake;
 
     const parsedEncodingDeviceId = (() => {
-      if (
-        encodingDeviceIdSource === undefined ||
-        encodingDeviceIdSource === null ||
-        encodingDeviceIdSource === ""
-      ) {
+      const normalized = String(encodingDeviceIdSource ?? "").trim();
+      if (!normalized) {
         return null;
       }
-      const parsed = Number(encodingDeviceIdSource);
+      const parsed = Number(normalized);
       return Number.isNaN(parsed) ? null : parsed;
     })();
 
@@ -1005,14 +996,11 @@ export const actualizarFalloSupervisor = async (req, res) => {
       : ipSpeakerIdSnake;
 
   const parsedIpSpeakerId = (() => {
-    if (
-      ipSpeakerIdSource === undefined ||
-      ipSpeakerIdSource === null ||
-      ipSpeakerIdSource === ""
-    ) {
+    const normalized = String(ipSpeakerIdSource ?? "").trim();
+    if (!normalized) {
       return null;
     }
-    const parsed = Number(ipSpeakerIdSource);
+    const parsed = Number(normalized);
     return Number.isNaN(parsed) ? null : parsed;
   })();
 
