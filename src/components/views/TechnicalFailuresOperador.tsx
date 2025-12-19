@@ -183,41 +183,23 @@ const TechnicalFailuresOperador: React.FC = () => {
   const showCameraField = PROBLEMAS_REQUIEREN_CAMARA.includes(
     normalizeText(problemaDescripcion),
   );
+  const tipoEquipoAfectadoNombreValue = String(formData?.tipoEquipoAfectadoNombre || '');
+
+  const isEquipoAfectacion =
+    normalizeText(String(formData?.affectationType || '')) === normalizeText('Equipo');
+
   const showIpSpeakerField =
-    formData.affectationType === 'Equipo' &&
-    normalizeText(tipoEquipoAfectadoNombre).includes('megafono ip');
+    isEquipoAfectacion &&
+    (normalizeText(tipoEquipoAfectadoNombreValue) === normalizeText('Megáfono IP') ||
+      normalizeText(tipoEquipoAfectadoNombreValue) === normalizeText('Megafono IP'));
   const tipoEquipoAfectadoSel = useMemo(() => {
     const id = formData?.tipoEquipoAfectadoId;
     if (!id) return null;
     return (tiposEquipoAfectado || []).find((x: any) => String(x.id) === String(id)) ?? null;
   }, [formData?.tipoEquipoAfectadoId, tiposEquipoAfectado]);
 
-  const tipoEquipoAfectadoNombre = useMemo(() => {
-    if (formData?.tipoEquipoAfectadoNombre) {
-      return formData.tipoEquipoAfectadoNombre;
-    }
-
-    const id = String(formData?.tipoEquipoAfectadoId || '');
-    if (!id) return '';
-
-    const list = (catalogos?.tiposEquipoAfectado || catalogos?.tiposEquipo || []) as any[];
-
-    const item =
-      list.find((x) => String(x.id) === id) ||
-      list.find((x) => String(x.value) === id);
-
-    return String(item?.nombre || item?.name || item?.label || '');
-  }, [
-    formData?.tipoEquipoAfectadoId,
-    formData?.tipoEquipoAfectadoNombre,
-    catalogos?.tiposEquipoAfectado,
-    catalogos?.tiposEquipo,
-  ]);
-
   const isGrabadorSelected =
     normalizeText(String(formData?.tipoEquipoAfectadoNombre || '')) === normalizeText('Grabador');
-  const isEquipoAfectacion =
-    normalizeText(String(formData?.affectationType || '')) === normalizeText('Equipo');
   const showEncodingDeviceField = isEquipoAfectacion && isGrabadorSelected;
 
   const sitiosItems = useMemo(
@@ -234,7 +216,7 @@ const TechnicalFailuresOperador: React.FC = () => {
 
   console.log('[GRABADOR] affectationType:', formData?.affectationType);
   console.log('[GRABADOR] tipoEquipoAfectadoId:', formData?.tipoEquipoAfectadoId);
-  console.log('[GRABADOR] tipoEquipoAfectadoNombre:', tipoEquipoAfectadoNombre);
+  console.log('[GRABADOR] tipoEquipoAfectadoNombre:', tipoEquipoAfectadoNombreValue);
   console.log('[GRABADOR] isEquipoAfectacion:', isEquipoAfectacion);
   console.log('[GRABADOR] isGrabadorSelected:', isGrabadorSelected);
   console.log('[GRABADOR] showEncodingDeviceField:', showEncodingDeviceField);
