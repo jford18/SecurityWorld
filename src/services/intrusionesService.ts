@@ -190,6 +190,11 @@ export interface IntrusionConsolidadoResponse {
   pageSize: number;
 }
 
+export interface IntrusionConsolidadoExportResponse {
+  data: IntrusionConsolidadoRow[];
+  total: number;
+}
+
 export const fetchIntrusiones = async (): Promise<Intrusion[]> => {
   const { data } = await apiClient.get<Intrusion[] | { data?: Intrusion[] }>('/intrusiones');
   return normalizeIntrusionArray(data);
@@ -224,6 +229,42 @@ export const fetchIntrusionesConsolidado = async (
     total: payload.total ?? 0,
     page: payload.page ?? 1,
     pageSize: payload.pageSize ?? params.limit ?? 0,
+  };
+};
+
+export const exportIntrusionesConsolidado = async (
+  params: IntrusionConsolidadoFilters
+): Promise<IntrusionConsolidadoExportResponse> => {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (key === 'page' || key === 'limit') {
+      return;
+    }
+
+    if (value === undefined || value === null || value === '') {
+      return;
+    }
+
+    searchParams.append(key, String(value));
+  });
+
+  const query = searchParams.toString();
+  const { data } = await apiClient.get<IntrusionConsolidadoExportResponse>(
+    `/intrusiones/consolidado/export${query ? `?${query}` : ''}`
+  );
+
+  const payload = data as Partial<IntrusionConsolidadoExportResponse> & {
+    data?: unknown;
+  };
+
+  const parsedData = Array.isArray(payload.data)
+    ? (payload.data as IntrusionConsolidadoRow[])
+    : [];
+
+  return {
+    data: parsedData,
+    total: payload.total ?? parsedData.length,
   };
 };
 
