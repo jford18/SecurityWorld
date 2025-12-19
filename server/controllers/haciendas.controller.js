@@ -18,6 +18,24 @@ export const getHaciendas = async (_req, res) => {
   }
 };
 
+export const getHaciendasActivas = async (_req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT id, nombre
+      FROM public.hacienda
+      WHERE activo = true
+      ORDER BY nombre ASC;
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    console.error("[API][ERROR] /api/haciendas/activas:", error);
+    res.status(500).json({
+      error: "[API][ERROR] /api/haciendas/activas",
+      details: error.message,
+    });
+  }
+};
+
 export const createHacienda = async (req, res) => {
   try {
     const { nombre, direccion, activo } = req.body;

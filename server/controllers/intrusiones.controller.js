@@ -593,6 +593,7 @@ export const getConsolidadoIntrusiones = async (req, res) => {
     fechaHasta,
     sitioId,
     clienteId,
+    haciendaId,
     tipoIntrusionId,
     tipoIntrusion,
     llegoAlerta,
@@ -656,6 +657,17 @@ export const getConsolidadoIntrusiones = async (req, res) => {
     }
     values.push(parsedClienteId);
     filters.push(`s.cliente_id = $${values.length}`);
+  }
+
+  if (haciendaId !== undefined && haciendaId !== "") {
+    const parsedHaciendaId = Number(haciendaId);
+    if (!Number.isInteger(parsedHaciendaId) || parsedHaciendaId <= 0) {
+      return res
+        .status(400)
+        .json({ mensaje: "El parámetro haciendaId no es válido." });
+    }
+    values.push(parsedHaciendaId);
+    filters.push(`s.hacienda_id = $${values.length}`);
   }
 
   if (metadata.hasTipoIntrusionId && tipoIntrusionId !== undefined && tipoIntrusionId !== "") {
