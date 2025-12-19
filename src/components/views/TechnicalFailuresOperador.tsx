@@ -137,7 +137,7 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [sitios, setSitios] = useState<Sitio[]>([]);
   const [selectedSite, setSelectedSite] = useState('');
   const [cameras, setCameras] = useState<CameraCatalogItem[]>([]);
-  const [selectedCameraId, setSelectedCameraId] = useState('');
+  const [selectedCameraId, setSelectedCameraId] = useState<string | null>('');
   const [isLoadingCamaras, setIsLoadingCamaras] = useState(false);
   const [encodingDevices, setEncodingDevices] = useState<
     { id: number; name: string }[]
@@ -153,6 +153,8 @@ const TechnicalFailuresOperador: React.FC = () => {
     Array<{ id: number; nombre: string }>
   >([]);
   const [nodoSitioError, setNodoSitioError] = useState<string | null>(null);
+
+  console.log('[CAMARAS] globalThis.axios =', (globalThis as any).axios);
 
   useEffect(() => {
     console.log('[GRABADOR] api.baseURL:', api?.defaults?.baseURL);
@@ -207,7 +209,8 @@ const TechnicalFailuresOperador: React.FC = () => {
   const showEncodingDeviceField = isEquipoAfectacion && isGrabadorSelected;
 
   const selectedCamera = useMemo(
-    () => cameras.find((camera) => String(camera.id) === String(selectedCameraId)) ?? null,
+    () =>
+      cameras.find((camera) => String(camera.id) === String(selectedCameraId ?? '')) ?? null,
     [cameras, selectedCameraId],
   );
 
@@ -774,16 +777,27 @@ const TechnicalFailuresOperador: React.FC = () => {
   }, [equipoEsHC, formData.affectationType, formData.tipoProblemaEquipo]);
 
   useEffect(() => {
-    if (!showCameraField) {
-      setCameras([]);
-      setSelectedCameraId('');
-      setIsLoadingCamaras(false);
-      return;
-    }
+    const afectationType = formData.affectationType;
+    const tipoEquipoAfectadoId = formData.tipoEquipoAfectadoId;
+    const tipoEquipoAfectadoNombre = formData.tipoEquipoAfectadoNombre;
+    const sitioId = formData.sitioId;
+    const condicionCamara =
+      afectationType === 'Equipo' &&
+      normalizeText(tipoEquipoAfectadoNombreValue) === normalizeText('Cámaras') &&
+      !!sitioId;
 
-    if (!formData.sitioId) {
+    console.groupCollapsed('[CAMARAS] useEffect disparado');
+    console.log('afectationType =', afectationType);
+    console.log('tipoEquipoAfectadoId =', tipoEquipoAfectadoId);
+    console.log('tipoEquipoAfectadoNombre =', tipoEquipoAfectadoNombre);
+    console.log('sitioId =', sitioId);
+    console.log('selectedSiteName =', selectedSiteName);
+    console.log('condicionCamara =', condicionCamara);
+    console.groupEnd();
+
+    if (!condicionCamara) {
       setCameras([]);
-      setSelectedCameraId('');
+      setSelectedCameraId(null);
       setIsLoadingCamaras(false);
       return;
     }
@@ -791,16 +805,27 @@ const TechnicalFailuresOperador: React.FC = () => {
     let isMounted = true;
     const loadCamaras = async () => {
       setIsLoadingCamaras(true);
+      const endpoint = `/catalogos/camaras-por-sitio/${sitioId}`;
+
+      console.groupCollapsed('[CAMARAS] request');
+      console.log('GET =', `/api${endpoint}`);
+      console.log('apiClient definido =', !!api);
+      console.log('apiClient baseURL =', (api as any)?.defaults?.baseURL);
+      console.groupEnd();
 
       try {
-        const { data } = await api.get<CameraCatalogItem[]>(
-          `/catalogos/camaras-por-sitio/${formData.sitioId}`,
-        );
+        const resp = await api.get<CameraCatalogItem[]>(endpoint);
 
         if (!isMounted) return;
 
-        const camaras = Array.isArray(data)
-          ? data.map((item) => ({
+        console.groupCollapsed('[CAMARAS] response');
+        console.log('status =', resp?.status);
+        console.log('rows =', Array.isArray(resp?.data) ? resp.data.length : 'no-array');
+        console.log('sample =', Array.isArray(resp?.data) ? resp.data[0] : resp?.data);
+        console.groupEnd();
+
+        const camaras = Array.isArray(resp.data)
+          ? resp.data.map((item) => ({
             ...item,
             id: Number(item.id),
             ip_address: item.ip_address ?? null,
@@ -809,13 +834,13 @@ const TechnicalFailuresOperador: React.FC = () => {
 
         setCameras(camaras);
         if (camaras.length === 0) {
-          setSelectedCameraId('');
+          setSelectedCameraId(null);
         }
       } catch (err) {
-        console.error('Error al cargar cámaras:', err);
+        console.error('[CAMARAS] error =', err);
         if (isMounted) {
           setCameras([]);
-          setSelectedCameraId('');
+          setSelectedCameraId(null);
         }
       } finally {
         if (isMounted) {
@@ -829,7 +854,13 @@ const TechnicalFailuresOperador: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [formData.sitioId, showCameraField]);
+  }, [
+    formData.affectationType,
+    formData.sitioId,
+    formData.tipoEquipoAfectadoNombre,
+    selectedSiteName,
+    tipoEquipoAfectadoNombreValue,
+  ]);
 
   useEffect(() => {
     if (!showIpSpeakerField) {
@@ -1061,7 +1092,7 @@ const TechnicalFailuresOperador: React.FC = () => {
             <select
               id="camera_id"
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#F9C300] focus:ring-[#F9C300]"
-              value={selectedCameraId}
+              value={selectedCameraId ?? ''}
               onChange={(e) => {
                 const value = e.target.value;
                 setSelectedCameraId(value);
