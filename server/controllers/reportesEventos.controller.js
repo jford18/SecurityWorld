@@ -1,6 +1,6 @@
 import { pool } from "../db.js";
 
-const BASE_CTE = `WITH base AS (
+const BASE_CTE = `WITH base_intrusiones AS (
     SELECT
         I.ID,
         I.SITIO_ID,
@@ -129,20 +129,21 @@ export const getInformeMensualEventos = async (req, res) => {
   const fechaFinExclusive = addOneDay(`${fechaFinParam}T00:00:00Z`);
 
   const resumenQuery = `${BASE_CTE}
+/* Este reporte usa únicamente datos de INTRUSIONES, no incluye fallos técnicos. */
 SELECT
     COUNT(*)                                           AS total_eventos,
     ROUND(100.0 * SUM(ES_AUTORIZADO) / NULLIF(COUNT(*),0), 2)          AS porcentaje_autorizados,
     ROUND(100.0 * (COUNT(*) - SUM(ES_AUTORIZADO)) / NULLIF(COUNT(*),0), 2) AS porcentaje_no_autorizados,
     COUNT(DISTINCT SITIO_ID)                          AS sitios_con_eventos,
     ROUND(AVG(MINUTOS_REACCION)::NUMERIC, 2)          AS t_prom_reaccion_min
-FROM base;`;
+FROM base_intrusiones;`;
 
   const porTipoQuery = `${BASE_CTE}
 SELECT
     TIPO_INTRUSION                   AS tipo,
     COUNT(*)                         AS n_eventos,
     COUNT(DISTINCT SITIO_ID)         AS n_sitios_con_evento
-FROM base
+FROM base_intrusiones
 GROUP BY TIPO_INTRUSION
 ORDER BY n_eventos DESC;`;
 
@@ -150,7 +151,7 @@ ORDER BY n_eventos DESC;`;
 SELECT
     FECHA,
     COUNT(*) AS n_eventos
-FROM base
+FROM base_intrusiones
 GROUP BY FECHA
 ORDER BY FECHA;`;
 
@@ -159,7 +160,7 @@ SELECT
     DIA_SEMANA,
     TIPO_INTRUSION,
     COUNT(*) AS n_eventos
-FROM base
+FROM base_intrusiones
 GROUP BY DIA_SEMANA, TIPO_INTRUSION
 ORDER BY DIA_SEMANA, TIPO_INTRUSION;`;
 
@@ -168,7 +169,7 @@ SELECT
     HORA,
     TIPO_INTRUSION,
     COUNT(*) AS n_eventos
-FROM base
+FROM base_intrusiones
 GROUP BY HORA, TIPO_INTRUSION
 ORDER BY HORA, TIPO_INTRUSION;`;
 
@@ -224,7 +225,7 @@ SELECT
   latitud,
   longitud,
   COUNT(*) AS total_eventos
-FROM base
+FROM base_intrusiones
 WHERE latitud IS NOT NULL
   AND longitud IS NOT NULL
 GROUP BY SITIO_ID, SITIO_NOMBRE, latitud, longitud
