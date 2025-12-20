@@ -6,7 +6,6 @@ export interface IntrusionPayload {
   fecha_reaccion?: string | null;
   fecha_reaccion_fuera?: string | null;
   ubicacion?: string;
-  tipo_intrusion_id?: number | null;
   tipo?: string;
   estado?: string;
   descripcion?: string;

@@ -719,16 +719,6 @@ const Intrusions: React.FC = () => {
       return;
     }
 
-    const tipoIntrusionIdValue =
-      tipoIntrusionId === '' || tipoIntrusionId === null
-        ? null
-        : Number(tipoIntrusionId);
-
-    if (tipoIntrusionIdValue !== null && !Number.isInteger(tipoIntrusionIdValue)) {
-      alert('El tipo de intrusión seleccionado no es válido.');
-      return;
-    }
-
     const sitioSeleccionado =
       sitios.find((sitio) => sitio.id === sitioIdNumber) ??
       sitios.find((sitio) => String(sitio.id) === formData.sitioId) ??
@@ -836,7 +826,6 @@ const Intrusions: React.FC = () => {
           ? fechaReaccionFueraIso || formData.fecha_reaccion_fuera
           : null,
       ubicacion: ubicacionValue,
-      tipo_intrusion_id: tipoIntrusionIdValue,
       tipo: tipoValue,
       estado: formData.estado || '',
       descripcion: formData.descripcion?.trim() || '',
@@ -853,7 +842,7 @@ const Intrusions: React.FC = () => {
     };
 
     try {
-      console.log('[INTRUSIONES][UI] creando intrusión payload:', payload);
+      console.log('[INTRUSIONES][UI] payload create:', payload);
       const created = await createIntrusion(payload);
       const enriched =
         created.sitio_nombre || !sitioSeleccionado
