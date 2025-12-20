@@ -1143,144 +1143,186 @@ export const getEventosNoAutorizadosDashboard = async (req, res) => {
 };
 
 export const getEventosAutorizadosDashboard = async (req, res) => {
-  const filterConfig = await buildIntrusionesFilterConfig(req.query);
-
-  if (filterConfig?.error) {
-    const { status = 400, message } = filterConfig.error;
-    return res.status(status).json({ mensaje: message });
-  }
-
-  const { metadata } = filterConfig;
-
-  if (!metadata.hasTipoIntrusionId) {
-    return res.status(500).json({
-      mensaje: "La configuración actual no permite identificar intrusiones autorizadas.",
-    });
-  }
-
-  const values = [...filterConfig.values];
-  const filters = [];
-
-  if (filterConfig.whereClause) {
-    filters.push(filterConfig.whereClause.replace(/^WHERE\s+/i, ""));
-  }
-
-  const protocoloExpression = "COALESCE(NULLIF(TRIM(cti.protocolo), ''), '')";
-  filters.push(`${protocoloExpression} = ''`);
-
-  const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
-
-  const personalCargoExpression = metadata.personaColumn
-    ? "COALESCE(NULLIF(TRIM(c.descripcion), ''), 'Sin información')"
-    : "'Sin información'";
-
-  const sitioDescripcionExpression = "COALESCE(NULLIF(TRIM(s.descripcion), ''), s.nombre)";
-
-  const baseCTE = `WITH base_intrusiones AS (
-    SELECT
-      i.id,
-      i.sitio_id,
-      ${sitioDescripcionExpression} AS sitio_descripcion,
-      s.hacienda_id,
-      h.nombre AS hacienda_nombre,
-      ${personalCargoExpression} AS personal_cargo,
-      i.fecha_evento,
-      (i.fecha_evento AT TIME ZONE 'UTC')::DATE AS fecha,
-      EXTRACT(ISODOW FROM i.fecha_evento) AS dia_semana_num
-    FROM public.intrusiones AS i
-    LEFT JOIN public.sitios AS s ON s.id = i.sitio_id
-    LEFT JOIN public.hacienda AS h ON h.id = s.hacienda_id
-    LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.id = i.tipo_intrusion_id
-    ${metadata.personaColumn ? `LEFT JOIN public.persona AS p ON p.id = i.${metadata.personaColumn}` : ""}
-    ${metadata.personaColumn ? "LEFT JOIN public.catalogo_cargo AS c ON c.id = p.cargo_id" : ""}
-    ${whereClause}
-  )`;
-
-  const barQuery = `${baseCTE}
-SELECT
-  b.hacienda_id,
-  COALESCE(NULLIF(TRIM(b.hacienda_nombre), ''), 'Sin hacienda') AS hacienda_nombre,
-  COUNT(*) AS total_eventos
-FROM base_intrusiones AS b
-GROUP BY b.hacienda_id, hacienda_nombre
-ORDER BY total_eventos DESC, hacienda_nombre ASC
-LIMIT 15;`;
-
-  const donutQuery = `${baseCTE}
-SELECT
-  COALESCE(NULLIF(TRIM(b.personal_cargo), ''), 'Sin información') AS personal_identificado,
-  COUNT(*) AS total_eventos
-FROM base_intrusiones AS b
-GROUP BY personal_identificado
-ORDER BY total_eventos DESC, personal_identificado ASC;`;
-
-  const diaSemanaQuery = `${baseCTE}
-SELECT
-  LOWER(TRIM(TO_CHAR(b.fecha, 'TMDay'))) AS dia_semana,
-  COUNT(*) AS total_eventos,
-  COUNT(DISTINCT b.sitio_id) AS total_sitios,
-  MIN(b.dia_semana_num) AS orden_dia
-FROM base_intrusiones AS b
-GROUP BY dia_semana
-ORDER BY orden_dia;`;
-
-  const lineaQuery = `${baseCTE}
-SELECT
-  b.fecha AS fecha,
-  COUNT(*) AS total_eventos
-FROM base_intrusiones AS b
-GROUP BY b.fecha
-ORDER BY b.fecha;`;
-
   try {
-    const [barResult, donutResult, diaSemanaResult, lineaResult] = await Promise.all([
-      pool.query(barQuery, values),
-      pool.query(donutQuery, values),
-      pool.query(diaSemanaQuery, values),
-      pool.query(lineaQuery, values),
-    ]);
+    const metadata = await getIntrusionesMetadata();
 
-    const barHaciendas = (barResult.rows ?? []).map((row) => ({
-      hacienda_id: row?.hacienda_id === null || row?.hacienda_id === undefined ? null : Number(row.hacienda_id),
-      hacienda_nombre: row?.hacienda_nombre ?? "",
-      total_eventos: row?.total_eventos === null || row?.total_eventos === undefined
-        ? 0
-        : Number(row.total_eventos),
-    }));
+    if (!metadata.hasTipoIntrusionId) {
+      return res.status(500).json({
+        mensaje: "La configuración actual no permite identificar intrusiones autorizadas.",
+      });
+    }
 
-    const donutPersonal = (donutResult.rows ?? []).map((row) => ({
-      personal_identificado: row?.personal_identificado ?? "Sin información",
-      total_eventos: row?.total_eventos === null || row?.total_eventos === undefined
-        ? 0
-        : Number(row.total_eventos),
-    }));
+    const fechaDesdeParam = req.query?.fechaDesde;
+    const fechaHastaParam = req.query?.fechaHasta;
+    const parsedFechaDesde = normalizeDateParam(fechaDesdeParam);
+    const parsedFechaHasta = normalizeDateParam(fechaHastaParam);
 
-    const tablaDiaSemana = (diaSemanaResult.rows ?? []).map((row) => ({
-      dia_semana: row?.dia_semana ?? "",
-      total_eventos: row?.total_eventos === null || row?.total_eventos === undefined
-        ? 0
-        : Number(row.total_eventos),
-      total_sitios: row?.total_sitios === null || row?.total_sitios === undefined
-        ? 0
-        : Number(row.total_sitios),
-    }));
+    if (fechaDesdeParam !== undefined && fechaDesdeParam !== "" && !parsedFechaDesde) {
+      return res.status(400).json({ mensaje: "El parámetro fechaDesde no es válido." });
+    }
+    if (fechaHastaParam !== undefined && fechaHastaParam !== "" && !parsedFechaHasta) {
+      return res.status(400).json({ mensaje: "El parámetro fechaHasta no es válido." });
+    }
 
-    const lineaPorFecha = (lineaResult.rows ?? []).map((row) => ({
-      fecha: row?.fecha ? new Date(row.fecha).toISOString().slice(0, 10) : null,
-      total_eventos: row?.total_eventos === null || row?.total_eventos === undefined
-        ? 0
-        : Number(row.total_eventos),
-    }));
+    const now = new Date();
+    const fechaHastaValue = (parsedFechaHasta ?? now);
+    fechaHastaValue.setHours(23, 59, 59, 999);
+
+    const fechaDesdeValue = parsedFechaDesde ?? new Date(fechaHastaValue);
+    fechaDesdeValue.setDate(fechaDesdeValue.getDate() - 29);
+    fechaDesdeValue.setHours(0, 0, 0, 0);
+
+    const haciendaValue = parseIntegerOrNull(req.query?.haciendaId);
+    if (haciendaValue === undefined) {
+      return res.status(400).json({ mensaje: "El parámetro haciendaId no es válido." });
+    }
+
+    const clienteValue = parseIntegerOrNull(req.query?.clienteId);
+    if (clienteValue === undefined) {
+      return res.status(400).json({ mensaje: "El parámetro clienteId no es válido." });
+    }
+
+    const sitioValue = parseIntegerOrNull(req.query?.sitioId);
+    if (sitioValue === undefined) {
+      return res.status(400).json({ mensaje: "El parámetro sitioId no es válido." });
+    }
+
+    const tipoIntrusionValue = parseIntegerOrNull(req.query?.tipoIntrusionId);
+    if (req.query?.tipoIntrusionId !== undefined && tipoIntrusionValue === undefined) {
+      return res.status(400).json({ mensaje: "El parámetro tipoIntrusionId no es válido." });
+    }
+
+    const llegoAlertaValue = (() => {
+      const parsed = normalizeBooleanParam(req.query?.llegoAlerta);
+      return parsed === undefined ? null : parsed;
+    })();
+
+    const personaColumn = metadata.personaColumn;
+    const personalIdValue = (() => {
+      const parsed = parseIntegerOrNull(req.query?.personalId);
+      if (personaColumn && req.query?.personalId !== undefined && parsed === undefined) {
+        return "__invalid";
+      }
+      return personaColumn ? parsed : null;
+    })();
+    if (personalIdValue === "__invalid") {
+      return res.status(400).json({ mensaje: "El parámetro personalId no es válido." });
+    }
+
+    const personalFilterClause = personaColumn
+      ? `($8::INT IS NULL OR i.${personaColumn} = $8)`
+      : "($8::INT IS NULL)";
+
+    const personalIdentificadoExpression = personaColumn
+      ? "COALESCE(NULLIF(TRIM(CONCAT_WS(' - ', c.descripcion, CONCAT_WS(' ', p.nombre, p.apellido))), ''), COALESCE(NULLIF(TRIM(i.personal_identificado), ''), 'SIN DEFINIR'))"
+      : "COALESCE(NULLIF(TRIM(i.personal_identificado), ''), 'SIN DEFINIR')";
+
+    const personaJoins = personaColumn
+      ? [
+          `LEFT JOIN public.persona AS p ON p.id = i.${personaColumn}`,
+          "LEFT JOIN public.catalogo_cargo AS c ON c.id = p.cargo_id",
+        ]
+      : [];
+
+    // AUTORIZADOS = COALESCE(TRIM(PROTOCOLO),'')='' con los mismos filtros del consolidado
+    const query = `
+      WITH base_intrusiones AS (
+        SELECT
+          i.id,
+          i.fecha_evento,
+          i.sitio_id,
+          s.hacienda_id,
+          ${personalIdentificadoExpression} AS personal_identificado,
+          COALESCE(NULLIF(TRIM(s.zona), ''), 'Sin zona') AS zona
+        FROM public.intrusiones AS i
+        LEFT JOIN public.sitios AS s ON s.id = i.sitio_id
+        LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.id = i.tipo_intrusion_id
+        ${personaJoins.join("\n        ")}
+        WHERE i.fecha_evento >= $1
+          AND i.fecha_evento <= $2
+          AND COALESCE(TRIM(cti.protocolo), '') = ''
+          AND ($3::INT IS NULL OR s.hacienda_id = $3)
+          AND ($4::INT IS NULL OR s.cliente_id = $4)
+          AND ($5::INT IS NULL OR i.sitio_id = $5)
+          AND ($6::INT IS NULL OR i.tipo_intrusion_id = $6)
+          AND ($7::BOOLEAN IS NULL OR i.llego_alerta = $7)
+          AND ${personalFilterClause}
+      )
+      SELECT
+        (
+          SELECT COALESCE(JSON_AGG(x), '[]'::JSON)
+          FROM (
+            SELECT
+              b.hacienda_id,
+              h.nombre AS hacienda_nombre,
+              COUNT(*) AS total_eventos
+            FROM base_intrusiones b
+            LEFT JOIN public.hacienda h ON h.id = b.hacienda_id
+            GROUP BY b.hacienda_id, h.nombre
+            ORDER BY total_eventos DESC
+            LIMIT 20
+          ) x
+        ) AS bar_haciendas,
+        (
+          SELECT COALESCE(JSON_AGG(x), '[]'::JSON)
+          FROM (
+            SELECT
+              COALESCE(b.personal_identificado, 'SIN DEFINIR') AS personal_identificado,
+              COUNT(*) AS total_eventos
+            FROM base_intrusiones b
+            GROUP BY COALESCE(b.personal_identificado, 'SIN DEFINIR')
+            ORDER BY total_eventos DESC
+          ) x
+        ) AS donut_personal,
+        (
+          SELECT COALESCE(JSON_AGG(x), '[]'::JSON)
+          FROM (
+            SELECT
+              TO_CHAR(b.fecha_evento, 'Day') AS dia_semana,
+              COUNT(*) AS total_eventos,
+              COUNT(DISTINCT b.sitio_id) AS total_sitios
+            FROM base_intrusiones b
+            GROUP BY TO_CHAR(b.fecha_evento, 'Day')
+          ) x
+        ) AS tabla_dia_semana,
+        (
+          SELECT COALESCE(JSON_AGG(x), '[]'::JSON)
+          FROM (
+            SELECT
+              DATE(b.fecha_evento) AS fecha,
+              COUNT(*) AS total_eventos
+            FROM base_intrusiones b
+            GROUP BY DATE(b.fecha_evento)
+            ORDER BY DATE(b.fecha_evento)
+          ) x
+        ) AS linea_por_fecha;
+    `;
+
+    const values = [
+      fechaDesdeValue,
+      fechaHastaValue,
+      haciendaValue,
+      clienteValue,
+      sitioValue,
+      tipoIntrusionValue,
+      llegoAlertaValue,
+      personalIdValue,
+    ];
+
+    const { rows } = await pool.query(query, values);
+    const [row] = rows ?? [];
 
     return res.json({
-      barHaciendas,
-      donutPersonal,
-      tablaDiaSemana,
-      lineaPorFecha,
+      barHaciendas: row?.bar_haciendas ?? [],
+      donutPersonal: row?.donut_personal ?? [],
+      tablaDiaSemana: row?.tabla_dia_semana ?? [],
+      lineaPorFecha: row?.linea_por_fecha ?? [],
     });
   } catch (error) {
-    console.error("Error al obtener el dashboard de eventos autorizados:", error);
-    return res.status(500).json({ mensaje: "Ocurrió un error al consultar el dashboard." });
+    console.error(error);
+    return res
+      .status(500)
+      .json({ message: "Error en dashboard eventos autorizados", detail: error.message });
   }
 };
 
