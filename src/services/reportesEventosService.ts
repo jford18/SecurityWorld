@@ -4,8 +4,10 @@ import { IntrusionConsolidadoFilters } from './intrusionesService';
 export interface InformeEventosResponse {
   resumen: {
     total_eventos: number;
-    porcentaje_autorizados: number | null;
-    porcentaje_no_autorizados: number | null;
+    eventos_autorizados: number;
+    eventos_no_autorizados: number;
+    porc_autorizados: number | null;
+    porc_no_autorizados: number | null;
     sitios_con_eventos: number;
     t_prom_reaccion_min: number | null;
   } | null;

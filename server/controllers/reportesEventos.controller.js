@@ -24,10 +24,19 @@ const mapResumenRow = (row) => {
     return null;
   }
 
+  const porcAutorizados = toNumberOrNull(row.porc_autorizados ?? row.porcentaje_autorizados);
+  const porcNoAutorizados = toNumberOrNull(
+    row.porc_no_autorizados ?? row.porcentaje_no_autorizados
+  );
+
   return {
     total_eventos: toNumber(row.total_eventos),
-    porcentaje_autorizados: toNumberOrNull(row.porcentaje_autorizados),
-    porcentaje_no_autorizados: toNumberOrNull(row.porcentaje_no_autorizados),
+    eventos_autorizados: toNumber(row.eventos_autorizados),
+    eventos_no_autorizados: toNumber(row.eventos_no_autorizados),
+    porcentaje_autorizados: porcAutorizados,
+    porc_autorizados: porcAutorizados,
+    porcentaje_no_autorizados: porcNoAutorizados,
+    porc_no_autorizados: porcNoAutorizados,
     sitios_con_eventos: toNumber(row.sitios_con_eventos),
     t_prom_reaccion_min: toNumberOrNull(row.t_prom_reaccion_min),
   };
@@ -74,6 +83,9 @@ const buildBaseIntrusionesCTE = (metadata, whereClause) => {
   const tipoIntrusionExpression = metadata.hasTipoIntrusionId
     ? "COALESCE(cti.descripcion, CAST(i.tipo_intrusion_id AS TEXT))"
     : "i.tipo";
+  const protocoloExpression = metadata.hasTipoIntrusionId
+    ? "NULLIF(TRIM(cti.protocolo), '')"
+    : "NULL";
 
   const sitioNombreExpression = "COALESCE(NULLIF(TRIM(s.descripcion), ''), s.nombre)";
 
@@ -96,7 +108,8 @@ const buildBaseIntrusionesCTE = (metadata, whereClause) => {
         (i.fecha_evento AT TIME ZONE 'UTC')::DATE             AS fecha,
         EXTRACT(ISODOW FROM i.fecha_evento)                   AS dia_semana,
         EXTRACT(HOUR   FROM i.fecha_evento)                   AS hora,
-        CASE WHEN ${tipoIntrusionExpression} ILIKE 'Autorizado%' THEN 1 ELSE 0 END AS es_autorizado,
+        CASE WHEN ${protocoloExpression} IS NULL THEN 1 ELSE 0 END AS es_autorizado,
+        CASE WHEN ${protocoloExpression} IS NOT NULL THEN 1 ELSE 0 END AS es_no_autorizado,
         CASE
             WHEN i.fecha_reaccion IS NOT NULL THEN
                 EXTRACT(EPOCH FROM (i.fecha_reaccion - i.fecha_evento)) / 60.0
@@ -126,8 +139,10 @@ export const getInformeMensualEventos = async (req, res) => {
 /* Este reporte usa únicamente datos de INTRUSIONES, no incluye fallos técnicos. */
 SELECT
     COUNT(*)                                           AS total_eventos,
-    ROUND(100.0 * SUM(ES_AUTORIZADO) / NULLIF(COUNT(*),0), 2)          AS porcentaje_autorizados,
-    ROUND(100.0 * (COUNT(*) - SUM(ES_AUTORIZADO)) / NULLIF(COUNT(*),0), 2) AS porcentaje_no_autorizados,
+    SUM(ES_AUTORIZADO)                                 AS eventos_autorizados,
+    SUM(ES_NO_AUTORIZADO)                              AS eventos_no_autorizados,
+    COALESCE(ROUND(100.0 * SUM(ES_AUTORIZADO) / NULLIF(COUNT(*),0), 2), 0)    AS porc_autorizados,
+    COALESCE(ROUND(100.0 * SUM(ES_NO_AUTORIZADO) / NULLIF(COUNT(*),0), 2), 0) AS porc_no_autorizados,
     COUNT(DISTINCT SITIO_ID)                          AS sitios_con_eventos,
     ROUND(AVG(MINUTOS_REACCION)::NUMERIC, 2)          AS t_prom_reaccion_min
 FROM base_intrusiones;`;
