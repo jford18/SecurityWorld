@@ -196,6 +196,7 @@ export interface IntrusionConsolidadoExportResponse {
 }
 
 export interface EventoPorHaciendaSitioRow {
+  tipo_intrusion: string | null;
   hacienda_id: number | null;
   hacienda_nombre: string | null;
   sitio_id: number | null;
@@ -304,6 +305,7 @@ export const getEventosPorHaciendaSitio = async (
   }
 
   return data.map((row) => ({
+    tipo_intrusion: row?.tipo_intrusion ?? null,
     hacienda_id: row?.hacienda_id ?? null,
     hacienda_nombre: row?.hacienda_nombre ?? null,
     sitio_id: row?.sitio_id ?? null,
