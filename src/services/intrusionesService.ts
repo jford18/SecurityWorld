@@ -203,6 +203,10 @@ export interface EventoPorHaciendaSitioRow {
   total_eventos: number;
 }
 
+export interface EventoTipoHaciendaSitioRow extends EventoPorHaciendaSitioRow {
+  tipo_intrusion: string | null;
+}
+
 const buildQueryString = (params: IntrusionConsolidadoFilters) => {
   const searchParams = new URLSearchParams();
 
@@ -304,6 +308,28 @@ export const getEventosPorHaciendaSitio = async (
   }
 
   return data.map((row) => ({
+    hacienda_id: row?.hacienda_id ?? null,
+    hacienda_nombre: row?.hacienda_nombre ?? null,
+    sitio_id: row?.sitio_id ?? null,
+    sitio_nombre: row?.sitio_nombre ?? null,
+    total_eventos: Number(row?.total_eventos) || 0,
+  }));
+};
+
+export const getEventosTree = async (
+  params: IntrusionConsolidadoFilters
+): Promise<EventoTipoHaciendaSitioRow[]> => {
+  const queryString = buildQueryString(params);
+  const { data } = await apiClient.get<EventoTipoHaciendaSitioRow[]>(
+    `/intrusiones/eventos-tree${queryString}`
+  );
+
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  return data.map((row) => ({
+    tipo_intrusion: row?.tipo_intrusion ?? null,
     hacienda_id: row?.hacienda_id ?? null,
     hacienda_nombre: row?.hacienda_nombre ?? null,
     sitio_id: row?.sitio_id ?? null,

@@ -889,6 +889,48 @@ export const getEventosPorHaciendaSitio = async (req, res) => {
   }
 };
 
+export const getEventosTree = async (req, res) => {
+  const filterConfig = await buildIntrusionesFilterConfig(req.query);
+
+  if (filterConfig?.error) {
+    const { status, message } = filterConfig.error;
+    return res.status(status).json({ mensaje: message });
+  }
+
+  const { whereClause, values, metadata } = filterConfig;
+
+  const tipoIntrusionExpression = metadata.hasTipoIntrusionId
+    ? "COALESCE(cti.descripcion, CAST(i.tipo_intrusion_id AS TEXT))"
+    : "COALESCE(i.tipo, 'Sin tipo')";
+
+  const joins = ["LEFT JOIN public.sitios AS s ON s.id = i.sitio_id", "LEFT JOIN public.hacienda AS h ON h.id = s.hacienda_id"];
+
+  if (metadata.hasTipoIntrusionId) {
+    joins.push("LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.id = i.tipo_intrusion_id");
+  }
+
+  const query = `SELECT
+    ${tipoIntrusionExpression} AS tipo_intrusion,
+    s.hacienda_id,
+    h.nombre AS hacienda_nombre,
+    i.sitio_id,
+    s.nombre AS sitio_nombre,
+    COUNT(*) AS total_eventos
+  FROM public.intrusiones AS i
+  ${joins.join("\n  ")}
+  ${whereClause}
+  GROUP BY tipo_intrusion, s.hacienda_id, h.nombre, i.sitio_id, s.nombre
+  ORDER BY COUNT(*) DESC, tipo_intrusion ASC NULLS LAST, h.nombre ASC NULLS LAST, s.nombre ASC NULLS LAST;`;
+
+  try {
+    const result = await pool.query(query, values);
+    return res.json(result.rows ?? []);
+  } catch (error) {
+    console.error("Error al obtener eventos por tipo, hacienda y sitio:", error);
+    return res.status(500).json({ mensaje: "Ocurrió un error al consultar los eventos." });
+  }
+};
+
 export const exportConsolidadoIntrusiones = async (req, res) => {
   const queryConfig = await prepareConsolidadoQuery(req.query, {
     includePagination: false,

@@ -18,9 +18,9 @@ import {
   getInformeMensualEventos,
 } from '../../services/reportesEventosService';
 import {
-  EventoPorHaciendaSitioRow,
+  EventoTipoHaciendaSitioRow,
   IntrusionConsolidadoFilters,
-  getEventosPorHaciendaSitio,
+  getEventosTree,
 } from '@/services/intrusionesService';
 import IntrusionesFilters from '@/components/intrusiones/IntrusionesFilters';
 import MapaEventosPorSitio from '../../components/reportes/MapaEventosPorSitio';
@@ -61,76 +61,122 @@ const colorPalette = [
   '#F59E0B',
 ];
 
-interface HaciendaTreeNode {
-  key: string;
-  haciendaId: number | null;
-  haciendaNombre: string;
-  totalEventos: number;
-  sitios: Array<{
-    sitioId: number | null;
-    sitioNombre: string;
-    totalEventos: number;
-  }>;
+interface NodoSitio {
+  id: number | null;
+  nombre: string;
+  total: number;
+}
+
+interface NodoHacienda {
+  id: number | null;
+  nombre: string;
+  total: number;
+  sitios: NodoSitio[];
+}
+
+interface NodoTipo {
+  nombre: string;
+  total: number;
+  haciendas: NodoHacienda[];
 }
 
 const InformeEventosScreen: React.FC = () => {
   const [filters, setFilters] = useState<IntrusionConsolidadoFilters>({ haciendaId: '' });
   const [data, setData] = useState<InformeEventosResponse | null>(null);
   const [eventosPorSitio, setEventosPorSitio] = useState<EventoPorSitio[]>([]);
-  const [eventosPorHaciendaSitio, setEventosPorHaciendaSitio] = useState<HaciendaTreeNode[]>([]);
+  const [eventosTree, setEventosTree] = useState<NodoTipo[]>([]);
   const [loading, setLoading] = useState(false);
   const [mapLoading, setMapLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedHaciendas, setExpandedHaciendas] = useState<Set<string>>(new Set());
+  const [expandedTipos, setExpandedTipos] = useState<Record<string, boolean>>({});
+  const [expandedHaciendas, setExpandedHaciendas] = useState<Record<string, boolean>>({});
 
-  const buildTreeData = useCallback((rows: EventoPorHaciendaSitioRow[]): HaciendaTreeNode[] => {
-    const haciendaMap = new Map<string, HaciendaTreeNode>();
+  const buildTreeData = useCallback((rows: EventoTipoHaciendaSitioRow[]): NodoTipo[] => {
+    const tipoMap = new Map<
+      string,
+      { nombre: string; total: number; haciendas: Map<string, { id: number | null; nombre: string; sitios: Map<string, NodoSitio> }> }
+    >();
 
     rows.forEach((row) => {
+      const tipoNombre = (row.tipo_intrusion ?? 'Sin tipo').trim() || 'Sin tipo';
       const haciendaId = row.hacienda_id ?? null;
       const haciendaNombre = (row.hacienda_nombre ?? 'Sin hacienda').trim() || 'Sin hacienda';
       const sitioId = row.sitio_id ?? null;
       const sitioNombre = (row.sitio_nombre ?? 'Sin sitio').trim() || 'Sin sitio';
-      const key = `hacienda-${haciendaId ?? 'sin'}-${haciendaNombre}`;
-
-      const existing = haciendaMap.get(key);
       const totalEventos = Number(row.total_eventos) || 0;
 
-      if (existing) {
-        existing.totalEventos += totalEventos;
-        const sitioIndex = existing.sitios.findIndex((sitio) => sitio.sitioId === sitioId);
-        if (sitioIndex >= 0) {
-          existing.sitios[sitioIndex].totalEventos += totalEventos;
-        } else {
-          existing.sitios.push({ sitioId, sitioNombre, totalEventos });
-        }
-      } else {
-        haciendaMap.set(key, {
-          key,
-          haciendaId,
-          haciendaNombre,
-          totalEventos,
-          sitios: [{ sitioId, sitioNombre, totalEventos }],
+      if (!tipoMap.has(tipoNombre)) {
+        tipoMap.set(tipoNombre, {
+          nombre: tipoNombre,
+          total: 0,
+          haciendas: new Map(),
         });
+      }
+
+      const tipoNode = tipoMap.get(tipoNombre)!;
+      tipoNode.total += totalEventos;
+
+      const haciendaKey = `${tipoNombre}__${haciendaId ?? 'sin'}__${haciendaNombre}`;
+      if (!tipoNode.haciendas.has(haciendaKey)) {
+        tipoNode.haciendas.set(haciendaKey, {
+          id: haciendaId,
+          nombre: haciendaNombre,
+          sitios: new Map(),
+        });
+      }
+
+      const haciendaNode = tipoNode.haciendas.get(haciendaKey)!;
+      const sitioKey = `${haciendaKey}__${sitioId ?? 'sin'}__${sitioNombre}`;
+      const existingSitio = haciendaNode.sitios.get(sitioKey);
+
+      if (existingSitio) {
+        existingSitio.total += totalEventos;
+      } else {
+        haciendaNode.sitios.set(sitioKey, { id: sitioId, nombre: sitioNombre, total: totalEventos });
       }
     });
 
-    return Array.from(haciendaMap.values())
-      .map((hacienda) => ({
-        ...hacienda,
-        sitios: hacienda.sitios.sort((a, b) => {
-          if (b.totalEventos !== a.totalEventos) {
-            return b.totalEventos - a.totalEventos;
-          }
-          return a.sitioNombre.localeCompare(b.sitioNombre, 'es');
-        }),
-      }))
+    const tipos = Array.from(tipoMap.values())
+      .map<NodoTipo>((tipo) => {
+        const haciendas = Array.from(tipo.haciendas.values()).map<NodoHacienda>((hacienda) => {
+          const sitios = Array.from(hacienda.sitios.values()).sort((a, b) => {
+            if (b.total !== a.total) {
+              return b.total - a.total;
+            }
+            return a.nombre.localeCompare(b.nombre, 'es');
+          });
+
+          const totalHacienda = sitios.reduce((sum, sitio) => sum + sitio.total, 0);
+
+          return {
+            id: hacienda.id,
+            nombre: hacienda.nombre,
+            sitios,
+            total: totalHacienda,
+          };
+        });
+
+        const totalTipo = haciendas.reduce((sum, hacienda) => sum + hacienda.total, 0);
+
+        return {
+          nombre: tipo.nombre,
+          total: totalTipo,
+          haciendas: haciendas.sort((a, b) => {
+            if (b.total !== a.total) {
+              return b.total - a.total;
+            }
+            return a.nombre.localeCompare(b.nombre, 'es');
+          }),
+        };
+      })
       .sort((a, b) => {
-        if (b.totalEventos !== a.totalEventos) {
-          return b.totalEventos - a.totalEventos;
+        if (b.total !== a.total) {
+          return b.total - a.total;
         }
-        return a.haciendaNombre.localeCompare(b.haciendaNombre, 'es');
+        return a.nombre.localeCompare(b.nombre, 'es');
       });
+
+    return tipos;
   }, []);
 
   const fetchInforme = useCallback(
@@ -139,37 +185,47 @@ const InformeEventosScreen: React.FC = () => {
       setMapLoading(true);
       setError(null);
       try {
-        const [response, eventosSitios, eventosHaciendasSitios] = await Promise.all([
+        const [response, eventosSitios, eventosTreeRows] = await Promise.all([
           getInformeMensualEventos(activeFilters),
           getEventosPorSitio(activeFilters),
-          getEventosPorHaciendaSitio(activeFilters),
+          getEventosTree(activeFilters),
         ]);
         setData(response);
         setEventosPorSitio(eventosSitios ?? []);
-        const treeData = buildTreeData(eventosHaciendasSitios ?? []);
-        setEventosPorHaciendaSitio(treeData);
-        setExpandedHaciendas((prev) => {
-          if (!treeData.length) {
-            return new Set();
+        const treeData = buildTreeData(eventosTreeRows ?? []);
+        setEventosTree(treeData);
+
+        const nextExpandedTipos: Record<string, boolean> = {};
+        const prevTipoKeys = Object.keys(expandedTipos);
+
+        treeData.forEach((tipo, index) => {
+          if (expandedTipos[tipo.nombre] || (prevTipoKeys.length === 0 && index === 0)) {
+            nextExpandedTipos[tipo.nombre] = true;
           }
-
-          const validKeys = new Set(treeData.map((item) => item.key));
-          const next = new Set<string>();
-
-          treeData.forEach((item, index) => {
-            if (prev.has(item.key) || (prev.size === 0 && index === 0)) {
-              next.add(item.key);
-            }
-          });
-
-          Array.from(prev).forEach((key) => {
-            if (validKeys.has(key)) {
-              next.add(key);
-            }
-          });
-
-          return next;
         });
+
+        const nextExpandedHaciendas: Record<string, boolean> = {};
+        const prevHaciendaKeys = Object.keys(expandedHaciendas);
+        let firstAssigned = false;
+
+        treeData.forEach((tipo) => {
+          const tipoExpanded = nextExpandedTipos[tipo.nombre];
+          tipo.haciendas.forEach((hacienda, index) => {
+            const key = `${tipo.nombre}__${hacienda.id ?? 'sin'}__${hacienda.nombre}`;
+            if (expandedHaciendas[key]) {
+              nextExpandedHaciendas[key] = true;
+              return;
+            }
+
+            if (prevHaciendaKeys.length === 0 && tipoExpanded && !firstAssigned && index === 0) {
+              nextExpandedHaciendas[key] = true;
+              firstAssigned = true;
+            }
+          });
+        });
+
+        setExpandedTipos(nextExpandedTipos);
+        setExpandedHaciendas(nextExpandedHaciendas);
       } catch (err) {
         console.error('Error al cargar el informe mensual de eventos:', err);
         setError('No se pudo obtener la información. Inténtalo nuevamente.');
@@ -178,7 +234,7 @@ const InformeEventosScreen: React.FC = () => {
         setMapLoading(false);
       }
     },
-    []
+    [buildTreeData, expandedHaciendas, expandedTipos]
   );
 
   useEffect(() => {
@@ -310,50 +366,80 @@ const InformeEventosScreen: React.FC = () => {
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
-          <h2 className="text-lg font-semibold text-[#1C2E4A] mb-4">Eventos por Hacienda y Sitio</h2>
+          <h2 className="text-lg font-semibold text-[#1C2E4A] mb-4">Eventos por Tipo, Hacienda y Sitio</h2>
           <div className="space-y-2">
-            {eventosPorHaciendaSitio.length ? (
-              eventosPorHaciendaSitio.map((hacienda) => {
-                const isExpanded = expandedHaciendas.has(hacienda.key);
+            {eventosTree.length ? (
+              eventosTree.map((tipo) => {
+                const tipoExpanded = expandedTipos[tipo.nombre] ?? false;
                 return (
-                  <div key={hacienda.key} className="border border-gray-100 rounded-lg">
+                  <div key={`tipo-${tipo.nombre}`} className="border border-gray-100 rounded-lg">
                     <button
                       type="button"
-                      onClick={() => {
-                        setExpandedHaciendas((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(hacienda.key)) {
-                            next.delete(hacienda.key);
-                          } else {
-                            next.add(hacienda.key);
-                          }
-                          return next;
-                        });
-                      }}
+                      onClick={() =>
+                        setExpandedTipos((prev) => ({
+                          ...prev,
+                          [tipo.nombre]: !tipoExpanded,
+                        }))
+                      }
                       className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">{isExpanded ? '▼' : '▶'}</span>
-                        <span className="font-medium text-[#1C2E4A]">{hacienda.haciendaNombre}</span>
+                        <span className="text-sm text-gray-600">{tipoExpanded ? '▼' : '▶'}</span>
+                        <span className="font-medium text-[#1C2E4A]">{tipo.nombre}</span>
                       </div>
-                      <span className="text-sm text-gray-700">{formatNumber(hacienda.totalEventos)}</span>
+                      <span className="text-sm text-gray-700 font-semibold">{formatNumber(tipo.total)}</span>
                     </button>
-                    {isExpanded && (
-                      <ul className="px-6 pb-3 space-y-1">
-                        {hacienda.sitios.length ? (
-                          hacienda.sitios.map((sitio) => (
-                            <li
-                              key={`${hacienda.key}-${sitio.sitioId ?? sitio.sitioNombre}`}
-                              className="flex items-center justify-between text-sm text-gray-700"
-                            >
-                              <span>{sitio.sitioNombre}</span>
-                              <span>{formatNumber(sitio.totalEventos)}</span>
-                            </li>
-                          ))
+                    {tipoExpanded && (
+                      <div className="space-y-1 pb-2">
+                        {tipo.haciendas.length ? (
+                          tipo.haciendas.map((hacienda) => {
+                            const haciendaKey = `${tipo.nombre}__${hacienda.id ?? 'sin'}__${hacienda.nombre}`;
+                            const haciendaExpanded = expandedHaciendas[haciendaKey] ?? false;
+
+                            return (
+                              <div key={haciendaKey}>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedHaciendas((prev) => ({
+                                      ...prev,
+                                      [haciendaKey]: !haciendaExpanded,
+                                    }))
+                                  }
+                                  className="w-full flex items-center justify-between pl-4 pr-3 py-2 text-left hover:bg-gray-50"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-gray-600">{haciendaExpanded ? '▼' : '▶'}</span>
+                                    <span className="font-medium text-[#1C2E4A]">{hacienda.nombre}</span>
+                                  </div>
+                                  <span className="text-sm text-gray-700 font-semibold">{formatNumber(hacienda.total)}</span>
+                                </button>
+                                {haciendaExpanded && (
+                                  <ul className="space-y-1">
+                                    {hacienda.sitios.length ? (
+                                      hacienda.sitios.map((sitio) => (
+                                        <li
+                                          key={`${haciendaKey}__${sitio.id ?? sitio.nombre}`}
+                                          className="flex items-center justify-between pl-8 pr-3 py-1 text-sm text-gray-700"
+                                        >
+                                          <span>{sitio.nombre}</span>
+                                          <span className="font-semibold">{formatNumber(sitio.total)}</span>
+                                        </li>
+                                      ))
+                                    ) : (
+                                      <li className="text-sm text-gray-500 pl-8 pr-3 py-1">
+                                        Sin sitios registrados.
+                                      </li>
+                                    )}
+                                  </ul>
+                                )}
+                              </div>
+                            );
+                          })
                         ) : (
-                          <li className="text-sm text-gray-500">Sin sitios registrados.</li>
+                          <div className="text-sm text-gray-500 px-4">Sin haciendas registradas.</div>
                         )}
-                      </ul>
+                      </div>
                     )}
                   </div>
                 );
