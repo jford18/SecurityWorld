@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Area,
   AreaChart,
@@ -17,19 +17,9 @@ import {
   getEventosPorSitio,
   getInformeMensualEventos,
 } from '../../services/reportesEventosService';
+import { IntrusionConsolidadoFilters } from '@/services/intrusionesService';
+import IntrusionesFilters from '@/components/intrusiones/IntrusionesFilters';
 import MapaEventosPorSitio from '../../components/reportes/MapaEventosPorSitio';
-
-const formatDateInput = (date: Date) => date.toISOString().slice(0, 10);
-
-const defaultRange = (() => {
-  const today = new Date();
-  const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
-  const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
-  return {
-    start: formatDateInput(start),
-    end: formatDateInput(end),
-  };
-})();
 
 const weekdayLabels: Record<number, string> = {
   1: 'Lunes',
@@ -68,47 +58,39 @@ const colorPalette = [
 ];
 
 const InformeEventosScreen: React.FC = () => {
-  const [fechaInicio, setFechaInicio] = useState(defaultRange.start);
-  const [fechaFin, setFechaFin] = useState(defaultRange.end);
+  const [filters, setFilters] = useState<IntrusionConsolidadoFilters>({ haciendaId: '' });
   const [data, setData] = useState<InformeEventosResponse | null>(null);
   const [eventosPorSitio, setEventosPorSitio] = useState<EventoPorSitio[]>([]);
   const [loading, setLoading] = useState(false);
   const [mapLoading, setMapLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchInforme = async (inicio: string, fin: string) => {
-    setLoading(true);
-    setMapLoading(true);
-    setError(null);
-    try {
-      const [response, eventosSitios] = await Promise.all([
-        getInformeMensualEventos(inicio, fin),
-        getEventosPorSitio(inicio, fin),
-      ]);
-      setData(response);
-      setEventosPorSitio(eventosSitios ?? []);
-    } catch (err) {
-      console.error('Error al cargar el informe mensual de eventos:', err);
-      setError('No se pudo obtener la información. Inténtalo nuevamente.');
-    } finally {
-      setLoading(false);
-      setMapLoading(false);
-    }
-  };
+  const fetchInforme = useCallback(
+    async (activeFilters: IntrusionConsolidadoFilters) => {
+      setLoading(true);
+      setMapLoading(true);
+      setError(null);
+      try {
+        const [response, eventosSitios] = await Promise.all([
+          getInformeMensualEventos(activeFilters),
+          getEventosPorSitio(activeFilters),
+        ]);
+        setData(response);
+        setEventosPorSitio(eventosSitios ?? []);
+      } catch (err) {
+        console.error('Error al cargar el informe mensual de eventos:', err);
+        setError('No se pudo obtener la información. Inténtalo nuevamente.');
+      } finally {
+        setLoading(false);
+        setMapLoading(false);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
-    void fetchInforme(defaultRange.start, defaultRange.end);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    if (!fechaInicio || !fechaFin) {
-      setError('Selecciona el rango de fechas para consultar.');
-      return;
-    }
-    void fetchInforme(fechaInicio, fechaFin);
-  };
+    void fetchInforme(filters);
+  }, [fetchInforme, filters]);
 
   const resumen = data?.resumen;
 
@@ -212,42 +194,11 @@ const InformeEventosScreen: React.FC = () => {
         </p>
       </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white rounded-lg shadow-md p-4 flex flex-wrap items-end gap-4"
-      >
-        <div className="flex-1 min-w-[180px]">
-          <label htmlFor="fechaInicio" className="block text-sm font-medium text-[#1C2E4A]">
-            Fecha inicio
-          </label>
-          <input
-            id="fechaInicio"
-            type="date"
-            value={fechaInicio}
-            onChange={(event) => setFechaInicio(event.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-          />
-        </div>
-        <div className="flex-1 min-w-[180px]">
-          <label htmlFor="fechaFin" className="block text-sm font-medium text-[#1C2E4A]">
-            Fecha fin
-          </label>
-          <input
-            id="fechaFin"
-            type="date"
-            value={fechaFin}
-            onChange={(event) => setFechaFin(event.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-          />
-        </div>
-        <button
-          type="submit"
-          className="px-6 py-2 bg-[#1C2E4A] text-white rounded-md shadow hover:bg-[#15233A] disabled:opacity-60"
-          disabled={loading}
-        >
-          {loading ? 'Consultando…' : 'Consultar'}
-        </button>
-      </form>
+      <IntrusionesFilters
+        filters={filters}
+        onFiltersChange={setFilters}
+        onApply={() => void fetchInforme(filters)}
+      />
 
       {error && <div className="bg-red-50 text-red-700 px-4 py-2 rounded-lg">{error}</div>}
 

@@ -129,10 +129,20 @@ const mapConsolidadoRow = (row) => {
   };
 };
 
-const prepareConsolidadoQuery = async (
-  queryParams,
-  { includePagination = true } = {}
-) => {
+export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
+  let metadata;
+  try {
+    metadata = await getIntrusionesMetadata();
+  } catch (error) {
+    console.error("No se pudo obtener la metadata de intrusiones:", error);
+    return {
+      error: {
+        status: 500,
+        message: "No se pudo preparar la consulta de intrusiones.",
+      },
+    };
+  }
+
   const {
     fechaDesde,
     fechaHasta,
@@ -146,19 +156,6 @@ const prepareConsolidadoQuery = async (
     page = 1,
     limit = 20,
   } = queryParams ?? {};
-
-  let metadata;
-  try {
-    metadata = await getIntrusionesMetadata();
-  } catch (error) {
-    console.error("No se pudo obtener la metadata de intrusiones:", error);
-    return {
-      error: {
-        status: 500,
-        message: "No se pudo preparar la consulta de intrusiones.",
-      },
-    };
-  }
 
   const filters = [];
   const values = [];
@@ -256,7 +253,38 @@ const prepareConsolidadoQuery = async (
     filters.push(`i.${metadata.personaColumn} = $${values.length}`);
   }
 
-  const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+  return {
+    metadata,
+    values,
+    whereClause: filters.length ? `WHERE ${filters.join(" AND ")}` : "",
+  };
+};
+
+const prepareConsolidadoQuery = async (
+  queryParams,
+  { includePagination = true } = {}
+) => {
+  const { page = 1, limit = 20 } = queryParams ?? {};
+
+  let filterConfig;
+  try {
+    filterConfig = await buildIntrusionesFilterConfig(queryParams);
+  } catch (error) {
+    console.error("No se pudo obtener la metadata de intrusiones:", error);
+    return {
+      error: {
+        status: 500,
+        message: "No se pudo preparar la consulta de intrusiones.",
+      },
+    };
+  }
+
+  if (filterConfig?.error) {
+    return { error: filterConfig.error };
+  }
+
+  const { metadata, whereClause } = filterConfig;
+  const values = [...filterConfig.values];
 
   const pageNumber = Number(page);
   const pageSize = Number(limit);

@@ -1,48 +1,5 @@
 import { pool } from "../db.js";
-
-const BASE_CTE = `WITH base_intrusiones AS (
-    SELECT
-        I.ID,
-        I.SITIO_ID,
-    S.NOMBRE          AS SITIO_NOMBRE,
-    S.latitud,
-    S.longitud,
-        I.TIPO            AS TIPO_INTRUSION,
-        I.FECHA_EVENTO,
-        I.FECHA_REACCION,
-        (I.FECHA_EVENTO AT TIME ZONE 'UTC')::DATE             AS FECHA,
-        EXTRACT(ISODOW FROM I.FECHA_EVENTO)                   AS DIA_SEMANA,
-        EXTRACT(HOUR   FROM I.FECHA_EVENTO)                   AS HORA,
-        CASE WHEN I.TIPO ILIKE 'Autorizado%' THEN 1 ELSE 0 END AS ES_AUTORIZADO,
-        CASE
-            WHEN I.FECHA_REACCION IS NOT NULL THEN
-                EXTRACT(EPOCH FROM (I.FECHA_REACCION - I.FECHA_EVENTO)) / 60.0
-            ELSE NULL
-        END AS MINUTOS_REACCION
-    FROM PUBLIC.INTRUSIONES I
-    LEFT JOIN PUBLIC.SITIOS S ON S.ID = I.SITIO_ID
-    WHERE I.FECHA_EVENTO >= $1::TIMESTAMP
-      AND I.FECHA_EVENTO <  $2::TIMESTAMP
-)`;
-
-const formatDateOnly = (value) => {
-  if (!value || typeof value !== "string") {
-    return null;
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed.toISOString().slice(0, 10);
-};
-
-const addOneDay = (value) => {
-  const parsed = new Date(value);
-  parsed.setUTCDate(parsed.getUTCDate() + 1);
-  return parsed.toISOString().slice(0, 10);
-};
+import { buildIntrusionesFilterConfig } from "./intrusiones.controller.js";
 
 const toNumber = (value, fallback = 0) => {
   if (value === null || value === undefined) {
@@ -107,28 +64,63 @@ const mapEventosPorSitioRow = (row) => ({
   total_eventos: toNumber(row?.total_eventos),
 });
 
+const normalizeReportesFilters = (query) => ({
+  ...query,
+  fechaDesde: query?.fechaDesde ?? query?.fechaInicio,
+  fechaHasta: query?.fechaHasta ?? query?.fechaFin,
+});
+
+const buildBaseIntrusionesCTE = (metadata, whereClause) => {
+  const tipoIntrusionExpression = metadata.hasTipoIntrusionId
+    ? "COALESCE(cti.descripcion, CAST(i.tipo_intrusion_id AS TEXT))"
+    : "i.tipo";
+
+  const joins = ["LEFT JOIN public.sitios AS s ON s.id = i.sitio_id"];
+
+  if (metadata.hasTipoIntrusionId) {
+    joins.push("LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.id = i.tipo_intrusion_id");
+  }
+
+  return `WITH base_intrusiones AS (
+    SELECT
+        i.id,
+        i.sitio_id,
+        s.nombre          AS sitio_nombre,
+        s.latitud,
+        s.longitud,
+        ${tipoIntrusionExpression}            AS tipo_intrusion,
+        i.fecha_evento,
+        i.fecha_reaccion,
+        (i.fecha_evento AT TIME ZONE 'UTC')::DATE             AS fecha,
+        EXTRACT(ISODOW FROM i.fecha_evento)                   AS dia_semana,
+        EXTRACT(HOUR   FROM i.fecha_evento)                   AS hora,
+        CASE WHEN ${tipoIntrusionExpression} ILIKE 'Autorizado%' THEN 1 ELSE 0 END AS es_autorizado,
+        CASE
+            WHEN i.fecha_reaccion IS NOT NULL THEN
+                EXTRACT(EPOCH FROM (i.fecha_reaccion - i.fecha_evento)) / 60.0
+            ELSE NULL
+        END AS minutos_reaccion
+    FROM public.intrusiones AS i
+    ${joins.join("\n    ")}
+    ${whereClause}
+  )`;
+};
+
 export const getInformeMensualEventos = async (req, res) => {
-  const { fechaInicio, fechaFin } = req.query ?? {};
+  const normalizedFilters = normalizeReportesFilters(req.query);
 
-  const fechaInicioParam = formatDateOnly(fechaInicio);
-  const fechaFinParam = formatDateOnly(fechaFin);
+  const filterConfig = await buildIntrusionesFilterConfig(normalizedFilters);
 
-  if (!fechaInicioParam || !fechaFinParam) {
-    return res
-      .status(400)
-      .json({
-        mensaje:
-          "Debe proporcionar los parámetros fechaInicio y fechaFin en formato YYYY-MM-DD.",
-      });
+  if (filterConfig?.error) {
+    const { status = 400, message } = filterConfig.error;
+    return res.status(status).json({ mensaje: message });
   }
 
-  if (fechaFinParam < fechaInicioParam) {
-    return res.status(400).json({ mensaje: "El rango de fechas no es válido." });
-  }
+  const { metadata, values, whereClause } = filterConfig;
 
-  const fechaFinExclusive = addOneDay(`${fechaFinParam}T00:00:00Z`);
+  const baseCTE = buildBaseIntrusionesCTE(metadata, whereClause);
 
-  const resumenQuery = `${BASE_CTE}
+  const resumenQuery = `${baseCTE}
 /* Este reporte usa únicamente datos de INTRUSIONES, no incluye fallos técnicos. */
 SELECT
     COUNT(*)                                           AS total_eventos,
@@ -138,7 +130,7 @@ SELECT
     ROUND(AVG(MINUTOS_REACCION)::NUMERIC, 2)          AS t_prom_reaccion_min
 FROM base_intrusiones;`;
 
-  const porTipoQuery = `${BASE_CTE}
+  const porTipoQuery = `${baseCTE}
 SELECT
     TIPO_INTRUSION                   AS tipo,
     COUNT(*)                         AS n_eventos,
@@ -147,7 +139,7 @@ FROM base_intrusiones
 GROUP BY TIPO_INTRUSION
 ORDER BY n_eventos DESC;`;
 
-  const porDiaQuery = `${BASE_CTE}
+  const porDiaQuery = `${baseCTE}
 SELECT
     FECHA,
     COUNT(*) AS n_eventos
@@ -155,7 +147,7 @@ FROM base_intrusiones
 GROUP BY FECHA
 ORDER BY FECHA;`;
 
-  const porDiaSemanaTipoQuery = `${BASE_CTE}
+  const porDiaSemanaTipoQuery = `${baseCTE}
 SELECT
     DIA_SEMANA,
     TIPO_INTRUSION,
@@ -164,7 +156,7 @@ FROM base_intrusiones
 GROUP BY DIA_SEMANA, TIPO_INTRUSION
 ORDER BY DIA_SEMANA, TIPO_INTRUSION;`;
 
-  const porHoraTipoQuery = `${BASE_CTE}
+  const porHoraTipoQuery = `${baseCTE}
 SELECT
     HORA,
     TIPO_INTRUSION,
@@ -174,15 +166,13 @@ GROUP BY HORA, TIPO_INTRUSION
 ORDER BY HORA, TIPO_INTRUSION;`;
 
   try {
-    const queryParams = [fechaInicioParam, fechaFinExclusive];
-
     const [resumenResult, porTipoResult, porDiaResult, porDiaSemanaTipoResult, porHoraTipoResult] =
       await Promise.all([
-        pool.query(resumenQuery, queryParams),
-        pool.query(porTipoQuery, queryParams),
-        pool.query(porDiaQuery, queryParams),
-        pool.query(porDiaSemanaTipoQuery, queryParams),
-        pool.query(porHoraTipoQuery, queryParams),
+        pool.query(resumenQuery, values),
+        pool.query(porTipoQuery, values),
+        pool.query(porDiaQuery, values),
+        pool.query(porDiaSemanaTipoQuery, values),
+        pool.query(porHoraTipoQuery, values),
       ]);
 
     return res.json({
@@ -201,24 +191,19 @@ ORDER BY HORA, TIPO_INTRUSION;`;
 };
 
 export const getEventosPorSitio = async (req, res) => {
-  const { fechaInicio, fechaFin } = req.query ?? {};
+  const normalizedFilters = normalizeReportesFilters(req.query);
+  const filterConfig = await buildIntrusionesFilterConfig(normalizedFilters);
 
-  const fechaInicioParam = formatDateOnly(fechaInicio);
-  const fechaFinParam = formatDateOnly(fechaFin);
-
-  if (!fechaInicioParam || !fechaFinParam) {
-    return res.status(400).json({
-      mensaje: "Debe proporcionar los parámetros fechaInicio y fechaFin en formato YYYY-MM-DD.",
-    });
+  if (filterConfig?.error) {
+    const { status = 400, message } = filterConfig.error;
+    return res.status(status).json({ mensaje: message });
   }
 
-  if (fechaFinParam < fechaInicioParam) {
-    return res.status(400).json({ mensaje: "El rango de fechas no es válido." });
-  }
+  const { metadata, values, whereClause } = filterConfig;
 
-  const fechaFinExclusive = addOneDay(`${fechaFinParam}T00:00:00Z`);
+  const baseCTE = buildBaseIntrusionesCTE(metadata, whereClause);
 
-  const eventosPorSitioQuery = `${BASE_CTE}
+  const eventosPorSitioQuery = `${baseCTE}
 SELECT
   SITIO_ID,
   SITIO_NOMBRE,
@@ -232,8 +217,7 @@ GROUP BY SITIO_ID, SITIO_NOMBRE, latitud, longitud
 ORDER BY SITIO_NOMBRE;`;
 
   try {
-    const queryParams = [fechaInicioParam, fechaFinExclusive];
-    const result = await pool.query(eventosPorSitioQuery, queryParams);
+    const result = await pool.query(eventosPorSitioQuery, values);
 
     return res.json(result.rows.map(mapEventosPorSitioRow));
   } catch (error) {
