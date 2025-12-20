@@ -531,6 +531,12 @@ export const createIntrusion = async (req, res) => {
       .json({ mensaje: "No se pudo preparar el registro de intrusiones." });
   }
 
+  console.log("[INTRUSIONES][CREATE] payload:", {
+    tipo_intrusion_id: rawTipoIntrusionId,
+    sitio_id: rawSitioId,
+    persona_id: rawPersonaId,
+  });
+
   const fechaEventoValue = rawFechaEvento ? parseFechaValue(rawFechaEvento) : new Date();
   const fechaReaccionValue = rawFechaReaccion ? parseFechaValue(rawFechaReaccion) : null;
   const fechaReaccionFueraValue = rawFechaReaccionFuera
@@ -550,9 +556,7 @@ export const createIntrusion = async (req, res) => {
     metadata.personaColumn && rawPersonaId !== undefined
       ? parseIntegerOrNull(rawPersonaId)
       : null;
-  const tipoIntrusionIdValue = metadata.hasTipoIntrusionId
-    ? parseIntegerOrNull(rawTipoIntrusionId)
-    : null;
+  const tipoIntrusionIdValue = parseIntegerOrNull(rawTipoIntrusionId);
 
   const missingFields = [];
 
@@ -560,7 +564,7 @@ export const createIntrusion = async (req, res) => {
     missingFields.push("sitio_id");
   }
 
-  if (metadata.hasTipoIntrusionId && !rawTipoIntrusionId && !rawTipoText) {
+  if (rawTipoIntrusionId === undefined || rawTipoIntrusionId === null || rawTipoIntrusionId === "") {
     missingFields.push("tipo_intrusion_id");
   }
 
@@ -646,24 +650,46 @@ export const createIntrusion = async (req, res) => {
     });
   }
 
-  if (metadata.hasTipoIntrusionId && tipoIntrusionIdValue === undefined) {
+  if (tipoIntrusionIdValue === undefined || tipoIntrusionIdValue === null) {
     return res.status(400).json({
       message: "El identificador del tipo de intrusión no es válido.",
       details: { field: "tipo_intrusion_id" },
     });
   }
 
-  try {
-    const columns = ["ubicacion", "sitio_id"];
-    const values = [rawUbicacion ?? null, sitioIdValue];
+  let tipoIntrusionDescripcion = typeof rawTipoText === "string" ? rawTipoText : null;
 
-    if (metadata.hasTipoIntrusionId) {
-      columns.push("tipo_intrusion_id");
-      values.push(tipoIntrusionIdValue);
+  try {
+    const tipoIntrusionResult = await pool.query(
+      "SELECT id, descripcion, activo FROM public.catalogo_tipo_intrusion WHERE id = $1",
+      [tipoIntrusionIdValue]
+    );
+
+    const tipoIntrusionRow = tipoIntrusionResult.rows?.[0];
+    if (!tipoIntrusionRow || tipoIntrusionRow.activo !== true) {
+      return res.status(400).json({
+        message: "El tipo de intrusión proporcionado no existe o no está activo.",
+        details: { field: "tipo_intrusion_id" },
+      });
     }
 
+    if (!tipoIntrusionDescripcion) {
+      tipoIntrusionDescripcion = tipoIntrusionRow.descripcion ?? null;
+    }
+  } catch (error) {
+    console.error("Error al validar tipo de intrusión:", error);
+    return res.status(500).json({
+      message: "No se pudo validar el tipo de intrusión.",
+      details: { field: "tipo_intrusion_id" },
+    });
+  }
+
+  try {
+    const columns = ["ubicacion", "sitio_id", "tipo_intrusion_id"];
+    const values = [rawUbicacion ?? null, sitioIdValue, tipoIntrusionIdValue];
+
     if (metadata.hasTipoText) {
-      const tipoTextValue = rawTipoText ?? (tipoIntrusionIdValue != null ? String(tipoIntrusionIdValue) : null);
+      const tipoTextValue = tipoIntrusionDescripcion ?? null;
       columns.push("tipo");
       values.push(tipoTextValue);
     }
@@ -1022,402 +1048,145 @@ export const getEventosPorHaciendaSitio = async (req, res) => {
   }
 };
 
-export const getEventosNoAutorizadosDashboard = async (req, res) => {
+export const getEventosNoAutorizadosDashboard = async (_req, res) => {
+  console.log(
+    "[INTRUSIONES][DASHBOARD][NO_AUTORIZADOS] usando JOIN TIPO_INTRUSION.NECESITA_PROTOCOLO=TRUE"
+  );
   try {
-    console.log("[INTRUSIONES][DASHBOARD][NO AUTORIZADOS] query params:", req.query);
-    const filterConfig = await buildIntrusionesFilterConfig(req.query);
+    const totalResult = await pool.query(
+      `SELECT
+    COUNT(*) AS total
+  FROM PUBLIC.INTRUSIONES A
+  JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.ID = A.TIPO_INTRUSION_ID)
+  WHERE B.NECESITA_PROTOCOLO = TRUE;`
+    );
 
-    if (filterConfig?.error) {
-      const { status = 400, message } = filterConfig.error;
-      return res.status(status).json({ message, detail: null });
-    }
+    const porDiaResult = await pool.query(
+      `SELECT
+    TO_CHAR(A.FECHA_EVENTO, 'YYYYMMDD')::INT AS PERIODO,
+    COUNT(*) AS TOTAL
+  FROM PUBLIC.INTRUSIONES A
+  JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.ID = A.TIPO_INTRUSION_ID)
+  WHERE B.NECESITA_PROTOCOLO = TRUE
+  GROUP BY TO_CHAR(A.FECHA_EVENTO, 'YYYYMMDD')::INT
+  ORDER BY PERIODO;`
+    );
 
-    const { metadata } = filterConfig;
-    const canIdentifyAutorizados = metadata.hasTipoIntrusionId || metadata.authorizedColumn;
-    const canMeasureReaccion = metadata.hasFechaReaccionEnviada;
+    const porSitioResult = await pool.query(
+      `SELECT
+    A.SITIO_ID,
+    C.NOMBRE AS SITIO_NOMBRE,
+    COUNT(*) AS TOTAL
+  FROM PUBLIC.INTRUSIONES A
+  JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.ID = A.TIPO_INTRUSION_ID)
+  LEFT JOIN PUBLIC.SITIOS C ON (C.ID = A.SITIO_ID)
+  WHERE B.NECESITA_PROTOCOLO = TRUE
+  GROUP BY A.SITIO_ID, C.NOMBRE
+  ORDER BY TOTAL DESC;`
+    );
 
-    if (!canIdentifyAutorizados || !canMeasureReaccion) {
-      const emptyResponse = {
-        kpis: { total_no_autorizados: 0 },
-        chart: [],
-        tabla: [],
-      };
-      console.log("[INTRUSIONES][DASHBOARD][NO AUTORIZADOS] result:", {
-        total: 0,
-        chartCount: 0,
-        tablaCount: 0,
-      });
-      return res.json(emptyResponse);
-    }
-
-    const sitiosMetadata = await getSitiosMetadata();
-
-    const values = [...filterConfig.values];
-    const filters = [];
-
-    if (filterConfig.whereClause) {
-      filters.push(filterConfig.whereClause.replace(/^WHERE\s+/i, ""));
-    }
-
-    const autorizadosCondition = buildAuthorizationCondition(metadata, { authorized: false });
-    filters.push(`(${autorizadosCondition})`);
-
-    const parsedSustraccionPersonal = normalizeBooleanParam(req.query?.sustraccionPersonal);
-    if (parsedSustraccionPersonal === true) {
-      if (!metadata.hasSustraccionPersonal) {
-        return res.status(400).json({
-          message: "El filtro de sustracción personal no está disponible en esta instalación.",
-          detail: null,
-        });
-      }
-      filters.push("i.sustraccion_personal = TRUE");
-    }
-
-    const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
-
-    const sitioDescripcionExpression = sitiosMetadata.hasDescripcion
-      ? "COALESCE(NULLIF(TRIM(s.descripcion), ''), s.nombre)"
-      : "s.nombre";
-
-    const zonaExpression = sitiosMetadata.hasZona
-      ? "COALESCE(NULLIF(TRIM(s.zona), ''), 'Sin zona')"
-      : "'Sin zona'";
-
-    const tipoIntrusionJoin = metadata.hasTipoIntrusionId
-      ? "LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.id = i.tipo_intrusion_id"
-      : "";
-
-    const baseCTE = `WITH intrusiones_filtradas AS (
-    SELECT
-      i.id,
-      i.sitio_id,
-      ${sitioDescripcionExpression} AS sitio_descripcion,
-      ${zonaExpression} AS zona,
-      i.fecha_evento,
-      i.fecha_reaccion,
-      i.fecha_reaccion_enviada,
-      ${metadata.hasSustraccionPersonal ? "COALESCE(i.sustraccion_personal, false)" : "false"} AS sustraccion_personal,
-      mc.descripcion AS medio_comunicacion,
-      ce.descripcion AS conclusion_evento,
-      CASE
-        WHEN i.fecha_reaccion_enviada IS NOT NULL
-         AND i.fecha_reaccion IS NOT NULL
-         AND i.fecha_reaccion_enviada >= i.fecha_reaccion
-          THEN EXTRACT(EPOCH FROM (i.fecha_reaccion_enviada - i.fecha_reaccion)) / 60.0
-        ELSE NULL
-      END AS tiempo_llegada_min
-    FROM public.intrusiones AS i
-    LEFT JOIN public.sitios AS s ON s.id = i.sitio_id
-    LEFT JOIN public.medio_comunicacion AS mc ON mc.id = i.medio_comunicacion_id
-    LEFT JOIN public.catalogo_conclusion_evento AS ce ON ce.id = i.conclusion_evento_id
-    ${tipoIntrusionJoin}
-    ${whereClause}
-  )`;
-
-    const kpiQuery = `${baseCTE}
-    SELECT COUNT(*) AS total_no_autorizados
-    FROM intrusiones_filtradas;`;
-
-    const chartQuery = `${baseCTE}
-    SELECT
-      zona,
-      sitio_id,
-      sitio_descripcion,
-      AVG(tiempo_llegada_min) AS promedio_min
-    FROM intrusiones_filtradas
-    WHERE tiempo_llegada_min IS NOT NULL
-    GROUP BY zona, sitio_id, sitio_descripcion
-    ORDER BY promedio_min DESC NULLS LAST, sitio_descripcion ASC NULLS LAST
-    LIMIT 15;`;
-
-    const tableQuery = `${baseCTE}
-    SELECT
-      id,
-      sitio_id,
-      sitio_descripcion,
-      fecha_evento,
-      medio_comunicacion,
-      fecha_reaccion_enviada,
-      tiempo_llegada_min,
-      conclusion_evento,
-      sustraccion_personal
-    FROM intrusiones_filtradas
-    ORDER BY fecha_evento DESC NULLS LAST, id DESC;`;
-
-    const [kpiResult, chartResult, tableResult] = await Promise.all([
-      pool.query(kpiQuery, values),
-      pool.query(chartQuery, values),
-      pool.query(tableQuery, values),
-    ]);
-
-    const kpis = {
-      total_no_autorizados: Number(kpiResult.rows[0]?.total_no_autorizados) || 0,
+    const responsePayload = {
+      total: Number(totalResult.rows?.[0]?.total) || 0,
+      porDia: (porDiaResult.rows ?? [])
+        .map((row) => ({
+          periodo: row?.periodo === null || row?.periodo === undefined ? null : Number(row.periodo),
+          total: row?.total === null || row?.total === undefined ? 0 : Number(row.total),
+        }))
+        .filter((row) => row.periodo !== null),
+      porSitio: (porSitioResult.rows ?? []).map((row) => ({
+        sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
+        sitio_nombre: row?.sitio_nombre ?? null,
+        total: row?.total === null || row?.total === undefined ? 0 : Number(row.total),
+      })),
     };
 
-    const chart = (chartResult.rows ?? []).map((row) => ({
-      zona: row?.zona ?? "Sin zona",
-      sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
-      sitio_descripcion: row?.sitio_descripcion ?? "",
-      promedio_min: row?.promedio_min === null || row?.promedio_min === undefined
-        ? 0
-        : Number(row.promedio_min),
-    }));
-
-    const tabla = (tableResult.rows ?? []).map((row) => ({
-      id: row?.id ?? null,
-      sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
-      sitio_descripcion: row?.sitio_descripcion ?? "",
-      fecha_evento: row?.fecha_evento ? new Date(row.fecha_evento).toISOString() : null,
-      medio_comunicacion: row?.medio_comunicacion ?? null,
-      fecha_reaccion_enviada: row?.fecha_reaccion_enviada
-        ? new Date(row.fecha_reaccion_enviada).toISOString()
-        : null,
-      tiempo_llegada_min:
-        row?.tiempo_llegada_min === null || row?.tiempo_llegada_min === undefined
-          ? null
-          : Number(row.tiempo_llegada_min),
-      conclusion_evento: row?.conclusion_evento ?? null,
-      sustraccion_personal: Boolean(row?.sustraccion_personal),
-    }));
-
-    const responsePayload = { kpis, chart, tabla };
-
-    console.log("[INTRUSIONES][DASHBOARD][NO AUTORIZADOS] result:", {
-      total: kpis.total_no_autorizados,
-      chartCount: chart.length,
-      tablaCount: tabla.length,
+    console.log("[INTRUSIONES][DASHBOARD] result:", {
+      total: responsePayload.total,
+      porDiaCount: responsePayload.porDia.length,
+      porSitioCount: responsePayload.porSitio.length,
     });
 
     return res.json(responsePayload);
-  } catch (error) {
-    console.error("Error al obtener el dashboard de eventos no autorizados:", error);
+  } catch (err) {
+    console.error("[INTRUSIONES][DASHBOARD] error:", err);
     return res.status(500).json({
       message: "Error al cargar dashboard de eventos no autorizados",
-      detail: error?.message ?? null,
-      kpis: { total_no_autorizados: 0 },
-      chart: [],
-      tabla: [],
+      detail: err?.message ?? null,
+      total: 0,
+      porDia: [],
+      porSitio: [],
     });
   }
 };
 
-export const getEventosAutorizadosDashboard = async (req, res) => {
+export const getEventosAutorizadosDashboard = async (_req, res) => {
+  console.log(
+    "[INTRUSIONES][DASHBOARD][AUTORIZADOS] usando JOIN TIPO_INTRUSION.NECESITA_PROTOCOLO=FALSE"
+  );
   try {
-    console.log("[INTRUSIONES][DASHBOARD][AUTORIZADOS] query params:", req.query);
-    const metadata = await getIntrusionesMetadata();
+    const totalResult = await pool.query(
+      `SELECT
+    COUNT(*) AS TOTAL
+  FROM PUBLIC.INTRUSIONES A
+  JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.ID = A.TIPO_INTRUSION_ID)
+  WHERE B.NECESITA_PROTOCOLO = FALSE;`
+    );
 
-    const canIdentifyAutorizados = metadata.hasTipoIntrusionId || metadata.authorizedColumn;
-    if (!canIdentifyAutorizados) {
-      const emptyResponse = {
-        barHaciendas: [],
-        donutPersonal: [],
-        tablaDiaSemana: [],
-        lineaPorFecha: [],
-        total: 0,
-      };
-      console.log("[INTRUSIONES][DASHBOARD][AUTORIZADOS] result:", {
-        total: 0,
-        porDiaCount: 0,
-        porSitioCount: 0,
-      });
-      return res.json(emptyResponse);
-    }
+    const porDiaResult = await pool.query(
+      `SELECT
+    TO_CHAR(A.FECHA_EVENTO, 'YYYYMMDD')::INT AS PERIODO,
+    COUNT(*) AS TOTAL
+  FROM PUBLIC.INTRUSIONES A
+  JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.ID = A.TIPO_INTRUSION_ID)
+  WHERE B.NECESITA_PROTOCOLO = FALSE
+  GROUP BY TO_CHAR(A.FECHA_EVENTO, 'YYYYMMDD')::INT
+  ORDER BY PERIODO;`
+    );
 
-    const fechaDesdeParam = req.query?.fechaDesde;
-    const fechaHastaParam = req.query?.fechaHasta;
-    const parsedFechaDesde = normalizeDateParam(fechaDesdeParam);
-    const parsedFechaHasta = normalizeDateParam(fechaHastaParam);
-
-    if (fechaDesdeParam !== undefined && fechaDesdeParam !== "" && !parsedFechaDesde) {
-      return res.status(400).json({ message: "El parámetro fechaDesde no es válido.", detail: null });
-    }
-    if (fechaHastaParam !== undefined && fechaHastaParam !== "" && !parsedFechaHasta) {
-      return res.status(400).json({ message: "El parámetro fechaHasta no es válido.", detail: null });
-    }
-
-    const now = new Date();
-    const fechaHastaValue = (parsedFechaHasta ?? now);
-    fechaHastaValue.setHours(23, 59, 59, 999);
-
-    const fechaDesdeValue = parsedFechaDesde ?? new Date(fechaHastaValue);
-    fechaDesdeValue.setDate(fechaDesdeValue.getDate() - 29);
-    fechaDesdeValue.setHours(0, 0, 0, 0);
-
-    const haciendaValue = parseIntegerOrNull(req.query?.haciendaId);
-    if (haciendaValue === undefined) {
-      return res.status(400).json({ message: "El parámetro haciendaId no es válido.", detail: null });
-    }
-
-    const clienteValue = parseIntegerOrNull(req.query?.clienteId);
-    if (clienteValue === undefined) {
-      return res.status(400).json({ message: "El parámetro clienteId no es válido.", detail: null });
-    }
-
-    const sitioValue = parseIntegerOrNull(req.query?.sitioId);
-    if (sitioValue === undefined) {
-      return res.status(400).json({ message: "El parámetro sitioId no es válido.", detail: null });
-    }
-
-    const tipoIntrusionValue = parseIntegerOrNull(req.query?.tipoIntrusionId);
-    if (req.query?.tipoIntrusionId !== undefined && tipoIntrusionValue === undefined) {
-      return res.status(400).json({ message: "El parámetro tipoIntrusionId no es válido.", detail: null });
-    }
-
-    const llegoAlertaValue = (() => {
-      const parsed = normalizeBooleanParam(req.query?.llegoAlerta);
-      return parsed === undefined ? null : parsed;
-    })();
-
-    const personaColumn = metadata.personaColumn;
-    const personalIdValue = (() => {
-      const parsed = parseIntegerOrNull(req.query?.personalId);
-      if (personaColumn && req.query?.personalId !== undefined && parsed === undefined) {
-        return "__invalid";
-      }
-      return personaColumn ? parsed : null;
-    })();
-    if (personalIdValue === "__invalid") {
-      return res.status(400).json({ message: "El parámetro personalId no es válido.", detail: null });
-    }
-
-    const personalFilterClause = personaColumn
-      ? `($8::INT IS NULL OR i.${personaColumn} = $8)`
-      : "($8::INT IS NULL)";
-
-    const personalIdentificadoExpression = personaColumn
-      ? "COALESCE(NULLIF(TRIM(CONCAT_WS(' - ', c.descripcion, CONCAT_WS(' ', p.nombre, p.apellido))), ''), COALESCE(NULLIF(TRIM(i.personal_identificado), ''), 'SIN DEFINIR'))"
-      : "COALESCE(NULLIF(TRIM(i.personal_identificado), ''), 'SIN DEFINIR')";
-
-    const personaJoins = personaColumn
-      ? [
-          `LEFT JOIN public.persona AS p ON p.id = i.${personaColumn}`,
-          "LEFT JOIN public.catalogo_cargo AS c ON c.id = p.cargo_id",
-        ]
-      : [];
-
-    const joins = ["LEFT JOIN public.sitios AS s ON s.id = i.sitio_id"];
-    if (metadata.hasTipoIntrusionId) {
-      joins.push("LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.id = i.tipo_intrusion_id");
-    }
-
-    joins.push(...personaJoins);
-
-    const autorizadosCondition = buildAuthorizationCondition(metadata, { authorized: true });
-
-    const query = `
-      WITH base_intrusiones AS (
-        SELECT
-          i.id,
-          i.fecha_evento,
-          i.sitio_id,
-          s.hacienda_id,
-          ${personalIdentificadoExpression} AS personal_identificado,
-          COALESCE(NULLIF(TRIM(s.zona), ''), 'Sin zona') AS zona
-        FROM public.intrusiones AS i
-        ${joins.join("\n        ")}
-        WHERE i.fecha_evento >= $1
-          AND i.fecha_evento <= $2
-          AND ${autorizadosCondition}
-          AND ($3::INT IS NULL OR s.hacienda_id = $3)
-          AND ($4::INT IS NULL OR s.cliente_id = $4)
-          AND ($5::INT IS NULL OR i.sitio_id = $5)
-          AND ($6::INT IS NULL OR i.tipo_intrusion_id = $6)
-          AND ($7::BOOLEAN IS NULL OR i.llego_alerta = $7)
-          AND ${personalFilterClause}
-      )
-      SELECT
-        (
-          SELECT COALESCE(JSON_AGG(x), '[]'::JSON)
-          FROM (
-            SELECT
-              b.hacienda_id,
-              h.nombre AS hacienda_nombre,
-              COUNT(*) AS total_eventos
-            FROM base_intrusiones b
-            LEFT JOIN public.hacienda h ON h.id = b.hacienda_id
-            GROUP BY b.hacienda_id, h.nombre
-            ORDER BY total_eventos DESC
-            LIMIT 20
-          ) x
-        ) AS bar_haciendas,
-        (
-          SELECT COALESCE(JSON_AGG(x), '[]'::JSON)
-          FROM (
-            SELECT
-              COALESCE(b.personal_identificado, 'SIN DEFINIR') AS personal_identificado,
-              COUNT(*) AS total_eventos
-            FROM base_intrusiones b
-            GROUP BY COALESCE(b.personal_identificado, 'SIN DEFINIR')
-            ORDER BY total_eventos DESC
-          ) x
-        ) AS donut_personal,
-        (
-          SELECT COALESCE(JSON_AGG(x), '[]'::JSON)
-          FROM (
-            SELECT
-              TO_CHAR(b.fecha_evento, 'Day') AS dia_semana,
-              COUNT(*) AS total_eventos,
-              COUNT(DISTINCT b.sitio_id) AS total_sitios
-            FROM base_intrusiones b
-            GROUP BY TO_CHAR(b.fecha_evento, 'Day')
-          ) x
-        ) AS tabla_dia_semana,
-        (
-          SELECT COALESCE(JSON_AGG(x), '[]'::JSON)
-          FROM (
-            SELECT
-              DATE(b.fecha_evento) AS fecha,
-              COUNT(*) AS total_eventos
-            FROM base_intrusiones b
-            GROUP BY DATE(b.fecha_evento)
-            ORDER BY DATE(b.fecha_evento)
-          ) x
-        ) AS linea_por_fecha,
-        (SELECT COUNT(*) FROM base_intrusiones) AS total_autorizados;
-    `;
-
-    const values = [
-      fechaDesdeValue,
-      fechaHastaValue,
-      haciendaValue,
-      clienteValue,
-      sitioValue,
-      tipoIntrusionValue,
-      llegoAlertaValue,
-      personalIdValue,
-    ];
-
-    const { rows } = await pool.query(query, values);
-    const [row] = rows ?? [];
+    const porSitioResult = await pool.query(
+      `SELECT
+    A.SITIO_ID,
+    C.NOMBRE AS SITIO_NOMBRE,
+    COUNT(*) AS TOTAL
+  FROM PUBLIC.INTRUSIONES A
+  JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.ID = A.TIPO_INTRUSION_ID)
+  LEFT JOIN PUBLIC.SITIOS C ON (C.ID = A.SITIO_ID)
+  WHERE B.NECESITA_PROTOCOLO = FALSE
+  GROUP BY A.SITIO_ID, C.NOMBRE
+  ORDER BY TOTAL DESC;`
+    );
 
     const responsePayload = {
-      barHaciendas: row?.bar_haciendas ?? [],
-      donutPersonal: row?.donut_personal ?? [],
-      tablaDiaSemana: row?.tabla_dia_semana ?? [],
-      lineaPorFecha: row?.linea_por_fecha ?? [],
-      total: row?.total_autorizados ? Number(row.total_autorizados) : 0,
+      total: Number(totalResult.rows?.[0]?.total) || 0,
+      porDia: (porDiaResult.rows ?? [])
+        .map((row) => ({
+          periodo: row?.periodo === null || row?.periodo === undefined ? null : Number(row.periodo),
+          total: row?.total === null || row?.total === undefined ? 0 : Number(row.total),
+        }))
+        .filter((row) => row.periodo !== null),
+      porSitio: (porSitioResult.rows ?? []).map((row) => ({
+        sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
+        sitio_nombre: row?.sitio_nombre ?? null,
+        total: row?.total === null || row?.total === undefined ? 0 : Number(row.total),
+      })),
     };
 
-    console.log("[INTRUSIONES][DASHBOARD][AUTORIZADOS] result:", {
+    console.log("[INTRUSIONES][DASHBOARD] result:", {
       total: responsePayload.total,
-      porDiaCount: responsePayload.tablaDiaSemana?.length ?? 0,
-      porSitioCount: responsePayload.barHaciendas?.length ?? 0,
+      porDiaCount: responsePayload.porDia.length,
+      porSitioCount: responsePayload.porSitio.length,
     });
 
     return res.json(responsePayload);
-  } catch (error) {
-    console.error("[INTRUSIONES][DASHBOARD][AUTORIZADOS] error:", error);
-    return res
-      .status(500)
-      .json({
-        message: "Error al cargar dashboard de eventos autorizados",
-        detail: error?.message ?? null,
-        barHaciendas: [],
-        donutPersonal: [],
-        tablaDiaSemana: [],
-        lineaPorFecha: [],
-        total: 0,
-      });
+  } catch (err) {
+    console.error("[INTRUSIONES][DASHBOARD] error:", err);
+    return res.status(500).json({
+      message: "Error al cargar dashboard de eventos autorizados",
+      detail: err?.message ?? null,
+      total: 0,
+      porDia: [],
+      porSitio: [],
+    });
   }
 };
 

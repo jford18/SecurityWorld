@@ -206,59 +206,21 @@ export interface EventoPorHaciendaSitioRow {
   total_eventos: number;
 }
 
-export interface EventoNoAutorizadoChartRow {
-  zona: string;
-  sitio_id: number | null;
-  sitio_descripcion: string;
-  promedio_min: number;
-}
-
-export interface EventoNoAutorizadoTablaRow {
-  id: number | null;
-  sitio_id: number | null;
-  sitio_descripcion: string;
-  fecha_evento: string | null;
-  medio_comunicacion: string | null;
-  fecha_reaccion_enviada: string | null;
-  tiempo_llegada_min: number | null;
-  conclusion_evento: string | null;
-  sustraccion_personal: boolean;
-}
-
-export interface EventosNoAutorizadosDashboardResponse {
-  kpis: { total_no_autorizados: number };
-  chart: EventoNoAutorizadoChartRow[];
-  tabla: EventoNoAutorizadoTablaRow[];
-}
-
-export interface EventoAutorizadoBarRow {
-  hacienda_id: number | null;
-  hacienda_nombre: string;
-  total_eventos: number;
-}
-
-export interface EventoAutorizadoDonutRow {
-  personal_identificado: string;
-  total_eventos: number;
-}
-
-export interface EventoAutorizadoDiaSemanaRow {
-  dia_semana: string;
-  total_eventos: number;
-  total_sitios: number;
-}
-
-export interface EventoAutorizadoLineaRow {
-  fecha: string | null;
-  total_eventos: number;
-}
-
-export interface EventosAutorizadosDashboardResponse {
+export interface EventosDashboardPorDiaRow {
+  periodo: number;
   total: number;
-  barHaciendas: EventoAutorizadoBarRow[];
-  donutPersonal: EventoAutorizadoDonutRow[];
-  tablaDiaSemana: EventoAutorizadoDiaSemanaRow[];
-  lineaPorFecha: EventoAutorizadoLineaRow[];
+}
+
+export interface EventosDashboardPorSitioRow {
+  sitio_id: number | null;
+  sitio_nombre: string | null;
+  total: number;
+}
+
+export interface EventosDashboardResponse {
+  total: number;
+  porDia: EventosDashboardPorDiaRow[];
+  porSitio: EventosDashboardPorSitioRow[];
 }
 
 const buildQueryString = (params: IntrusionConsolidadoFilters) => {
@@ -373,48 +335,35 @@ export const getEventosPorHaciendaSitio = async (
 
 export const getDashboardEventosNoAutorizados = async (
   params: IntrusionConsolidadoFilters
-): Promise<EventosNoAutorizadosDashboardResponse> => {
+): Promise<EventosDashboardResponse> => {
   try {
     const queryString = buildQueryString(params);
-    const { data } = await apiClient.get<EventosNoAutorizadosDashboardResponse>(
+    const { data } = await apiClient.get<EventosDashboardResponse>(
       `/intrusiones/eventos-no-autorizados/dashboard${queryString}`
     );
 
-    const kpis = { total_no_autorizados: data?.kpis?.total_no_autorizados ?? 0 };
+    const total = Number(data?.total) || 0;
+    const porDia = Array.isArray(data?.porDia)
+      ? data.porDia
+          .map((row) => ({
+            periodo: row?.periodo === null || row?.periodo === undefined ? 0 : Number(row.periodo),
+            total: Number(row?.total) || 0,
+          }))
+          .filter((row) => Number.isFinite(row.periodo))
+      : [];
 
-    const chart = Array.isArray(data?.chart)
-      ? data.chart.map((row) => ({
-          zona: row?.zona ?? 'Sin zona',
+    const porSitio = Array.isArray(data?.porSitio)
+      ? data.porSitio.map((row) => ({
           sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
-          sitio_descripcion: row?.sitio_descripcion ?? '',
-          promedio_min: Number(row?.promedio_min) || 0,
+          sitio_nombre: row?.sitio_nombre ?? null,
+          total: Number(row?.total) || 0,
         }))
       : [];
 
-    const tabla = Array.isArray(data?.tabla)
-      ? data.tabla.map((row) => ({
-          id: row?.id === null || row?.id === undefined ? null : Number(row.id),
-          sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
-          sitio_descripcion: row?.sitio_descripcion ?? '',
-          fecha_evento: row?.fecha_evento ?? null,
-          medio_comunicacion: row?.medio_comunicacion ?? null,
-          fecha_reaccion_enviada: row?.fecha_reaccion_enviada ?? null,
-          tiempo_llegada_min:
-            row?.tiempo_llegada_min === null || row?.tiempo_llegada_min === undefined
-              ? null
-              : Number(row.tiempo_llegada_min),
-          conclusion_evento: row?.conclusion_evento ?? null,
-          sustraccion_personal: Boolean(row?.sustraccion_personal),
-        }))
-      : [];
-
-    return {
-      kpis,
-      chart,
-      tabla,
-    };
+    return { total, porDia, porSitio };
   } catch (error: unknown) {
-    const axiosError = error as { response?: { data?: { message?: string; detail?: string } } };
+    const axiosError = error as { response?: { status?: number; data?: { message?: string; detail?: string } } };
+    console.log('[INTRUSIONES][SERVICE] error:', axiosError?.response?.status, axiosError?.response?.data);
     const backendMessage = axiosError?.response?.data?.message;
     const backendDetail = axiosError?.response?.data?.detail;
     const combinedMessage = [backendMessage, backendDetail].filter(Boolean).join(': ');
@@ -426,49 +375,35 @@ export const getDashboardEventosNoAutorizados = async (
 
 export const getDashboardEventosAutorizados = async (
   params: IntrusionConsolidadoFilters
-): Promise<EventosAutorizadosDashboardResponse> => {
+): Promise<EventosDashboardResponse> => {
   try {
-    console.log('[INTRUSIONES][SERVICE] GET eventos-autorizados dashboard');
     const queryString = buildQueryString(params);
-    const { data } = await apiClient.get<EventosAutorizadosDashboardResponse>(
+    const { data } = await apiClient.get<EventosDashboardResponse>(
       `/intrusiones/eventos-autorizados/dashboard${queryString}`
     );
 
     const total = Number(data?.total) || 0;
-    const barHaciendas = Array.isArray(data?.barHaciendas)
-      ? data.barHaciendas.map((row) => ({
-          hacienda_id: row?.hacienda_id === null || row?.hacienda_id === undefined ? null : Number(row.hacienda_id),
-          hacienda_nombre: row?.hacienda_nombre ?? 'Sin hacienda',
-          total_eventos: Number(row?.total_eventos) || 0,
+    const porDia = Array.isArray(data?.porDia)
+      ? data.porDia
+          .map((row) => ({
+            periodo: row?.periodo === null || row?.periodo === undefined ? 0 : Number(row.periodo),
+            total: Number(row?.total) || 0,
+          }))
+          .filter((row) => Number.isFinite(row.periodo))
+      : [];
+
+    const porSitio = Array.isArray(data?.porSitio)
+      ? data.porSitio.map((row) => ({
+          sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
+          sitio_nombre: row?.sitio_nombre ?? null,
+          total: Number(row?.total) || 0,
         }))
       : [];
 
-    const donutPersonal = Array.isArray(data?.donutPersonal)
-      ? data.donutPersonal.map((row) => ({
-          personal_identificado: row?.personal_identificado ?? 'Sin información',
-          total_eventos: Number(row?.total_eventos) || 0,
-        }))
-      : [];
-
-    const tablaDiaSemana = Array.isArray(data?.tablaDiaSemana)
-      ? data.tablaDiaSemana.map((row) => ({
-          dia_semana: row?.dia_semana ?? '',
-          total_eventos: Number(row?.total_eventos) || 0,
-          total_sitios: Number(row?.total_sitios) || 0,
-        }))
-      : [];
-
-    const lineaPorFecha = Array.isArray(data?.lineaPorFecha)
-      ? data.lineaPorFecha.map((row) => ({
-          fecha: row?.fecha ?? null,
-          total_eventos: Number(row?.total_eventos) || 0,
-        }))
-      : [];
-
-    return { total, barHaciendas, donutPersonal, tablaDiaSemana, lineaPorFecha };
+    return { total, porDia, porSitio };
   } catch (error: unknown) {
     const axiosError = error as { response?: { status?: number; data?: { message?: string; detail?: string } } };
-    console.log('[INTRUSIONES][SERVICE] error response:', axiosError?.response?.status, axiosError?.response?.data);
+    console.log('[INTRUSIONES][SERVICE] error:', axiosError?.response?.status, axiosError?.response?.data);
 
     const status = axiosError?.response?.status;
     const backendMessage = axiosError?.response?.data?.message || 'Error al cargar dashboard autorizados';
@@ -496,7 +431,8 @@ export const createIntrusion = async (
     }
     return normalized;
   } catch (error: unknown) {
-    const axiosError = error as { response?: { data?: unknown } };
+    const axiosError = error as { response?: { data?: unknown; status?: number } };
+    console.log('[INTRUSIONES][SERVICE] error:', axiosError?.response?.status, axiosError?.response?.data);
     const backendMessage = (() => {
       const data = axiosError?.response?.data as
         | { message?: string; mensaje?: string; error?: string }
