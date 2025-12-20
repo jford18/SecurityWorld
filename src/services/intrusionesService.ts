@@ -179,6 +179,7 @@ export interface IntrusionConsolidadoFilters {
   tipoIntrusion?: string;
   llegoAlerta?: boolean | string;
   personalId?: number | string;
+  sustraccionPersonal?: boolean | string;
   page?: number;
   limit?: number;
 }
@@ -202,6 +203,31 @@ export interface EventoPorHaciendaSitioRow {
   sitio_id: number | null;
   sitio_nombre: string | null;
   total_eventos: number;
+}
+
+export interface EventoNoAutorizadoChartRow {
+  zona: string;
+  sitio_id: number | null;
+  sitio_descripcion: string;
+  promedio_min: number;
+}
+
+export interface EventoNoAutorizadoTablaRow {
+  id: number | null;
+  sitio_id: number | null;
+  sitio_descripcion: string;
+  fecha_evento: string | null;
+  medio_comunicacion: string | null;
+  fecha_reaccion_enviada: string | null;
+  tiempo_llegada_min: number | null;
+  conclusion_evento: string | null;
+  sustraccion_personal: boolean;
+}
+
+export interface EventosNoAutorizadosDashboardResponse {
+  kpis: { total_no_autorizados: number };
+  chart: EventoNoAutorizadoChartRow[];
+  tabla: EventoNoAutorizadoTablaRow[];
 }
 
 const buildQueryString = (params: IntrusionConsolidadoFilters) => {
@@ -312,6 +338,49 @@ export const getEventosPorHaciendaSitio = async (
     sitio_nombre: row?.sitio_nombre ?? null,
     total_eventos: Number(row?.total_eventos) || 0,
   }));
+};
+
+export const getDashboardEventosNoAutorizados = async (
+  params: IntrusionConsolidadoFilters
+): Promise<EventosNoAutorizadosDashboardResponse> => {
+  const queryString = buildQueryString(params);
+  const { data } = await apiClient.get<EventosNoAutorizadosDashboardResponse>(
+    `/intrusiones/eventos-no-autorizados/dashboard${queryString}`
+  );
+
+  const kpis = { total_no_autorizados: data?.kpis?.total_no_autorizados ?? 0 };
+
+  const chart = Array.isArray(data?.chart)
+    ? data.chart.map((row) => ({
+        zona: row?.zona ?? 'Sin zona',
+        sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
+        sitio_descripcion: row?.sitio_descripcion ?? '',
+        promedio_min: Number(row?.promedio_min) || 0,
+      }))
+    : [];
+
+  const tabla = Array.isArray(data?.tabla)
+    ? data.tabla.map((row) => ({
+        id: row?.id === null || row?.id === undefined ? null : Number(row.id),
+        sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
+        sitio_descripcion: row?.sitio_descripcion ?? '',
+        fecha_evento: row?.fecha_evento ?? null,
+        medio_comunicacion: row?.medio_comunicacion ?? null,
+        fecha_reaccion_enviada: row?.fecha_reaccion_enviada ?? null,
+        tiempo_llegada_min:
+          row?.tiempo_llegada_min === null || row?.tiempo_llegada_min === undefined
+            ? null
+            : Number(row.tiempo_llegada_min),
+        conclusion_evento: row?.conclusion_evento ?? null,
+        sustraccion_personal: Boolean(row?.sustraccion_personal),
+      }))
+    : [];
+
+  return {
+    kpis,
+    chart,
+    tabla,
+  };
 };
 
 export const createIntrusion = async (

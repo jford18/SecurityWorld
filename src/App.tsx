@@ -94,6 +94,7 @@ import TechnicalFailuresConsultas from './components/views/TechnicalFailuresCons
 import TechnicalFailuresAdministrador from './components/views/TechnicalFailuresAdministrador';
 import IntrusionsConsolidated from './components/views/IntrusionsConsolidated';
 import IntrusionsAdministrador from './components/views/IntrusionsAdministrador';
+import UnauthorizedEventsDashboard from './components/views/UnauthorizedEventsDashboard';
 
 interface RouteDefinition {
   path: string;
@@ -121,6 +122,10 @@ const routeConfig: RouteDefinition[] = [
   {
     path: '/consultas/consolidado-intrusiones',
     element: <IntrusionsConsolidated />,
+  },
+  {
+    path: '/reportes/eventos-no-autorizados',
+    element: <UnauthorizedEventsDashboard />,
   },
   { path: '/intrusiones', element: <Intrusions /> },
   { path: '/intrusiones-administrador', element: <IntrusionsAdministrador /> },
