@@ -719,6 +719,16 @@ const Intrusions: React.FC = () => {
       return;
     }
 
+    const tipoIntrusionIdValue =
+      tipoIntrusionId === '' || tipoIntrusionId === null
+        ? null
+        : Number(tipoIntrusionId);
+
+    if (tipoIntrusionIdValue !== null && !Number.isInteger(tipoIntrusionIdValue)) {
+      alert('El tipo de intrusión seleccionado no es válido.');
+      return;
+    }
+
     const sitioSeleccionado =
       sitios.find((sitio) => sitio.id === sitioIdNumber) ??
       sitios.find((sitio) => String(sitio.id) === formData.sitioId) ??
@@ -816,6 +826,8 @@ const Intrusions: React.FC = () => {
     const fechaReaccionIso = toIsoString(formData.fecha_reaccion);
     const fechaReaccionFueraIso = toIsoString(formData.fecha_reaccion_fuera);
 
+    const ubicacionValue = sitioSeleccionado?.nombre?.trim() || '';
+
     const payload: IntrusionPayload = {
       fecha_evento: fechaEventoIso || formData.fecha_evento,
       fecha_reaccion: fechaReaccionIso || null,
@@ -823,7 +835,8 @@ const Intrusions: React.FC = () => {
         requiereProtocolo && formData.fecha_reaccion_fuera
           ? fechaReaccionFueraIso || formData.fecha_reaccion_fuera
           : null,
-      ubicacion: '',
+      ubicacion: ubicacionValue,
+      tipo_intrusion_id: tipoIntrusionIdValue,
       tipo: tipoValue,
       estado: formData.estado || '',
       descripcion: formData.descripcion?.trim() || '',
@@ -853,7 +866,12 @@ const Intrusions: React.FC = () => {
       setRequiereProtocolo(false);
     } catch (err) {
       console.error('Error al registrar intrusión:', err);
-      setError('No se pudo registrar la intrusión. Intente nuevamente.');
+      const backendMessage = err instanceof Error && err.message ? err.message : null;
+      setError(
+        backendMessage
+          ? `No se pudo registrar la intrusión. ${backendMessage}`
+          : 'No se pudo registrar la intrusión. Intente nuevamente.'
+      );
     } finally {
       setIsSubmitting(false);
     }
