@@ -195,6 +195,29 @@ export interface IntrusionConsolidadoExportResponse {
   total: number;
 }
 
+export interface EventoPorHaciendaSitioRow {
+  hacienda_id: number | null;
+  hacienda_nombre: string | null;
+  sitio_id: number | null;
+  sitio_nombre: string | null;
+  total_eventos: number;
+}
+
+const buildQueryString = (params: IntrusionConsolidadoFilters) => {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return;
+    }
+
+    searchParams.append(key, String(value));
+  });
+
+  const query = searchParams.toString();
+  return query ? `?${query}` : '';
+};
+
 export const fetchIntrusiones = async (): Promise<Intrusion[]> => {
   const { data } = await apiClient.get<Intrusion[] | { data?: Intrusion[] }>('/intrusiones');
   return normalizeIntrusionArray(data);
@@ -266,6 +289,27 @@ export const exportIntrusionesConsolidado = async (
     data: parsedData,
     total: payload.total ?? parsedData.length,
   };
+};
+
+export const getEventosPorHaciendaSitio = async (
+  params: IntrusionConsolidadoFilters
+): Promise<EventoPorHaciendaSitioRow[]> => {
+  const queryString = buildQueryString(params);
+  const { data } = await apiClient.get<EventoPorHaciendaSitioRow[]>(
+    `/intrusiones/eventos-por-hacienda-sitio${queryString}`
+  );
+
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  return data.map((row) => ({
+    hacienda_id: row?.hacienda_id ?? null,
+    hacienda_nombre: row?.hacienda_nombre ?? null,
+    sitio_id: row?.sitio_id ?? null,
+    sitio_nombre: row?.sitio_nombre ?? null,
+    total_eventos: Number(row?.total_eventos) || 0,
+  }));
 };
 
 export const createIntrusion = async (

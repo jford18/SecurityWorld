@@ -17,7 +17,11 @@ import {
   getEventosPorSitio,
   getInformeMensualEventos,
 } from '../../services/reportesEventosService';
-import { IntrusionConsolidadoFilters } from '@/services/intrusionesService';
+import {
+  EventoPorHaciendaSitioRow,
+  IntrusionConsolidadoFilters,
+  getEventosPorHaciendaSitio,
+} from '@/services/intrusionesService';
 import IntrusionesFilters from '@/components/intrusiones/IntrusionesFilters';
 import MapaEventosPorSitio from '../../components/reportes/MapaEventosPorSitio';
 
@@ -57,13 +61,77 @@ const colorPalette = [
   '#F59E0B',
 ];
 
+interface HaciendaTreeNode {
+  key: string;
+  haciendaId: number | null;
+  haciendaNombre: string;
+  totalEventos: number;
+  sitios: Array<{
+    sitioId: number | null;
+    sitioNombre: string;
+    totalEventos: number;
+  }>;
+}
+
 const InformeEventosScreen: React.FC = () => {
   const [filters, setFilters] = useState<IntrusionConsolidadoFilters>({ haciendaId: '' });
   const [data, setData] = useState<InformeEventosResponse | null>(null);
   const [eventosPorSitio, setEventosPorSitio] = useState<EventoPorSitio[]>([]);
+  const [eventosPorHaciendaSitio, setEventosPorHaciendaSitio] = useState<HaciendaTreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [mapLoading, setMapLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedHaciendas, setExpandedHaciendas] = useState<Set<string>>(new Set());
+
+  const buildTreeData = useCallback((rows: EventoPorHaciendaSitioRow[]): HaciendaTreeNode[] => {
+    const haciendaMap = new Map<string, HaciendaTreeNode>();
+
+    rows.forEach((row) => {
+      const haciendaId = row.hacienda_id ?? null;
+      const haciendaNombre = (row.hacienda_nombre ?? 'Sin hacienda').trim() || 'Sin hacienda';
+      const sitioId = row.sitio_id ?? null;
+      const sitioNombre = (row.sitio_nombre ?? 'Sin sitio').trim() || 'Sin sitio';
+      const key = `hacienda-${haciendaId ?? 'sin'}-${haciendaNombre}`;
+
+      const existing = haciendaMap.get(key);
+      const totalEventos = Number(row.total_eventos) || 0;
+
+      if (existing) {
+        existing.totalEventos += totalEventos;
+        const sitioIndex = existing.sitios.findIndex((sitio) => sitio.sitioId === sitioId);
+        if (sitioIndex >= 0) {
+          existing.sitios[sitioIndex].totalEventos += totalEventos;
+        } else {
+          existing.sitios.push({ sitioId, sitioNombre, totalEventos });
+        }
+      } else {
+        haciendaMap.set(key, {
+          key,
+          haciendaId,
+          haciendaNombre,
+          totalEventos,
+          sitios: [{ sitioId, sitioNombre, totalEventos }],
+        });
+      }
+    });
+
+    return Array.from(haciendaMap.values())
+      .map((hacienda) => ({
+        ...hacienda,
+        sitios: hacienda.sitios.sort((a, b) => {
+          if (b.totalEventos !== a.totalEventos) {
+            return b.totalEventos - a.totalEventos;
+          }
+          return a.sitioNombre.localeCompare(b.sitioNombre, 'es');
+        }),
+      }))
+      .sort((a, b) => {
+        if (b.totalEventos !== a.totalEventos) {
+          return b.totalEventos - a.totalEventos;
+        }
+        return a.haciendaNombre.localeCompare(b.haciendaNombre, 'es');
+      });
+  }, []);
 
   const fetchInforme = useCallback(
     async (activeFilters: IntrusionConsolidadoFilters) => {
@@ -71,12 +139,37 @@ const InformeEventosScreen: React.FC = () => {
       setMapLoading(true);
       setError(null);
       try {
-        const [response, eventosSitios] = await Promise.all([
+        const [response, eventosSitios, eventosHaciendasSitios] = await Promise.all([
           getInformeMensualEventos(activeFilters),
           getEventosPorSitio(activeFilters),
+          getEventosPorHaciendaSitio(activeFilters),
         ]);
         setData(response);
         setEventosPorSitio(eventosSitios ?? []);
+        const treeData = buildTreeData(eventosHaciendasSitios ?? []);
+        setEventosPorHaciendaSitio(treeData);
+        setExpandedHaciendas((prev) => {
+          if (!treeData.length) {
+            return new Set();
+          }
+
+          const validKeys = new Set(treeData.map((item) => item.key));
+          const next = new Set<string>();
+
+          treeData.forEach((item, index) => {
+            if (prev.has(item.key) || (prev.size === 0 && index === 0)) {
+              next.add(item.key);
+            }
+          });
+
+          Array.from(prev).forEach((key) => {
+            if (validKeys.has(key)) {
+              next.add(key);
+            }
+          });
+
+          return next;
+        });
       } catch (err) {
         console.error('Error al cargar el informe mensual de eventos:', err);
         setError('No se pudo obtener la información. Inténtalo nuevamente.');
@@ -217,44 +310,59 @@ const InformeEventosScreen: React.FC = () => {
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
-          <h2 className="text-lg font-semibold text-[#1C2E4A] mb-4">Tipos de intrusión</h2>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 border border-gray-100 rounded-lg overflow-hidden">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Tipo de intrusión
-                  </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Nº eventos
-                  </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Nº sitios con eventos
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {data?.porTipo?.length ? (
-                  data.porTipo.map((row, index) => (
-                    <tr key={row.tipo} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="px-4 py-2 text-sm text-gray-700">{row.tipo}</td>
-                      <td className="px-4 py-2 text-sm text-right text-gray-700">
-                        {row.n_eventos.toLocaleString('es-MX')}
-                      </td>
-                      <td className="px-4 py-2 text-sm text-right text-gray-700">
-                        {row.n_sitios_con_evento.toLocaleString('es-MX')}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-4 text-center text-sm text-gray-500">
-                      Sin datos para el periodo seleccionado.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <h2 className="text-lg font-semibold text-[#1C2E4A] mb-4">Eventos por Hacienda y Sitio</h2>
+          <div className="space-y-2">
+            {eventosPorHaciendaSitio.length ? (
+              eventosPorHaciendaSitio.map((hacienda) => {
+                const isExpanded = expandedHaciendas.has(hacienda.key);
+                return (
+                  <div key={hacienda.key} className="border border-gray-100 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExpandedHaciendas((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(hacienda.key)) {
+                            next.delete(hacienda.key);
+                          } else {
+                            next.add(hacienda.key);
+                          }
+                          return next;
+                        });
+                      }}
+                      className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">{isExpanded ? '▼' : '▶'}</span>
+                        <span className="font-medium text-[#1C2E4A]">{hacienda.haciendaNombre}</span>
+                      </div>
+                      <span className="text-sm text-gray-700">{formatNumber(hacienda.totalEventos)}</span>
+                    </button>
+                    {isExpanded && (
+                      <ul className="px-6 pb-3 space-y-1">
+                        {hacienda.sitios.length ? (
+                          hacienda.sitios.map((sitio) => (
+                            <li
+                              key={`${hacienda.key}-${sitio.sitioId ?? sitio.sitioNombre}`}
+                              className="flex items-center justify-between text-sm text-gray-700"
+                            >
+                              <span>{sitio.sitioNombre}</span>
+                              <span>{formatNumber(sitio.totalEventos)}</span>
+                            </li>
+                          ))
+                        ) : (
+                          <li className="text-sm text-gray-500">Sin sitios registrados.</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-sm text-gray-500 text-center py-6">
+                Sin datos para el periodo seleccionado.
+              </div>
+            )}
           </div>
         </div>
         <div className="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
