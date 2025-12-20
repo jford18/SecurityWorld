@@ -372,47 +372,6 @@ const InformeEventosScreen: React.FC = () => {
               </div>
             )}
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 border border-gray-100 rounded-lg overflow-hidden">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Día
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Tipo de intrusión
-                  </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Nº eventos
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {data?.porDiaSemanaTipo?.length ? (
-                  data.porDiaSemanaTipo.map((row, index) => (
-                    <tr
-                      key={`${row.dia_semana}-${row.tipo_intrusion}-${index}`}
-                      className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
-                    >
-                      <td className="px-4 py-2 text-sm text-gray-700">
-                        {weekdayLabels[row.dia_semana] ?? `Día ${row.dia_semana}`}
-                      </td>
-                      <td className="px-4 py-2 text-sm text-gray-700">{row.tipo_intrusion}</td>
-                      <td className="px-4 py-2 text-sm text-right text-gray-700">
-                        {row.n_eventos.toLocaleString('es-MX')}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-4 text-center text-sm text-gray-500">
-                      Sin datos para el periodo seleccionado.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
         </div>
         <div className="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
           <h2 className="text-lg font-semibold text-[#1C2E4A] mb-4">Eventos por hora y tipo</h2>
@@ -445,45 +404,6 @@ const InformeEventosScreen: React.FC = () => {
                 No hay datos para el periodo seleccionado.
               </div>
             )}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 border border-gray-100 rounded-lg overflow-hidden">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Hora
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Tipo de intrusión
-                  </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Nº eventos
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {data?.porHoraTipo?.length ? (
-                  data.porHoraTipo.map((row, index) => (
-                    <tr
-                      key={`${row.hora}-${row.tipo_intrusion}-${index}`}
-                      className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
-                    >
-                      <td className="px-4 py-2 text-sm text-gray-700">{formatHourLabel(row.hora)}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700">{row.tipo_intrusion}</td>
-                      <td className="px-4 py-2 text-sm text-right text-gray-700">
-                        {row.n_eventos.toLocaleString('es-MX')}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-4 text-center text-sm text-gray-500">
-                      Sin datos para el periodo seleccionado.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
           </div>
         </div>
       </section>
