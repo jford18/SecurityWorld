@@ -75,6 +75,8 @@ const buildBaseIntrusionesCTE = (metadata, whereClause) => {
     ? "COALESCE(cti.descripcion, CAST(i.tipo_intrusion_id AS TEXT))"
     : "i.tipo";
 
+  const sitioNombreExpression = "COALESCE(NULLIF(TRIM(s.descripcion), ''), s.nombre)";
+
   const joins = ["LEFT JOIN public.sitios AS s ON s.id = i.sitio_id"];
 
   if (metadata.hasTipoIntrusionId) {
@@ -85,7 +87,7 @@ const buildBaseIntrusionesCTE = (metadata, whereClause) => {
     SELECT
         i.id,
         i.sitio_id,
-        s.nombre          AS sitio_nombre,
+        ${sitioNombreExpression}          AS sitio_nombre,
         s.latitud,
         s.longitud,
         ${tipoIntrusionExpression}            AS tipo_intrusion,

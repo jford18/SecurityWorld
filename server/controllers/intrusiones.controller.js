@@ -871,6 +871,8 @@ export const getEventosPorHaciendaSitio = async (req, res) => {
     ? "COALESCE(cti.descripcion, CAST(i.tipo_intrusion_id AS TEXT))"
     : "i.tipo";
 
+  const sitioNombreExpression = "COALESCE(NULLIF(TRIM(s.descripcion), ''), s.nombre)";
+
   const joins = [
     "LEFT JOIN public.sitios AS s ON s.id = i.sitio_id",
     "LEFT JOIN public.hacienda AS h ON h.id = s.hacienda_id",
@@ -885,13 +887,13 @@ export const getEventosPorHaciendaSitio = async (req, res) => {
     s.hacienda_id,
     h.nombre AS hacienda_nombre,
     i.sitio_id,
-    s.nombre AS sitio_nombre,
+    ${sitioNombreExpression} AS sitio_nombre,
     COUNT(*) AS total_eventos
   FROM public.intrusiones AS i
   ${joins.join("\n  ")}
   ${whereClause}
-  GROUP BY ${tipoIntrusionExpression}, s.hacienda_id, h.nombre, i.sitio_id, s.nombre
-  ORDER BY COUNT(*) DESC, ${tipoIntrusionExpression} ASC NULLS LAST, h.nombre ASC NULLS LAST, s.nombre ASC NULLS LAST;`;
+  GROUP BY ${tipoIntrusionExpression}, s.hacienda_id, h.nombre, i.sitio_id, ${sitioNombreExpression}
+  ORDER BY COUNT(*) DESC, ${tipoIntrusionExpression} ASC NULLS LAST, h.nombre ASC NULLS LAST, ${sitioNombreExpression} ASC NULLS LAST;`;
 
   try {
     const result = await pool.query(query, values);
