@@ -984,60 +984,64 @@ export const getEventosPorHaciendaSitio = async (req, res) => {
 };
 
 export const getEventosNoAutorizadosDashboard = async (req, res) => {
-  const filterConfig = await buildIntrusionesFilterConfig(req.query);
+  try {
+    const filterConfig = await buildIntrusionesFilterConfig(req.query);
 
-  if (filterConfig?.error) {
-    const { status = 400, message } = filterConfig.error;
-    return res.status(status).json({ mensaje: message });
-  }
+    if (filterConfig?.error) {
+      const { status = 400, message } = filterConfig.error;
+      return res.status(status).json({ message, detail: null });
+    }
 
-  const { metadata } = filterConfig;
+    const { metadata } = filterConfig;
 
-  if (!metadata.hasTipoIntrusionId) {
-    return res.status(500).json({
-      mensaje: "La configuración actual no permite identificar intrusiones no autorizadas.",
-    });
-  }
-
-  if (!metadata.hasFechaReaccionEnviada) {
-    return res.status(500).json({
-      mensaje: "No es posible calcular el tiempo de llegada de la fuerza de reacción.",
-    });
-  }
-
-  const sitiosMetadata = await getSitiosMetadata();
-
-  const values = [...filterConfig.values];
-  const filters = [];
-
-  if (filterConfig.whereClause) {
-    filters.push(filterConfig.whereClause.replace(/^WHERE\s+/i, ""));
-  }
-
-  const protocoloExpression = "NULLIF(TRIM(cti.protocolo), '')";
-  filters.push(`${protocoloExpression} IS NOT NULL`);
-
-  const parsedSustraccionPersonal = normalizeBooleanParam(req.query?.sustraccionPersonal);
-  if (parsedSustraccionPersonal === true) {
-    if (!metadata.hasSustraccionPersonal) {
+    if (!metadata.hasTipoIntrusionId) {
       return res.status(400).json({
-        mensaje: "El filtro de sustracción personal no está disponible en esta instalación.",
+        message: "La configuración actual no permite identificar intrusiones no autorizadas.",
+        detail: null,
       });
     }
-    filters.push("i.sustraccion_personal = TRUE");
-  }
 
-  const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+    if (!metadata.hasFechaReaccionEnviada) {
+      return res.status(400).json({
+        message: "No es posible calcular el tiempo de llegada de la fuerza de reacción.",
+        detail: null,
+      });
+    }
 
-  const sitioDescripcionExpression = sitiosMetadata.hasDescripcion
-    ? "COALESCE(NULLIF(TRIM(s.descripcion), ''), s.nombre)"
-    : "s.nombre";
+    const sitiosMetadata = await getSitiosMetadata();
 
-  const zonaExpression = sitiosMetadata.hasZona
-    ? "COALESCE(NULLIF(TRIM(s.zona), ''), 'Sin zona')"
-    : "'Sin zona'";
+    const values = [...filterConfig.values];
+    const filters = [];
 
-  const baseCTE = `WITH intrusiones_filtradas AS (
+    if (filterConfig.whereClause) {
+      filters.push(filterConfig.whereClause.replace(/^WHERE\s+/i, ""));
+    }
+
+    const protocoloExpression = "NULLIF(TRIM(cti.protocolo), '')";
+    filters.push(`${protocoloExpression} IS NOT NULL`);
+
+    const parsedSustraccionPersonal = normalizeBooleanParam(req.query?.sustraccionPersonal);
+    if (parsedSustraccionPersonal === true) {
+      if (!metadata.hasSustraccionPersonal) {
+        return res.status(400).json({
+          message: "El filtro de sustracción personal no está disponible en esta instalación.",
+          detail: null,
+        });
+      }
+      filters.push("i.sustraccion_personal = TRUE");
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+    const sitioDescripcionExpression = sitiosMetadata.hasDescripcion
+      ? "COALESCE(NULLIF(TRIM(s.descripcion), ''), s.nombre)"
+      : "s.nombre";
+
+    const zonaExpression = sitiosMetadata.hasZona
+      ? "COALESCE(NULLIF(TRIM(s.zona), ''), 'Sin zona')"
+      : "'Sin zona'";
+
+    const baseCTE = `WITH intrusiones_filtradas AS (
     SELECT
       i.id,
       i.sitio_id,
@@ -1064,11 +1068,11 @@ export const getEventosNoAutorizadosDashboard = async (req, res) => {
     ${whereClause}
   )`;
 
-  const kpiQuery = `${baseCTE}
+    const kpiQuery = `${baseCTE}
     SELECT COUNT(*) AS total_no_autorizados
     FROM intrusiones_filtradas;`;
 
-  const chartQuery = `${baseCTE}
+    const chartQuery = `${baseCTE}
     SELECT
       zona,
       sitio_id,
@@ -1080,7 +1084,7 @@ export const getEventosNoAutorizadosDashboard = async (req, res) => {
     ORDER BY promedio_min DESC NULLS LAST, sitio_descripcion ASC NULLS LAST
     LIMIT 15;`;
 
-  const tableQuery = `${baseCTE}
+    const tableQuery = `${baseCTE}
     SELECT
       id,
       sitio_id,
@@ -1094,7 +1098,6 @@ export const getEventosNoAutorizadosDashboard = async (req, res) => {
     FROM intrusiones_filtradas
     ORDER BY fecha_evento DESC NULLS LAST, id DESC;`;
 
-  try {
     const [kpiResult, chartResult, tableResult] = await Promise.all([
       pool.query(kpiQuery, values),
       pool.query(chartQuery, values),
@@ -1138,7 +1141,13 @@ export const getEventosNoAutorizadosDashboard = async (req, res) => {
     });
   } catch (error) {
     console.error("Error al obtener el dashboard de eventos no autorizados:", error);
-    return res.status(500).json({ mensaje: "Ocurrió un error al consultar el dashboard." });
+    return res.status(500).json({
+      message: "Error al cargar dashboard de eventos no autorizados",
+      detail: error?.message ?? null,
+      kpis: { total_no_autorizados: 0 },
+      chart: [],
+      tabla: [],
+    });
   }
 };
 
@@ -1147,8 +1156,9 @@ export const getEventosAutorizadosDashboard = async (req, res) => {
     const metadata = await getIntrusionesMetadata();
 
     if (!metadata.hasTipoIntrusionId) {
-      return res.status(500).json({
-        mensaje: "La configuración actual no permite identificar intrusiones autorizadas.",
+      return res.status(400).json({
+        message: "La configuración actual no permite identificar intrusiones autorizadas.",
+        detail: null,
       });
     }
 
@@ -1158,10 +1168,10 @@ export const getEventosAutorizadosDashboard = async (req, res) => {
     const parsedFechaHasta = normalizeDateParam(fechaHastaParam);
 
     if (fechaDesdeParam !== undefined && fechaDesdeParam !== "" && !parsedFechaDesde) {
-      return res.status(400).json({ mensaje: "El parámetro fechaDesde no es válido." });
+      return res.status(400).json({ message: "El parámetro fechaDesde no es válido.", detail: null });
     }
     if (fechaHastaParam !== undefined && fechaHastaParam !== "" && !parsedFechaHasta) {
-      return res.status(400).json({ mensaje: "El parámetro fechaHasta no es válido." });
+      return res.status(400).json({ message: "El parámetro fechaHasta no es válido.", detail: null });
     }
 
     const now = new Date();
@@ -1174,22 +1184,22 @@ export const getEventosAutorizadosDashboard = async (req, res) => {
 
     const haciendaValue = parseIntegerOrNull(req.query?.haciendaId);
     if (haciendaValue === undefined) {
-      return res.status(400).json({ mensaje: "El parámetro haciendaId no es válido." });
+      return res.status(400).json({ message: "El parámetro haciendaId no es válido.", detail: null });
     }
 
     const clienteValue = parseIntegerOrNull(req.query?.clienteId);
     if (clienteValue === undefined) {
-      return res.status(400).json({ mensaje: "El parámetro clienteId no es válido." });
+      return res.status(400).json({ message: "El parámetro clienteId no es válido.", detail: null });
     }
 
     const sitioValue = parseIntegerOrNull(req.query?.sitioId);
     if (sitioValue === undefined) {
-      return res.status(400).json({ mensaje: "El parámetro sitioId no es válido." });
+      return res.status(400).json({ message: "El parámetro sitioId no es válido.", detail: null });
     }
 
     const tipoIntrusionValue = parseIntegerOrNull(req.query?.tipoIntrusionId);
     if (req.query?.tipoIntrusionId !== undefined && tipoIntrusionValue === undefined) {
-      return res.status(400).json({ mensaje: "El parámetro tipoIntrusionId no es válido." });
+      return res.status(400).json({ message: "El parámetro tipoIntrusionId no es válido.", detail: null });
     }
 
     const llegoAlertaValue = (() => {
@@ -1206,7 +1216,7 @@ export const getEventosAutorizadosDashboard = async (req, res) => {
       return personaColumn ? parsed : null;
     })();
     if (personalIdValue === "__invalid") {
-      return res.status(400).json({ mensaje: "El parámetro personalId no es válido." });
+      return res.status(400).json({ message: "El parámetro personalId no es válido.", detail: null });
     }
 
     const personalFilterClause = personaColumn
@@ -1322,7 +1332,14 @@ export const getEventosAutorizadosDashboard = async (req, res) => {
     console.error(error);
     return res
       .status(500)
-      .json({ message: "Error en dashboard eventos autorizados", detail: error.message });
+      .json({
+        message: "Error al cargar dashboard de eventos autorizados",
+        detail: error?.message ?? null,
+        barHaciendas: [],
+        donutPersonal: [],
+        tablaDiaSemana: [],
+        lineaPorFecha: [],
+      });
   }
 };
 
