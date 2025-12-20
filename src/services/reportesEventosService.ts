@@ -1,4 +1,5 @@
 import api from './api';
+import { IntrusionConsolidadoFilters } from './intrusionesService';
 
 export interface InformeEventosResponse {
   resumen: {
@@ -37,23 +38,34 @@ export interface EventoPorSitio {
   total_eventos: number;
 }
 
-export const getInformeMensualEventos = async (
-  fechaInicio: string,
-  fechaFin: string
-): Promise<InformeEventosResponse> => {
-  const response = await api.get('/reportes/eventos-mensual', {
-    params: { fechaInicio, fechaFin },
+const buildQueryString = (filters: IntrusionConsolidadoFilters) => {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return;
+    }
+
+    searchParams.append(key, String(value));
   });
+
+  const query = searchParams.toString();
+  return query ? `?${query}` : '';
+};
+
+export const getInformeMensualEventos = async (
+  filters: IntrusionConsolidadoFilters
+): Promise<InformeEventosResponse> => {
+  const queryString = buildQueryString(filters);
+  const response = await api.get(`/reportes/eventos-mensual${queryString}`);
   return response.data;
 };
 
 export const getEventosPorSitio = async (
-  fechaInicio: string,
-  fechaFin: string,
+  filters: IntrusionConsolidadoFilters
 ): Promise<EventoPorSitio[]> => {
-  const response = await api.get('/reportes/informe-eventos/eventos-por-sitio', {
-    params: { fechaInicio, fechaFin },
-  });
+  const queryString = buildQueryString(filters);
+  const response = await api.get(`/reportes/informe-eventos/eventos-por-sitio${queryString}`);
 
   return response.data;
 };
