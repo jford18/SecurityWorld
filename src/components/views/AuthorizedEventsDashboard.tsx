@@ -43,7 +43,8 @@ const AuthorizedEventsDashboard: React.FC = () => {
       setData(response);
     } catch (requestError) {
       console.error('Error al cargar el dashboard de eventos autorizados:', requestError);
-      setError('No se pudo cargar la información.');
+      const errorMessage = requestError instanceof Error ? requestError.message : 'No se pudo cargar la información.';
+      setError(`Error al cargar dashboard: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }

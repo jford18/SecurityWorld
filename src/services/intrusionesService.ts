@@ -373,85 +373,105 @@ export const getEventosPorHaciendaSitio = async (
 export const getDashboardEventosNoAutorizados = async (
   params: IntrusionConsolidadoFilters
 ): Promise<EventosNoAutorizadosDashboardResponse> => {
-  const queryString = buildQueryString(params);
-  const { data } = await apiClient.get<EventosNoAutorizadosDashboardResponse>(
-    `/intrusiones/eventos-no-autorizados/dashboard${queryString}`
-  );
+  try {
+    const queryString = buildQueryString(params);
+    const { data } = await apiClient.get<EventosNoAutorizadosDashboardResponse>(
+      `/intrusiones/eventos-no-autorizados/dashboard${queryString}`
+    );
 
-  const kpis = { total_no_autorizados: data?.kpis?.total_no_autorizados ?? 0 };
+    const kpis = { total_no_autorizados: data?.kpis?.total_no_autorizados ?? 0 };
 
-  const chart = Array.isArray(data?.chart)
-    ? data.chart.map((row) => ({
-        zona: row?.zona ?? 'Sin zona',
-        sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
-        sitio_descripcion: row?.sitio_descripcion ?? '',
-        promedio_min: Number(row?.promedio_min) || 0,
-      }))
-    : [];
+    const chart = Array.isArray(data?.chart)
+      ? data.chart.map((row) => ({
+          zona: row?.zona ?? 'Sin zona',
+          sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
+          sitio_descripcion: row?.sitio_descripcion ?? '',
+          promedio_min: Number(row?.promedio_min) || 0,
+        }))
+      : [];
 
-  const tabla = Array.isArray(data?.tabla)
-    ? data.tabla.map((row) => ({
-        id: row?.id === null || row?.id === undefined ? null : Number(row.id),
-        sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
-        sitio_descripcion: row?.sitio_descripcion ?? '',
-        fecha_evento: row?.fecha_evento ?? null,
-        medio_comunicacion: row?.medio_comunicacion ?? null,
-        fecha_reaccion_enviada: row?.fecha_reaccion_enviada ?? null,
-        tiempo_llegada_min:
-          row?.tiempo_llegada_min === null || row?.tiempo_llegada_min === undefined
-            ? null
-            : Number(row.tiempo_llegada_min),
-        conclusion_evento: row?.conclusion_evento ?? null,
-        sustraccion_personal: Boolean(row?.sustraccion_personal),
-      }))
-    : [];
+    const tabla = Array.isArray(data?.tabla)
+      ? data.tabla.map((row) => ({
+          id: row?.id === null || row?.id === undefined ? null : Number(row.id),
+          sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
+          sitio_descripcion: row?.sitio_descripcion ?? '',
+          fecha_evento: row?.fecha_evento ?? null,
+          medio_comunicacion: row?.medio_comunicacion ?? null,
+          fecha_reaccion_enviada: row?.fecha_reaccion_enviada ?? null,
+          tiempo_llegada_min:
+            row?.tiempo_llegada_min === null || row?.tiempo_llegada_min === undefined
+              ? null
+              : Number(row.tiempo_llegada_min),
+          conclusion_evento: row?.conclusion_evento ?? null,
+          sustraccion_personal: Boolean(row?.sustraccion_personal),
+        }))
+      : [];
 
-  return {
-    kpis,
-    chart,
-    tabla,
-  };
+    return {
+      kpis,
+      chart,
+      tabla,
+    };
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: { message?: string; detail?: string } } };
+    const backendMessage = axiosError?.response?.data?.message;
+    const backendDetail = axiosError?.response?.data?.detail;
+    const combinedMessage = [backendMessage, backendDetail].filter(Boolean).join(': ');
+    const finalMessage = combinedMessage || 'No se pudo cargar el dashboard de eventos no autorizados.';
+
+    throw new Error(finalMessage);
+  }
 };
 
 export const getDashboardEventosAutorizados = async (
   params: IntrusionConsolidadoFilters
 ): Promise<EventosAutorizadosDashboardResponse> => {
-  const queryString = buildQueryString(params);
-  const { data } = await apiClient.get<EventosAutorizadosDashboardResponse>(
-    `/intrusiones/eventos-autorizados/dashboard${queryString}`
-  );
+  try {
+    const queryString = buildQueryString(params);
+    const { data } = await apiClient.get<EventosAutorizadosDashboardResponse>(
+      `/intrusiones/eventos-autorizados/dashboard${queryString}`
+    );
 
-  const barHaciendas = Array.isArray(data?.barHaciendas)
-    ? data.barHaciendas.map((row) => ({
-        hacienda_id: row?.hacienda_id === null || row?.hacienda_id === undefined ? null : Number(row.hacienda_id),
-        hacienda_nombre: row?.hacienda_nombre ?? 'Sin hacienda',
-        total_eventos: Number(row?.total_eventos) || 0,
-      }))
-    : [];
+    const barHaciendas = Array.isArray(data?.barHaciendas)
+      ? data.barHaciendas.map((row) => ({
+          hacienda_id: row?.hacienda_id === null || row?.hacienda_id === undefined ? null : Number(row.hacienda_id),
+          hacienda_nombre: row?.hacienda_nombre ?? 'Sin hacienda',
+          total_eventos: Number(row?.total_eventos) || 0,
+        }))
+      : [];
 
-  const donutPersonal = Array.isArray(data?.donutPersonal)
-    ? data.donutPersonal.map((row) => ({
-        personal_identificado: row?.personal_identificado ?? 'Sin información',
-        total_eventos: Number(row?.total_eventos) || 0,
-      }))
-    : [];
+    const donutPersonal = Array.isArray(data?.donutPersonal)
+      ? data.donutPersonal.map((row) => ({
+          personal_identificado: row?.personal_identificado ?? 'Sin información',
+          total_eventos: Number(row?.total_eventos) || 0,
+        }))
+      : [];
 
-  const tablaDiaSemana = Array.isArray(data?.tablaDiaSemana)
-    ? data.tablaDiaSemana.map((row) => ({
-        dia_semana: row?.dia_semana ?? '',
-        total_eventos: Number(row?.total_eventos) || 0,
-        total_sitios: Number(row?.total_sitios) || 0,
-      }))
-    : [];
+    const tablaDiaSemana = Array.isArray(data?.tablaDiaSemana)
+      ? data.tablaDiaSemana.map((row) => ({
+          dia_semana: row?.dia_semana ?? '',
+          total_eventos: Number(row?.total_eventos) || 0,
+          total_sitios: Number(row?.total_sitios) || 0,
+        }))
+      : [];
 
-  const lineaPorFecha = Array.isArray(data?.lineaPorFecha)
-    ? data.lineaPorFecha.map((row) => ({
-        fecha: row?.fecha ?? null,
-        total_eventos: Number(row?.total_eventos) || 0,
-      }))
-    : [];
+    const lineaPorFecha = Array.isArray(data?.lineaPorFecha)
+      ? data.lineaPorFecha.map((row) => ({
+          fecha: row?.fecha ?? null,
+          total_eventos: Number(row?.total_eventos) || 0,
+        }))
+      : [];
 
-  return { barHaciendas, donutPersonal, tablaDiaSemana, lineaPorFecha };
+    return { barHaciendas, donutPersonal, tablaDiaSemana, lineaPorFecha };
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: { message?: string; detail?: string } } };
+    const backendMessage = axiosError?.response?.data?.message;
+    const backendDetail = axiosError?.response?.data?.detail;
+    const combinedMessage = [backendMessage, backendDetail].filter(Boolean).join(': ');
+    const finalMessage = combinedMessage || 'No se pudo cargar el dashboard de eventos autorizados.';
+
+    throw new Error(finalMessage);
+  }
 };
 
 export const createIntrusion = async (
