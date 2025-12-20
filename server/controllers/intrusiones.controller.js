@@ -350,6 +350,7 @@ const prepareConsolidadoQuery = async (
 };
 
 let intrusionesColumnCache = null;
+let sitiosColumnCache = null;
 
 const getIntrusionesMetadata = async () => {
   if (intrusionesColumnCache) {
@@ -374,9 +375,33 @@ const getIntrusionesMetadata = async () => {
     hasTipoIntrusionId: columnNames.has("tipo_intrusion_id"),
     hasTipoText: columnNames.has("tipo"),
     personaColumn,
+    hasFechaReaccionEnviada: columnNames.has("fecha_reaccion_enviada"),
+    hasSustraccionPersonal: columnNames.has("sustraccion_personal"),
   };
 
   return intrusionesColumnCache;
+};
+
+const getSitiosMetadata = async () => {
+  if (sitiosColumnCache) {
+    return sitiosColumnCache;
+  }
+
+  const columnsResult = await pool.query(
+    `SELECT column_name
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'sitios'`
+  );
+
+  const columnNames = new Set(columnsResult.rows.map((row) => row.column_name));
+
+  sitiosColumnCache = {
+    hasDescripcion: columnNames.has("descripcion"),
+    hasZona: columnNames.has("zona"),
+  };
+
+  return sitiosColumnCache;
 };
 
 export const listIntrusiones = async (_req, res) => {
@@ -901,6 +926,165 @@ export const getEventosPorHaciendaSitio = async (req, res) => {
   } catch (error) {
     console.error("Error al obtener eventos por hacienda y sitio:", error);
     return res.status(500).json({ mensaje: "Ocurrió un error al consultar los eventos." });
+  }
+};
+
+export const getEventosNoAutorizadosDashboard = async (req, res) => {
+  const filterConfig = await buildIntrusionesFilterConfig(req.query);
+
+  if (filterConfig?.error) {
+    const { status = 400, message } = filterConfig.error;
+    return res.status(status).json({ mensaje: message });
+  }
+
+  const { metadata } = filterConfig;
+
+  if (!metadata.hasTipoIntrusionId) {
+    return res.status(500).json({
+      mensaje: "La configuración actual no permite identificar intrusiones no autorizadas.",
+    });
+  }
+
+  if (!metadata.hasFechaReaccionEnviada) {
+    return res.status(500).json({
+      mensaje: "No es posible calcular el tiempo de llegada de la fuerza de reacción.",
+    });
+  }
+
+  const sitiosMetadata = await getSitiosMetadata();
+
+  const values = [...filterConfig.values];
+  const filters = [];
+
+  if (filterConfig.whereClause) {
+    filters.push(filterConfig.whereClause.replace(/^WHERE\s+/i, ""));
+  }
+
+  const protocoloExpression = "NULLIF(TRIM(cti.protocolo), '')";
+  filters.push(`${protocoloExpression} IS NOT NULL`);
+
+  const parsedSustraccionPersonal = normalizeBooleanParam(req.query?.sustraccionPersonal);
+  if (parsedSustraccionPersonal === true) {
+    if (!metadata.hasSustraccionPersonal) {
+      return res.status(400).json({
+        mensaje: "El filtro de sustracción personal no está disponible en esta instalación.",
+      });
+    }
+    filters.push("i.sustraccion_personal = TRUE");
+  }
+
+  const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  const sitioDescripcionExpression = sitiosMetadata.hasDescripcion
+    ? "COALESCE(NULLIF(TRIM(s.descripcion), ''), s.nombre)"
+    : "s.nombre";
+
+  const zonaExpression = sitiosMetadata.hasZona
+    ? "COALESCE(NULLIF(TRIM(s.zona), ''), 'Sin zona')"
+    : "'Sin zona'";
+
+  const baseCTE = `WITH intrusiones_filtradas AS (
+    SELECT
+      i.id,
+      i.sitio_id,
+      ${sitioDescripcionExpression} AS sitio_descripcion,
+      ${zonaExpression} AS zona,
+      i.fecha_evento,
+      i.fecha_reaccion,
+      i.fecha_reaccion_enviada,
+      ${metadata.hasSustraccionPersonal ? "COALESCE(i.sustraccion_personal, false)" : "false"} AS sustraccion_personal,
+      mc.descripcion AS medio_comunicacion,
+      ce.descripcion AS conclusion_evento,
+      CASE
+        WHEN i.fecha_reaccion_enviada IS NOT NULL
+         AND i.fecha_reaccion IS NOT NULL
+         AND i.fecha_reaccion_enviada >= i.fecha_reaccion
+          THEN EXTRACT(EPOCH FROM (i.fecha_reaccion_enviada - i.fecha_reaccion)) / 60.0
+        ELSE NULL
+      END AS tiempo_llegada_min
+    FROM public.intrusiones AS i
+    LEFT JOIN public.sitios AS s ON s.id = i.sitio_id
+    LEFT JOIN public.medio_comunicacion AS mc ON mc.id = i.medio_comunicacion_id
+    LEFT JOIN public.catalogo_conclusion_evento AS ce ON ce.id = i.conclusion_evento_id
+    LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.id = i.tipo_intrusion_id
+    ${whereClause}
+  )`;
+
+  const kpiQuery = `${baseCTE}
+    SELECT COUNT(*) AS total_no_autorizados
+    FROM intrusiones_filtradas;`;
+
+  const chartQuery = `${baseCTE}
+    SELECT
+      zona,
+      sitio_id,
+      sitio_descripcion,
+      AVG(tiempo_llegada_min) AS promedio_min
+    FROM intrusiones_filtradas
+    WHERE tiempo_llegada_min IS NOT NULL
+    GROUP BY zona, sitio_id, sitio_descripcion
+    ORDER BY promedio_min DESC NULLS LAST, sitio_descripcion ASC NULLS LAST
+    LIMIT 15;`;
+
+  const tableQuery = `${baseCTE}
+    SELECT
+      id,
+      sitio_id,
+      sitio_descripcion,
+      fecha_evento,
+      medio_comunicacion,
+      fecha_reaccion_enviada,
+      tiempo_llegada_min,
+      conclusion_evento,
+      sustraccion_personal
+    FROM intrusiones_filtradas
+    ORDER BY fecha_evento DESC NULLS LAST, id DESC;`;
+
+  try {
+    const [kpiResult, chartResult, tableResult] = await Promise.all([
+      pool.query(kpiQuery, values),
+      pool.query(chartQuery, values),
+      pool.query(tableQuery, values),
+    ]);
+
+    const kpis = {
+      total_no_autorizados: Number(kpiResult.rows[0]?.total_no_autorizados) || 0,
+    };
+
+    const chart = (chartResult.rows ?? []).map((row) => ({
+      zona: row?.zona ?? "Sin zona",
+      sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
+      sitio_descripcion: row?.sitio_descripcion ?? "",
+      promedio_min: row?.promedio_min === null || row?.promedio_min === undefined
+        ? 0
+        : Number(row.promedio_min),
+    }));
+
+    const tabla = (tableResult.rows ?? []).map((row) => ({
+      id: row?.id ?? null,
+      sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
+      sitio_descripcion: row?.sitio_descripcion ?? "",
+      fecha_evento: row?.fecha_evento ? new Date(row.fecha_evento).toISOString() : null,
+      medio_comunicacion: row?.medio_comunicacion ?? null,
+      fecha_reaccion_enviada: row?.fecha_reaccion_enviada
+        ? new Date(row.fecha_reaccion_enviada).toISOString()
+        : null,
+      tiempo_llegada_min:
+        row?.tiempo_llegada_min === null || row?.tiempo_llegada_min === undefined
+          ? null
+          : Number(row.tiempo_llegada_min),
+      conclusion_evento: row?.conclusion_evento ?? null,
+      sustraccion_personal: Boolean(row?.sustraccion_personal),
+    }));
+
+    return res.json({
+      kpis,
+      chart,
+      tabla,
+    });
+  } catch (error) {
+    console.error("Error al obtener el dashboard de eventos no autorizados:", error);
+    return res.status(500).json({ mensaje: "Ocurrió un error al consultar el dashboard." });
   }
 };
 

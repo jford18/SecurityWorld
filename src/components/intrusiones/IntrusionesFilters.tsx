@@ -39,6 +39,7 @@ interface IntrusionesFiltersProps {
   onFiltersChange: (filters: IntrusionConsolidadoFilters) => void;
   onApply?: () => void;
   onClear?: () => void;
+  includeSustraccionPersonal?: boolean;
 }
 
 const IntrusionesFilters: React.FC<IntrusionesFiltersProps> = ({
@@ -46,6 +47,7 @@ const IntrusionesFilters: React.FC<IntrusionesFiltersProps> = ({
   onFiltersChange,
   onApply,
   onClear,
+  includeSustraccionPersonal = false,
 }) => {
   const [sitios, setSitios] = useState<Sitio[]>([]);
   const [clientes, setClientes] = useState<ClienteResumen[]>([]);
@@ -140,7 +142,24 @@ const IntrusionesFilters: React.FC<IntrusionesFiltersProps> = ({
   };
 
   const handleClearFilters = () => {
-    onFiltersChange({ haciendaId: '' });
+    const clearedFilters: IntrusionConsolidadoFilters = {
+      ...filters,
+      fechaDesde: undefined,
+      fechaHasta: undefined,
+      haciendaId: '',
+      clienteId: '',
+      sitioId: '',
+      tipoIntrusionId: '',
+      tipoIntrusion: undefined,
+      llegoAlerta: undefined,
+      personalId: '',
+    };
+
+    if ('sustraccionPersonal' in filters) {
+      clearedFilters.sustraccionPersonal = undefined;
+    }
+
+    onFiltersChange(clearedFilters);
     onClear?.();
   };
 
@@ -246,6 +265,22 @@ const IntrusionesFilters: React.FC<IntrusionesFiltersProps> = ({
             ))}
           </select>
         </div>
+        {includeSustraccionPersonal && (
+          <div className="flex items-center gap-2 pt-6">
+            <input
+              id="sustraccion-personal"
+              type="checkbox"
+              checked={Boolean(filters.sustraccionPersonal)}
+              onChange={(e) =>
+                emitFiltersChange('sustraccionPersonal', e.target.checked ? true : undefined)
+              }
+              className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <label htmlFor="sustraccion-personal" className="text-sm font-medium text-gray-700">
+              Sustracción personal
+            </label>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-end gap-3">
