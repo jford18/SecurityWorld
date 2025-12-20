@@ -61,77 +61,147 @@ const colorPalette = [
   '#F59E0B',
 ];
 
+interface SitioTreeNode {
+  key: string;
+  sitioId: number | null;
+  sitioNombre: string;
+  totalEventos: number;
+}
+
 interface HaciendaTreeNode {
   key: string;
   haciendaId: number | null;
   haciendaNombre: string;
   totalEventos: number;
-  sitios: Array<{
-    sitioId: number | null;
-    sitioNombre: string;
-    totalEventos: number;
-  }>;
+  sitios: SitioTreeNode[];
+}
+
+interface TipoIntrusionTreeNode {
+  key: string;
+  tipoIntrusion: string;
+  totalEventos: number;
+  haciendas: HaciendaTreeNode[];
 }
 
 const InformeEventosScreen: React.FC = () => {
   const [filters, setFilters] = useState<IntrusionConsolidadoFilters>({ haciendaId: '' });
   const [data, setData] = useState<InformeEventosResponse | null>(null);
   const [eventosPorSitio, setEventosPorSitio] = useState<EventoPorSitio[]>([]);
-  const [eventosPorHaciendaSitio, setEventosPorHaciendaSitio] = useState<HaciendaTreeNode[]>([]);
+  const [eventosPorTipoHaciendaSitio, setEventosPorTipoHaciendaSitio] = useState<
+    TipoIntrusionTreeNode[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [mapLoading, setMapLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedTipos, setExpandedTipos] = useState<Set<string>>(new Set());
   const [expandedHaciendas, setExpandedHaciendas] = useState<Set<string>>(new Set());
 
-  const buildTreeData = useCallback((rows: EventoPorHaciendaSitioRow[]): HaciendaTreeNode[] => {
-    const haciendaMap = new Map<string, HaciendaTreeNode>();
+  const buildTreeData = useCallback(
+    (rows: EventoPorHaciendaSitioRow[]): TipoIntrusionTreeNode[] => {
+      const tiposMap = new Map<
+        string,
+        TipoIntrusionTreeNode & { haciendasMap: Map<string, HaciendaTreeNode> }
+      >();
 
-    rows.forEach((row) => {
-      const haciendaId = row.hacienda_id ?? null;
-      const haciendaNombre = (row.hacienda_nombre ?? 'Sin hacienda').trim() || 'Sin hacienda';
-      const sitioId = row.sitio_id ?? null;
-      const sitioNombre = (row.sitio_nombre ?? 'Sin sitio').trim() || 'Sin sitio';
-      const key = `hacienda-${haciendaId ?? 'sin'}-${haciendaNombre}`;
+      rows.forEach((row) => {
+        const tipoIntrusion = (row.tipo_intrusion ?? 'Sin tipo').trim() || 'Sin tipo';
+        const tipoKey = `tipo-${tipoIntrusion.toLowerCase()}`;
+        const haciendaId = row.hacienda_id ?? null;
+        const haciendaNombre = (row.hacienda_nombre ?? 'Sin hacienda').trim() || 'Sin hacienda';
+        const sitioId = row.sitio_id ?? null;
+        const sitioNombre = (row.sitio_nombre ?? 'Sin sitio').trim() || 'Sin sitio';
+        const haciendaKey = `hacienda-${haciendaId ?? 'sin'}-${haciendaNombre}`;
+        const totalEventos = Number(row.total_eventos) || 0;
 
-      const existing = haciendaMap.get(key);
-      const totalEventos = Number(row.total_eventos) || 0;
-
-      if (existing) {
-        existing.totalEventos += totalEventos;
-        const sitioIndex = existing.sitios.findIndex((sitio) => sitio.sitioId === sitioId);
-        if (sitioIndex >= 0) {
-          existing.sitios[sitioIndex].totalEventos += totalEventos;
+        const existingTipo = tiposMap.get(tipoKey);
+        if (existingTipo) {
+          existingTipo.totalEventos += totalEventos;
         } else {
-          existing.sitios.push({ sitioId, sitioNombre, totalEventos });
+          tiposMap.set(tipoKey, {
+            key: tipoKey,
+            tipoIntrusion,
+            totalEventos,
+            haciendas: [],
+            haciendasMap: new Map<string, HaciendaTreeNode>(),
+          });
         }
-      } else {
-        haciendaMap.set(key, {
-          key,
-          haciendaId,
-          haciendaNombre,
-          totalEventos,
-          sitios: [{ sitioId, sitioNombre, totalEventos }],
-        });
-      }
-    });
 
-    return Array.from(haciendaMap.values())
-      .map((hacienda) => ({
-        ...hacienda,
-        sitios: hacienda.sitios.sort((a, b) => {
+        const tipoNode = tiposMap.get(tipoKey);
+        if (!tipoNode) {
+          return;
+        }
+
+        const existingHacienda = tipoNode.haciendasMap.get(haciendaKey);
+        if (existingHacienda) {
+          existingHacienda.totalEventos += totalEventos;
+          const existingSitioIndex = existingHacienda.sitios.findIndex(
+            (sitio) => sitio.sitioId === sitioId
+          );
+          if (existingSitioIndex >= 0) {
+            existingHacienda.sitios[existingSitioIndex].totalEventos += totalEventos;
+          } else {
+            existingHacienda.sitios.push({
+              key: `${haciendaKey}-${sitioId ?? sitioNombre}`,
+              sitioId,
+              sitioNombre,
+              totalEventos,
+            });
+          }
+        } else {
+          tipoNode.haciendasMap.set(haciendaKey, {
+            key: haciendaKey,
+            haciendaId,
+            haciendaNombre,
+            totalEventos,
+            sitios: [
+              {
+                key: `${haciendaKey}-${sitioId ?? sitioNombre}`,
+                sitioId,
+                sitioNombre,
+                totalEventos,
+              },
+            ],
+          });
+        }
+      });
+
+      return Array.from(tiposMap.values())
+        .map((tipo) => {
+          const haciendas = Array.from(tipo.haciendasMap.values())
+            .map((hacienda) => ({
+              ...hacienda,
+              sitios: hacienda.sitios.sort((a, b) => {
+                if (b.totalEventos !== a.totalEventos) {
+                  return b.totalEventos - a.totalEventos;
+                }
+                return a.sitioNombre.localeCompare(b.sitioNombre, 'es');
+              }),
+            }))
+            .sort((a, b) => {
+              if (b.totalEventos !== a.totalEventos) {
+                return b.totalEventos - a.totalEventos;
+              }
+              return a.haciendaNombre.localeCompare(b.haciendaNombre, 'es');
+            });
+
+          const totalEventosTipo = haciendas.reduce((acc, hacienda) => acc + hacienda.totalEventos, 0);
+
+          return {
+            key: tipo.key,
+            tipoIntrusion: tipo.tipoIntrusion,
+            totalEventos: totalEventosTipo,
+            haciendas,
+          };
+        })
+        .sort((a, b) => {
           if (b.totalEventos !== a.totalEventos) {
             return b.totalEventos - a.totalEventos;
           }
-          return a.sitioNombre.localeCompare(b.sitioNombre, 'es');
-        }),
-      }))
-      .sort((a, b) => {
-        if (b.totalEventos !== a.totalEventos) {
-          return b.totalEventos - a.totalEventos;
-        }
-        return a.haciendaNombre.localeCompare(b.haciendaNombre, 'es');
-      });
-  }, []);
+          return a.tipoIntrusion.localeCompare(b.tipoIntrusion, 'es');
+        });
+    },
+    []
+  );
 
   const fetchInforme = useCallback(
     async (activeFilters: IntrusionConsolidadoFilters) => {
@@ -147,14 +217,14 @@ const InformeEventosScreen: React.FC = () => {
         setData(response);
         setEventosPorSitio(eventosSitios ?? []);
         const treeData = buildTreeData(eventosHaciendasSitios ?? []);
-        setEventosPorHaciendaSitio(treeData);
-        setExpandedHaciendas((prev) => {
+        setEventosPorTipoHaciendaSitio(treeData);
+        setExpandedTipos((prev) => {
           if (!treeData.length) {
             return new Set();
           }
 
-          const validKeys = new Set(treeData.map((item) => item.key));
           const next = new Set<string>();
+          const validTipoKeys = new Set(treeData.map((item) => item.key));
 
           treeData.forEach((item, index) => {
             if (prev.has(item.key) || (prev.size === 0 && index === 0)) {
@@ -162,11 +232,36 @@ const InformeEventosScreen: React.FC = () => {
             }
           });
 
-          Array.from(prev).forEach((key) => {
-            if (validKeys.has(key)) {
-              next.add(key);
-            }
+          Array.from(prev)
+            .filter((key) => validTipoKeys.has(key))
+            .forEach((key) => next.add(key));
+
+          return next;
+        });
+
+        setExpandedHaciendas((prev) => {
+          if (!treeData.length) {
+            return new Set();
+          }
+
+          const next = new Set<string>();
+          const validHaciendaKeys = new Set<string>();
+
+          treeData.forEach((tipo, tipoIndex) => {
+            tipo.haciendas.forEach((hacienda, haciendaIndex) => {
+              validHaciendaKeys.add(hacienda.key);
+              if (
+                prev.has(hacienda.key) ||
+                (prev.size === 0 && tipoIndex === 0 && haciendaIndex === 0)
+              ) {
+                next.add(hacienda.key);
+              }
+            });
           });
+
+          Array.from(prev)
+            .filter((key) => validHaciendaKeys.has(key))
+            .forEach((key) => next.add(key));
 
           return next;
         });
@@ -311,49 +406,124 @@ const InformeEventosScreen: React.FC = () => {
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
           <h2 className="text-lg font-semibold text-[#1C2E4A] mb-4">Eventos por Hacienda y Sitio</h2>
+          {/*
+            El expand/collapse existente usa divs con role="button" (no shadcn/ui ni Headless UI).
+            Se implementa un tree custom para soportar los 3 niveles sin anidar botones.
+          */}
           <div className="space-y-2">
-            {eventosPorHaciendaSitio.length ? (
-              eventosPorHaciendaSitio.map((hacienda) => {
-                const isExpanded = expandedHaciendas.has(hacienda.key);
+            {eventosPorTipoHaciendaSitio.length ? (
+              eventosPorTipoHaciendaSitio.map((tipo) => {
+                const tipoExpanded = expandedTipos.has(tipo.key);
+
+                const toggleTipo = () => {
+                  setExpandedTipos((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(tipo.key)) {
+                      next.delete(tipo.key);
+                    } else {
+                      next.add(tipo.key);
+                    }
+                    return next;
+                  });
+                };
+
+                const toggleHacienda = (haciendaKey: string) => {
+                  setExpandedHaciendas((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(haciendaKey)) {
+                      next.delete(haciendaKey);
+                    } else {
+                      next.add(haciendaKey);
+                    }
+                    return next;
+                  });
+                };
+
+                const handleKeyToggle = (
+                  event: React.KeyboardEvent<HTMLDivElement>,
+                  action: () => void,
+                ) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    action();
+                  }
+                };
+
                 return (
-                  <div key={hacienda.key} className="border border-gray-100 rounded-lg">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExpandedHaciendas((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(hacienda.key)) {
-                            next.delete(hacienda.key);
-                          } else {
-                            next.add(hacienda.key);
-                          }
-                          return next;
-                        });
-                      }}
-                      className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50"
+                  <div key={tipo.key} className="border border-gray-100 rounded-lg">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={toggleTipo}
+                      onKeyDown={(event) => handleKeyToggle(event, toggleTipo)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50 cursor-pointer"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">{isExpanded ? '▼' : '▶'}</span>
-                        <span className="font-medium text-[#1C2E4A]">{hacienda.haciendaNombre}</span>
+                        <span className="text-sm text-gray-600">{tipoExpanded ? '▼' : '▶'}</span>
+                        <span className="font-semibold text-[#1C2E4A]">{tipo.tipoIntrusion}</span>
                       </div>
-                      <span className="text-sm text-gray-700">{formatNumber(hacienda.totalEventos)}</span>
-                    </button>
-                    {isExpanded && (
-                      <ul className="px-6 pb-3 space-y-1">
-                        {hacienda.sitios.length ? (
-                          hacienda.sitios.map((sitio) => (
-                            <li
-                              key={`${hacienda.key}-${sitio.sitioId ?? sitio.sitioNombre}`}
-                              className="flex items-center justify-between text-sm text-gray-700"
-                            >
-                              <span>{sitio.sitioNombre}</span>
-                              <span>{formatNumber(sitio.totalEventos)}</span>
-                            </li>
-                          ))
+                      <span className="text-sm text-gray-700 font-medium">
+                        {formatNumber(tipo.totalEventos)}
+                      </span>
+                    </div>
+
+                    {tipoExpanded && (
+                      <div className="px-3 pb-3 space-y-2">
+                        {tipo.haciendas.length ? (
+                          tipo.haciendas.map((hacienda) => {
+                            const haciendaExpanded = expandedHaciendas.has(hacienda.key);
+
+                            const handleHaciendaToggle = () => toggleHacienda(hacienda.key);
+
+                            return (
+                              <div
+                                key={hacienda.key}
+                                className="border border-gray-100 rounded-md bg-gray-50"
+                              >
+                                <div
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={handleHaciendaToggle}
+                                  onKeyDown={(event) => handleKeyToggle(event, handleHaciendaToggle)}
+                                  className="flex items-center justify-between px-3 py-2 text-left hover:bg-gray-100 cursor-pointer"
+                                >
+                                  <div className="flex items-center gap-2 pl-3">
+                                    <span className="text-xs text-gray-600">
+                                      {haciendaExpanded ? '▼' : '▶'}
+                                    </span>
+                                    <span className="font-medium text-[#1C2E4A]">
+                                      {hacienda.haciendaNombre}
+                                    </span>
+                                  </div>
+                                  <span className="text-sm text-gray-700 font-medium">
+                                    {formatNumber(hacienda.totalEventos)}
+                                  </span>
+                                </div>
+
+                                {haciendaExpanded && (
+                                  <ul className="pl-8 pr-3 pb-2 space-y-1">
+                                    {hacienda.sitios.length ? (
+                                      hacienda.sitios.map((sitio) => (
+                                        <li
+                                          key={sitio.key}
+                                          className="flex items-center justify-between text-sm text-gray-700"
+                                        >
+                                          <span className="pl-4">{sitio.sitioNombre}</span>
+                                          <span>{formatNumber(sitio.totalEventos)}</span>
+                                        </li>
+                                      ))
+                                    ) : (
+                                      <li className="text-sm text-gray-500 pl-4">Sin sitios registrados.</li>
+                                    )}
+                                  </ul>
+                                )}
+                              </div>
+                            );
+                          })
                         ) : (
-                          <li className="text-sm text-gray-500">Sin sitios registrados.</li>
+                          <div className="text-sm text-gray-500 pl-3">Sin haciendas registradas.</div>
                         )}
-                      </ul>
+                      </div>
                     )}
                   </div>
                 );
