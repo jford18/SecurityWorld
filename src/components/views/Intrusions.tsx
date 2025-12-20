@@ -853,6 +853,7 @@ const Intrusions: React.FC = () => {
     };
 
     try {
+      console.log('[INTRUSIONES][UI] creando intrusión payload:', payload);
       const created = await createIntrusion(payload);
       const enriched =
         created.sitio_nombre || !sitioSeleccionado
