@@ -31,7 +31,13 @@ const formatDate = (value: string | null) => {
 
 const AuthorizedEventsDashboard: React.FC = () => {
   const [filters, setFilters] = useState<IntrusionConsolidadoFilters>({ haciendaId: '' });
-  const [data, setData] = useState<EventosAutorizadosDashboardResponse | null>(null);
+  const [data, setData] = useState<EventosAutorizadosDashboardResponse>({
+    total: 0,
+    barHaciendas: [],
+    donutPersonal: [],
+    tablaDiaSemana: [],
+    lineaPorFecha: [],
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,12 +45,14 @@ const AuthorizedEventsDashboard: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
+      console.log('[INTRUSIONES][UI] cargando dashboard autorizados');
       const response = await getDashboardEventosAutorizados(filters);
+      console.log('[INTRUSIONES][UI] dashboard autorizados OK:', response);
       setData(response);
     } catch (requestError) {
-      console.error('Error al cargar el dashboard de eventos autorizados:', requestError);
-      const errorMessage = requestError instanceof Error ? requestError.message : 'No se pudo cargar la información.';
-      setError(`Error al cargar dashboard: ${errorMessage}`);
+      console.error('[INTRUSIONES][UI] dashboard autorizados ERROR:', requestError);
+      const errorMessage = requestError instanceof Error ? requestError.message : 'Error al cargar dashboard autorizados';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -62,15 +70,17 @@ const AuthorizedEventsDashboard: React.FC = () => {
   const donutData = useMemo(() => data?.donutPersonal ?? [], [data]);
   const tablaData = useMemo(() => data?.tablaDiaSemana ?? [], [data]);
   const lineaData = useMemo(() => data?.lineaPorFecha ?? [], [data]);
+  const totalEventos = useMemo(() => data?.total ?? 0, [data]);
 
   const tablaConTotal = useMemo(() => {
     const totalEventos = tablaData.reduce((acc, row) => acc + (row?.total_eventos ?? 0), 0);
     const totalSitios = tablaData.reduce((acc, row) => acc + (row?.total_sitios ?? 0), 0);
 
-    return [
-      ...tablaData,
-      { dia_semana: 'Total', total_eventos: totalEventos, total_sitios: totalSitios },
-    ];
+    if (tablaData.length === 0) {
+      return [];
+    }
+
+    return [...tablaData, { dia_semana: 'Total', total_eventos: totalEventos, total_sitios: totalSitios }];
   }, [tablaData]);
 
   const getColor = (index: number) => colorPalette[index % colorPalette.length];
@@ -87,6 +97,9 @@ const AuthorizedEventsDashboard: React.FC = () => {
       />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {!error && !isLoading && totalEventos === 0 && (
+        <p className="text-sm text-gray-600">Sin datos</p>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-lg shadow-md">

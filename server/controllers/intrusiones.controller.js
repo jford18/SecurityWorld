@@ -352,24 +352,61 @@ const prepareConsolidadoQuery = async (
 let intrusionesColumnCache = null;
 let sitiosColumnCache = null;
 
+const truthyValues = ["1", "t", "true", "TRUE", "si", "sí", "yes", "y", "S", "s"];
+
+const buildAuthorizationCondition = (metadata, { authorized }) => {
+  if (metadata?.authorizedColumn) {
+    if (metadata.authorizedColumnType === "boolean") {
+      return `COALESCE(i.${metadata.authorizedColumn}, FALSE) = ${authorized ? "TRUE" : "FALSE"}`;
+    }
+
+    const inClause = `COALESCE(NULLIF(TRIM(CAST(i.${metadata.authorizedColumn} AS TEXT)), ''), '0') ${
+      authorized ? "IN" : "NOT IN"
+    } (${truthyValues.map((value) => `'${value}'`).join(", ")})`;
+
+    return authorized ? inClause : `${inClause} OR i.${metadata.authorizedColumn} IS NULL`;
+  }
+
+  if (metadata?.hasTipoIntrusionId) {
+    return authorized
+      ? "COALESCE(TRIM(cti.protocolo), '') = ''"
+      : "COALESCE(TRIM(cti.protocolo), '') <> ''";
+  }
+
+  return authorized ? "FALSE" : "FALSE";
+};
+
 const getIntrusionesMetadata = async () => {
   if (intrusionesColumnCache) {
     return intrusionesColumnCache;
   }
 
   const columnsResult = await pool.query(
-    `SELECT column_name
+    `SELECT column_name, data_type
        FROM information_schema.columns
       WHERE table_schema = 'public'
         AND table_name = 'intrusiones'`
   );
 
   const columnNames = new Set(columnsResult.rows.map((row) => row.column_name));
+  const columnTypes = columnsResult.rows.reduce((acc, row) => {
+    acc[row.column_name] = row.data_type;
+    return acc;
+  }, {});
   const personaColumn = columnNames.has("persona_id")
     ? "persona_id"
     : columnNames.has("personal_id")
     ? "personal_id"
     : null;
+
+  const authorizedColumnCandidates = [
+    "es_autorizado",
+    "autorizado",
+    "es_autorizada",
+    "estado_autorizacion",
+    "estado_autorizado",
+  ];
+  const authorizedColumn = authorizedColumnCandidates.find((name) => columnNames.has(name)) || null;
 
   intrusionesColumnCache = {
     hasTipoIntrusionId: columnNames.has("tipo_intrusion_id"),
@@ -377,6 +414,8 @@ const getIntrusionesMetadata = async () => {
     personaColumn,
     hasFechaReaccionEnviada: columnNames.has("fecha_reaccion_enviada"),
     hasSustraccionPersonal: columnNames.has("sustraccion_personal"),
+    authorizedColumn,
+    authorizedColumnType: authorizedColumn ? columnTypes[authorizedColumn] : null,
   };
 
   return intrusionesColumnCache;
@@ -985,6 +1024,7 @@ export const getEventosPorHaciendaSitio = async (req, res) => {
 
 export const getEventosNoAutorizadosDashboard = async (req, res) => {
   try {
+    console.log("[INTRUSIONES][DASHBOARD][NO AUTORIZADOS] query params:", req.query);
     const filterConfig = await buildIntrusionesFilterConfig(req.query);
 
     if (filterConfig?.error) {
@@ -993,19 +1033,21 @@ export const getEventosNoAutorizadosDashboard = async (req, res) => {
     }
 
     const { metadata } = filterConfig;
+    const canIdentifyAutorizados = metadata.hasTipoIntrusionId || metadata.authorizedColumn;
+    const canMeasureReaccion = metadata.hasFechaReaccionEnviada;
 
-    if (!metadata.hasTipoIntrusionId) {
-      return res.status(400).json({
-        message: "La configuración actual no permite identificar intrusiones no autorizadas.",
-        detail: null,
+    if (!canIdentifyAutorizados || !canMeasureReaccion) {
+      const emptyResponse = {
+        kpis: { total_no_autorizados: 0 },
+        chart: [],
+        tabla: [],
+      };
+      console.log("[INTRUSIONES][DASHBOARD][NO AUTORIZADOS] result:", {
+        total: 0,
+        chartCount: 0,
+        tablaCount: 0,
       });
-    }
-
-    if (!metadata.hasFechaReaccionEnviada) {
-      return res.status(400).json({
-        message: "No es posible calcular el tiempo de llegada de la fuerza de reacción.",
-        detail: null,
-      });
+      return res.json(emptyResponse);
     }
 
     const sitiosMetadata = await getSitiosMetadata();
@@ -1017,8 +1059,8 @@ export const getEventosNoAutorizadosDashboard = async (req, res) => {
       filters.push(filterConfig.whereClause.replace(/^WHERE\s+/i, ""));
     }
 
-    const protocoloExpression = "NULLIF(TRIM(cti.protocolo), '')";
-    filters.push(`${protocoloExpression} IS NOT NULL`);
+    const autorizadosCondition = buildAuthorizationCondition(metadata, { authorized: false });
+    filters.push(`(${autorizadosCondition})`);
 
     const parsedSustraccionPersonal = normalizeBooleanParam(req.query?.sustraccionPersonal);
     if (parsedSustraccionPersonal === true) {
@@ -1040,6 +1082,10 @@ export const getEventosNoAutorizadosDashboard = async (req, res) => {
     const zonaExpression = sitiosMetadata.hasZona
       ? "COALESCE(NULLIF(TRIM(s.zona), ''), 'Sin zona')"
       : "'Sin zona'";
+
+    const tipoIntrusionJoin = metadata.hasTipoIntrusionId
+      ? "LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.id = i.tipo_intrusion_id"
+      : "";
 
     const baseCTE = `WITH intrusiones_filtradas AS (
     SELECT
@@ -1064,7 +1110,7 @@ export const getEventosNoAutorizadosDashboard = async (req, res) => {
     LEFT JOIN public.sitios AS s ON s.id = i.sitio_id
     LEFT JOIN public.medio_comunicacion AS mc ON mc.id = i.medio_comunicacion_id
     LEFT JOIN public.catalogo_conclusion_evento AS ce ON ce.id = i.conclusion_evento_id
-    LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.id = i.tipo_intrusion_id
+    ${tipoIntrusionJoin}
     ${whereClause}
   )`;
 
@@ -1134,11 +1180,15 @@ export const getEventosNoAutorizadosDashboard = async (req, res) => {
       sustraccion_personal: Boolean(row?.sustraccion_personal),
     }));
 
-    return res.json({
-      kpis,
-      chart,
-      tabla,
+    const responsePayload = { kpis, chart, tabla };
+
+    console.log("[INTRUSIONES][DASHBOARD][NO AUTORIZADOS] result:", {
+      total: kpis.total_no_autorizados,
+      chartCount: chart.length,
+      tablaCount: tabla.length,
     });
+
+    return res.json(responsePayload);
   } catch (error) {
     console.error("Error al obtener el dashboard de eventos no autorizados:", error);
     return res.status(500).json({
@@ -1153,13 +1203,24 @@ export const getEventosNoAutorizadosDashboard = async (req, res) => {
 
 export const getEventosAutorizadosDashboard = async (req, res) => {
   try {
+    console.log("[INTRUSIONES][DASHBOARD][AUTORIZADOS] query params:", req.query);
     const metadata = await getIntrusionesMetadata();
 
-    if (!metadata.hasTipoIntrusionId) {
-      return res.status(400).json({
-        message: "La configuración actual no permite identificar intrusiones autorizadas.",
-        detail: null,
+    const canIdentifyAutorizados = metadata.hasTipoIntrusionId || metadata.authorizedColumn;
+    if (!canIdentifyAutorizados) {
+      const emptyResponse = {
+        barHaciendas: [],
+        donutPersonal: [],
+        tablaDiaSemana: [],
+        lineaPorFecha: [],
+        total: 0,
+      };
+      console.log("[INTRUSIONES][DASHBOARD][AUTORIZADOS] result:", {
+        total: 0,
+        porDiaCount: 0,
+        porSitioCount: 0,
       });
+      return res.json(emptyResponse);
     }
 
     const fechaDesdeParam = req.query?.fechaDesde;
@@ -1234,7 +1295,15 @@ export const getEventosAutorizadosDashboard = async (req, res) => {
         ]
       : [];
 
-    // AUTORIZADOS = COALESCE(TRIM(PROTOCOLO),'')='' con los mismos filtros del consolidado
+    const joins = ["LEFT JOIN public.sitios AS s ON s.id = i.sitio_id"];
+    if (metadata.hasTipoIntrusionId) {
+      joins.push("LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.id = i.tipo_intrusion_id");
+    }
+
+    joins.push(...personaJoins);
+
+    const autorizadosCondition = buildAuthorizationCondition(metadata, { authorized: true });
+
     const query = `
       WITH base_intrusiones AS (
         SELECT
@@ -1245,12 +1314,10 @@ export const getEventosAutorizadosDashboard = async (req, res) => {
           ${personalIdentificadoExpression} AS personal_identificado,
           COALESCE(NULLIF(TRIM(s.zona), ''), 'Sin zona') AS zona
         FROM public.intrusiones AS i
-        LEFT JOIN public.sitios AS s ON s.id = i.sitio_id
-        LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.id = i.tipo_intrusion_id
-        ${personaJoins.join("\n        ")}
+        ${joins.join("\n        ")}
         WHERE i.fecha_evento >= $1
           AND i.fecha_evento <= $2
-          AND COALESCE(TRIM(cti.protocolo), '') = ''
+          AND ${autorizadosCondition}
           AND ($3::INT IS NULL OR s.hacienda_id = $3)
           AND ($4::INT IS NULL OR s.cliente_id = $4)
           AND ($5::INT IS NULL OR i.sitio_id = $5)
@@ -1305,7 +1372,8 @@ export const getEventosAutorizadosDashboard = async (req, res) => {
             GROUP BY DATE(b.fecha_evento)
             ORDER BY DATE(b.fecha_evento)
           ) x
-        ) AS linea_por_fecha;
+        ) AS linea_por_fecha,
+        (SELECT COUNT(*) FROM base_intrusiones) AS total_autorizados;
     `;
 
     const values = [
@@ -1322,14 +1390,23 @@ export const getEventosAutorizadosDashboard = async (req, res) => {
     const { rows } = await pool.query(query, values);
     const [row] = rows ?? [];
 
-    return res.json({
+    const responsePayload = {
       barHaciendas: row?.bar_haciendas ?? [],
       donutPersonal: row?.donut_personal ?? [],
       tablaDiaSemana: row?.tabla_dia_semana ?? [],
       lineaPorFecha: row?.linea_por_fecha ?? [],
+      total: row?.total_autorizados ? Number(row.total_autorizados) : 0,
+    };
+
+    console.log("[INTRUSIONES][DASHBOARD][AUTORIZADOS] result:", {
+      total: responsePayload.total,
+      porDiaCount: responsePayload.tablaDiaSemana?.length ?? 0,
+      porSitioCount: responsePayload.barHaciendas?.length ?? 0,
     });
+
+    return res.json(responsePayload);
   } catch (error) {
-    console.error(error);
+    console.error("[INTRUSIONES][DASHBOARD][AUTORIZADOS] error:", error);
     return res
       .status(500)
       .json({
@@ -1339,6 +1416,7 @@ export const getEventosAutorizadosDashboard = async (req, res) => {
         donutPersonal: [],
         tablaDiaSemana: [],
         lineaPorFecha: [],
+        total: 0,
       });
   }
 };
