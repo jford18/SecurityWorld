@@ -1088,6 +1088,148 @@ export const getEventosNoAutorizadosDashboard = async (req, res) => {
   }
 };
 
+export const getEventosAutorizadosDashboard = async (req, res) => {
+  const filterConfig = await buildIntrusionesFilterConfig(req.query);
+
+  if (filterConfig?.error) {
+    const { status = 400, message } = filterConfig.error;
+    return res.status(status).json({ mensaje: message });
+  }
+
+  const { metadata } = filterConfig;
+
+  if (!metadata.hasTipoIntrusionId) {
+    return res.status(500).json({
+      mensaje: "La configuración actual no permite identificar intrusiones autorizadas.",
+    });
+  }
+
+  const values = [...filterConfig.values];
+  const filters = [];
+
+  if (filterConfig.whereClause) {
+    filters.push(filterConfig.whereClause.replace(/^WHERE\s+/i, ""));
+  }
+
+  const protocoloExpression = "COALESCE(NULLIF(TRIM(cti.protocolo), ''), '')";
+  filters.push(`${protocoloExpression} = ''`);
+
+  const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  const personalCargoExpression = metadata.personaColumn
+    ? "COALESCE(NULLIF(TRIM(c.descripcion), ''), 'Sin información')"
+    : "'Sin información'";
+
+  const sitioDescripcionExpression = "COALESCE(NULLIF(TRIM(s.descripcion), ''), s.nombre)";
+
+  const baseCTE = `WITH base_intrusiones AS (
+    SELECT
+      i.id,
+      i.sitio_id,
+      ${sitioDescripcionExpression} AS sitio_descripcion,
+      s.hacienda_id,
+      h.nombre AS hacienda_nombre,
+      ${personalCargoExpression} AS personal_cargo,
+      i.fecha_evento,
+      (i.fecha_evento AT TIME ZONE 'UTC')::DATE AS fecha,
+      EXTRACT(ISODOW FROM i.fecha_evento) AS dia_semana_num
+    FROM public.intrusiones AS i
+    LEFT JOIN public.sitios AS s ON s.id = i.sitio_id
+    LEFT JOIN public.hacienda AS h ON h.id = s.hacienda_id
+    LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.id = i.tipo_intrusion_id
+    ${metadata.personaColumn ? `LEFT JOIN public.persona AS p ON p.id = i.${metadata.personaColumn}` : ""}
+    ${metadata.personaColumn ? "LEFT JOIN public.catalogo_cargo AS c ON c.id = p.cargo_id" : ""}
+    ${whereClause}
+  )`;
+
+  const barQuery = `${baseCTE}
+SELECT
+  b.hacienda_id,
+  COALESCE(NULLIF(TRIM(b.hacienda_nombre), ''), 'Sin hacienda') AS hacienda_nombre,
+  COUNT(*) AS total_eventos
+FROM base_intrusiones AS b
+GROUP BY b.hacienda_id, hacienda_nombre
+ORDER BY total_eventos DESC, hacienda_nombre ASC
+LIMIT 15;`;
+
+  const donutQuery = `${baseCTE}
+SELECT
+  COALESCE(NULLIF(TRIM(b.personal_cargo), ''), 'Sin información') AS personal_identificado,
+  COUNT(*) AS total_eventos
+FROM base_intrusiones AS b
+GROUP BY personal_identificado
+ORDER BY total_eventos DESC, personal_identificado ASC;`;
+
+  const diaSemanaQuery = `${baseCTE}
+SELECT
+  LOWER(TRIM(TO_CHAR(b.fecha, 'TMDay'))) AS dia_semana,
+  COUNT(*) AS total_eventos,
+  COUNT(DISTINCT b.sitio_id) AS total_sitios,
+  MIN(b.dia_semana_num) AS orden_dia
+FROM base_intrusiones AS b
+GROUP BY dia_semana
+ORDER BY orden_dia;`;
+
+  const lineaQuery = `${baseCTE}
+SELECT
+  b.fecha AS fecha,
+  COUNT(*) AS total_eventos
+FROM base_intrusiones AS b
+GROUP BY b.fecha
+ORDER BY b.fecha;`;
+
+  try {
+    const [barResult, donutResult, diaSemanaResult, lineaResult] = await Promise.all([
+      pool.query(barQuery, values),
+      pool.query(donutQuery, values),
+      pool.query(diaSemanaQuery, values),
+      pool.query(lineaQuery, values),
+    ]);
+
+    const barHaciendas = (barResult.rows ?? []).map((row) => ({
+      hacienda_id: row?.hacienda_id === null || row?.hacienda_id === undefined ? null : Number(row.hacienda_id),
+      hacienda_nombre: row?.hacienda_nombre ?? "",
+      total_eventos: row?.total_eventos === null || row?.total_eventos === undefined
+        ? 0
+        : Number(row.total_eventos),
+    }));
+
+    const donutPersonal = (donutResult.rows ?? []).map((row) => ({
+      personal_identificado: row?.personal_identificado ?? "Sin información",
+      total_eventos: row?.total_eventos === null || row?.total_eventos === undefined
+        ? 0
+        : Number(row.total_eventos),
+    }));
+
+    const tablaDiaSemana = (diaSemanaResult.rows ?? []).map((row) => ({
+      dia_semana: row?.dia_semana ?? "",
+      total_eventos: row?.total_eventos === null || row?.total_eventos === undefined
+        ? 0
+        : Number(row.total_eventos),
+      total_sitios: row?.total_sitios === null || row?.total_sitios === undefined
+        ? 0
+        : Number(row.total_sitios),
+    }));
+
+    const lineaPorFecha = (lineaResult.rows ?? []).map((row) => ({
+      fecha: row?.fecha ? new Date(row.fecha).toISOString().slice(0, 10) : null,
+      total_eventos: row?.total_eventos === null || row?.total_eventos === undefined
+        ? 0
+        : Number(row.total_eventos),
+    }));
+
+    return res.json({
+      barHaciendas,
+      donutPersonal,
+      tablaDiaSemana,
+      lineaPorFecha,
+    });
+  } catch (error) {
+    console.error("Error al obtener el dashboard de eventos autorizados:", error);
+    return res.status(500).json({ mensaje: "Ocurrió un error al consultar el dashboard." });
+  }
+};
+
 export const exportConsolidadoIntrusiones = async (req, res) => {
   const queryConfig = await prepareConsolidadoQuery(req.query, {
     includePagination: false,
