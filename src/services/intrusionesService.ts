@@ -230,6 +230,35 @@ export interface EventosNoAutorizadosDashboardResponse {
   tabla: EventoNoAutorizadoTablaRow[];
 }
 
+export interface EventoAutorizadoBarRow {
+  hacienda_id: number | null;
+  hacienda_nombre: string;
+  total_eventos: number;
+}
+
+export interface EventoAutorizadoDonutRow {
+  personal_identificado: string;
+  total_eventos: number;
+}
+
+export interface EventoAutorizadoDiaSemanaRow {
+  dia_semana: string;
+  total_eventos: number;
+  total_sitios: number;
+}
+
+export interface EventoAutorizadoLineaRow {
+  fecha: string | null;
+  total_eventos: number;
+}
+
+export interface EventosAutorizadosDashboardResponse {
+  barHaciendas: EventoAutorizadoBarRow[];
+  donutPersonal: EventoAutorizadoDonutRow[];
+  tablaDiaSemana: EventoAutorizadoDiaSemanaRow[];
+  lineaPorFecha: EventoAutorizadoLineaRow[];
+}
+
 const buildQueryString = (params: IntrusionConsolidadoFilters) => {
   const searchParams = new URLSearchParams();
 
@@ -381,6 +410,47 @@ export const getDashboardEventosNoAutorizados = async (
     chart,
     tabla,
   };
+};
+
+export const getDashboardEventosAutorizados = async (
+  params: IntrusionConsolidadoFilters
+): Promise<EventosAutorizadosDashboardResponse> => {
+  const queryString = buildQueryString(params);
+  const { data } = await apiClient.get<EventosAutorizadosDashboardResponse>(
+    `/intrusiones/eventos-autorizados/dashboard${queryString}`
+  );
+
+  const barHaciendas = Array.isArray(data?.barHaciendas)
+    ? data.barHaciendas.map((row) => ({
+        hacienda_id: row?.hacienda_id === null || row?.hacienda_id === undefined ? null : Number(row.hacienda_id),
+        hacienda_nombre: row?.hacienda_nombre ?? 'Sin hacienda',
+        total_eventos: Number(row?.total_eventos) || 0,
+      }))
+    : [];
+
+  const donutPersonal = Array.isArray(data?.donutPersonal)
+    ? data.donutPersonal.map((row) => ({
+        personal_identificado: row?.personal_identificado ?? 'Sin información',
+        total_eventos: Number(row?.total_eventos) || 0,
+      }))
+    : [];
+
+  const tablaDiaSemana = Array.isArray(data?.tablaDiaSemana)
+    ? data.tablaDiaSemana.map((row) => ({
+        dia_semana: row?.dia_semana ?? '',
+        total_eventos: Number(row?.total_eventos) || 0,
+        total_sitios: Number(row?.total_sitios) || 0,
+      }))
+    : [];
+
+  const lineaPorFecha = Array.isArray(data?.lineaPorFecha)
+    ? data.lineaPorFecha.map((row) => ({
+        fecha: row?.fecha ?? null,
+        total_eventos: Number(row?.total_eventos) || 0,
+      }))
+    : [];
+
+  return { barHaciendas, donutPersonal, tablaDiaSemana, lineaPorFecha };
 };
 
 export const createIntrusion = async (
