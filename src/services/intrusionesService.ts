@@ -254,6 +254,7 @@ export interface EventoAutorizadoLineaRow {
 }
 
 export interface EventosAutorizadosDashboardResponse {
+  total: number;
   barHaciendas: EventoAutorizadoBarRow[];
   donutPersonal: EventoAutorizadoDonutRow[];
   tablaDiaSemana: EventoAutorizadoDiaSemanaRow[];
@@ -427,11 +428,13 @@ export const getDashboardEventosAutorizados = async (
   params: IntrusionConsolidadoFilters
 ): Promise<EventosAutorizadosDashboardResponse> => {
   try {
+    console.log('[INTRUSIONES][SERVICE] GET eventos-autorizados dashboard');
     const queryString = buildQueryString(params);
     const { data } = await apiClient.get<EventosAutorizadosDashboardResponse>(
       `/intrusiones/eventos-autorizados/dashboard${queryString}`
     );
 
+    const total = Number(data?.total) || 0;
     const barHaciendas = Array.isArray(data?.barHaciendas)
       ? data.barHaciendas.map((row) => ({
           hacienda_id: row?.hacienda_id === null || row?.hacienda_id === undefined ? null : Number(row.hacienda_id),
@@ -462,11 +465,19 @@ export const getDashboardEventosAutorizados = async (
         }))
       : [];
 
-    return { barHaciendas, donutPersonal, tablaDiaSemana, lineaPorFecha };
+    return { total, barHaciendas, donutPersonal, tablaDiaSemana, lineaPorFecha };
   } catch (error: unknown) {
-    const axiosError = error as { response?: { data?: { message?: string; detail?: string } } };
-    const backendMessage = axiosError?.response?.data?.message;
+    const axiosError = error as { response?: { status?: number; data?: { message?: string; detail?: string } } };
+    console.log('[INTRUSIONES][SERVICE] error response:', axiosError?.response?.status, axiosError?.response?.data);
+
+    const status = axiosError?.response?.status;
+    const backendMessage = axiosError?.response?.data?.message || 'Error al cargar dashboard autorizados';
     const backendDetail = axiosError?.response?.data?.detail;
+
+    if (status === 400) {
+      throw new Error(backendMessage);
+    }
+
     const combinedMessage = [backendMessage, backendDetail].filter(Boolean).join(': ');
     const finalMessage = combinedMessage || 'No se pudo cargar el dashboard de eventos autorizados.';
 
