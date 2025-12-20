@@ -357,11 +357,15 @@ const InformeEventosScreen: React.FC = () => {
     },
     {
       label: '% eventos autorizados',
-      value: resumen ? formatPercent(resumen.porcentaje_autorizados) : 'N/D',
+      value: resumen
+        ? formatPercent(resumen.porc_autorizados ?? resumen.porcentaje_autorizados)
+        : 'N/D',
     },
     {
       label: '% eventos no autorizados',
-      value: resumen ? formatPercent(resumen.porcentaje_no_autorizados) : 'N/D',
+      value: resumen
+        ? formatPercent(resumen.porc_no_autorizados ?? resumen.porcentaje_no_autorizados)
+        : 'N/D',
     },
     {
       label: 'N.º sitios con eventos',
