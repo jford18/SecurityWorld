@@ -4,7 +4,9 @@ const BASE_CTE = `WITH base AS (
     SELECT
         I.ID,
         I.SITIO_ID,
-        S.NOMBRE          AS SITIO_NOMBRE,
+    S.NOMBRE          AS SITIO_NOMBRE,
+    S.latitud,
+    S.longitud,
         I.TIPO            AS TIPO_INTRUSION,
         I.FECHA_EVENTO,
         I.FECHA_REACCION,
@@ -97,6 +99,14 @@ const mapPorHoraTipoRow = (row) => ({
   n_eventos: toNumber(row?.n_eventos),
 });
 
+const mapEventosPorSitioRow = (row) => ({
+  sitio_id: toNumberOrNull(row?.sitio_id),
+  sitio_nombre: row?.sitio_nombre ?? "",
+  latitud: row?.latitud === null || row?.latitud === undefined ? null : Number(row.latitud),
+  longitud: row?.longitud === null || row?.longitud === undefined ? null : Number(row.longitud),
+  total_eventos: toNumber(row?.total_eventos),
+});
+
 export const getInformeMensualEventos = async (req, res) => {
   const { fechaInicio, fechaFin } = req.query ?? {};
 
@@ -186,5 +196,49 @@ ORDER BY HORA, TIPO_INTRUSION;`;
     return res
       .status(500)
       .json({ mensaje: "Ocurrió un error al obtener el informe mensual de eventos." });
+  }
+};
+
+export const getEventosPorSitio = async (req, res) => {
+  const { fechaInicio, fechaFin } = req.query ?? {};
+
+  const fechaInicioParam = formatDateOnly(fechaInicio);
+  const fechaFinParam = formatDateOnly(fechaFin);
+
+  if (!fechaInicioParam || !fechaFinParam) {
+    return res.status(400).json({
+      mensaje: "Debe proporcionar los parámetros fechaInicio y fechaFin en formato YYYY-MM-DD.",
+    });
+  }
+
+  if (fechaFinParam < fechaInicioParam) {
+    return res.status(400).json({ mensaje: "El rango de fechas no es válido." });
+  }
+
+  const fechaFinExclusive = addOneDay(`${fechaFinParam}T00:00:00Z`);
+
+  const eventosPorSitioQuery = `${BASE_CTE}
+SELECT
+  SITIO_ID,
+  SITIO_NOMBRE,
+  latitud,
+  longitud,
+  COUNT(*) AS total_eventos
+FROM base
+WHERE latitud IS NOT NULL
+  AND longitud IS NOT NULL
+GROUP BY SITIO_ID, SITIO_NOMBRE, latitud, longitud
+ORDER BY SITIO_NOMBRE;`;
+
+  try {
+    const queryParams = [fechaInicioParam, fechaFinExclusive];
+    const result = await pool.query(eventosPorSitioQuery, queryParams);
+
+    return res.json(result.rows.map(mapEventosPorSitioRow));
+  } catch (error) {
+    console.error("Error al obtener los eventos por sitio:", error);
+    return res
+      .status(500)
+      .json({ mensaje: "Ocurrió un error al obtener los eventos por sitio." });
   }
 };

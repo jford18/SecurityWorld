@@ -29,6 +29,14 @@ export interface InformeEventosResponse {
   }>;
 }
 
+export interface EventoPorSitio {
+  sitio_id: number | null;
+  sitio_nombre: string;
+  latitud: number | null;
+  longitud: number | null;
+  total_eventos: number;
+}
+
 export const getInformeMensualEventos = async (
   fechaInicio: string,
   fechaFin: string
@@ -36,5 +44,16 @@ export const getInformeMensualEventos = async (
   const response = await api.get('/reportes/eventos-mensual', {
     params: { fechaInicio, fechaFin },
   });
+  return response.data;
+};
+
+export const getEventosPorSitio = async (
+  fechaInicio: string,
+  fechaFin: string,
+): Promise<EventoPorSitio[]> => {
+  const response = await api.get('/reportes/informe-eventos/eventos-por-sitio', {
+    params: { fechaInicio, fechaFin },
+  });
+
   return response.data;
 };

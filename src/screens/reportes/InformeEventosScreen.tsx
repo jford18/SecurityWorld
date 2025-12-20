@@ -12,9 +12,12 @@ import {
   YAxis,
 } from 'recharts';
 import {
+  EventoPorSitio,
   InformeEventosResponse,
+  getEventosPorSitio,
   getInformeMensualEventos,
 } from '../../services/reportesEventosService';
+import MapaEventosPorSitio from '../../components/reportes/MapaEventosPorSitio';
 
 const formatDateInput = (date: Date) => date.toISOString().slice(0, 10);
 
@@ -68,20 +71,28 @@ const InformeEventosScreen: React.FC = () => {
   const [fechaInicio, setFechaInicio] = useState(defaultRange.start);
   const [fechaFin, setFechaFin] = useState(defaultRange.end);
   const [data, setData] = useState<InformeEventosResponse | null>(null);
+  const [eventosPorSitio, setEventosPorSitio] = useState<EventoPorSitio[]>([]);
   const [loading, setLoading] = useState(false);
+  const [mapLoading, setMapLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchInforme = async (inicio: string, fin: string) => {
     setLoading(true);
+    setMapLoading(true);
     setError(null);
     try {
-      const response = await getInformeMensualEventos(inicio, fin);
+      const [response, eventosSitios] = await Promise.all([
+        getInformeMensualEventos(inicio, fin),
+        getEventosPorSitio(inicio, fin),
+      ]);
       setData(response);
+      setEventosPorSitio(eventosSitios ?? []);
     } catch (err) {
       console.error('Error al cargar el informe mensual de eventos:', err);
       setError('No se pudo obtener la información. Inténtalo nuevamente.');
     } finally {
       setLoading(false);
+      setMapLoading(false);
     }
   };
 
@@ -476,6 +487,8 @@ const InformeEventosScreen: React.FC = () => {
           </div>
         </div>
       </section>
+
+      <MapaEventosPorSitio data={eventosPorSitio} loading={mapLoading} />
     </div>
   );
 };
