@@ -505,8 +505,6 @@ export const createIntrusion = async (req, res) => {
   const rawUbicacion =
     body.ubicacion ?? body.UBICACION ?? body.sitio_nombre ?? body.SITIO_NOMBRE ?? null;
   const rawTipoText = body.tipo ?? body.TIPO ?? null;
-  const rawTipoIntrusionId =
-    body.tipo_intrusion_id ?? body.TIPO_INTRUSION_ID ?? body.tipoIntrusionId ?? null;
   const rawSitioId = body.sitio_id ?? body.SITIO_ID ?? body.sitioId ?? null;
   const rawFechaEvento = body.fecha_evento ?? body.FECHA_EVENTO ?? null;
   const rawFechaReaccion = body.fecha_reaccion ?? body.FECHA_REACCION ?? null;
@@ -532,7 +530,7 @@ export const createIntrusion = async (req, res) => {
   }
 
   console.log("[INTRUSIONES][CREATE] payload:", {
-    tipo_intrusion_id: rawTipoIntrusionId,
+    tipo: body.tipo ?? body.TIPO,
     sitio_id: rawSitioId,
     persona_id: rawPersonaId,
   });
@@ -556,7 +554,7 @@ export const createIntrusion = async (req, res) => {
     metadata.personaColumn && rawPersonaId !== undefined
       ? parseIntegerOrNull(rawPersonaId)
       : null;
-  const tipoIntrusionIdValue = parseIntegerOrNull(rawTipoIntrusionId);
+  const tipoTextValue = typeof rawTipoText === "string" ? rawTipoText.trim() : "";
 
   const missingFields = [];
 
@@ -564,11 +562,7 @@ export const createIntrusion = async (req, res) => {
     missingFields.push("sitio_id");
   }
 
-  if (rawTipoIntrusionId === undefined || rawTipoIntrusionId === null || rawTipoIntrusionId === "") {
-    missingFields.push("tipo_intrusion_id");
-  }
-
-  if (!metadata.hasTipoIntrusionId && metadata.hasTipoText && !rawTipoText) {
+  if (metadata.hasTipoText && !tipoTextValue) {
     missingFields.push("tipo");
   }
 
@@ -650,49 +644,9 @@ export const createIntrusion = async (req, res) => {
     });
   }
 
-  if (tipoIntrusionIdValue === undefined || tipoIntrusionIdValue === null) {
-    return res.status(400).json({
-      message: "El identificador del tipo de intrusión no es válido.",
-      details: { field: "tipo_intrusion_id" },
-    });
-  }
-
-  let tipoIntrusionDescripcion = typeof rawTipoText === "string" ? rawTipoText : null;
-
   try {
-    const tipoIntrusionResult = await pool.query(
-      "SELECT id, descripcion, activo FROM public.catalogo_tipo_intrusion WHERE id = $1",
-      [tipoIntrusionIdValue]
-    );
-
-    const tipoIntrusionRow = tipoIntrusionResult.rows?.[0];
-    if (!tipoIntrusionRow || tipoIntrusionRow.activo !== true) {
-      return res.status(400).json({
-        message: "El tipo de intrusión proporcionado no existe o no está activo.",
-        details: { field: "tipo_intrusion_id" },
-      });
-    }
-
-    if (!tipoIntrusionDescripcion) {
-      tipoIntrusionDescripcion = tipoIntrusionRow.descripcion ?? null;
-    }
-  } catch (error) {
-    console.error("Error al validar tipo de intrusión:", error);
-    return res.status(500).json({
-      message: "No se pudo validar el tipo de intrusión.",
-      details: { field: "tipo_intrusion_id" },
-    });
-  }
-
-  try {
-    const columns = ["ubicacion", "sitio_id", "tipo_intrusion_id"];
-    const values = [rawUbicacion ?? null, sitioIdValue, tipoIntrusionIdValue];
-
-    if (metadata.hasTipoText) {
-      const tipoTextValue = tipoIntrusionDescripcion ?? null;
-      columns.push("tipo");
-      values.push(tipoTextValue);
-    }
+    const columns = ["ubicacion", "sitio_id", "tipo"];
+    const values = [rawUbicacion ?? null, sitioIdValue, tipoTextValue || null];
 
     columns.push(
       "estado",
@@ -727,18 +681,11 @@ export const createIntrusion = async (req, res) => {
 
     const placeholders = columns.map((_, index) => `$${index + 1}`);
 
-    const tipoReturningColumn = metadata.hasTipoText
-      ? "tipo"
-      : metadata.hasTipoIntrusionId
-      ? `COALESCE((SELECT descripcion FROM public.catalogo_tipo_intrusion WHERE id = tipo_intrusion_id), CAST(tipo_intrusion_id AS TEXT)) AS tipo`
-      : null;
-
     const returningColumns = [
       "id",
       "ubicacion",
       "sitio_id",
-      metadata.hasTipoIntrusionId ? "tipo_intrusion_id" : null,
-      tipoReturningColumn,
+      "tipo",
       "estado",
       "descripcion",
       "fecha_evento",
@@ -1050,14 +997,14 @@ export const getEventosPorHaciendaSitio = async (req, res) => {
 
 export const getEventosNoAutorizadosDashboard = async (_req, res) => {
   console.log(
-    "[INTRUSIONES][DASHBOARD][NO_AUTORIZADOS] usando JOIN TIPO_INTRUSION.NECESITA_PROTOCOLO=TRUE"
+    "[INTRUSIONES][DASHBOARD][NO_AUTORIZADOS] usando JOIN descripcion vs tipo"
   );
   try {
     const totalResult = await pool.query(
       `SELECT
     COUNT(*) AS total
   FROM PUBLIC.INTRUSIONES A
-  JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.ID = A.TIPO_INTRUSION_ID)
+  LEFT JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (TRIM(B.DESCRIPCION) = TRIM(A.TIPO))
   WHERE B.NECESITA_PROTOCOLO = TRUE;`
     );
 
@@ -1066,7 +1013,7 @@ export const getEventosNoAutorizadosDashboard = async (_req, res) => {
     TO_CHAR(A.FECHA_EVENTO, 'YYYYMMDD')::INT AS PERIODO,
     COUNT(*) AS TOTAL
   FROM PUBLIC.INTRUSIONES A
-  JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.ID = A.TIPO_INTRUSION_ID)
+  LEFT JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (TRIM(B.DESCRIPCION) = TRIM(A.TIPO))
   WHERE B.NECESITA_PROTOCOLO = TRUE
   GROUP BY TO_CHAR(A.FECHA_EVENTO, 'YYYYMMDD')::INT
   ORDER BY PERIODO;`
@@ -1078,7 +1025,7 @@ export const getEventosNoAutorizadosDashboard = async (_req, res) => {
     C.NOMBRE AS SITIO_NOMBRE,
     COUNT(*) AS TOTAL
   FROM PUBLIC.INTRUSIONES A
-  JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.ID = A.TIPO_INTRUSION_ID)
+  LEFT JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (TRIM(B.DESCRIPCION) = TRIM(A.TIPO))
   LEFT JOIN PUBLIC.SITIOS C ON (C.ID = A.SITIO_ID)
   WHERE B.NECESITA_PROTOCOLO = TRUE
   GROUP BY A.SITIO_ID, C.NOMBRE
@@ -1121,15 +1068,15 @@ export const getEventosNoAutorizadosDashboard = async (_req, res) => {
 
 export const getEventosAutorizadosDashboard = async (_req, res) => {
   console.log(
-    "[INTRUSIONES][DASHBOARD][AUTORIZADOS] usando JOIN TIPO_INTRUSION.NECESITA_PROTOCOLO=FALSE"
+    "[INTRUSIONES][DASHBOARD][AUTORIZADOS] usando JOIN descripcion vs tipo"
   );
   try {
     const totalResult = await pool.query(
       `SELECT
     COUNT(*) AS TOTAL
   FROM PUBLIC.INTRUSIONES A
-  JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.ID = A.TIPO_INTRUSION_ID)
-  WHERE B.NECESITA_PROTOCOLO = FALSE;`
+  LEFT JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (TRIM(B.DESCRIPCION) = TRIM(A.TIPO))
+  WHERE COALESCE(B.NECESITA_PROTOCOLO, FALSE) = FALSE;`
     );
 
     const porDiaResult = await pool.query(
@@ -1137,8 +1084,8 @@ export const getEventosAutorizadosDashboard = async (_req, res) => {
     TO_CHAR(A.FECHA_EVENTO, 'YYYYMMDD')::INT AS PERIODO,
     COUNT(*) AS TOTAL
   FROM PUBLIC.INTRUSIONES A
-  JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.ID = A.TIPO_INTRUSION_ID)
-  WHERE B.NECESITA_PROTOCOLO = FALSE
+  LEFT JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (TRIM(B.DESCRIPCION) = TRIM(A.TIPO))
+  WHERE COALESCE(B.NECESITA_PROTOCOLO, FALSE) = FALSE
   GROUP BY TO_CHAR(A.FECHA_EVENTO, 'YYYYMMDD')::INT
   ORDER BY PERIODO;`
     );
@@ -1149,9 +1096,9 @@ export const getEventosAutorizadosDashboard = async (_req, res) => {
     C.NOMBRE AS SITIO_NOMBRE,
     COUNT(*) AS TOTAL
   FROM PUBLIC.INTRUSIONES A
-  JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.ID = A.TIPO_INTRUSION_ID)
+  LEFT JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (TRIM(B.DESCRIPCION) = TRIM(A.TIPO))
   LEFT JOIN PUBLIC.SITIOS C ON (C.ID = A.SITIO_ID)
-  WHERE B.NECESITA_PROTOCOLO = FALSE
+  WHERE COALESCE(B.NECESITA_PROTOCOLO, FALSE) = FALSE
   GROUP BY A.SITIO_ID, C.NOMBRE
   ORDER BY TOTAL DESC;`
     );
