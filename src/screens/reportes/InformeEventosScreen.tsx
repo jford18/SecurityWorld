@@ -373,7 +373,12 @@ const InformeEventosScreen: React.FC = () => {
     },
     {
       label: 'T. prom. reacción (min)',
-      value: resumen ? formatNumber(resumen.t_prom_reaccion_min, { minimumFractionDigits: 2 }) : 'N/D',
+      value: resumen
+        ? formatNumber(resumen.t_prom_reaccion_min, {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+          })
+        : 'N/D',
     },
   ];
 

@@ -111,8 +111,10 @@ const buildBaseIntrusionesCTE = (metadata, whereClause) => {
         CASE WHEN ${protocoloExpression} IS NULL THEN 1 ELSE 0 END AS es_autorizado,
         CASE WHEN ${protocoloExpression} IS NOT NULL THEN 1 ELSE 0 END AS es_no_autorizado,
         CASE
-            WHEN i.fecha_reaccion IS NOT NULL THEN
-                EXTRACT(EPOCH FROM (i.fecha_reaccion - i.fecha_evento)) / 60.0
+            WHEN i.fecha_evento IS NOT NULL
+             AND i.fecha_reaccion IS NOT NULL
+             AND i.fecha_reaccion >= i.fecha_evento
+              THEN EXTRACT(EPOCH FROM (i.fecha_reaccion - i.fecha_evento)) / 60.0
             ELSE NULL
         END AS minutos_reaccion
     FROM public.intrusiones AS i
@@ -144,7 +146,7 @@ SELECT
     COALESCE(ROUND(100.0 * SUM(ES_AUTORIZADO) / NULLIF(COUNT(*),0), 2), 0)    AS porc_autorizados,
     COALESCE(ROUND(100.0 * SUM(ES_NO_AUTORIZADO) / NULLIF(COUNT(*),0), 2), 0) AS porc_no_autorizados,
     COUNT(DISTINCT SITIO_ID)                          AS sitios_con_eventos,
-    ROUND(AVG(MINUTOS_REACCION)::NUMERIC, 2)          AS t_prom_reaccion_min
+    COALESCE(ROUND(AVG(MINUTOS_REACCION)::NUMERIC, 2), 0) AS t_prom_reaccion_min
 FROM base_intrusiones;`;
 
   const porTipoQuery = `${baseCTE}
