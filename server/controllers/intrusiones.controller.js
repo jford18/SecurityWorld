@@ -996,9 +996,6 @@ export const getEventosPorHaciendaSitio = async (req, res) => {
 };
 
 export const getEventosNoAutorizadosDashboard = async (_req, res) => {
-  console.log(
-    "[INTRUSIONES][DASHBOARD][NO_AUTORIZADOS] usando JOIN CATALOGO_TIPO_INTRUSION.DESCRIPCION = INTRUSIONES.TIPO y NECESITA_PROTOCOLO=TRUE"
-  );
   try {
     const totalResult = await pool.query(
       `SELECT
@@ -1008,60 +1005,88 @@ JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.DESCRIPCION = A.TIPO)
 WHERE B.NECESITA_PROTOCOLO = TRUE;`
     );
 
-    const porDiaResult = await pool.query(
+    const tiempoLlegadaResult = await pool.query(
       `SELECT
-    TO_CHAR(A.FECHA_EVENTO, 'YYYYMMDD')::INT AS PERIODO,
-    COUNT(*) AS TOTAL
-FROM PUBLIC.INTRUSIONES A
-JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.DESCRIPCION = A.TIPO)
-WHERE B.NECESITA_PROTOCOLO = TRUE
-GROUP BY TO_CHAR(A.FECHA_EVENTO, 'YYYYMMDD')::INT
-ORDER BY PERIODO;`
-    );
-
-    const porSitioResult = await pool.query(
-      `SELECT
-    A.SITIO_ID,
     C.NOMBRE AS SITIO_NOMBRE,
-    COUNT(*) AS TOTAL
+    COALESCE(C.ZONA, 'GENERAL') AS ZONA,
+    ROUND(AVG(EXTRACT(EPOCH FROM (A.FECHA_REACCION - A.FECHA_EVENTO)) / 60.0), 2) AS TIEMPO_LLEGADA_PROM_MIN
 FROM PUBLIC.INTRUSIONES A
 JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.DESCRIPCION = A.TIPO)
 LEFT JOIN PUBLIC.SITIOS C ON (C.ID = A.SITIO_ID)
 WHERE B.NECESITA_PROTOCOLO = TRUE
-GROUP BY A.SITIO_ID, C.NOMBRE
-ORDER BY TOTAL DESC;`
+  AND A.FECHA_EVENTO IS NOT NULL
+  AND A.FECHA_REACCION IS NOT NULL
+GROUP BY C.NOMBRE, COALESCE(C.ZONA, 'GENERAL')
+ORDER BY TIEMPO_LLEGADA_PROM_MIN DESC
+LIMIT 15;`
     );
 
-    const responsePayload = {
-      total: Number(totalResult.rows?.[0]?.total) || 0,
-      porDia: (porDiaResult.rows ?? [])
-        .map((row) => ({
-          periodo: row?.periodo === null || row?.periodo === undefined ? null : Number(row.periodo),
-          total: row?.total === null || row?.total === undefined ? 0 : Number(row.total),
-        }))
-        .filter((row) => row.periodo !== null),
-      porSitio: (porSitioResult.rows ?? []).map((row) => ({
-        sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
-        sitio_nombre: row?.sitio_nombre ?? null,
-        total: row?.total === null || row?.total === undefined ? 0 : Number(row.total),
-      })),
-    };
+    const resumenResult = await pool.query(
+      `SELECT
+    C.NOMBRE AS NOMBRE_SITIO,
+    TO_CHAR(A.FECHA_EVENTO, 'DD/MM/YYYY') AS FECHA_INTRUSION,
+    TO_CHAR(A.FECHA_EVENTO, 'HH24:MI:SS') AS HORA_INTRUSION,
+    D.DESCRIPCION AS PRIMERA_COMUNICACION,
+    E.DESCRIPCION AS RESULTADO_FUERZA_REACCION,
+    ROUND(EXTRACT(EPOCH FROM (A.FECHA_REACCION - A.FECHA_EVENTO)) / 60.0, 2) AS TIEMPO_LLEGADA_MIN,
+    F.DESCRIPCION AS CONCLUSION_EVENTO
+FROM PUBLIC.INTRUSIONES A
+JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.DESCRIPCION = A.TIPO)
+LEFT JOIN PUBLIC.SITIOS C ON (C.ID = A.SITIO_ID)
+LEFT JOIN PUBLIC.CATALOGO_MEDIO_COMUNICACION D ON (D.ID = A.MEDIO_COMUNICACION_ID)
+LEFT JOIN PUBLIC.CATALOGO_FUERZA_REACCION E ON (E.ID = A.FUERZA_REACCION_ID)
+LEFT JOIN PUBLIC.CATALOGO_CONCLUSION_EVENTO F ON (F.ID = A.CONCLUSION_EVENTO_ID)
+WHERE B.NECESITA_PROTOCOLO = TRUE
+ORDER BY A.FECHA_EVENTO DESC NULLS LAST, A.ID DESC
+LIMIT 50;`
+    );
 
-    console.log("[INTRUSIONES][DASHBOARD] result:", {
-      total: responsePayload.total,
-      porDiaCount: responsePayload.porDia.length,
-      porSitioCount: responsePayload.porSitio.length,
+    const total = Number(totalResult?.rows?.[0]?.total) || 0;
+
+    const tiempoLlegada = (tiempoLlegadaResult?.rows ?? []).map((row) => ({
+      sitio_nombre: row?.sitio_nombre ?? null,
+      zona: row?.zona ?? null,
+      tiempo_llegada_prom_min:
+        row?.tiempo_llegada_prom_min === null || row?.tiempo_llegada_prom_min === undefined
+          ? 0
+          : Number(row.tiempo_llegada_prom_min),
+    }));
+
+    const resumen = (resumenResult?.rows ?? []).map((row) => ({
+      nombre_sitio: row?.nombre_sitio ?? null,
+      fecha_intrusion: row?.fecha_intrusion ?? null,
+      hora_intrusion: row?.hora_intrusion ?? null,
+      primera_comunicacion: row?.primera_comunicacion ?? null,
+      resultado_fuerza_reaccion: row?.resultado_fuerza_reaccion ?? null,
+      tiempo_llegada_min:
+        row?.tiempo_llegada_min === null || row?.tiempo_llegada_min === undefined
+          ? null
+          : Number(row.tiempo_llegada_min),
+      conclusion_evento: row?.conclusion_evento ?? null,
+    }));
+
+    console.log(
+      "[INTRUSIONES][DASHBOARD][NO_AUTORIZADOS] total:",
+      total,
+      "tiempoLlegada:",
+      tiempoLlegada.length,
+      "resumen:",
+      resumen.length
+    );
+
+    return res.json({
+      total,
+      tiempoLlegada,
+      resumen,
     });
-
-    return res.json(responsePayload);
   } catch (err) {
-    console.error("[INTRUSIONES][DASHBOARD] error:", err);
+    console.error("[INTRUSIONES][DASHBOARD][NO_AUTORIZADOS] error:", err);
     return res.status(500).json({
       message: "Error al cargar dashboard de eventos no autorizados",
       detail: err?.message ?? null,
       total: 0,
-      porDia: [],
-      porSitio: [],
+      tiempoLlegada: [],
+      resumen: [],
     });
   }
 };
