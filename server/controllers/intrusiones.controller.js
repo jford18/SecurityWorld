@@ -462,22 +462,25 @@ export const listIntrusiones = async (_req, res) => {
 };
 
 export const createIntrusion = async (req, res) => {
-  const {
-    ubicacion,
-    tipo,
-    estado,
-    descripcion,
-    fecha_evento,
-    fecha_reaccion,
-    fecha_reaccion_fuera,
-    llego_alerta,
-    medio_comunicacion_id,
-    conclusion_evento_id,
-    sustraccion_material,
-    sitio_id,
-    fuerza_reaccion_id,
-    persona_id,
-  } = req.body || {};
+  const body = req.body || {};
+  const rawUbicacion =
+    body.ubicacion ?? body.UBICACION ?? body.sitio_nombre ?? body.SITIO_NOMBRE ?? null;
+  const rawTipoText = body.tipo ?? body.TIPO ?? null;
+  const rawTipoIntrusionId =
+    body.tipo_intrusion_id ?? body.TIPO_INTRUSION_ID ?? body.tipoIntrusionId ?? null;
+  const rawSitioId = body.sitio_id ?? body.SITIO_ID ?? body.sitioId ?? null;
+  const rawFechaEvento = body.fecha_evento ?? body.FECHA_EVENTO ?? null;
+  const rawFechaReaccion = body.fecha_reaccion ?? body.FECHA_REACCION ?? null;
+  const rawFechaReaccionFuera =
+    body.fecha_reaccion_fuera ?? body.FECHA_REACCION_FUERA ?? null;
+  const rawLlegoAlerta = body.llego_alerta ?? body.LLEGO_ALERTA;
+  const rawMedioComunicacionId = body.medio_comunicacion_id ?? body.MEDIO_COMUNICACION_ID;
+  const rawConclusionEventoId = body.conclusion_evento_id ?? body.CONCLUSION_EVENTO_ID;
+  const rawSustraccionMaterial = body.sustraccion_material ?? body.SUSTRACCION_MATERIAL;
+  const rawFuerzaReaccionId = body.fuerza_reaccion_id ?? body.FUERZA_REACCION_ID;
+  const rawPersonaId = body.persona_id ?? body.personal_id ?? body.PERSONA_ID ?? body.PERSONAL_ID;
+  const rawEstado = body.estado ?? body.ESTADO ?? null;
+  const rawDescripcion = body.descripcion ?? body.DESCRIPCION ?? null;
 
   let metadata;
   try {
@@ -489,44 +492,69 @@ export const createIntrusion = async (req, res) => {
       .json({ mensaje: "No se pudo preparar el registro de intrusiones." });
   }
 
-  const fechaEventoValue = fecha_evento ? parseFechaValue(fecha_evento) : new Date();
-  const fechaReaccionValue = fecha_reaccion ? parseFechaValue(fecha_reaccion) : null;
-  const fechaReaccionFueraValue = fecha_reaccion_fuera
-    ? parseFechaValue(fecha_reaccion_fuera)
+  const fechaEventoValue = rawFechaEvento ? parseFechaValue(rawFechaEvento) : new Date();
+  const fechaReaccionValue = rawFechaReaccion ? parseFechaValue(rawFechaReaccion) : null;
+  const fechaReaccionFueraValue = rawFechaReaccionFuera
+    ? parseFechaValue(rawFechaReaccionFuera)
     : null;
-  const llegoAlertaValue =
-    typeof llego_alerta === "boolean" ? llego_alerta : false;
+  const llegoAlertaValue = typeof rawLlegoAlerta === "boolean" ? rawLlegoAlerta : false;
   const medioComValue =
-    medio_comunicacion_id === null || medio_comunicacion_id === undefined || medio_comunicacion_id === ""
+    rawMedioComunicacionId === null || rawMedioComunicacionId === undefined || rawMedioComunicacionId === ""
       ? null
-      : Number(medio_comunicacion_id);
-  const conclusionEventoValue = parseIntegerOrNull(conclusion_evento_id);
+      : Number(rawMedioComunicacionId);
+  const conclusionEventoValue = parseIntegerOrNull(rawConclusionEventoId);
   const sustraccionMaterialValue =
-    typeof sustraccion_material === "boolean" ? sustraccion_material : false;
-  const sitioIdValue = parseIntegerOrNull(sitio_id);
-  const fuerzaReaccionValue = parseIntegerOrNull(fuerza_reaccion_id);
-  const personaRaw = persona_id ?? req.body?.personal_id;
+    typeof rawSustraccionMaterial === "boolean" ? rawSustraccionMaterial : false;
+  const sitioIdValue = parseIntegerOrNull(rawSitioId);
+  const fuerzaReaccionValue = parseIntegerOrNull(rawFuerzaReaccionId);
   const personaIdValue =
-    metadata.personaColumn && personaRaw !== undefined
-      ? parseIntegerOrNull(personaRaw)
+    metadata.personaColumn && rawPersonaId !== undefined
+      ? parseIntegerOrNull(rawPersonaId)
       : null;
+  const tipoIntrusionIdValue = metadata.hasTipoIntrusionId
+    ? parseIntegerOrNull(rawTipoIntrusionId)
+    : null;
+
+  const missingFields = [];
+
+  if (rawSitioId === undefined || rawSitioId === null || rawSitioId === "") {
+    missingFields.push("sitio_id");
+  }
+
+  if (metadata.hasTipoIntrusionId && !rawTipoIntrusionId && !rawTipoText) {
+    missingFields.push("tipo_intrusion_id");
+  }
+
+  if (!metadata.hasTipoIntrusionId && metadata.hasTipoText && !rawTipoText) {
+    missingFields.push("tipo");
+  }
+
+  if (missingFields.length) {
+    return res.status(400).json({
+      message: "Faltan campos obligatorios para registrar la intrusión.",
+      details: { missingFields },
+    });
+  }
 
   if (sitioIdValue === undefined) {
-    return res
-      .status(400)
-      .json({ mensaje: "El identificador del sitio no es válido." });
+    return res.status(400).json({
+      message: "El identificador del sitio no es válido.",
+      details: { field: "sitio_id" },
+    });
   }
 
-  if (fecha_evento && !fechaEventoValue) {
-    return res
-      .status(400)
-      .json({ mensaje: "La fecha y hora del evento no es válida." });
+  if (rawFechaEvento && !fechaEventoValue) {
+    return res.status(400).json({
+      message: "La fecha y hora del evento no es válida.",
+      details: { field: "fecha_evento" },
+    });
   }
 
-  if (fecha_reaccion && !fechaReaccionValue) {
-    return res
-      .status(400)
-      .json({ mensaje: "La fecha y hora de reacción no es válida." });
+  if (rawFechaReaccion && !fechaReaccionValue) {
+    return res.status(400).json({
+      message: "La fecha y hora de reacción no es válida.",
+      details: { field: "fecha_reaccion" },
+    });
   }
 
   if (
@@ -535,15 +563,16 @@ export const createIntrusion = async (req, res) => {
     fechaReaccionValue.getTime() <= fechaEventoValue.getTime()
   ) {
     return res.status(400).json({
-      message:
-        "La fecha y hora de reacción debe ser mayor que la fecha y hora de intrusión.",
+      message: "La fecha y hora de reacción debe ser mayor que la fecha y hora de intrusión.",
+      details: { field: "fecha_reaccion" },
     });
   }
 
-  if (fecha_reaccion_fuera && !fechaReaccionFueraValue) {
-    return res
-      .status(400)
-      .json({ mensaje: "La fecha y hora de reacción de fuera no es válida." });
+  if (rawFechaReaccionFuera && !fechaReaccionFueraValue) {
+    return res.status(400).json({
+      message: "La fecha y hora de reacción de fuera no es válida.",
+      details: { field: "fecha_reaccion_fuera" },
+    });
   }
 
   if (
@@ -551,37 +580,56 @@ export const createIntrusion = async (req, res) => {
     fechaReaccionValue &&
     fechaReaccionFueraValue.getTime() <= fechaReaccionValue.getTime()
   ) {
-    return res
-      .status(400)
-      .json({
-        mensaje:
-          "La fecha de reacción de fuera debe ser posterior a la fecha de reacción.",
-      });
+    return res.status(400).json({
+      message: "La fecha de reacción de fuera debe ser posterior a la fecha de reacción.",
+      details: { field: "fecha_reaccion_fuera" },
+    });
   }
 
   if (conclusionEventoValue === undefined) {
-    return res
-      .status(400)
-      .json({ mensaje: "El identificador de la conclusión del evento no es válido." });
+    return res.status(400).json({
+      message: "El identificador de la conclusión del evento no es válido.",
+      details: { field: "conclusion_evento_id" },
+    });
   }
 
   if (fuerzaReaccionValue === undefined) {
-    return res
-      .status(400)
-      .json({ mensaje: "El identificador de la fuerza de reacción no es válido." });
+    return res.status(400).json({
+      message: "El identificador de la fuerza de reacción no es válido.",
+      details: { field: "fuerza_reaccion_id" },
+    });
   }
 
-  if (metadata.personaColumn && personaRaw !== undefined && personaIdValue === undefined) {
-    return res
-      .status(400)
-      .json({ mensaje: "El identificador de la persona no es válido." });
+  if (metadata.personaColumn && rawPersonaId !== undefined && personaIdValue === undefined) {
+    return res.status(400).json({
+      message: "El identificador de la persona no es válido.",
+      details: { field: metadata.personaColumn },
+    });
+  }
+
+  if (metadata.hasTipoIntrusionId && tipoIntrusionIdValue === undefined) {
+    return res.status(400).json({
+      message: "El identificador del tipo de intrusión no es válido.",
+      details: { field: "tipo_intrusion_id" },
+    });
   }
 
   try {
-    const columns = [
-      "ubicacion",
-      "sitio_id",
-      "tipo",
+    const columns = ["ubicacion", "sitio_id"];
+    const values = [rawUbicacion ?? null, sitioIdValue];
+
+    if (metadata.hasTipoIntrusionId) {
+      columns.push("tipo_intrusion_id");
+      values.push(tipoIntrusionIdValue);
+    }
+
+    if (metadata.hasTipoText) {
+      const tipoTextValue = rawTipoText ?? (tipoIntrusionIdValue != null ? String(tipoIntrusionIdValue) : null);
+      columns.push("tipo");
+      values.push(tipoTextValue);
+    }
+
+    columns.push(
       "estado",
       "descripcion",
       "fecha_evento",
@@ -591,15 +639,12 @@ export const createIntrusion = async (req, res) => {
       "medio_comunicacion_id",
       "conclusion_evento_id",
       "sustraccion_material",
-      "fuerza_reaccion_id",
-    ];
+      "fuerza_reaccion_id"
+    );
 
-    const values = [
-      ubicacion ?? null,
-      sitioIdValue,
-      tipo ?? null,
-      estado ?? null,
-      descripcion ?? null,
+    values.push(
+      rawEstado ?? null,
+      rawDescripcion ?? null,
       fechaEventoValue,
       fechaReaccionValue,
       fechaReaccionFueraValue,
@@ -607,8 +652,8 @@ export const createIntrusion = async (req, res) => {
       medioComValue,
       conclusionEventoValue,
       sustraccionMaterialValue,
-      fuerzaReaccionValue,
-    ];
+      fuerzaReaccionValue
+    );
 
     if (metadata.personaColumn) {
       columns.push(metadata.personaColumn);
@@ -617,11 +662,18 @@ export const createIntrusion = async (req, res) => {
 
     const placeholders = columns.map((_, index) => `$${index + 1}`);
 
+    const tipoReturningColumn = metadata.hasTipoText
+      ? "tipo"
+      : metadata.hasTipoIntrusionId
+      ? `COALESCE((SELECT descripcion FROM public.catalogo_tipo_intrusion WHERE id = tipo_intrusion_id), CAST(tipo_intrusion_id AS TEXT)) AS tipo`
+      : null;
+
     const returningColumns = [
       "id",
       "ubicacion",
       "sitio_id",
-      "tipo",
+      metadata.hasTipoIntrusionId ? "tipo_intrusion_id" : null,
+      tipoReturningColumn,
       "estado",
       "descripcion",
       "fecha_evento",
@@ -654,7 +706,9 @@ export const createIntrusion = async (req, res) => {
     return res.status(201).json(mapIntrusionRow(created));
   } catch (error) {
     console.error("Error al crear intrusión:", error);
-    return res.status(500).json({ mensaje: "Error al registrar la intrusión" });
+    return res
+      .status(500)
+      .json({ message: "Error al registrar la intrusión", mensaje: "Error al registrar la intrusión" });
   }
 };
 

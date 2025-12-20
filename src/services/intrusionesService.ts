@@ -6,6 +6,7 @@ export interface IntrusionPayload {
   fecha_reaccion?: string | null;
   fecha_reaccion_fuera?: string | null;
   ubicacion?: string;
+  tipo_intrusion_id?: number | null;
   tipo?: string;
   estado?: string;
   descripcion?: string;
@@ -456,12 +457,26 @@ export const getDashboardEventosAutorizados = async (
 export const createIntrusion = async (
   payload: IntrusionPayload
 ): Promise<Intrusion> => {
-  const { data } = await apiClient.post<Intrusion>('/intrusiones', payload);
-  const normalized = normalizeIntrusion(data);
-  if (!normalized) {
-    throw new Error('Respuesta inesperada al crear la intrusión.');
+  try {
+    const { data } = await apiClient.post<Intrusion>('/intrusiones', payload);
+    const normalized = normalizeIntrusion(data);
+    if (!normalized) {
+      throw new Error('Respuesta inesperada al crear la intrusión.');
+    }
+    return normalized;
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: unknown } };
+    const backendMessage = (() => {
+      const data = axiosError?.response?.data as
+        | { message?: string; mensaje?: string; error?: string }
+        | undefined;
+
+      return data?.message || data?.mensaje || data?.error;
+    })();
+
+    const errorMessage = backendMessage || (error as Error)?.message || 'Error al crear la intrusión.';
+    throw new Error(errorMessage);
   }
-  return normalized;
 };
 
 export const updateIntrusion = async (
