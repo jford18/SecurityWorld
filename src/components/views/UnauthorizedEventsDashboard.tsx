@@ -1,15 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-  Cell,
-  Legend,
-} from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import IntrusionesFilters from '@/components/intrusiones/IntrusionesFilters';
 import {
   IntrusionConsolidadoFilters,
@@ -53,7 +43,6 @@ const UnauthorizedEventsDashboard: React.FC = () => {
     () =>
       (data?.tiempoLlegada ?? []).map((row) => ({
         sitio_nombre: row.sitio_nombre ?? 'Sin sitio',
-        zona: row.zona ?? 'GENERAL',
         tiempo_llegada_prom_min: row.tiempo_llegada_prom_min ?? 0,
       })),
     [data?.tiempoLlegada]
@@ -61,28 +50,7 @@ const UnauthorizedEventsDashboard: React.FC = () => {
 
   const tableData = useMemo(() => data?.resumen ?? [], [data?.resumen]);
 
-  const uniqueZones = useMemo(() => {
-    const zones = new Set<string>();
-    chartData.forEach((item) => zones.add(item.zona || 'GENERAL'));
-    return Array.from(zones);
-  }, [chartData]);
-
-  const getColorForZone = (zone: string) => {
-    const key = zone || 'GENERAL';
-    const index = uniqueZones.indexOf(key);
-    return colorPalette[index >= 0 ? index % colorPalette.length : 0];
-  };
-
-  const legendPayload = useMemo(
-    () =>
-      uniqueZones.map((zone) => ({
-        id: zone || 'GENERAL',
-        type: 'square' as const,
-        value: zone || 'GENERAL',
-        color: getColorForZone(zone),
-      })),
-    [uniqueZones]
-  );
+  const getColor = () => colorPalette[0];
 
   return (
     <div className="space-y-6">
@@ -111,7 +79,7 @@ const UnauthorizedEventsDashboard: React.FC = () => {
           <div className="lg:col-span-2 bg-slate-50 border border-slate-100 rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
               <h5 className="text-lg font-semibold text-[#1C2E4A]">
-                Tiempo de llegada fuerza de reacción (min) por Sitio y Zona
+                Tiempo de llegada fuerza de reacción (min) por Sitio
               </h5>
               <span className="text-xs text-gray-500">Top 15</span>
             </div>
@@ -139,12 +107,8 @@ const UnauthorizedEventsDashboard: React.FC = () => {
                       tick={{ fontSize: 12 }}
                     />
                     <Tooltip
-                      formatter={(value, _name, props) => [
-                        `${value as number} min`,
-                        `Zona: ${(props?.payload?.zona as string) || 'GENERAL'}`,
-                      ]}
+                      formatter={(value: number) => [`${value} min`, 'Tiempo de llegada']}
                     />
-                    <Legend payload={legendPayload} />
                     <Bar
                       dataKey="tiempo_llegada_prom_min"
                       name="Tiempo de llegada (min)"
@@ -152,8 +116,8 @@ const UnauthorizedEventsDashboard: React.FC = () => {
                     >
                       {chartData.map((row, index) => (
                         <Cell
-                          key={`${row.sitio_nombre}-${row.zona}-${index}`}
-                          fill={getColorForZone(row.zona)}
+                          key={`${row.sitio_nombre}-${index}`}
+                          fill={getColor()}
                         />
                       ))}
                     </Bar>

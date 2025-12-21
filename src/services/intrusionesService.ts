@@ -224,7 +224,6 @@ export interface EventosDashboardResponse {
 
 export interface TiempoLlegadaDashboardRow {
   sitio_nombre: string | null;
-  zona: string | null;
   tiempo_llegada_prom_min: number;
 }
 
@@ -369,7 +368,6 @@ export const getDashboardEventosNoAutorizados = async (
     const tiempoLlegada = Array.isArray(data?.tiempoLlegada)
       ? data.tiempoLlegada.map((row) => ({
           sitio_nombre: row?.sitio_nombre ?? null,
-          zona: row?.zona ?? null,
           tiempo_llegada_prom_min:
             row?.tiempo_llegada_prom_min === null || row?.tiempo_llegada_prom_min === undefined
               ? 0
