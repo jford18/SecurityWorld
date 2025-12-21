@@ -1043,12 +1043,17 @@ LIMIT 50;`
     const total = Number(totalResult?.rows?.[0]?.total) || 0;
 
     const tiempoLlegada = (tiempoLlegadaResult?.rows ?? []).map((row) => ({
-      sitio_nombre: row?.sitio_nombre ?? null,
-      tiempo_llegada_prom_min:
+      sitio: row?.sitio_nombre || "SIN SITIO",
+      minutos:
         row?.tiempo_llegada_prom_min === null || row?.tiempo_llegada_prom_min === undefined
           ? 0
           : Number(row.tiempo_llegada_prom_min),
     }));
+
+    console.log(
+      "[INTRUSIONES][DASHBOARD][NO_AUTORIZADOS] tiempoLlegada sample:",
+      tiempoLlegada.slice(0, 3)
+    );
 
     const resumen = (resumenResult?.rows ?? []).map((row) => ({
       nombre_sitio: row?.nombre_sitio ?? null,

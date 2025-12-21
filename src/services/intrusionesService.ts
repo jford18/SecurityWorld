@@ -223,8 +223,8 @@ export interface EventosDashboardResponse {
 }
 
 export interface TiempoLlegadaDashboardRow {
-  sitio_nombre: string | null;
-  tiempo_llegada_prom_min: number;
+  sitio: string | null;
+  minutos: number;
 }
 
 export interface ResumenProtocoloEventoRow {
@@ -367,11 +367,9 @@ export const getDashboardEventosNoAutorizados = async (
 
     const tiempoLlegada = Array.isArray(data?.tiempoLlegada)
       ? data.tiempoLlegada.map((row) => ({
-          sitio_nombre: row?.sitio_nombre ?? null,
-          tiempo_llegada_prom_min:
-            row?.tiempo_llegada_prom_min === null || row?.tiempo_llegada_prom_min === undefined
-              ? 0
-              : Number(row.tiempo_llegada_prom_min),
+          sitio: row?.sitio ?? null,
+          minutos:
+            row?.minutos === null || row?.minutos === undefined ? 0 : Number(row.minutos),
         }))
       : [];
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LabelList } from 'recharts';
 import IntrusionesFilters from '@/components/intrusiones/IntrusionesFilters';
 import {
   IntrusionConsolidadoFilters,
@@ -39,14 +39,18 @@ const UnauthorizedEventsDashboard: React.FC = () => {
     setFilters(updatedFilters);
   };
 
-  const chartData = useMemo(
-    () =>
-      (data?.tiempoLlegada ?? []).map((row) => ({
-        sitio_nombre: row.sitio_nombre ?? 'Sin sitio',
-        tiempo_llegada_prom_min: row.tiempo_llegada_prom_min ?? 0,
-      })),
-    [data?.tiempoLlegada]
-  );
+  const chartData = useMemo(() => {
+    const mapped = (data?.tiempoLlegada ?? []).map((row) => ({
+      sitio: row?.sitio ?? 'Sin sitio',
+      minutos: Number(row?.minutos ?? 0),
+    }));
+
+    const sorted = mapped.sort((a, b) => b.minutos - a.minutos).slice(0, 15);
+
+    console.log('[INTRUSIONES][UI][NO_AUTORIZADOS] chartData:', sorted);
+
+    return sorted;
+  }, [data?.tiempoLlegada]);
 
   const tableData = useMemo(() => data?.resumen ?? [], [data?.resumen]);
 
@@ -83,43 +87,46 @@ const UnauthorizedEventsDashboard: React.FC = () => {
               </h5>
               <span className="text-xs text-gray-500">Top 15</span>
             </div>
-            <div className="h-96">
+            <div className="h-[360px]">
               {isLoading ? (
                 <p className="text-sm text-gray-600">Cargando gráfico...</p>
               ) : chartData.length === 0 ? (
                 <p className="text-sm text-gray-600">No hay datos para los filtros seleccionados.</p>
               ) : (
-                <ResponsiveContainer>
+                <ResponsiveContainer width="100%" height={360}>
                   <BarChart
                     data={chartData}
                     layout="vertical"
-                    margin={{ top: 10, right: 30, left: 180, bottom: 10 }}
+                    margin={{ top: 10, right: 20, left: 60, bottom: 10 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                       type="number"
-                      label={{ value: 'Tiempo de llegada (min)', position: 'insideBottomRight', offset: -5 }}
+                      label={{
+                        value: 'Tiempo de llegada fuerza de reacción (min)',
+                        position: 'insideBottomRight',
+                        offset: -5,
+                      }}
                     />
                     <YAxis
-                      dataKey="sitio_nombre"
+                      dataKey="sitio"
                       type="category"
-                      width={260}
+                      width={240}
                       tick={{ fontSize: 12 }}
+                      tickFormatter={(value: string) =>
+                        value?.length > 30 ? `${value.slice(0, 30)}…` : value
+                      }
                     />
                     <Tooltip
                       formatter={(value: number) => [`${value} min`, 'Tiempo de llegada']}
                     />
                     <Bar
-                      dataKey="tiempo_llegada_prom_min"
+                      dataKey="minutos"
                       name="Tiempo de llegada (min)"
                       radius={[0, 4, 4, 0]}
+                      fill={getColor()}
                     >
-                      {chartData.map((row, index) => (
-                        <Cell
-                          key={`${row.sitio_nombre}-${index}`}
-                          fill={getColor()}
-                        />
-                      ))}
+                      <LabelList dataKey="minutos" position="insideRight" />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
