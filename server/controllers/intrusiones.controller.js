@@ -1008,7 +1008,6 @@ WHERE B.NECESITA_PROTOCOLO = TRUE;`
     const tiempoLlegadaResult = await pool.query(
       `SELECT
     C.NOMBRE AS SITIO_NOMBRE,
-    COALESCE(C.ZONA, 'GENERAL') AS ZONA,
     ROUND(AVG(EXTRACT(EPOCH FROM (A.FECHA_REACCION - A.FECHA_EVENTO)) / 60.0), 2) AS TIEMPO_LLEGADA_PROM_MIN
 FROM PUBLIC.INTRUSIONES A
 JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.DESCRIPCION = A.TIPO)
@@ -1016,7 +1015,7 @@ LEFT JOIN PUBLIC.SITIOS C ON (C.ID = A.SITIO_ID)
 WHERE B.NECESITA_PROTOCOLO = TRUE
   AND A.FECHA_EVENTO IS NOT NULL
   AND A.FECHA_REACCION IS NOT NULL
-GROUP BY C.NOMBRE, COALESCE(C.ZONA, 'GENERAL')
+GROUP BY C.NOMBRE
 ORDER BY TIEMPO_LLEGADA_PROM_MIN DESC
 LIMIT 15;`
     );
@@ -1045,7 +1044,6 @@ LIMIT 50;`
 
     const tiempoLlegada = (tiempoLlegadaResult?.rows ?? []).map((row) => ({
       sitio_nombre: row?.sitio_nombre ?? null,
-      zona: row?.zona ?? null,
       tiempo_llegada_prom_min:
         row?.tiempo_llegada_prom_min === null || row?.tiempo_llegada_prom_min === undefined
           ? 0
@@ -1066,7 +1064,7 @@ LIMIT 50;`
     }));
 
     console.log(
-      "[INTRUSIONES][DASHBOARD][NO_AUTORIZADOS] total:",
+      "[INTRUSIONES][DASHBOARD][NO_AUTORIZADOS] SIN ZONA - total:",
       total,
       "tiempoLlegada:",
       tiempoLlegada.length,
