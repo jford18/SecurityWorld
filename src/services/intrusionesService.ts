@@ -213,6 +213,7 @@ export interface EventosDashboardPorDiaRow {
 export interface EventosDashboardPorSitioRow {
   sitio_id: number | null;
   sitio_nombre: string | null;
+  sitio_descripcion?: string | null;
   total: number;
 }
 
@@ -224,10 +225,12 @@ export interface EventosDashboardResponse {
 
 export interface TiempoLlegadaDashboardRow {
   sitio: string | null;
+  sitio_descripcion?: string | null;
   minutos: number;
 }
 
 export interface ResumenProtocoloEventoRow {
+  sitio_descripcion: string | null;
   nombre_sitio: string | null;
   fecha_intrusion: string | null;
   hora_intrusion: string | null;
@@ -367,7 +370,8 @@ export const getDashboardEventosNoAutorizados = async (
 
     const tiempoLlegada = Array.isArray(data?.tiempoLlegada)
       ? data.tiempoLlegada.map((row) => ({
-          sitio: row?.sitio ?? null,
+          sitio_descripcion: row?.sitio_descripcion ?? null,
+          sitio: row?.sitio_descripcion ?? row?.sitio ?? null,
           minutos:
             row?.minutos === null || row?.minutos === undefined ? 0 : Number(row.minutos),
         }))
@@ -375,7 +379,8 @@ export const getDashboardEventosNoAutorizados = async (
 
     const resumen = Array.isArray(data?.resumen)
       ? data.resumen.map((row) => ({
-          nombre_sitio: row?.nombre_sitio ?? null,
+          sitio_descripcion: row?.sitio_descripcion ?? row?.nombre_sitio ?? null,
+          nombre_sitio: row?.nombre_sitio ?? row?.sitio_descripcion ?? null,
           fecha_intrusion: row?.fecha_intrusion ?? null,
           hora_intrusion: row?.hora_intrusion ?? null,
           primera_comunicacion: row?.primera_comunicacion ?? null,
@@ -424,7 +429,8 @@ export const getDashboardEventosAutorizados = async (
     const porSitio = Array.isArray(data?.porSitio)
       ? data.porSitio.map((row) => ({
           sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
-          sitio_nombre: row?.sitio_nombre ?? null,
+          sitio_descripcion: row?.sitio_descripcion ?? null,
+          sitio_nombre: row?.sitio_nombre ?? row?.sitio_descripcion ?? null,
           total: Number(row?.total) || 0,
         }))
       : [];
