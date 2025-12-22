@@ -2,6 +2,7 @@ import argparse
 import os
 import re
 import time
+from datetime import datetime
 import traceback
 from pathlib import Path
 
@@ -278,42 +279,64 @@ def process_camera_resource_status(excel_path: str) -> None:
             inplace=True,
         )
 
-        df["last_online_time"] = pd.to_datetime(df["last_online_time"], errors="coerce")
-        df["last_online_time"] = df["last_online_time"].where(
-            df["last_online_time"].notna(), None
-        )
+        def safe_str(v):
+            if v is None:
+                return ""
+            try:
+                if pd.isna(v):
+                    return ""
+            except Exception:
+                pass
+            return str(v).strip()
 
         def normalize_online_status(value):
-            if value is None or (isinstance(value, float) and np.isnan(value)):
+            val = safe_str(value).upper()
+            if val == "":
                 return None
+            if val in {"ONLINE", "OFFLINE"}:
+                return val
+            return val
+
+        def parse_last_online(value):
+            if value is None:
+                return None
+            try:
+                if pd.isna(value):
+                    return None
+            except Exception:
+                pass
+
+            if isinstance(value, datetime):
+                return value
+
             value_str = str(value).strip()
             if not value_str:
                 return None
-            if value_str.lower() == "online":
-                return "ONLINE"
-            if value_str.lower() == "offline":
-                return "OFFLINE"
-            return value_str.upper()
+
+            parsed = pd.to_datetime(value_str, errors="coerce")
+            if pd.isna(parsed):
+                return None
+            return parsed.to_pydatetime() if hasattr(parsed, "to_pydatetime") else parsed
 
         df["online_status"] = df["online_status"].apply(normalize_online_status)
 
         records: list[dict] = []
         for _, row in df.iterrows():
-            device_code = str(row.get("device_code") or "").strip()
+            device_code = safe_str(row.get("device_code"))
             if not device_code:
                 continue
 
             records.append(
                 {
-                    "camera_name": (row.get("camera_name") or "").strip(),
+                    "camera_name": safe_str(row.get("camera_name")),
                     "device_code": device_code,
-                    "site_name": (row.get("site_name") or "").strip(),
-                    "device_type": (row.get("device_type") or "").strip(),
+                    "site_name": safe_str(row.get("site_name")),
+                    "device_type": safe_str(row.get("device_type")),
                     "online_status": row.get("online_status"),
-                    "record_status": (row.get("record_status") or "").strip(),
-                    "signal_status": (row.get("signal_status") or "").strip(),
-                    "last_online_time": row.get("last_online_time"),
-                    "ip_address": (row.get("ip_address") or "").strip(),
+                    "record_status": safe_str(row.get("record_status")),
+                    "signal_status": safe_str(row.get("signal_status")),
+                    "last_online_time": parse_last_online(row.get("last_online_time")),
+                    "ip_address": safe_str(row.get("ip_address")),
                 }
             )
 
