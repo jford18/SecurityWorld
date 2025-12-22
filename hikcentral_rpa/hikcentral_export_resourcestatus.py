@@ -234,8 +234,6 @@ def registrar_ejecucion_y_pasos(
 
 
 def process_camera_resource_status(excel_path: str) -> None:
-    from datetime import datetime
-
     excel_file = Path(excel_path)
     if not excel_file.exists():
         excel_file = max(
@@ -249,8 +247,6 @@ def process_camera_resource_status(excel_path: str) -> None:
         return
 
     try:
-        conn = None
-        cur = None
         df = pd.read_excel(excel_file, sheet_name="Camera", header=7)
         df = df[df["Name"].notna()].copy()
         df = df[
@@ -271,116 +267,104 @@ def process_camera_resource_status(excel_path: str) -> None:
             columns={
                 "Name": "camera_name",
                 "Channel Address": "device_code",
-                "Device Address": "device_address",
+                "Device Address": "ip_address",
                 "Area": "site_name",
-                "Device Model": "device_model",
-                "Network Status": "network_status",
-                "Video Signal": "video_signal",
-                "Recording Status": "recording_status",
-                "Auto-Check Time": "auto_check_time",
+                "Device Model": "device_type",
+                "Network Status": "online_status",
+                "Video Signal": "signal_status",
+                "Recording Status": "record_status",
+                "Auto-Check Time": "last_online_time",
             },
             inplace=True,
         )
 
-        df["auto_check_time"] = pd.to_datetime(df["auto_check_time"], errors="coerce")
-        df["auto_check_time"] = df["auto_check_time"].where(
-            df["auto_check_time"].notna(), None
+        df["last_online_time"] = pd.to_datetime(df["last_online_time"], errors="coerce")
+        df["last_online_time"] = df["last_online_time"].where(
+            df["last_online_time"].notna(), None
         )
 
-        conn = get_pg_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = 'public'
-              AND table_name   = 'hik_camera_resource_status'
-            """
-        )
-        db_columns = {row[0] for row in cur.fetchall()}
-        cur.close()
-        cur = None
+        def normalize_online_status(value):
+            if value is None or (isinstance(value, float) and np.isnan(value)):
+                return None
+            value_str = str(value).strip()
+            if not value_str:
+                return None
+            if value_str.lower() == "online":
+                return "ONLINE"
+            if value_str.lower() == "offline":
+                return "OFFLINE"
+            return value_str.upper()
 
-        possible_mappings = {
-            "camera_name": ["camera_name"],
-            "device_code": ["device_code"],
-            "device_address": ["device_address", "ip_address"],
-            "site_name": ["site_name"],
-            "network_status": ["network_status", "online_status"],
-            "video_signal": ["video_signal", "signal_status"],
-            "recording_status": ["recording_status", "record_status"],
-            "auto_check_time": ["auto_check_time", "last_online_time"],
-            "device_model": ["device_model"],
-        }
+        df["online_status"] = df["online_status"].apply(normalize_online_status)
 
-        insert_columns: list[str] = []
-        df_columns: list[str] = []
-
-        for df_col, candidates in possible_mappings.items():
-            if df_col not in df.columns:
+        records: list[dict] = []
+        for _, row in df.iterrows():
+            device_code = str(row.get("device_code") or "").strip()
+            if not device_code:
                 continue
-            target = next((c for c in candidates if c in db_columns), None)
-            if target:
-                insert_columns.append(target)
-                df_columns.append(df_col)
 
-        for key in ("camera_name", "device_code"):
-            if key not in df_columns and key in df.columns and key in db_columns:
-                insert_columns.insert(0, key)
-                df_columns.insert(0, key)
-
-        if "camera_name" not in insert_columns or "device_code" not in insert_columns:
-            print(
-                "[ERROR] La tabla hik_camera_resource_status no tiene columnas camera_name y device_code compatibles."
+            records.append(
+                {
+                    "camera_name": (row.get("camera_name") or "").strip(),
+                    "device_code": device_code,
+                    "site_name": (row.get("site_name") or "").strip(),
+                    "device_type": (row.get("device_type") or "").strip(),
+                    "online_status": row.get("online_status"),
+                    "record_status": (row.get("record_status") or "").strip(),
+                    "signal_status": (row.get("signal_status") or "").strip(),
+                    "last_online_time": row.get("last_online_time"),
+                    "ip_address": (row.get("ip_address") or "").strip(),
+                }
             )
-            return
-
-        df_for_db = df[df_columns].copy()
-        df_for_db = df_for_db.replace({np.nan: None})
-        df_for_db = df_for_db.where(df_for_db.notna(), None)
-        records = df_for_db.to_dict(orient="records")
 
         if not records:
             print("[INFO] No hay registros de cámaras para insertar/actualizar.")
             return
 
-        cols_sql = ", ".join(insert_columns + ["updated_at"])
-        vals_sql = ", ".join([f"%({c})s" for c in df_columns] + ["NOW()"])
-
-        update_cols = [c for c in insert_columns if c not in ("camera_name", "device_code")]
-        set_sql = ", ".join([f"{c} = EXCLUDED.{c}" for c in update_cols] + ["updated_at = NOW()"])
-
-        sql = f"""
-            INSERT INTO hik_camera_resource_status (
-                {cols_sql}
+        sql = """
+            INSERT INTO PUBLIC.HIK_CAMERA_RESOURCE_STATUS (
+                CAMERA_NAME, DEVICE_CODE, SITE_NAME, DEVICE_TYPE, ONLINE_STATUS, RECORD_STATUS, SIGNAL_STATUS, LAST_ONLINE_TIME, IP_ADDRESS, CREATED_AT, UPDATED_AT
             )
-            VALUES (
-                {vals_sql}
-            )
-            ON CONFLICT (camera_name, device_code)
-            DO UPDATE SET
-                {set_sql};
+            SELECT
+                %(camera_name)s,
+                %(device_code)s,
+                %(site_name)s,
+                %(device_type)s,
+                %(online_status)s,
+                %(record_status)s,
+                %(signal_status)s,
+                %(last_online_time)s,
+                %(ip_address)s,
+                NOW(),
+                NOW()
+            ON CONFLICT (DEVICE_CODE) DO UPDATE SET
+                CAMERA_NAME      = EXCLUDED.CAMERA_NAME,
+                SITE_NAME        = EXCLUDED.SITE_NAME,
+                DEVICE_TYPE      = EXCLUDED.DEVICE_TYPE,
+                ONLINE_STATUS    = EXCLUDED.ONLINE_STATUS,
+                RECORD_STATUS    = EXCLUDED.RECORD_STATUS,
+                SIGNAL_STATUS    = EXCLUDED.SIGNAL_STATUS,
+                LAST_ONLINE_TIME = EXCLUDED.LAST_ONLINE_TIME,
+                IP_ADDRESS       = EXCLUDED.IP_ADDRESS,
+                UPDATED_AT       = NOW();
         """
 
         try:
+            conn = get_pg_connection()
             with conn:
-                with conn.cursor() as cur_db:
-                    execute_batch(cur_db, sql, records, page_size=500)
+                with conn.cursor() as cur:
+                    execute_batch(cur, sql, records, page_size=500)
+            print(f"[INFO] Cámaras insertadas/actualizadas: {len(records)}")
         except Exception as db_error:
             print(f"[ERROR] No se pudieron insertar/actualizar las cámaras: {db_error}")
             traceback.print_exc()
-            return
-
-        print(f"[INFO] Cámaras insertadas/actualizadas: {len(records)}")
+        finally:
+            if 'conn' in locals() and conn:
+                conn.close()
 
     except Exception as e:
         print(f"[ERROR] Error al procesar el archivo de cámaras: {e}")
         traceback.print_exc()
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
 
 
 def process_encoding_device_status(excel_path: str) -> None:
