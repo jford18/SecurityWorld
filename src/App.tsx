@@ -96,6 +96,8 @@ import IntrusionsConsolidated from './components/views/IntrusionsConsolidated';
 import IntrusionsAdministrador from './components/views/IntrusionsAdministrador';
 import UnauthorizedEventsDashboard from './components/views/UnauthorizedEventsDashboard';
 import AuthorizedEventsDashboard from './components/views/AuthorizedEventsDashboard';
+import { registrarLogeo } from './services/authService';
+import ReporteLogeosTurnos from './screens/reportes/ReporteLogeosTurnos';
 
 interface RouteDefinition {
   path: string;
@@ -132,6 +134,7 @@ const routeConfig: RouteDefinition[] = [
     path: '/reportes/eventos-autorizados',
     element: <AuthorizedEventsDashboard />,
   },
+  { path: '/reportes/logeos-turnos', element: <ReporteLogeosTurnos /> },
   { path: '/intrusiones', element: <Intrusions /> },
   { path: '/intrusiones-administrador', element: <IntrusionsAdministrador /> },
   { path: '/reportes/alertas-turno', element: <AlertsReportByShift /> },
@@ -275,17 +278,26 @@ const AppContent: React.FC = () => {
     }
   }, [session.token, setSession]);
 
-  const handleLogin = (payload: {
+  const handleLogin = async (payload: {
     user: { id: number; nombre_usuario: string };
     selectedRole: RoleOption;
     consoleName: string;
+    consoleId: number;
     token: string;
     roles: RoleOption[];
     roleTokens: RoleToken[];
     requirePasswordChange: boolean;
   }) => {
-    const { user, selectedRole, consoleName, token, roles, roleTokens, requirePasswordChange } =
-      payload;
+    const {
+      user,
+      selectedRole,
+      consoleName,
+      consoleId,
+      token,
+      roles,
+      roleTokens,
+      requirePasswordChange,
+    } = payload;
 
     setSession({
       userId: user.id,
@@ -320,6 +332,12 @@ const AppContent: React.FC = () => {
       localStorage.removeItem('selectedConsole');
     }
     localStorage.setItem('requirePasswordChange', requirePasswordChange ? 'true' : 'false');
+
+    try {
+      await registrarLogeo(consoleId);
+    } catch (error) {
+      console.error('No se pudo registrar el logeo con consola', error);
+    }
   };
 
   const isAuthenticated = Boolean(session.token);

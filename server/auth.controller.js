@@ -1,6 +1,19 @@
 import jwt from "jsonwebtoken";
 import db from "./db.js";
 
+const parseNumeric = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const extractClientIp = (req) => {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim() !== "") {
+    return forwarded.split(",")[0].trim();
+  }
+  return typeof req.ip === "string" ? req.ip : null;
+};
+
 export const loginUser = async (req, res) => {
   try {
     const { nombre_usuario, contrasena } = req.body;
@@ -59,6 +72,29 @@ export const loginUser = async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || "8h" }
     );
 
+    const consolaCandidates = [
+      req.body?.consola_id,
+      req.body?.consolaId,
+      req.headers["x-consola-id"],
+      req.headers["x-consolaid"],
+    ];
+    const consolaId = consolaCandidates
+      .map(parseNumeric)
+      .find((value) => value !== null && value > 0);
+
+    const ipOrigen = extractClientIp(req);
+    const userAgent = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : null;
+
+    try {
+      await db.query(
+        `INSERT INTO LOG_USUARIO_LOGIN (usuario_id, consola_id, fecha_logeo, ip_origen, user_agent)
+         VALUES ($1, $2, NOW(), $3, $4)`,
+        [user.id, consolaId ?? null, ipOrigen, userAgent]
+      );
+    } catch (logError) {
+      console.error("[AUTH] No se pudo registrar el logeo de usuario", logError);
+    }
+
     return res.json({
       usuario_id: user.id,
       nombre_usuario: user.nombre_usuario,
@@ -70,6 +106,39 @@ export const loginUser = async (req, res) => {
   } catch (error) {
     console.error("Error en loginUser:", error);
     res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+export const registrarLogeo = async (req, res) => {
+  try {
+    const usuarioId = req.user?.usuario_id;
+    const { CONSOLA_ID, consola_id, consolaId } = req.body ?? {};
+
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
+
+    const consolaIdValue = [consola_id, CONSOLA_ID, consolaId]
+      .map(parseNumeric)
+      .find((value) => value !== null && value > 0);
+
+    if (!consolaIdValue) {
+      return res.status(400).json({ message: "CONSOLA_ID es obligatorio" });
+    }
+
+    const ipOrigen = extractClientIp(req);
+    const userAgent = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : null;
+
+    await db.query(
+      `INSERT INTO LOG_USUARIO_LOGIN (usuario_id, consola_id, fecha_logeo, ip_origen, user_agent)
+       VALUES ($1, $2, NOW(), $3, $4)`,
+      [usuarioId, consolaIdValue, ipOrigen, userAgent]
+    );
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Error al registrar logeo", error);
+    return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 

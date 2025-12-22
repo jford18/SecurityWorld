@@ -28,3 +28,8 @@ export const changePassword = async (nuevaContrasena: string) => {
   const { data } = await api.post('/auth/cambiar-clave', { nuevaContrasena });
   return data as { success: boolean; message: string };
 };
+
+export const registrarLogeo = async (consolaId: number) => {
+  const { data } = await api.post('/auth/registrar-logeo', { CONSOLA_ID: consolaId });
+  return data as { success: boolean };
+};
