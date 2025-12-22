@@ -8,6 +8,7 @@ interface LoginScreenProps {
     user: UsuarioAutenticado;
     selectedRole: RoleOption;
     consoleName: string;
+    consoleId: number;
     token: string;
     roles: RoleOption[];
     roleTokens: RoleToken[];
@@ -144,14 +145,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       return;
     }
 
-    const selectedConsoleName = consolas.find((consola) => consola.id === selectedConsolaId)?.nombre;
+    const selectedConsole = consolas.find((consola) => consola.id === selectedConsolaId);
+    const selectedConsoleName = selectedConsole?.nombre;
 
     if (!authToken) {
       setError('No se recibió un token de autenticación válido.');
       return;
     }
 
-    if (!selectedConsolaId || !selectedConsoleName) {
+    if (!selectedConsole || !selectedConsoleName) {
       setError('Seleccione una consola para continuar.'); // FIX: Validar que el usuario elija una consola antes de continuar.
       return;
     }
@@ -175,6 +177,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         user: usuarioAutenticado,
         selectedRole: assignedRole,
         consoleName: selectedConsoleName || '',
+        consoleId: selectedConsole.id,
         token: sessionToken,
         roles: [assignedRole],
         roleTokens,
