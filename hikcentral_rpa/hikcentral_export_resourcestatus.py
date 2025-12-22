@@ -141,10 +141,11 @@ class StepTimer:
 BASE_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = BASE_DIR / ".env"
 load_dotenv(ENV_PATH)
-URL = "https://172.16.9.253/#"
+
+URL = "http://172.16.9.10/#/"
 SCRIPT_NAME = "hikcentral_export_resourcestatus.py"
 HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
-HIK_PASSWORD = os.getenv("HIK_PASSWORD", "AbcDef*91Ghj#")
+HIK_PASSWORD = os.getenv("HIK_PASSWORD", "SW2112asm")
 
 DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")
 
