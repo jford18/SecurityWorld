@@ -1007,7 +1007,7 @@ WHERE B.NECESITA_PROTOCOLO = TRUE;`
 
     const tiempoLlegadaResult = await pool.query(
       `SELECT
-    C.NOMBRE AS SITIO_NOMBRE,
+    COALESCE(C.DESCRIPCION, C.NOMBRE) AS SITIO_DESCRIPCION,
     ROUND(AVG(EXTRACT(EPOCH FROM (A.FECHA_REACCION - A.FECHA_EVENTO)) / 60.0), 2) AS TIEMPO_LLEGADA_PROM_MIN
 FROM PUBLIC.INTRUSIONES A
 JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.DESCRIPCION = A.TIPO)
@@ -1015,14 +1015,14 @@ LEFT JOIN PUBLIC.SITIOS C ON (C.ID = A.SITIO_ID)
 WHERE B.NECESITA_PROTOCOLO = TRUE
   AND A.FECHA_EVENTO IS NOT NULL
   AND A.FECHA_REACCION IS NOT NULL
-GROUP BY C.NOMBRE
+GROUP BY COALESCE(C.DESCRIPCION, C.NOMBRE)
 ORDER BY TIEMPO_LLEGADA_PROM_MIN DESC
-LIMIT 15;`
+LIMIT 15; /* A: PUBLIC.INTRUSIONES, B: PUBLIC.CATALOGO_TIPO_INTRUSION, filtro principal: B.NECESITA_PROTOCOLO = TRUE */`
     );
 
     const resumenResult = await pool.query(
       `SELECT
-    C.NOMBRE AS NOMBRE_SITIO,
+    COALESCE(C.DESCRIPCION, C.NOMBRE) AS SITIO_DESCRIPCION,
     TO_CHAR(A.FECHA_EVENTO, 'DD/MM/YYYY') AS FECHA_INTRUSION,
     TO_CHAR(A.FECHA_EVENTO, 'HH24:MI:SS') AS HORA_INTRUSION,
     D.DESCRIPCION AS PRIMERA_COMUNICACION,
@@ -1037,13 +1037,14 @@ LEFT JOIN PUBLIC.CATALOGO_FUERZA_REACCION E ON (E.ID = A.FUERZA_REACCION_ID)
 LEFT JOIN PUBLIC.CATALOGO_CONCLUSION_EVENTO F ON (F.ID = A.CONCLUSION_EVENTO_ID)
 WHERE B.NECESITA_PROTOCOLO = TRUE
 ORDER BY A.FECHA_EVENTO DESC NULLS LAST, A.ID DESC
-LIMIT 50;`
+LIMIT 50; /* A: PUBLIC.INTRUSIONES, B: PUBLIC.CATALOGO_TIPO_INTRUSION, filtro principal: B.NECESITA_PROTOCOLO = TRUE */`
     );
 
     const total = Number(totalResult?.rows?.[0]?.total) || 0;
 
     const tiempoLlegada = (tiempoLlegadaResult?.rows ?? []).map((row) => ({
-      sitio: row?.sitio_nombre || "SIN SITIO",
+      sitio_descripcion: row?.sitio_descripcion ?? null,
+      sitio: row?.sitio_descripcion || "SIN SITIO",
       minutos:
         row?.tiempo_llegada_prom_min === null || row?.tiempo_llegada_prom_min === undefined
           ? 0
@@ -1056,7 +1057,8 @@ LIMIT 50;`
     );
 
     const resumen = (resumenResult?.rows ?? []).map((row) => ({
-      nombre_sitio: row?.nombre_sitio ?? null,
+      sitio_descripcion: row?.sitio_descripcion ?? null,
+      nombre_sitio: row?.sitio_descripcion ?? null,
       fecha_intrusion: row?.fecha_intrusion ?? null,
       hora_intrusion: row?.hora_intrusion ?? null,
       primera_comunicacion: row?.primera_comunicacion ?? null,
@@ -1121,14 +1123,14 @@ ORDER BY PERIODO;`
     const porSitioResult = await pool.query(
       `SELECT
     A.SITIO_ID,
-    C.NOMBRE AS SITIO_NOMBRE,
+    COALESCE(C.DESCRIPCION, C.NOMBRE) AS SITIO_DESCRIPCION,
     COUNT(*) AS TOTAL
 FROM PUBLIC.INTRUSIONES A
 LEFT JOIN PUBLIC.CATALOGO_TIPO_INTRUSION B ON (B.DESCRIPCION = A.TIPO)
 LEFT JOIN PUBLIC.SITIOS C ON (C.ID = A.SITIO_ID)
 WHERE COALESCE(B.NECESITA_PROTOCOLO, FALSE) = FALSE
-GROUP BY A.SITIO_ID, C.NOMBRE
-ORDER BY TOTAL DESC;`
+GROUP BY A.SITIO_ID, COALESCE(C.DESCRIPCION, C.NOMBRE)
+ORDER BY TOTAL DESC; /* A: PUBLIC.INTRUSIONES, B: PUBLIC.CATALOGO_TIPO_INTRUSION, filtro principal: COALESCE(B.NECESITA_PROTOCOLO, FALSE) = FALSE */`
     );
 
     const responsePayload = {
@@ -1141,7 +1143,8 @@ ORDER BY TOTAL DESC;`
         .filter((row) => row.periodo !== null),
       porSitio: (porSitioResult.rows ?? []).map((row) => ({
         sitio_id: row?.sitio_id === null || row?.sitio_id === undefined ? null : Number(row.sitio_id),
-        sitio_nombre: row?.sitio_nombre ?? null,
+        sitio_descripcion: row?.sitio_descripcion ?? null,
+        sitio_nombre: row?.sitio_descripcion ?? null,
         total: row?.total === null || row?.total === undefined ? 0 : Number(row.total),
       })),
     };

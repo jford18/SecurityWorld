@@ -41,7 +41,7 @@ const UnauthorizedEventsDashboard: React.FC = () => {
 
   const chartData = useMemo(() => {
     const mapped = (data?.tiempoLlegada ?? []).map((row) => ({
-      sitio: row?.sitio ?? 'Sin sitio',
+      sitio: row?.sitio_descripcion ?? row?.sitio ?? 'Sin sitio',
       minutos: Number(row?.minutos ?? 0),
     }));
 
@@ -178,8 +178,11 @@ const UnauthorizedEventsDashboard: React.FC = () => {
                 </tr>
               ) : (
                 tableData.map((row, index) => (
-                  <tr key={`${row.nombre_sitio}-${row.fecha_intrusion}-${index}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="px-4 py-3 text-sm text-gray-900">{row.nombre_sitio ?? 'Sin sitio'}</td>
+                  <tr
+                    key={`${row.sitio_descripcion ?? row.nombre_sitio}-${row.fecha_intrusion}-${index}`}
+                    className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                  >
+                    <td className="px-4 py-3 text-sm text-gray-900">{row.sitio_descripcion ?? row.nombre_sitio ?? 'Sin sitio'}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{row.fecha_intrusion ?? '-'}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{row.hora_intrusion ?? '-'}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{row.primera_comunicacion ?? '-'}</td>

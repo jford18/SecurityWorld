@@ -68,7 +68,7 @@ const AuthorizedEventsDashboard: React.FC = () => {
 
   const barData = useMemo(
     () => (data?.porSitio ?? []).slice(0, 15).map((row) => ({
-      sitio_nombre: row.sitio_nombre ?? 'Sin sitio',
+      sitio_nombre: row.sitio_descripcion ?? row.sitio_nombre ?? 'Sin sitio',
       total: row.total ?? 0,
     })),
     [data?.porSitio]
@@ -189,7 +189,7 @@ const AuthorizedEventsDashboard: React.FC = () => {
               ) : (
                 tablaData.map((row, index) => (
                   <tr key={`${row.sitio_id ?? 'sin-sitio'}-${index}`} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900">{row.sitio_nombre ?? 'Sin sitio'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{row.sitio_descripcion ?? row.sitio_nombre ?? 'Sin sitio'}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{row.total ?? 0}</td>
                   </tr>
                 ))
