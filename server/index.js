@@ -38,6 +38,7 @@ import tipoServicioRoutes from "./routes/tipoServicio.routes.js";
 import catalogoTipoEquipoAfectadoRoutes from "./routes/catalogoTipoEquipoAfectadoRoutes.js";
 import fallosTecnicosRoutes from "./routes/fallosTecnicosRoutes.js";
 import hikEncodingDevicesRoutes from "./routes/hikEncodingDevices.routes.js";
+import dashboardUptimeCamarasRoutes from "./routes/dashboardUptimeCamaras.routes.js";
 
 dotenv.config();
 
@@ -83,6 +84,7 @@ const knownApiPrefixes = [
   "/api/tipos-servicio",
   "/api/v1/departamentos-responsables",
   "/api/hik",
+  "/api/dashboards",
 ];
 
 app.use((req, _res, next) => {
@@ -146,6 +148,7 @@ app.use("/api/v1/departamentos-responsables", departamentosResponsablesRoutes);
 app.use("/api/tipos-servicio", tipoServicioRoutes);
 app.use("/api/catalogo-tipo-equipo-afectado", catalogoTipoEquipoAfectadoRoutes);
 app.use("/api/hik", hikEncodingDevicesRoutes);
+app.use("/api", dashboardUptimeCamarasRoutes);
 
 const logRoutes = (stack) => {
   stack
