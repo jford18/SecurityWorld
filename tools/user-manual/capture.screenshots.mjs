@@ -38,6 +38,150 @@ const buildUrl = (baseUrl, relativePath) => {
   return new URL(normalizedPath, baseUrl).href;
 };
 
+const getTagName = async (locator) => {
+  const handle = await locator.elementHandle();
+  if (!handle) return null;
+  return handle.evaluate((el) => el.tagName.toLowerCase());
+};
+
+const selectConsoleOption = async (selectLocator) => {
+  const consoleName = process.env.MANUAL_CONSOLA;
+  let selectedLabel = null;
+
+  if (consoleName) {
+    try {
+      const result = await selectLocator.selectOption({ label: consoleName });
+      if (result && result.length > 0) {
+        selectedLabel = consoleName;
+        return selectedLabel;
+      }
+    } catch (error) {
+      console.warn(`No fue posible seleccionar la consola por etiqueta: ${consoleName}`, error);
+    }
+    try {
+      const result = await selectLocator.selectOption(consoleName);
+      if (result && result.length > 0) {
+        selectedLabel = consoleName;
+        return selectedLabel;
+      }
+    } catch (error) {
+      console.warn(`No fue posible seleccionar la consola por valor: ${consoleName}`, error);
+    }
+  }
+
+  const options = await selectLocator.locator('option').all();
+  for (const option of options) {
+    const value = (await option.getAttribute('value')) ?? '';
+    if (value.trim() === '') {
+      continue;
+    }
+    await selectLocator.selectOption(value);
+    selectedLabel = (await option.textContent())?.trim() ?? value;
+    break;
+  }
+
+  if (!selectedLabel && options.length > 0) {
+    selectedLabel = (await options[0].textContent())?.trim() ?? null;
+  }
+
+  return selectedLabel;
+};
+
+const enterConsole = async (page) => {
+  const consoleLabel = page.getByLabel('Seleccione Consola');
+  const consoleText = page.getByText('Seleccione Consola', { exact: false });
+  const fallbackSelect = page.locator('select').first();
+
+  try {
+    await Promise.race([
+      consoleLabel.waitFor({ state: 'visible', timeout: 5000 }),
+      consoleText.waitFor({ state: 'visible', timeout: 5000 }),
+      fallbackSelect.waitFor({ state: 'visible', timeout: 5000 }),
+    ]);
+  } catch {
+    console.log('Console screen not detected, continuing');
+    return;
+  }
+
+  let selectedConsole = null;
+  let consoleLocator = null;
+
+  if (await consoleLabel.count()) {
+    consoleLocator = consoleLabel;
+  } else if (await fallbackSelect.count()) {
+    const tagName = await getTagName(fallbackSelect);
+    if (tagName === 'select') {
+      consoleLocator = fallbackSelect;
+    }
+  }
+
+  if (consoleLocator) {
+    const tagName = await getTagName(consoleLocator);
+    if (tagName === 'select') {
+      selectedConsole = await selectConsoleOption(consoleLocator);
+    } else {
+      await consoleLocator.click();
+      const consoleName = process.env.MANUAL_CONSOLA;
+      let optionLocator = consoleName
+        ? page.getByRole('option', { name: consoleName }).first()
+        : page.getByRole('option').first();
+
+      if (!(await optionLocator.count())) {
+        optionLocator = consoleName
+          ? page.getByText(consoleName, { exact: false }).first()
+          : page.locator('[role="option"]').first();
+      }
+
+      if (await optionLocator.count()) {
+        await optionLocator.click();
+        selectedConsole = consoleName ?? (await optionLocator.textContent())?.trim() ?? null;
+      }
+    }
+  } else {
+    const container = consoleText.first();
+    if (await container.count()) {
+      const trigger = container.locator('..').locator('input,[role="combobox"],button').first();
+      if (await trigger.count()) {
+        await trigger.click();
+        const consoleName = process.env.MANUAL_CONSOLA;
+        let optionLocator = consoleName
+          ? page.getByRole('option', { name: consoleName }).first()
+          : page.getByRole('option').first();
+
+        if (!(await optionLocator.count())) {
+          optionLocator = consoleName
+            ? page.getByText(consoleName, { exact: false }).first()
+            : page.locator('[role="option"]').first();
+        }
+
+        if (await optionLocator.count()) {
+          await optionLocator.click();
+          selectedConsole = consoleName ?? (await optionLocator.textContent())?.trim() ?? null;
+        }
+      }
+    }
+  }
+
+  const enterButton = page.getByRole('button', { name: 'Ingresar' });
+  if (await enterButton.count()) {
+    await enterButton.click();
+  }
+
+  await Promise.allSettled([
+    page.waitForSelector('text=PRINCIPAL', { timeout: 15000 }),
+    page.waitForSelector('nav', { timeout: 15000 }),
+  ]);
+
+  try {
+    await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 15000 });
+  } catch (error) {
+    console.warn('No fue posible confirmar la salida de /login:', error);
+  }
+
+  console.log(`Consola seleccionada: ${selectedConsole ?? 'no seleccionada'}`);
+  console.log(`URL tras ingresar: ${page.url()}`);
+};
+
 const takeScreenshot = async (page, outDir, entry) => {
   const filename = `${String(entry.order).padStart(2, '0')}-${slugify(entry.title)}.png`;
   const destination = path.resolve(outDir, filename);
@@ -52,23 +196,7 @@ const performLogin = async (page, baseUrl, credentials) => {
   await page.click('button[type="submit"]');
   await page.waitForLoadState('networkidle');
 
-  const consoleSelect = page.locator('#console');
-  if (await consoleSelect.count()) {
-    try {
-      await consoleSelect.waitFor({ state: 'visible', timeout: 5000 });
-      const options = await consoleSelect.locator('option:not([value=""])').all();
-      if (options.length > 0) {
-        const firstValue = await options[0].getAttribute('value');
-        if (firstValue) {
-          await consoleSelect.selectOption(firstValue);
-        }
-      }
-      await page.click('button[type="submit"]');
-      await page.waitForLoadState('networkidle');
-    } catch (error) {
-      console.warn('No fue posible seleccionar una consola automáticamente:', error);
-    }
-  }
+  await enterConsole(page);
 };
 
 const main = async () => {
