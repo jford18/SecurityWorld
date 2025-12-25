@@ -17,7 +17,9 @@ Este utilitario automatiza la navegación del portal para capturar pantallas en 
    - `MANUAL_PASS`: contraseña del usuario.
    - `MANUAL_OUT`: ruta donde se guardarán las capturas (por defecto `./tools/user-manual/out`).
 
-> También puedes definir estas variables en un archivo `.env` en la raíz del proyecto.
+3. Asegúrate de tener disponibles las dependencias de desarrollo `playwright` y `dotenv` (incluidas en `package.json`). Playwright requiere que el navegador Chromium esté instalado en el entorno.
+
+El script carga las variables desde `tools/user-manual/manual.env` (basado en `manual.env.example`).
 
 ## Uso
 
