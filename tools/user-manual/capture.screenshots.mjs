@@ -87,7 +87,15 @@ const selectConsoleOption = async (selectLocator) => {
   return selectedLabel;
 };
 
-const enterConsole = async (page) => {
+const takeNamedScreenshot = async (page, outDir, filename) => {
+  if (!outDir) return;
+  const destination = path.resolve(outDir, filename);
+  ensureOutputDir(path.dirname(destination));
+  await page.screenshot({ path: destination, fullPage: true });
+  console.log(`OK: ${filename}`);
+};
+
+const enterConsole = async (page, outDir) => {
   const consoleLabel = page.getByLabel('Seleccione Consola');
   const consoleText = page.getByText('Seleccione Consola', { exact: false });
   const fallbackSelect = page.locator('select').first();
@@ -162,6 +170,8 @@ const enterConsole = async (page) => {
     }
   }
 
+  await takeNamedScreenshot(page, outDir, '01-seleccion-consola.png');
+
   const enterButton = page.getByRole('button', { name: 'Ingresar' });
   if (await enterButton.count()) {
     await enterButton.click();
@@ -180,23 +190,91 @@ const enterConsole = async (page) => {
 
   console.log(`Consola seleccionada: ${selectedConsole ?? 'no seleccionada'}`);
   console.log(`URL tras ingresar: ${page.url()}`);
+
+  await takeNamedScreenshot(page, outDir, '02-post-ingresar.png');
 };
 
 const takeScreenshot = async (page, outDir, entry) => {
   const filename = `${String(entry.order).padStart(2, '0')}-${slugify(entry.title)}.png`;
-  const destination = path.resolve(outDir, filename);
-  await page.screenshot({ path: destination, fullPage: true });
-  console.log(`OK: ${entry.title} => ${filename}`);
+  await takeNamedScreenshot(page, outDir, filename);
 };
 
-const performLogin = async (page, baseUrl, credentials) => {
+const performLogin = async (page, baseUrl, credentials, outDir) => {
   await page.goto(buildUrl(baseUrl, '/login'), { waitUntil: 'networkidle' });
   await page.fill('input#username', credentials.user);
   await page.fill('input#password', credentials.pass);
   await page.click('button[type="submit"]');
   await page.waitForLoadState('networkidle');
 
-  await enterConsole(page);
+  await enterConsole(page, outDir);
+};
+
+const waitForSidebar = async (page) => {
+  await Promise.allSettled([
+    page.waitForSelector('text=PRINCIPAL', { timeout: 15000 }),
+    page.waitForSelector('aside nav', { timeout: 15000 }),
+    page.waitForSelector('text=Dashboard', { timeout: 15000 }),
+  ]);
+};
+
+const escapeRestrictedPage = async (page) => {
+  await waitForSidebar(page);
+
+  if (!page.url().includes('/sin-permiso')) {
+    return;
+  }
+
+  const dashboardLink = page.getByRole('link', { name: 'Dashboard' }).first();
+  const firstMenuLink = page.locator("aside a[href^='/']").first();
+
+  if ((await dashboardLink.count()) > 0) {
+    await dashboardLink.click();
+  } else if ((await firstMenuLink.count()) > 0) {
+    await firstMenuLink.click();
+  }
+
+  try {
+    await page.waitForURL((url) => !url.pathname.includes('/sin-permiso'), { timeout: 10000 });
+  } catch (error) {
+    console.warn('No fue posible salir de /sin-permiso', error);
+  }
+
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForTimeout(500);
+};
+
+const navigateViaMenu = async (page, baseUrl, entry) => {
+  const normalizedPath = entry.path.startsWith('/') ? entry.path : `/${entry.path}`;
+  let clicked = false;
+
+  const byHref = page.locator(`a[href="${normalizedPath}"]`).first();
+  if ((await byHref.count()) > 0) {
+    await byHref.click();
+    clicked = true;
+  } else {
+    const menuText = entry.menuText ?? entry.title;
+    const byText = page.getByRole('link', { name: menuText }).first();
+    if ((await byText.count()) > 0) {
+      await byText.click();
+      clicked = true;
+    }
+  }
+
+  if (!clicked) {
+    await page.goto(buildUrl(baseUrl, normalizedPath), { waitUntil: 'networkidle' });
+  }
+
+  await page.waitForLoadState('networkidle');
+  try {
+    await page.waitForURL((url) => url.pathname.includes(normalizedPath), { timeout: 8000 });
+  } catch {}
+
+  return normalizedPath;
+};
+
+const isRestricted = async (page) => {
+  const restrictedText = page.getByText('Acceso restringido', { exact: false });
+  return (await restrictedText.isVisible()) || page.url().includes('/sin-permiso');
 };
 
 const main = async () => {
@@ -233,15 +311,23 @@ const main = async () => {
     await takeScreenshot(page, outputDir, loginEntry);
   }
 
-  await performLogin(page, baseUrl, { user, pass });
+  await performLogin(page, baseUrl, { user, pass }, outputDir);
+  await escapeRestrictedPage(page);
 
   for (const entry of pages) {
     if (entry.path === '/login') {
       continue;
     }
-    await page.goto(buildUrl(baseUrl, entry.path), { waitUntil: 'networkidle' });
+    const normalizedPath = await navigateViaMenu(page, baseUrl, entry);
     await page.waitForTimeout(500);
-    await takeScreenshot(page, outputDir, entry);
+
+    const restricted = await isRestricted(page);
+    const filename = `${String(entry.order).padStart(2, '0')}-${slugify(entry.title)}${
+      restricted ? '-restringido' : ''
+    }.png`;
+
+    await takeNamedScreenshot(page, outputDir, filename);
+    console.log('PAGE', entry.order, entry.title, 'EXPECTED', normalizedPath, 'FINAL', page.url(), 'RESTRICTED', restricted);
   }
 
   await browser.close();
