@@ -8,16 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const loadEnv = () => {
-  const manualEnvPath = path.join(__dirname, 'manual.env');
-  const rootEnvPath = path.join(process.cwd(), '.env');
-
-  if (fs.existsSync(manualEnvPath)) {
-    dotenv.config({ path: manualEnvPath });
-  } else if (fs.existsSync(rootEnvPath)) {
-    dotenv.config({ path: rootEnvPath });
-  } else {
-    dotenv.config();
-  }
+  dotenv.config({ path: new URL('./manual.env', import.meta.url) });
 };
 
 const slugify = (value) =>
@@ -88,8 +79,15 @@ const main = async () => {
   const pass = process.env.MANUAL_PASS;
   const outDir = process.env.MANUAL_OUT;
 
-  if (!baseUrl || !user || !pass || !outDir) {
-    throw new Error('Faltan variables de entorno: asegúrate de definir MANUAL_BASE_URL, MANUAL_USER, MANUAL_PASS y MANUAL_OUT.');
+  const missingVars = [];
+  if (!baseUrl) missingVars.push('MANUAL_BASE_URL');
+  if (!user) missingVars.push('MANUAL_USER');
+  if (!pass) missingVars.push('MANUAL_PASS');
+  if (!outDir) missingVars.push('MANUAL_OUT');
+
+  if (missingVars.length > 0) {
+    console.error(`Faltan variables de entorno requeridas: ${missingVars.join(', ')}`);
+    process.exit(1);
   }
 
   const pagesPath = path.join(__dirname, 'manual.pages.json');
