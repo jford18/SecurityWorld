@@ -1,11 +1,303 @@
 [
-  { "order": 1, "title": "Login", "path": "/login" },
-  { "order": 2, "title": "Intrusiones", "path": "/intrusiones" },
-  { "order": 3, "title": "Fallos Técnicos Operador", "path": "/fallos/operador" },
-  { "order": 4, "title": "Fallos Técnicos Supervisor", "path": "/fallos/supervisor" },
-  { "order": 5, "title": "Fallos Técnicos Administrador", "path": "/fallos/administrador" },
-  { "order": 6, "title": "Mantenimiento Nodos", "path": "/administracion/nodos" },
-  { "order": 7, "title": "Mantenimiento Clientes", "path": "/administracion/clientes" },
-  { "order": 8, "title": "Mantenimiento Personas", "path": "/administracion/persona" },
-  { "order": 9, "title": "Mantenimiento Sitios", "path": "/administracion/sitios" }
+  {
+    "order": 1,
+    "title": "Login",
+    "path": "/login",
+    "menuText": "Login",
+    "waitForText": "Login"
+  },
+  {
+    "order": 2,
+    "title": "Dashboard",
+    "path": "/dashboard",
+    "menuText": "Dashboard",
+    "waitForText": "Dashboard"
+  },
+  {
+    "order": 3,
+    "title": "Dashboard Uptime Cámaras",
+    "path": "/dashboards/uptime-camaras",
+    "menuText": "Uptime Cámaras",
+    "waitForText": "Uptime"
+  },
+  {
+    "order": 4,
+    "title": "Fallos Técnicos",
+    "path": "/fallos",
+    "menuText": "Fallos Técnicos",
+    "waitForText": "Fallos"
+  },
+  {
+    "order": 5,
+    "title": "Fallos Técnicos Operador",
+    "path": "/fallos/operador",
+    "menuText": "Fallos Operador",
+    "waitForText": "Fallos Técnicos"
+  },
+  {
+    "order": 6,
+    "title": "Fallos Técnicos Supervisor",
+    "path": "/fallos/supervisor",
+    "menuText": "Fallos Supervisor",
+    "waitForText": "Fallos Técnicos"
+  },
+  {
+    "order": 7,
+    "title": "Fallos Técnicos Administrador",
+    "path": "/fallos/administrador",
+    "menuText": "Fallos Administrador",
+    "waitForText": "Fallos Técnicos"
+  },
+  {
+    "order": 8,
+    "title": "Consultas Fallos Técnicos",
+    "path": "/fallos-tecnicos-consultas",
+    "menuText": "Consultas Fallos",
+    "waitForText": "Fallos Técnicos"
+  },
+  {
+    "order": 9,
+    "title": "Consolidado de Intrusiones",
+    "path": "/consultas/consolidado-intrusiones",
+    "menuText": "Consolidado Intrusiones",
+    "waitForText": "Consolidado"
+  },
+  {
+    "order": 10,
+    "title": "Intrusiones",
+    "path": "/intrusiones",
+    "menuText": "Intrusiones",
+    "waitForText": "Registro de Intrusiones"
+  },
+  {
+    "order": 11,
+    "title": "Intrusiones Administrador",
+    "path": "/intrusiones-administrador",
+    "menuText": "Intrusiones Administrador",
+    "waitForText": "Intrusiones - Administrador"
+  },
+  {
+    "order": 12,
+    "title": "Eventos No Autorizados",
+    "path": "/reportes/eventos-no-autorizados",
+    "menuText": "Eventos No Autorizados",
+    "waitForText": "Eventos No Autorizados"
+  },
+  {
+    "order": 13,
+    "title": "Eventos Autorizados",
+    "path": "/reportes/eventos-autorizados",
+    "menuText": "Eventos Autorizados",
+    "waitForText": "Eventos Autorizados"
+  },
+  {
+    "order": 14,
+    "title": "Reporte de Alertas por Turno",
+    "path": "/reportes/alertas-turno",
+    "menuText": "Alertas por Turno",
+    "waitForText": "Reporte de Alertas por Turno"
+  },
+  {
+    "order": 15,
+    "title": "Reporte Logeos por Turno",
+    "path": "/reportes/logeos-turnos",
+    "menuText": "Logeos por Turno",
+    "waitForText": "Reporte de Logeos"
+  },
+  {
+    "order": 16,
+    "title": "Informe de Eventos",
+    "path": "/reportes/informe-eventos",
+    "menuText": "Informe de Eventos",
+    "waitForText": "Informe de Eventos"
+  },
+  {
+    "order": 17,
+    "title": "Cambio de Clave",
+    "path": "/cambiar-clave",
+    "menuText": "Cambiar Clave",
+    "waitForText": "Cambiar"
+  },
+  {
+    "order": 18,
+    "title": "Sitios",
+    "path": "/administracion/sitios",
+    "menuText": "Sitios",
+    "waitForText": "Sitios"
+  },
+  {
+    "order": 19,
+    "title": "Asignación de Nodos a Sitios",
+    "path": "/administracion/asignacion-nodos-sitios",
+    "menuText": "Asignación Nodos-Sitios",
+    "waitForText": "Asignación"
+  },
+  {
+    "order": 20,
+    "title": "Consolas",
+    "path": "/administracion/consolas",
+    "menuText": "Consolas",
+    "waitForText": "Consolas"
+  },
+  {
+    "order": 21,
+    "title": "Nodos",
+    "path": "/administracion/nodos",
+    "menuText": "Nodos",
+    "waitForText": "Nodos"
+  },
+  {
+    "order": 22,
+    "title": "Fuerza de Reacción",
+    "path": "/administracion/fuerza-reaccion",
+    "menuText": "Fuerza de Reacción",
+    "waitForText": "Fuerza"
+  },
+  {
+    "order": 23,
+    "title": "Cargo",
+    "path": "/administracion/cargo",
+    "menuText": "Cargo",
+    "waitForText": "Cargo"
+  },
+  {
+    "order": 24,
+    "title": "Persona",
+    "path": "/administracion/persona",
+    "menuText": "Persona",
+    "waitForText": "Persona"
+  },
+  {
+    "order": 25,
+    "title": "Medio de Comunicación",
+    "path": "/administracion/medio-comunicacion",
+    "menuText": "Medio de Comunicación",
+    "waitForText": "Comunicación"
+  },
+  {
+    "order": 26,
+    "title": "Conclusión de Evento",
+    "path": "/administracion/conclusion-evento",
+    "menuText": "Conclusión de Evento",
+    "waitForText": "Conclusión"
+  },
+  {
+    "order": 27,
+    "title": "Tipo de Intrusión",
+    "path": "/administracion/tipo-intrusion",
+    "menuText": "Tipo de Intrusión",
+    "waitForText": "Intrusión"
+  },
+  {
+    "order": 28,
+    "title": "Tipo de Equipo Afectado",
+    "path": "/administracion/tipo-equipo-afectado",
+    "menuText": "Tipo Equipo Afectado",
+    "waitForText": "Equipo Afectado"
+  },
+  {
+    "order": 29,
+    "title": "Tipo de Servicio",
+    "path": "/administracion/tipo-servicio",
+    "menuText": "Tipo de Servicio",
+    "waitForText": "Servicio"
+  },
+  {
+    "order": 30,
+    "title": "Clientes",
+    "path": "/administracion/clientes",
+    "menuText": "Clientes",
+    "waitForText": "Clientes"
+  },
+  {
+    "order": 31,
+    "title": "Proveedores",
+    "path": "/administracion/proveedores",
+    "menuText": "Proveedores",
+    "waitForText": "Proveedores"
+  },
+  {
+    "order": 32,
+    "title": "Asignar Cliente a Sitio",
+    "path": "/administracion/asignar-cliente-sitio",
+    "menuText": "Asignar Cliente-Sitio",
+    "waitForText": "Asignar"
+  },
+  {
+    "order": 33,
+    "title": "Departamento Responsable",
+    "path": "/administracion/departamento-responsable",
+    "menuText": "Departamento Responsable",
+    "waitForText": "Departamento"
+  },
+  {
+    "order": 34,
+    "title": "Roles",
+    "path": "/administracion/roles",
+    "menuText": "Roles",
+    "waitForText": "Roles"
+  },
+  {
+    "order": 35,
+    "title": "Usuarios",
+    "path": "/administracion/usuarios",
+    "menuText": "Usuarios",
+    "waitForText": "Usuarios"
+  },
+  {
+    "order": 36,
+    "title": "Catálogo Tipo de Problema",
+    "path": "/administracion/catalogo-tipo-problema",
+    "menuText": "Catálogo Tipo Problema",
+    "waitForText": "Tipo de Problema"
+  },
+  {
+    "order": 37,
+    "title": "Asignación de Roles",
+    "path": "/administracion/asignacion-roles",
+    "menuText": "Asignación de Roles",
+    "waitForText": "Asignación"
+  },
+  {
+    "order": 38,
+    "title": "Menús",
+    "path": "/administracion/menus",
+    "menuText": "Menús",
+    "waitForText": "Menú"
+  },
+  {
+    "order": 39,
+    "title": "Roles y Menús",
+    "path": "/administracion/roles-menus",
+    "menuText": "Roles-Menús",
+    "waitForText": "Roles"
+  },
+  {
+    "order": 40,
+    "title": "Hacienda",
+    "path": "/administracion/hacienda",
+    "menuText": "Hacienda",
+    "waitForText": "Hacienda"
+  },
+  {
+    "order": 41,
+    "title": "Tipo de Área",
+    "path": "/administracion/tipo-area",
+    "menuText": "Tipo de Área",
+    "waitForText": "Tipo de Área"
+  },
+  {
+    "order": 42,
+    "title": "Nuevo Tipo de Área",
+    "path": "/administracion/tipo-area/nuevo",
+    "menuText": "Tipo de Área - Nuevo",
+    "waitForText": "Nuevo"
+  },
+  {
+    "order": 43,
+    "title": "Editar Tipo de Área",
+    "path": "/administracion/tipo-area/editar/:id",
+    "menuText": "Tipo de Área - Editar",
+    "waitForText": "Editar"
+  }
 ]
