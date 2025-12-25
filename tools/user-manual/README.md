@@ -39,3 +39,17 @@ El script:
 ## Salida
 
 Las imágenes se guardan en la carpeta definida en `MANUAL_OUT` (por defecto `tools/user-manual/out`).
+
+## Generar el manual
+
+Con las capturas listas en `tools/user-manual/out`, genera el manual en Markdown, HTML y PDF ejecutando:
+
+```bash
+node tools/user-manual/build.manual.mjs
+```
+
+Los archivos de salida quedan disponibles en la misma carpeta:
+
+- `tools/user-manual/manual.md`
+- `tools/user-manual/manual.html`
+- `tools/user-manual/manual.pdf`
