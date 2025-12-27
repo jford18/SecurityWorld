@@ -7,7 +7,6 @@ import {
   fetchIntrusiones,
   IntrusionPayload,
   fetchIntrusionesEncoladasHc,
-  openIntrusionDesdeHc,
   updateIntrusion,
 } from '../../services/intrusionesService';
 import {
@@ -186,6 +185,7 @@ const Intrusions: React.FC = () => {
     'fecha_evento_hc' | 'region' | 'name' | 'trigger_event' | 'status' | 'alarm_category'
   >('fecha_evento_hc');
   const [hcOrderDir, setHcOrderDir] = useState<'asc' | 'desc'>('desc');
+  const [hcSeleccionado, setHcSeleccionado] = useState<IntrusionHcQueueRow | null>(null);
   const { session } = useSession();
   const [sitios, setSitios] = useState<Sitio[]>([]);
   const [fuerzasReaccion, setFuerzasReaccion] = useState<FuerzaReaccionCatalogItem[]>([]);
@@ -627,74 +627,25 @@ const Intrusions: React.FC = () => {
     setSitioId(intrusion.sitio_id ?? null);
   };
 
-  const sanitizeIntrusionId = (value: unknown): number | null => {
-    if (value === null || value === undefined) {
-      return null;
-    }
+  const handleAbrirEncolado = (row: IntrusionHcQueueRow) => {
+    console.log('[ENCOLADOS HC] ABRIR -> NUEVA INTRUSION', row);
+    setHcSeleccionado(row);
 
-    const parsed = Number(String(value).replace('#', '').trim());
-    return Number.isInteger(parsed) ? parsed : null;
-  };
+    setEditingIntrusionId(null);
+    setFormData((prev) => ({
+      ...prev,
+      origen: 'HC',
+      hik_alarm_evento_id:
+        row?.hik_alarm_evento_id !== undefined && row?.hik_alarm_evento_id !== null
+          ? String(row.hik_alarm_evento_id)
+          : null,
+      fecha_evento: normalizeDateTimeLocalString(row?.fecha_evento_hc || '') || prev.fecha_evento,
+      no_llego_alerta: false,
+    }));
 
-  const navigateToIntrusionEdition = async (intrusionId: unknown) => {
-    const parsedId = sanitizeIntrusionId(intrusionId);
-    if (!parsedId) {
-      throw new Error('No se pudo identificar la intrusión seleccionada.');
-    }
-
-    const findIntrusion = (list: Intrusion[]) =>
-      list.find((intrusion) => intrusion.id === parsedId) || null;
-
-    const localMatch = findIntrusion(intrusions);
-    if (localMatch) {
-      populateFormFromIntrusion(localMatch);
-      return;
-    }
-
-    const refreshed = await fetchIntrusiones();
-    setIntrusions(refreshed);
-
-    const refreshedMatch = findIntrusion(refreshed);
-    if (!refreshedMatch) {
-      throw new Error('No se encontró la intrusión vinculada.');
-    }
-
-    populateFormFromIntrusion(refreshedMatch);
-  };
-
-  const handleAbrirEncolado = async (row: IntrusionHcQueueRow) => {
-    console.log('[ENCOLADOS HC] CLICK ABRIR row=', row);
-    console.log('[ENCOLADOS HC] IDS', {
-      hik_alarm_evento_id: row?.hik_alarm_evento_id ?? row?.HIK_ALARM_EVENTO_ID,
-      intrusion_id: row?.intrusion_id ?? row?.INTRUSION_ID,
-    });
-
-    const hikId = row?.hik_alarm_evento_id ?? row?.HIK_ALARM_EVENTO_ID;
-    const intrRaw = row?.intrusion_id ?? row?.INTRUSION_ID;
-    const intrId = intrRaw ? Number(String(intrRaw).replace('#', '')) : null;
-    console.log('[ENCOLADOS HC] normalized', { hikId, intrRaw, intrId });
-
-    try {
-      if (intrId) {
-        console.log('[ENCOLADOS HC] YA EXISTE INTRUSION, navegando a', intrId);
-        console.log('[ENCOLADOS HC] navigate() a editar intrusion id=', intrId);
-        await navigateToIntrusionEdition(intrId);
-        setError(null);
-        return;
-      }
-
-      console.log('[ENCOLADOS HC] NO EXISTE INTRUSION, llamando API abrir HC con hikId=', hikId);
-      const createdIntrusionId = await openIntrusionDesdeHc(hikId ?? row.hik_alarm_evento_id);
-      console.log('[ENCOLADOS HC] RESPUESTA abrir HC =', createdIntrusionId);
-      console.log('[ENCOLADOS HC] navigate() a editar intrusion id=', createdIntrusionId);
-      await navigateToIntrusionEdition(createdIntrusionId);
-      setError(null);
-    } catch (err) {
-      console.error('[ENCOLADOS HC] ERROR abrir HC', err);
-      console.error('No se pudo abrir la intrusión de HC:', err);
-      const backendMessage = err instanceof Error && err.message ? err.message : null;
-      setError(backendMessage || 'No se pudo abrir la intrusión proveniente de HikCentral.');
-    }
+    document
+      .getElementById('nueva-intrusion-form')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const handleHcSort = (
@@ -1261,8 +1212,15 @@ const Intrusions: React.FC = () => {
         <p className="text-xs text-gray-500 mt-2">Total: {hcTotal}</p>
       </div>
 
-      <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
-        <h4 className="text-[#1C2E4A] text-lg font-semibold mb-4">Reportar Nueva Intrusión</h4>
+      <div id="nueva-intrusion-form" className="mt-8 bg-white p-6 rounded-lg shadow-md">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-[#1C2E4A] text-lg font-semibold">Reportar Nueva Intrusión</h4>
+          {hcSeleccionado && (
+            <span className="text-xs text-gray-600">
+              Evento HC seleccionado #{hcSeleccionado.hik_alarm_evento_id}
+            </span>
+          )}
+        </div>
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h3 className="text-[#1C2E4A] text-base font-semibold mb-4">
