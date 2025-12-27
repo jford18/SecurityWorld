@@ -18,3 +18,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/15rwNkucljwQEgBdaFw8Egy
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## User manual
+
+The manual at `tools/user-manual/manual.md` is editable and kept as the source of truth. Running `node tools/user-manual/build.manual.mjs` will generate `manual.html` and `manual.pdf` from the existing Markdown without overwriting it.
