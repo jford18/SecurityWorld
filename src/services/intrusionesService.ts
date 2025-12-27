@@ -510,7 +510,16 @@ export const createIntrusion = async (
   payload: IntrusionPayload
 ): Promise<Intrusion> => {
   try {
-    const { data } = await apiClient.post<Intrusion>('/intrusiones', payload);
+    const payloadToSend: IntrusionPayload = { ...payload };
+    const hasHikAlarmEventoId =
+      payload.hik_alarm_evento_id !== undefined && payload.hik_alarm_evento_id !== null;
+
+    if (hasHikAlarmEventoId) {
+      payloadToSend.no_llego_alerta = false;
+      payloadToSend.origen = payloadToSend.origen ?? 'HC';
+    }
+
+    const { data } = await apiClient.post<Intrusion>('/intrusiones', payloadToSend);
     const normalized = normalizeIntrusion(data);
     if (!normalized) {
       throw new Error('Respuesta inesperada al crear la intrusión.');
