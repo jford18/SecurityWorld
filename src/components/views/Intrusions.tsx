@@ -199,6 +199,10 @@ const Intrusions: React.FC = () => {
   );
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
+  const isNoLlegoDisabled = (intrusion?: Partial<IntrusionFormData> | null) =>
+    String(intrusion?.origen || '').toUpperCase() === 'HC' ||
+    intrusion?.hik_alarm_evento_id != null;
+
   const resetClientePersonaSelection = () => {
     setSitioId(null);
     setClienteId(null);
@@ -823,6 +827,11 @@ const Intrusions: React.FC = () => {
     tipoDescripcion,
   ]);
 
+  const noLlegoDisabled = useMemo(
+    () => isNoLlegoDisabled(formData),
+    [formData.hik_alarm_evento_id, formData.origen]
+  );
+
   useEffect(() => {
     if (noLlegoDisabled && formData.no_llego_alerta) {
       setFormData((prev) => ({ ...prev, no_llego_alerta: false }));
@@ -904,7 +913,6 @@ const Intrusions: React.FC = () => {
   }, [fechaReaccionError, fechaReaccionFueraError]);
 
   const isButtonDisabled = isSubmitDisabled || disableSave;
-  const noLlegoDisabled = formData.origen === 'HC' || Boolean(formData.hik_alarm_evento_id);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
