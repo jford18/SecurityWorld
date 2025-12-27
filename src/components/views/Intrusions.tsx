@@ -623,10 +623,54 @@ const Intrusions: React.FC = () => {
     setSitioId(intrusion.sitio_id ?? null);
   };
 
+  const sanitizeIntrusionId = (value: unknown): number | null => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    const parsed = Number(String(value).replace('#', '').trim());
+    return Number.isInteger(parsed) ? parsed : null;
+  };
+
+  const navigateToIntrusionEdition = async (intrusionId: unknown) => {
+    const parsedId = sanitizeIntrusionId(intrusionId);
+    if (!parsedId) {
+      throw new Error('No se pudo identificar la intrusión seleccionada.');
+    }
+
+    const findIntrusion = (list: Intrusion[]) =>
+      list.find((intrusion) => intrusion.id === parsedId) || null;
+
+    const localMatch = findIntrusion(intrusions);
+    if (localMatch) {
+      populateFormFromIntrusion(localMatch);
+      return;
+    }
+
+    const refreshed = await fetchIntrusiones();
+    setIntrusions(refreshed);
+
+    const refreshedMatch = findIntrusion(refreshed);
+    if (!refreshedMatch) {
+      throw new Error('No se encontró la intrusión vinculada.');
+    }
+
+    populateFormFromIntrusion(refreshedMatch);
+  };
+
   const handleOpenHcRow = async (row: IntrusionHcQueueRow) => {
     try {
-      const opened = await openIntrusionDesdeHc(row.hik_alarm_evento_id);
-      populateFormFromIntrusion(opened);
+      const linkedIntrusionId = sanitizeIntrusionId(row.intrusion_id);
+      if (linkedIntrusionId) {
+        await navigateToIntrusionEdition(linkedIntrusionId);
+        setError(null);
+        return;
+      }
+
+      const createdIntrusionId = await openIntrusionDesdeHc(
+        row.hik_alarm_evento_id
+      );
+      await navigateToIntrusionEdition(createdIntrusionId);
       setError(null);
     } catch (err) {
       console.error('No se pudo abrir la intrusión de HC:', err);
@@ -720,6 +764,29 @@ const Intrusions: React.FC = () => {
     });
   }, [intrusionesTableData, sortDirection, sortField]);
 
+  const validateCompletionBeforeSubmit = () => {
+    if (!formData.completado) return [] as string[];
+
+    const needsProtocol = requiereProtocolo || formData.necesita_protocolo;
+    const missingFields: string[] = [];
+
+    if (!formData.fecha_reaccion) missingFields.push('Fecha hora reacción');
+    if (!formData.medio_comunicacion_id) missingFields.push('Medio de comunicación');
+    if (!personaId) missingFields.push('Persona');
+
+    if (needsProtocol) {
+      if (!formData.fecha_reaccion_enviada) {
+        missingFields.push('Fecha y hora reacción enviada');
+      }
+      if (!formData.fecha_llegada_fuerza_reaccion && !formData.fecha_reaccion_fuera) {
+        missingFields.push('Fecha llegada fuerza reacción');
+      }
+      if (!formData.conclusion_evento_id) missingFields.push('Conclusión del evento');
+    }
+
+    return missingFields;
+  };
+
   const renderSortIndicator = (field: keyof IntrusionConsolidadoRow) => {
     if (sortField !== field) return null;
     return sortDirection === 'asc' ? '▲' : '▼';
@@ -755,6 +822,12 @@ const Intrusions: React.FC = () => {
     requiereProtocolo,
     tipoDescripcion,
   ]);
+
+  useEffect(() => {
+    if (noLlegoDisabled && formData.no_llego_alerta) {
+      setFormData((prev) => ({ ...prev, no_llego_alerta: false }));
+    }
+  }, [formData.no_llego_alerta, noLlegoDisabled]);
 
   useEffect(() => {
     if (formData.fecha_evento && formData.fecha_reaccion) {
@@ -837,6 +910,12 @@ const Intrusions: React.FC = () => {
     event.preventDefault();
 
     setError(null);
+
+    const completionMissing = validateCompletionBeforeSubmit();
+    if (completionMissing.length) {
+      setError(`Complete los campos requeridos: ${completionMissing.join(', ')}`);
+      return;
+    }
 
     if (fechaReaccionError || fechaReaccionFueraError) {
       return;

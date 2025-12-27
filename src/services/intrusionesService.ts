@@ -575,15 +575,15 @@ export const fetchIntrusionesEncoladasHc = async (
 
 export const openIntrusionDesdeHc = async (
   hikAlarmEventoId: number | string
-): Promise<Intrusion> => {
-  const { data } = await apiClient.post<Intrusion>(
+): Promise<number> => {
+  const { data } = await apiClient.post<{ id?: number | string }>(
     `/intrusiones/hc/${hikAlarmEventoId}/abrir`
   );
 
-  const normalized = normalizeIntrusion(data);
-  if (!normalized) {
+  const parsedId = Number((data as { id?: unknown }).id);
+  if (!Number.isInteger(parsedId)) {
     throw new Error('No se pudo abrir la intrusión encolada.');
   }
 
-  return normalized;
+  return parsedId;
 };
