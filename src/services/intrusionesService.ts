@@ -576,9 +576,10 @@ export const fetchIntrusionesEncoladasHc = async (
 export const openIntrusionDesdeHc = async (
   hikAlarmEventoId: number | string
 ): Promise<number> => {
-  const { data } = await apiClient.post<{ id?: number | string }>(
-    `/intrusiones/hc/${hikAlarmEventoId}/abrir`
-  );
+  const url = `/intrusiones/hc/${hikAlarmEventoId}/abrir`;
+  console.log('[SERVICE] POST abrir HC url=', url, 'hikId=', hikAlarmEventoId);
+  const { data } = await apiClient.post<{ id?: number | string }>(url);
+  console.log('[SERVICE] POST abrir HC response=', (data as unknown) ?? null);
 
   const parsedId = Number((data as { id?: unknown }).id);
   if (!Number.isInteger(parsedId)) {

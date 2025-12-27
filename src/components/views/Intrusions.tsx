@@ -662,21 +662,35 @@ const Intrusions: React.FC = () => {
     populateFormFromIntrusion(refreshedMatch);
   };
 
-  const handleOpenHcRow = async (row: IntrusionHcQueueRow) => {
+  const handleAbrirEncolado = async (row: IntrusionHcQueueRow) => {
+    console.log('[ENCOLADOS HC] CLICK ABRIR row=', row);
+    console.log('[ENCOLADOS HC] IDS', {
+      hik_alarm_evento_id: row?.hik_alarm_evento_id ?? row?.HIK_ALARM_EVENTO_ID,
+      intrusion_id: row?.intrusion_id ?? row?.INTRUSION_ID,
+    });
+
+    const hikId = row?.hik_alarm_evento_id ?? row?.HIK_ALARM_EVENTO_ID;
+    const intrRaw = row?.intrusion_id ?? row?.INTRUSION_ID;
+    const intrId = intrRaw ? Number(String(intrRaw).replace('#', '')) : null;
+    console.log('[ENCOLADOS HC] normalized', { hikId, intrRaw, intrId });
+
     try {
-      const linkedIntrusionId = sanitizeIntrusionId(row.intrusion_id);
-      if (linkedIntrusionId) {
-        await navigateToIntrusionEdition(linkedIntrusionId);
+      if (intrId) {
+        console.log('[ENCOLADOS HC] YA EXISTE INTRUSION, navegando a', intrId);
+        console.log('[ENCOLADOS HC] navigate() a editar intrusion id=', intrId);
+        await navigateToIntrusionEdition(intrId);
         setError(null);
         return;
       }
 
-      const createdIntrusionId = await openIntrusionDesdeHc(
-        row.hik_alarm_evento_id
-      );
+      console.log('[ENCOLADOS HC] NO EXISTE INTRUSION, llamando API abrir HC con hikId=', hikId);
+      const createdIntrusionId = await openIntrusionDesdeHc(hikId ?? row.hik_alarm_evento_id);
+      console.log('[ENCOLADOS HC] RESPUESTA abrir HC =', createdIntrusionId);
+      console.log('[ENCOLADOS HC] navigate() a editar intrusion id=', createdIntrusionId);
       await navigateToIntrusionEdition(createdIntrusionId);
       setError(null);
     } catch (err) {
+      console.error('[ENCOLADOS HC] ERROR abrir HC', err);
       console.error('No se pudo abrir la intrusión de HC:', err);
       const backendMessage = err instanceof Error && err.message ? err.message : null;
       setError(backendMessage || 'No se pudo abrir la intrusión proveniente de HikCentral.');
@@ -1233,7 +1247,7 @@ const Intrusions: React.FC = () => {
                       <button
                         type="button"
                         className="px-3 py-1 text-xs font-semibold bg-[#F9C300] text-[#1C2E4A] rounded hover:bg-yellow-400"
-                        onClick={() => handleOpenHcRow(row)}
+                        onClick={() => handleAbrirEncolado(row)}
                       >
                         Abrir
                       </button>
