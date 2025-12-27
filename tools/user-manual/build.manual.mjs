@@ -12,6 +12,46 @@ const PDF_PATH = join(BASE_DIR, 'manual.pdf');
 const OUT_DIR = join(BASE_DIR, 'out');
 const PAGES_PATH = join(BASE_DIR, 'manual.pages.json');
 
+const isPngFile = (name) => /\.png$/i.test(name);
+
+const buildImagesIndex = async () => {
+  let entries = [];
+
+  try {
+    entries = await fsPromises.readdir(OUT_DIR, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return new Map();
+    }
+    throw error;
+  }
+  const images = entries.filter((entry) => entry.isFile() && isPngFile(entry.name));
+  const byPrefix = new Map();
+
+  images.forEach((file) => {
+    const match = file.name.match(/^(\d{2})-/);
+    if (!match) return;
+    const prefix = match[1];
+    const list = byPrefix.get(prefix) || [];
+    list.push(file.name);
+    byPrefix.set(prefix, list);
+  });
+
+  const pickBest = (files) => {
+    const sorted = [...files].sort((a, b) => a.localeCompare(b));
+    const nonRestricted = sorted.filter((name) => !name.includes('-restringido'));
+    return (nonRestricted[0] || sorted[0]) ?? null;
+  };
+
+  const selected = new Map();
+  byPrefix.forEach((files, prefix) => {
+    const best = pickBest(files);
+    if (best) selected.set(prefix, best);
+  });
+
+  return selected;
+};
+
 const loadChromium = async () => {
   if (chromium) return chromium;
   const playwright = await import('playwright');
@@ -68,6 +108,49 @@ const getManualMarkdown = async () => {
 
   console.log('Using existing manual.md');
   return fs.readFileSync(MD_PATH, 'utf-8');
+};
+
+const syncImagesIntoMarkdown = (markdown, imagesIndex) => {
+  const lines = markdown.split(/\r?\n/);
+  let currentPrefix = null;
+  let changed = false;
+
+  const isImagenLine = (line) => {
+    const trimmed = line.trim();
+    return trimmed.startsWith('Imagen:') || trimmed.startsWith('- Imagen:');
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const headingMatch = line.match(/^##\s+(\d{2})\./);
+    if (headingMatch) {
+      currentPrefix = headingMatch[1];
+      continue;
+    }
+
+    if (!isImagenLine(line)) continue;
+
+    const nextIndex = i + 1;
+    if (nextIndex >= lines.length) continue;
+    const nextLine = lines[nextIndex];
+    const nextTrimmed = nextLine.trim();
+    if (!(nextTrimmed === '' || /^\(captura pendiente\)$/i.test(nextTrimmed))) continue;
+
+    const chosen = currentPrefix ? imagesIndex.get(currentPrefix) : null;
+    if (!chosen) continue;
+
+    const indentMatch = nextLine.match(/^(\s*)/);
+    const indent = indentMatch ? indentMatch[1] : '';
+    const replacement = `${indent}![](./out/${chosen})`;
+
+    if (nextLine !== replacement) {
+      lines[nextIndex] = replacement;
+      changed = true;
+    }
+  }
+
+  if (!changed) return { markdown, changed: false };
+  return { markdown: lines.join('\n'), changed: true };
 };
 
 const markdownToHtml = (markdown) => {
@@ -148,7 +231,7 @@ const markdownToHtml = (markdown) => {
     if (imageMatch) {
       closeSteps();
       htmlLines.push(
-        `<img src="${imageMatch[1]}" style="max-width:100%;height:auto;border:1px solid #eee;border-radius:8px;">`,
+        `<img src="${imageMatch[1]}" style="max-width:100%;height:auto;border:1px solid #eee;border-radius:8px">`,
       );
       return;
     }
@@ -232,8 +315,16 @@ const generatePlaceholderPdf = async () => {
 };
 
 const run = async () => {
+  const imagesIndex = await buildImagesIndex();
   const markdown = await getManualMarkdown();
-  const html = buildHtmlDocument(markdownToHtml(markdown));
+  const { markdown: syncedMarkdown, changed } = syncImagesIntoMarkdown(markdown, imagesIndex);
+
+  if (changed) {
+    await fsPromises.writeFile(MD_PATH, syncedMarkdown, 'utf-8');
+    console.log('SYNC IMAGES: updated manual.md');
+  }
+
+  const html = buildHtmlDocument(markdownToHtml(syncedMarkdown));
   await saveFile(HTML_PATH, html);
 
   try {
