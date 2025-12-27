@@ -4,415 +4,712 @@
   <meta charset="utf-8">
   <title>Manual de Usuario</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 15mm; color: #1a1a1a; }
-    h1, h2 { color: #0a0a0a; }
-    .cover { text-align: center; margin-bottom: 20mm; }
-    .cover h1 { font-size: 32px; margin-bottom: 4mm; }
-    .cover p { font-size: 16px; margin: 0; }
-    .toc { margin-bottom: 20mm; }
-    .toc ol { padding-left: 18px; }
-    section { page-break-after: always; margin-bottom: 20mm; }
-    section:last-of-type { page-break-after: auto; }
-    img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; }
-    .image { margin-top: 8px; }
+    @page { size: A4; margin: 15mm; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; color: #1a1a1a; }
+    main { padding: 15mm; }
+    h1 { text-align: center; margin-bottom: 12mm; }
+    h2.section-heading { margin-top: 14mm; margin-bottom: 6mm; font-size: 20px; }
+    h2.section-heading:not(.first-section) { page-break-before: always; }
+    p { line-height: 1.45; margin: 4px 0; }
+    ol { padding-left: 18px; margin: 6px 0 10px 0; }
+    hr.section-break { border: 0; border-top: 1px solid #ddd; margin: 12mm 0 10mm 0; }
+    img { display: block; margin: 8px 0 10px 0; }
     .pending { font-style: italic; color: #888; }
   </style>
 </head>
 <body>
-  <div class="cover">
+  <main>
     <h1>Manual de Usuario</h1>
-    <p>Fecha: 2025-12-25</p>
-  </div>
-  <div class="toc">
-    <h2>Índice</h2>
-    <ol><li><a href="#01-login">01. Login</a></li><li><a href="#02-dashboard">02. Dashboard</a></li><li><a href="#03-dashboard-uptime-c-maras">03. Dashboard Uptime Cámaras</a></li><li><a href="#04-fallos-t-cnicos">04. Fallos Técnicos</a></li><li><a href="#05-fallos-t-cnicos-operador">05. Fallos Técnicos Operador</a></li><li><a href="#06-fallos-t-cnicos-supervisor">06. Fallos Técnicos Supervisor</a></li><li><a href="#07-fallos-t-cnicos-administrador">07. Fallos Técnicos Administrador</a></li><li><a href="#08-consultas-fallos-t-cnicos">08. Consultas Fallos Técnicos</a></li><li><a href="#09-consolidado-de-intrusiones">09. Consolidado de Intrusiones</a></li><li><a href="#10-intrusiones">10. Intrusiones</a></li><li><a href="#11-intrusiones-administrador">11. Intrusiones Administrador</a></li><li><a href="#12-eventos-no-autorizados">12. Eventos No Autorizados</a></li><li><a href="#13-eventos-autorizados">13. Eventos Autorizados</a></li><li><a href="#14-reporte-de-alertas-por-turno">14. Reporte de Alertas por Turno</a></li><li><a href="#15-reporte-logeos-por-turno">15. Reporte Logeos por Turno</a></li><li><a href="#16-informe-de-eventos">16. Informe de Eventos</a></li><li><a href="#17-cambio-de-clave">17. Cambio de Clave</a></li><li><a href="#18-sitios">18. Sitios</a></li><li><a href="#19-asignaci-n-de-nodos-a-sitios">19. Asignación de Nodos a Sitios</a></li><li><a href="#20-consolas">20. Consolas</a></li><li><a href="#21-nodos">21. Nodos</a></li><li><a href="#22-fuerza-de-reacci-n">22. Fuerza de Reacción</a></li><li><a href="#23-cargo">23. Cargo</a></li><li><a href="#24-persona">24. Persona</a></li><li><a href="#25-medio-de-comunicaci-n">25. Medio de Comunicación</a></li><li><a href="#26-conclusi-n-de-evento">26. Conclusión de Evento</a></li><li><a href="#27-tipo-de-intrusi-n">27. Tipo de Intrusión</a></li><li><a href="#28-tipo-de-equipo-afectado">28. Tipo de Equipo Afectado</a></li><li><a href="#29-tipo-de-servicio">29. Tipo de Servicio</a></li><li><a href="#30-clientes">30. Clientes</a></li><li><a href="#31-proveedores">31. Proveedores</a></li><li><a href="#32-asignar-cliente-a-sitio">32. Asignar Cliente a Sitio</a></li><li><a href="#33-departamento-responsable">33. Departamento Responsable</a></li><li><a href="#34-roles">34. Roles</a></li><li><a href="#35-usuarios">35. Usuarios</a></li><li><a href="#36-cat-logo-tipo-de-problema">36. Catálogo Tipo de Problema</a></li><li><a href="#37-asignaci-n-de-roles">37. Asignación de Roles</a></li><li><a href="#38-men-s">38. Menús</a></li><li><a href="#39-roles-y-men-s">39. Roles y Menús</a></li><li><a href="#40-hacienda">40. Hacienda</a></li><li><a href="#41-tipo-de-rea">41. Tipo de Área</a></li><li><a href="#42-nuevo-tipo-de-rea">42. Nuevo Tipo de Área</a></li><li><a href="#43-editar-tipo-de-rea">43. Editar Tipo de Área</a></li></ol>
-  </div>
-  
-<section id="01-login">
-  <h2>01. Login</h2>
-  <p><strong>Ruta:</strong> /login</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="02-dashboard">
-  <h2>02. Dashboard</h2>
-  <p><strong>Ruta:</strong> /dashboard</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="03-dashboard-uptime-c-maras">
-  <h2>03. Dashboard Uptime Cámaras</h2>
-  <p><strong>Ruta:</strong> /dashboards/uptime-camaras</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="04-fallos-t-cnicos">
-  <h2>04. Fallos Técnicos</h2>
-  <p><strong>Ruta:</strong> /fallos</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="05-fallos-t-cnicos-operador">
-  <h2>05. Fallos Técnicos Operador</h2>
-  <p><strong>Ruta:</strong> /fallos/operador</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="06-fallos-t-cnicos-supervisor">
-  <h2>06. Fallos Técnicos Supervisor</h2>
-  <p><strong>Ruta:</strong> /fallos/supervisor</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="07-fallos-t-cnicos-administrador">
-  <h2>07. Fallos Técnicos Administrador</h2>
-  <p><strong>Ruta:</strong> /fallos/administrador</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="08-consultas-fallos-t-cnicos">
-  <h2>08. Consultas Fallos Técnicos</h2>
-  <p><strong>Ruta:</strong> /fallos-tecnicos-consultas</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="09-consolidado-de-intrusiones">
-  <h2>09. Consolidado de Intrusiones</h2>
-  <p><strong>Ruta:</strong> /consultas/consolidado-intrusiones</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="10-intrusiones">
-  <h2>10. Intrusiones</h2>
-  <p><strong>Ruta:</strong> /intrusiones</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="11-intrusiones-administrador">
-  <h2>11. Intrusiones Administrador</h2>
-  <p><strong>Ruta:</strong> /intrusiones-administrador</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="12-eventos-no-autorizados">
-  <h2>12. Eventos No Autorizados</h2>
-  <p><strong>Ruta:</strong> /reportes/eventos-no-autorizados</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="13-eventos-autorizados">
-  <h2>13. Eventos Autorizados</h2>
-  <p><strong>Ruta:</strong> /reportes/eventos-autorizados</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="14-reporte-de-alertas-por-turno">
-  <h2>14. Reporte de Alertas por Turno</h2>
-  <p><strong>Ruta:</strong> /reportes/alertas-turno</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="15-reporte-logeos-por-turno">
-  <h2>15. Reporte Logeos por Turno</h2>
-  <p><strong>Ruta:</strong> /reportes/logeos-turnos</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="16-informe-de-eventos">
-  <h2>16. Informe de Eventos</h2>
-  <p><strong>Ruta:</strong> /reportes/informe-eventos</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="17-cambio-de-clave">
-  <h2>17. Cambio de Clave</h2>
-  <p><strong>Ruta:</strong> /cambiar-clave</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="18-sitios">
-  <h2>18. Sitios</h2>
-  <p><strong>Ruta:</strong> /administracion/sitios</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="19-asignaci-n-de-nodos-a-sitios">
-  <h2>19. Asignación de Nodos a Sitios</h2>
-  <p><strong>Ruta:</strong> /administracion/asignacion-nodos-sitios</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="20-consolas">
-  <h2>20. Consolas</h2>
-  <p><strong>Ruta:</strong> /administracion/consolas</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="21-nodos">
-  <h2>21. Nodos</h2>
-  <p><strong>Ruta:</strong> /administracion/nodos</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="22-fuerza-de-reacci-n">
-  <h2>22. Fuerza de Reacción</h2>
-  <p><strong>Ruta:</strong> /administracion/fuerza-reaccion</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="23-cargo">
-  <h2>23. Cargo</h2>
-  <p><strong>Ruta:</strong> /administracion/cargo</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="24-persona">
-  <h2>24. Persona</h2>
-  <p><strong>Ruta:</strong> /administracion/persona</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="25-medio-de-comunicaci-n">
-  <h2>25. Medio de Comunicación</h2>
-  <p><strong>Ruta:</strong> /administracion/medio-comunicacion</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="26-conclusi-n-de-evento">
-  <h2>26. Conclusión de Evento</h2>
-  <p><strong>Ruta:</strong> /administracion/conclusion-evento</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="27-tipo-de-intrusi-n">
-  <h2>27. Tipo de Intrusión</h2>
-  <p><strong>Ruta:</strong> /administracion/tipo-intrusion</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="28-tipo-de-equipo-afectado">
-  <h2>28. Tipo de Equipo Afectado</h2>
-  <p><strong>Ruta:</strong> /administracion/tipo-equipo-afectado</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="29-tipo-de-servicio">
-  <h2>29. Tipo de Servicio</h2>
-  <p><strong>Ruta:</strong> /administracion/tipo-servicio</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="30-clientes">
-  <h2>30. Clientes</h2>
-  <p><strong>Ruta:</strong> /administracion/clientes</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="31-proveedores">
-  <h2>31. Proveedores</h2>
-  <p><strong>Ruta:</strong> /administracion/proveedores</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="32-asignar-cliente-a-sitio">
-  <h2>32. Asignar Cliente a Sitio</h2>
-  <p><strong>Ruta:</strong> /administracion/asignar-cliente-sitio</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="33-departamento-responsable">
-  <h2>33. Departamento Responsable</h2>
-  <p><strong>Ruta:</strong> /administracion/departamento-responsable</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="34-roles">
-  <h2>34. Roles</h2>
-  <p><strong>Ruta:</strong> /administracion/roles</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="35-usuarios">
-  <h2>35. Usuarios</h2>
-  <p><strong>Ruta:</strong> /administracion/usuarios</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="36-cat-logo-tipo-de-problema">
-  <h2>36. Catálogo Tipo de Problema</h2>
-  <p><strong>Ruta:</strong> /administracion/catalogo-tipo-problema</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="37-asignaci-n-de-roles">
-  <h2>37. Asignación de Roles</h2>
-  <p><strong>Ruta:</strong> /administracion/asignacion-roles</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="38-men-s">
-  <h2>38. Menús</h2>
-  <p><strong>Ruta:</strong> /administracion/menus</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="39-roles-y-men-s">
-  <h2>39. Roles y Menús</h2>
-  <p><strong>Ruta:</strong> /administracion/roles-menus</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="40-hacienda">
-  <h2>40. Hacienda</h2>
-  <p><strong>Ruta:</strong> /administracion/hacienda</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="41-tipo-de-rea">
-  <h2>41. Tipo de Área</h2>
-  <p><strong>Ruta:</strong> /administracion/tipo-area</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="42-nuevo-tipo-de-rea">
-  <h2>42. Nuevo Tipo de Área</h2>
-  <p><strong>Ruta:</strong> /administracion/tipo-area/nuevo</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
-
-<section id="43-editar-tipo-de-rea">
-  <h2>43. Editar Tipo de Área</h2>
-  <p><strong>Ruta:</strong> /administracion/tipo-area/editar/:id</p>
-  <p><strong>Descripción:</strong> (pendiente)</p>
-  <p><strong>Pasos:</strong></p>
-  <ol><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li><li>(pendiente)</li></ol>
-  <p class="pending">(captura pendiente)</p>
-</section>
+<p>Fecha: 2025-12-25</p>
+<h2 class="section-heading first-section">Índice</h2>
+<p><a href="#01-login">01. Login</a></p>
+<p><a href="#02-dashboard">02. Dashboard</a></p>
+<p><a href="#03-dashboard-uptime-c-maras">03. Dashboard Uptime Cámaras</a></p>
+<p><a href="#04-fallos-t-cnicos">04. Fallos Técnicos</a></p>
+<p><a href="#05-fallos-t-cnicos-operador">05. Fallos Técnicos Operador</a></p>
+<p><a href="#06-fallos-t-cnicos-supervisor">06. Fallos Técnicos Supervisor</a></p>
+<p><a href="#07-fallos-t-cnicos-administrador">07. Fallos Técnicos Administrador</a></p>
+<p><a href="#08-consultas-fallos-t-cnicos">08. Consultas Fallos Técnicos</a></p>
+<p><a href="#09-consolidado-de-intrusiones">09. Consolidado de Intrusiones</a></p>
+<p><a href="#10-intrusiones">10. Intrusiones</a></p>
+<p><a href="#11-intrusiones-administrador">11. Intrusiones Administrador</a></p>
+<p><a href="#12-eventos-no-autorizados">12. Eventos No Autorizados</a></p>
+<p><a href="#13-eventos-autorizados">13. Eventos Autorizados</a></p>
+<p><a href="#14-reporte-de-alertas-por-turno">14. Reporte de Alertas por Turno</a></p>
+<p><a href="#15-reporte-logeos-por-turno">15. Reporte Logeos por Turno</a></p>
+<p><a href="#16-informe-de-eventos">16. Informe de Eventos</a></p>
+<p><a href="#17-cambio-de-clave">17. Cambio de Clave</a></p>
+<p><a href="#18-sitios">18. Sitios</a></p>
+<p><a href="#19-asignaci-n-de-nodos-a-sitios">19. Asignación de Nodos a Sitios</a></p>
+<p><a href="#20-consolas">20. Consolas</a></p>
+<p><a href="#21-nodos">21. Nodos</a></p>
+<p><a href="#22-fuerza-de-reacci-n">22. Fuerza de Reacción</a></p>
+<p><a href="#23-cargo">23. Cargo</a></p>
+<p><a href="#24-persona">24. Persona</a></p>
+<p><a href="#25-medio-de-comunicaci-n">25. Medio de Comunicación</a></p>
+<p><a href="#26-conclusi-n-de-evento">26. Conclusión de Evento</a></p>
+<p><a href="#27-tipo-de-intrusi-n">27. Tipo de Intrusión</a></p>
+<p><a href="#28-tipo-de-equipo-afectado">28. Tipo de Equipo Afectado</a></p>
+<p><a href="#29-tipo-de-servicio">29. Tipo de Servicio</a></p>
+<p><a href="#30-clientes">30. Clientes</a></p>
+<p><a href="#31-proveedores">31. Proveedores</a></p>
+<p><a href="#32-asignar-cliente-a-sitio">32. Asignar Cliente a Sitio</a></p>
+<p><a href="#33-departamento-responsable">33. Departamento Responsable</a></p>
+<p><a href="#34-roles">34. Roles</a></p>
+<p><a href="#35-usuarios">35. Usuarios</a></p>
+<p><a href="#36-cat-logo-tipo-de-problema">36. Catálogo Tipo de Problema</a></p>
+<p><a href="#37-asignaci-n-de-roles">37. Asignación de Roles</a></p>
+<p><a href="#38-men-s">38. Menús</a></p>
+<p><a href="#39-roles-y-men-s">39. Roles y Menús</a></p>
+<p><a href="#40-hacienda">40. Hacienda</a></p>
+<p><a href="#41-tipo-de-rea">41. Tipo de Área</a></p>
+<p><a href="#42-nuevo-tipo-de-rea">42. Nuevo Tipo de Área</a></p>
+<p><a href="#43-editar-tipo-de-rea">43. Editar Tipo de Área</a></p>
+<hr class="section-break">
+<h2 class="section-heading">01. Login</h2>
+<a id="01-login"></a>
+<p><b>Ruta:</b> /login</p>
+<p><b>Descripción:</b> Permite iniciar sesión en el Portal Administrativo con credenciales autorizadas.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Ingresar usuario y contraseña.</li>
+<li>Presionar "Ingresar".</li>
+<li>Verificar que se muestre la pantalla de selección de consola (si aplica).</li>
+<li>Confirmar que el portal cargue correctamente.</li>
+<li>Si aparece un mensaje de acceso, contactar al administrador.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">02. Dashboard</h2>
+<a id="02-dashboard"></a>
+<p><b>Ruta:</b> /dashboard</p>
+<p><b>Descripción:</b> Muestra indicadores generales y accesos rápidos a módulos de operación y mantenimiento.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Revisar la consola y rol activo en la parte superior.</li>
+<li>Analizar los indicadores disponibles en pantalla.</li>
+<li>Usar el menú lateral para cambiar de módulo.</li>
+<li>Aplicar filtros si el dashboard los incluye.</li>
+<li>Exportar o capturar información cuando corresponda (si existe botón/acción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">03. Dashboard Uptime Cámaras</h2>
+<a id="03-dashboard-uptime-c-maras"></a>
+<p><b>Ruta:</b> /dashboards/uptime-camaras</p>
+<p><b>Descripción:</b> Muestra indicadores generales y accesos rápidos a módulos de operación y mantenimiento.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Revisar la consola y rol activo en la parte superior.</li>
+<li>Analizar los indicadores disponibles en pantalla.</li>
+<li>Usar el menú lateral para cambiar de módulo.</li>
+<li>Aplicar filtros si el dashboard los incluye.</li>
+<li>Exportar o capturar información cuando corresponda (si existe botón/acción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">04. Fallos Técnicos</h2>
+<a id="04-fallos-t-cnicos"></a>
+<p><b>Ruta:</b> /fallos</p>
+<p><b>Descripción:</b> Permite registrar, consultar y dar seguimiento a eventos operativos del sistema.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Revisar el listado de eventos y su estado.</li>
+<li>Usar filtros/búsqueda para ubicar un registro específico.</li>
+<li>Abrir el detalle del evento (si aplica) para ver información completa.</li>
+<li>Registrar o actualizar información operativa permitida (según el rol).</li>
+<li>Guardar cambios y confirmar que el registro se actualizó correctamente.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">05. Fallos Técnicos Operador</h2>
+<a id="05-fallos-t-cnicos-operador"></a>
+<p><b>Ruta:</b> /fallos/operador</p>
+<p><b>Descripción:</b> Permite registrar, consultar y dar seguimiento a eventos operativos del sistema.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Revisar el listado de eventos y su estado.</li>
+<li>Usar filtros/búsqueda para ubicar un registro específico.</li>
+<li>Abrir el detalle del evento (si aplica) para ver información completa.</li>
+<li>Registrar o actualizar información operativa permitida (según el rol).</li>
+<li>Guardar cambios y confirmar que el registro se actualizó correctamente.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">06. Fallos Técnicos Supervisor</h2>
+<a id="06-fallos-t-cnicos-supervisor"></a>
+<p><b>Ruta:</b> /fallos/supervisor</p>
+<p><b>Descripción:</b> Permite registrar, consultar y dar seguimiento a eventos operativos del sistema.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Revisar el listado de eventos y su estado.</li>
+<li>Usar filtros/búsqueda para ubicar un registro específico.</li>
+<li>Abrir el detalle del evento (si aplica) para ver información completa.</li>
+<li>Registrar o actualizar información operativa permitida (según el rol).</li>
+<li>Guardar cambios y confirmar que el registro se actualizó correctamente.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">07. Fallos Técnicos Administrador</h2>
+<a id="07-fallos-t-cnicos-administrador"></a>
+<p><b>Ruta:</b> /fallos/administrador</p>
+<p><b>Descripción:</b> Permite registrar, consultar y dar seguimiento a eventos operativos del sistema.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Revisar el listado de eventos y su estado.</li>
+<li>Usar filtros/búsqueda para ubicar un registro específico.</li>
+<li>Abrir el detalle del evento (si aplica) para ver información completa.</li>
+<li>Registrar o actualizar información operativa permitida (según el rol).</li>
+<li>Guardar cambios y confirmar que el registro se actualizó correctamente.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">08. Consultas Fallos Técnicos</h2>
+<a id="08-consultas-fallos-t-cnicos"></a>
+<p><b>Ruta:</b> /fallos-tecnicos-consultas</p>
+<p><b>Descripción:</b> Presenta información histórica y consolidada para análisis y control operativo.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Seleccionar rango de fechas o filtros disponibles.</li>
+<li>Ejecutar la consulta o actualizar el reporte.</li>
+<li>Revisar totales y resultados en pantalla.</li>
+<li>Exportar a Excel/PDF si la opción lo permite.</li>
+<li>Validar que el corte/fechas coincidan con lo requerido.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">09. Consolidado de Intrusiones</h2>
+<a id="09-consolidado-de-intrusiones"></a>
+<p><b>Ruta:</b> /consultas/consolidado-intrusiones</p>
+<p><b>Descripción:</b> Presenta información histórica y consolidada para análisis y control operativo.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Seleccionar rango de fechas o filtros disponibles.</li>
+<li>Ejecutar la consulta o actualizar el reporte.</li>
+<li>Revisar totales y resultados en pantalla.</li>
+<li>Exportar a Excel/PDF si la opción lo permite.</li>
+<li>Validar que el corte/fechas coincidan con lo requerido.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">10. Intrusiones</h2>
+<a id="10-intrusiones"></a>
+<p><b>Ruta:</b> /intrusiones</p>
+<p><b>Descripción:</b> Permite registrar, consultar y dar seguimiento a eventos operativos del sistema.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Revisar el listado de eventos y su estado.</li>
+<li>Usar filtros/búsqueda para ubicar un registro específico.</li>
+<li>Abrir el detalle del evento (si aplica) para ver información completa.</li>
+<li>Registrar o actualizar información operativa permitida (según el rol).</li>
+<li>Guardar cambios y confirmar que el registro se actualizó correctamente.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">11. Intrusiones Administrador</h2>
+<a id="11-intrusiones-administrador"></a>
+<p><b>Ruta:</b> /intrusiones-administrador</p>
+<p><b>Descripción:</b> Permite registrar, consultar y dar seguimiento a eventos operativos del sistema.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Revisar el listado de eventos y su estado.</li>
+<li>Usar filtros/búsqueda para ubicar un registro específico.</li>
+<li>Abrir el detalle del evento (si aplica) para ver información completa.</li>
+<li>Registrar o actualizar información operativa permitida (según el rol).</li>
+<li>Guardar cambios y confirmar que el registro se actualizó correctamente.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">12. Eventos No Autorizados</h2>
+<a id="12-eventos-no-autorizados"></a>
+<p><b>Ruta:</b> /reportes/eventos-no-autorizados</p>
+<p><b>Descripción:</b> Presenta información histórica y consolidada para análisis y control operativo.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Seleccionar rango de fechas o filtros disponibles.</li>
+<li>Ejecutar la consulta o actualizar el reporte.</li>
+<li>Revisar totales y resultados en pantalla.</li>
+<li>Exportar a Excel/PDF si la opción lo permite.</li>
+<li>Validar que el corte/fechas coincidan con lo requerido.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">13. Eventos Autorizados</h2>
+<a id="13-eventos-autorizados"></a>
+<p><b>Ruta:</b> /reportes/eventos-autorizados</p>
+<p><b>Descripción:</b> Presenta información histórica y consolidada para análisis y control operativo.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Seleccionar rango de fechas o filtros disponibles.</li>
+<li>Ejecutar la consulta o actualizar el reporte.</li>
+<li>Revisar totales y resultados en pantalla.</li>
+<li>Exportar a Excel/PDF si la opción lo permite.</li>
+<li>Validar que el corte/fechas coincidan con lo requerido.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">14. Reporte de Alertas por Turno</h2>
+<a id="14-reporte-de-alertas-por-turno"></a>
+<p><b>Ruta:</b> /reportes/alertas-turno</p>
+<p><b>Descripción:</b> Presenta información histórica y consolidada para análisis y control operativo.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Seleccionar rango de fechas o filtros disponibles.</li>
+<li>Ejecutar la consulta o actualizar el reporte.</li>
+<li>Revisar totales y resultados en pantalla.</li>
+<li>Exportar a Excel/PDF si la opción lo permite.</li>
+<li>Validar que el corte/fechas coincidan con lo requerido.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">15. Reporte Logeos por Turno</h2>
+<a id="15-reporte-logeos-por-turno"></a>
+<p><b>Ruta:</b> /reportes/logeos-turnos</p>
+<p><b>Descripción:</b> Presenta información histórica y consolidada para análisis y control operativo.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Seleccionar rango de fechas o filtros disponibles.</li>
+<li>Ejecutar la consulta o actualizar el reporte.</li>
+<li>Revisar totales y resultados en pantalla.</li>
+<li>Exportar a Excel/PDF si la opción lo permite.</li>
+<li>Validar que el corte/fechas coincidan con lo requerido.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">16. Informe de Eventos</h2>
+<a id="16-informe-de-eventos"></a>
+<p><b>Ruta:</b> /reportes/informe-eventos</p>
+<p><b>Descripción:</b> Presenta información histórica y consolidada para análisis y control operativo.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Seleccionar rango de fechas o filtros disponibles.</li>
+<li>Ejecutar la consulta o actualizar el reporte.</li>
+<li>Revisar totales y resultados en pantalla.</li>
+<li>Exportar a Excel/PDF si la opción lo permite.</li>
+<li>Validar que el corte/fechas coincidan con lo requerido.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">17. Cambio de Clave</h2>
+<a id="17-cambio-de-clave"></a>
+<p><b>Ruta:</b> /cambiar-clave</p>
+<p><b>Descripción:</b> Permite actualizar la contraseña personal para proteger el acceso al portal.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Ingresar la contraseña actual en el campo correspondiente.</li>
+<li>Escribir la nueva contraseña siguiendo las políticas indicadas.</li>
+<li>Confirmar la nueva contraseña repitiéndola en el campo de verificación.</li>
+<li>Guardar los cambios y esperar la confirmación del sistema.</li>
+<li>Cerrar sesión y volver a ingresar para validar que la actualización fue exitosa.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">18. Sitios</h2>
+<a id="18-sitios"></a>
+<p><b>Ruta:</b> /administracion/sitios</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar) usados para asignaciones operativas de sitios.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">19. Asignación de Nodos a Sitios</h2>
+<a id="19-asignaci-n-de-nodos-a-sitios"></a>
+<p><b>Ruta:</b> /administracion/asignacion-nodos-sitios</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar) para vincular nodos con sitios en operación.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">20. Consolas</h2>
+<a id="20-consolas"></a>
+<p><b>Ruta:</b> /administracion/consolas</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar) para definir consolas utilizadas en las asignaciones operativas.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">21. Nodos</h2>
+<a id="21-nodos"></a>
+<p><b>Ruta:</b> /administracion/nodos</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar) que se asignan a sitios y consolas de operación.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">22. Fuerza de Reacción</h2>
+<a id="22-fuerza-de-reacci-n"></a>
+<p><b>Ruta:</b> /administracion/fuerza-reaccion</p>
+<p><b>Descripción:</b> Permite registrar, consultar y dar seguimiento a eventos operativos del sistema.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Revisar el listado de eventos y su estado.</li>
+<li>Usar filtros/búsqueda para ubicar un registro específico.</li>
+<li>Abrir el detalle del evento (si aplica) para ver información completa.</li>
+<li>Registrar o actualizar información operativa permitida (según el rol).</li>
+<li>Guardar cambios y confirmar que el registro se actualizó correctamente.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">23. Cargo</h2>
+<a id="23-cargo"></a>
+<p><b>Ruta:</b> /administracion/cargo</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar).</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">24. Persona</h2>
+<a id="24-persona"></a>
+<p><b>Ruta:</b> /administracion/persona</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar).</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">25. Medio de Comunicación</h2>
+<a id="25-medio-de-comunicaci-n"></a>
+<p><b>Ruta:</b> /administracion/medio-comunicacion</p>
+<p><b>Descripción:</b> Permite registrar, consultar y dar seguimiento a eventos operativos del sistema.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Revisar el listado de eventos y su estado.</li>
+<li>Usar filtros/búsqueda para ubicar un registro específico.</li>
+<li>Abrir el detalle del evento (si aplica) para ver información completa.</li>
+<li>Registrar o actualizar información operativa permitida (según el rol).</li>
+<li>Guardar cambios y confirmar que el registro se actualizó correctamente.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">26. Conclusión de Evento</h2>
+<a id="26-conclusi-n-de-evento"></a>
+<p><b>Ruta:</b> /administracion/conclusion-evento</p>
+<p><b>Descripción:</b> Permite registrar, consultar y dar seguimiento a eventos operativos del sistema.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Revisar el listado de eventos y su estado.</li>
+<li>Usar filtros/búsqueda para ubicar un registro específico.</li>
+<li>Abrir el detalle del evento (si aplica) para ver información completa.</li>
+<li>Registrar o actualizar información operativa permitida (según el rol).</li>
+<li>Guardar cambios y confirmar que el registro se actualizó correctamente.</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">27. Tipo de Intrusión</h2>
+<a id="27-tipo-de-intrusi-n"></a>
+<p><b>Ruta:</b> /administracion/tipo-intrusion</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar).</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">28. Tipo de Equipo Afectado</h2>
+<a id="28-tipo-de-equipo-afectado"></a>
+<p><b>Ruta:</b> /administracion/tipo-equipo-afectado</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar).</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">29. Tipo de Servicio</h2>
+<a id="29-tipo-de-servicio"></a>
+<p><b>Ruta:</b> /administracion/tipo-servicio</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar).</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">30. Clientes</h2>
+<a id="30-clientes"></a>
+<p><b>Ruta:</b> /administracion/clientes</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar).</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">31. Proveedores</h2>
+<a id="31-proveedores"></a>
+<p><b>Ruta:</b> /administracion/proveedores</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar).</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">32. Asignar Cliente a Sitio</h2>
+<a id="32-asignar-cliente-a-sitio"></a>
+<p><b>Ruta:</b> /administracion/asignar-cliente-sitio</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar) para vincular clientes con sitios operativos.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">33. Departamento Responsable</h2>
+<a id="33-departamento-responsable"></a>
+<p><b>Ruta:</b> /administracion/departamento-responsable</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar).</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">34. Roles</h2>
+<a id="34-roles"></a>
+<p><b>Ruta:</b> /administracion/roles</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar) incluyendo la asignación de permisos y accesos.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar, definiendo los permisos necesarios.</li>
+<li>Editar un registro existente para ajustar accesos y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">35. Usuarios</h2>
+<a id="35-usuarios"></a>
+<p><b>Ruta:</b> /administracion/usuarios</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar), incluyendo la asignación de roles.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios, asignar roles y guardar.</li>
+<li>Editar un registro existente para actualizar datos o activar/inactivar y guardar cambios.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">36. Catálogo Tipo de Problema</h2>
+<a id="36-cat-logo-tipo-de-problema"></a>
+<p><b>Ruta:</b> /administracion/catalogo-tipo-problema</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar).</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">37. Asignación de Roles</h2>
+<a id="37-asignaci-n-de-roles"></a>
+<p><b>Ruta:</b> /administracion/asignacion-roles</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar) para asignar roles a los usuarios autorizados.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios, seleccionando el rol a asignar, y guardar.</li>
+<li>Editar un registro existente para ajustar roles y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">38. Menús</h2>
+<a id="38-men-s"></a>
+<p><b>Ruta:</b> /administracion/menus</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar) controlando accesos a menús.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios, definiendo permisos de menú, y guardar.</li>
+<li>Editar un registro existente para ajustar accesos y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">39. Roles y Menús</h2>
+<a id="39-roles-y-men-s"></a>
+<p><b>Ruta:</b> /administracion/roles-menus</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar) relacionando roles con accesos a menús.</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios, asociando menús al rol, y guardar.</li>
+<li>Editar un registro existente para ajustar permisos y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">40. Hacienda</h2>
+<a id="40-hacienda"></a>
+<p><b>Ruta:</b> /administracion/hacienda</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar).</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">41. Tipo de Área</h2>
+<a id="41-tipo-de-rea"></a>
+<p><b>Ruta:</b> /administracion/tipo-area</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar).</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">42. Nuevo Tipo de Área</h2>
+<a id="42-nuevo-tipo-de-rea"></a>
+<p><b>Ruta:</b> /administracion/tipo-area/nuevo</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar).</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+<hr class="section-break">
+<h2 class="section-heading">43. Editar Tipo de Área</h2>
+<a id="43-editar-tipo-de-rea"></a>
+<p><b>Ruta:</b> /administracion/tipo-area/editar/:id</p>
+<p><b>Descripción:</b> Permite administrar registros maestros del sistema (crear, editar, activar/inactivar y consultar).</p>
+<p><b>Pasos:</b></p>
+<ol>
+<li>Usar filtros de la cabecera para buscar un registro.</li>
+<li>Presionar "Nuevo" (o equivalente) para crear un registro.</li>
+<li>Completar los campos obligatorios y guardar.</li>
+<li>Editar un registro existente y guardar cambios cuando sea necesario.</li>
+<li>Exportar a Excel o revisar listados para verificar la información (si existe opción).</li>
+</ol>
+<p><b>Imagen:</b></p>
+<p class="pending">(captura pendiente)</p>
+  </main>
 </body>
 </html>
