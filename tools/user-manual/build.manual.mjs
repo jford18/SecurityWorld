@@ -1,14 +1,16 @@
-import fs from 'fs/promises';
-import path, { dirname, join } from 'path';
+import fs from 'fs';
+import { promises as fsPromises } from 'fs';
+import { basename, dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
 let chromium = null;
 
 const BASE_DIR = dirname(fileURLToPath(import.meta.url));
-const PAGES_JSON_PATH = join(BASE_DIR, 'manual.pages.json');
-const MANUAL_MD_PATH = join(BASE_DIR, 'manual.md');
-const MANUAL_HTML_PATH = join(BASE_DIR, 'manual.html');
-const MANUAL_PDF_PATH = join(BASE_DIR, 'manual.pdf');
+const MD_PATH = join(BASE_DIR, 'manual.md');
+const HTML_PATH = join(BASE_DIR, 'manual.html');
+const PDF_PATH = join(BASE_DIR, 'manual.pdf');
+const OUT_DIR = join(BASE_DIR, 'out');
+const PAGES_PATH = join(BASE_DIR, 'manual.pages.json');
 
 const loadChromium = async () => {
   if (chromium) return chromium;
@@ -18,51 +20,54 @@ const loadChromium = async () => {
 };
 
 const loadPages = async () => {
-  const raw = await fs.readFile(PAGES_JSON_PATH, 'utf-8');
+  const raw = await fsPromises.readFile(PAGES_PATH, 'utf-8');
   const pages = JSON.parse(raw);
   return pages.sort((a, b) => a.order - b.order);
 };
 
-const ensureManualMarkdown = async () => {
-  try {
-    await fs.access(MANUAL_MD_PATH);
-    const markdown = await fs.readFile(MANUAL_MD_PATH, 'utf-8');
-    return markdown;
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
+const buildManualFromPages = async () => {
+  const pages = await loadPages();
+  const lines = ['# Manual de Usuario', '', '## Índice'];
 
-    const pages = await loadPages();
-    const lines = ['# Manual de Usuario', '', '## Índice'];
+  pages.forEach((page) => {
+    const sectionId = `${String(page.order).padStart(2, '0')}-${page.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    lines.push(`- [${String(page.order).padStart(2, '0')}. ${page.title}](#${sectionId})`);
+  });
 
-    pages.forEach((page) => {
-      const sectionId = `${String(page.order).padStart(2, '0')}-${page.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-      lines.push(`- [${String(page.order).padStart(2, '0')}. ${page.title}](#${sectionId})`);
-    });
-
+  lines.push('');
+  pages.forEach((page) => {
+    const order = String(page.order).padStart(2, '0');
+    const sectionId = `${order}-${page.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    lines.push(`## ${order}. ${page.title}`);
+    lines.push(`<a id="${sectionId}"></a>`);
+    lines.push(`- Ruta: ${page.path}`);
+    lines.push('- Descripción: (pendiente)');
+    lines.push('- Pasos:');
+    lines.push('  1. (pendiente)');
+    lines.push('  2. (pendiente)');
+    lines.push('  3. (pendiente)');
+    lines.push('  4. (pendiente)');
+    lines.push('  5. (pendiente)');
+    lines.push('- Imagen:');
+    lines.push('  (captura pendiente)');
     lines.push('');
-    pages.forEach((page) => {
-      const order = String(page.order).padStart(2, '0');
-      const sectionId = `${order}-${page.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-      lines.push(`## ${order}. ${page.title}`);
-      lines.push(`<a id="${sectionId}"></a>`);
-      lines.push(`- Ruta: ${page.path}`);
-      lines.push('- Descripción: (pendiente)');
-      lines.push('- Pasos:');
-      lines.push('  1. (pendiente)');
-      lines.push('  2. (pendiente)');
-      lines.push('  3. (pendiente)');
-      lines.push('  4. (pendiente)');
-      lines.push('  5. (pendiente)');
-      lines.push('- Imagen:');
-      lines.push('  (captura pendiente)');
-      lines.push('');
-    });
+  });
 
-    const markdown = lines.join('\n');
-    await fs.writeFile(MANUAL_MD_PATH, markdown, 'utf-8');
-    console.log(`OK: ${path.basename(MANUAL_MD_PATH)} (creado desde manual.pages.json)`);
+  return lines.join('\n');
+};
+
+const getManualMarkdown = async () => {
+  const mdExists = fs.existsSync(MD_PATH);
+
+  if (!mdExists) {
+    console.log('Generating manual.md (first time)');
+    const markdown = await buildManualFromPages();
+    fs.writeFileSync(MD_PATH, markdown, 'utf-8');
     return markdown;
   }
+
+  console.log('Using existing manual.md');
+  return fs.readFileSync(MD_PATH, 'utf-8');
 };
 
 const markdownToHtml = (markdown) => {
@@ -199,38 +204,37 @@ const buildHtmlDocument = (bodyContent) => `<!doctype html>
   </main>
 </body>
 </html>`;
-
 const saveFile = async (filePath, content) => {
-  await fs.writeFile(filePath, content, 'utf-8');
-  console.log(`OK: ${path.basename(filePath)}`);
+  await fsPromises.writeFile(filePath, content, 'utf-8');
+  console.log(`OK: ${basename(filePath)}`);
 };
 
 const generatePdf = async () => {
   const engine = await loadChromium();
   const browser = await engine.launch({ headless: true });
   const page = await browser.newPage();
-  const fileUrl = pathToFileURL(MANUAL_HTML_PATH).href;
+  const fileUrl = pathToFileURL(HTML_PATH).href;
   await page.goto(fileUrl);
   await page.pdf({
-    path: MANUAL_PDF_PATH,
+    path: PDF_PATH,
     format: 'A4',
     printBackground: true,
     margin: { top: '15mm', right: '15mm', bottom: '15mm', left: '15mm' },
   });
   await browser.close();
-  console.log(`OK: ${path.basename(MANUAL_PDF_PATH)}`);
+  console.log(`OK: ${basename(PDF_PATH)}`);
 };
 
 const generatePlaceholderPdf = async () => {
   const placeholder = `%PDF-1.4\n1 0 obj<<>>endobj\n2 0 obj<< /Type /Catalog /Pages 3 0 R >>endobj\n3 0 obj<< /Type /Pages /Kids [4 0 R] /Count 1 >>endobj\n4 0 obj<< /Type /Page /Parent 3 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 6 0 R >> >> >>endobj\n5 0 obj<< /Length 80 >>stream\nBT /F1 12 Tf 72 720 Td (Ejecuta build.manual.mjs con Playwright instalado para generar el PDF definitivo) Tj ET\nendstream endobj\n6 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj\nxref\n0 7\n0000000000 65535 f \n0000000010 00000 n \n0000000043 00000 n \n0000000102 00000 n \n0000000175 00000 n \n0000000373 00000 n \n0000000503 00000 n \ntrailer<< /Size 7 /Root 2 0 R >>\nstartxref\n592\n%%EOF`;
-  await fs.writeFile(MANUAL_PDF_PATH, placeholder, 'utf-8');
-  console.warn(`WARN: ${path.basename(MANUAL_PDF_PATH)} generado como placeholder (sin Playwright).`);
+  await fsPromises.writeFile(PDF_PATH, placeholder, 'utf-8');
+  console.warn(`WARN: ${basename(PDF_PATH)} generado como placeholder (sin Playwright).`);
 };
 
 const run = async () => {
-  const markdown = await ensureManualMarkdown();
+  const markdown = await getManualMarkdown();
   const html = buildHtmlDocument(markdownToHtml(markdown));
-  await saveFile(MANUAL_HTML_PATH, html);
+  await saveFile(HTML_PATH, html);
 
   try {
     await generatePdf();
