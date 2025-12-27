@@ -1,6 +1,26 @@
 import { pool } from "../db.js";
 
 const mapIntrusionRow = (row) => {
+  const hikAlarmEventoIdRaw =
+    row?.hik_alarm_evento_id === undefined
+      ? row?.hik_alarm_eventoid ?? row?.hik_alarm_evento
+      : row.hik_alarm_evento_id;
+  const hikAlarmEventoId =
+    hikAlarmEventoIdRaw === null || hikAlarmEventoIdRaw === undefined
+      ? null
+      : Number(hikAlarmEventoIdRaw);
+
+  const noLlegoAlerta =
+    typeof row?.no_llego_alerta === "boolean"
+      ? row.no_llego_alerta
+      : row?.llego_alerta !== undefined
+      ? !row.llego_alerta
+      : false;
+
+  const completado = Boolean(row?.completado);
+  const fechaCompletado = row?.fecha_completado
+    ? new Date(row.fecha_completado).toISOString()
+    : null;
   const medioId =
     row?.medio_comunicacion_id === null || row?.medio_comunicacion_id === undefined
       ? null
@@ -38,6 +58,9 @@ const mapIntrusionRow = (row) => {
 
   return {
     id: row?.id,
+    origen: row?.origen ?? null,
+    hik_alarm_evento_id:
+      hikAlarmEventoId === null || Number.isNaN(hikAlarmEventoId) ? null : hikAlarmEventoId,
     ubicacion: row?.ubicacion ?? "",
     sitio_id: sitioId === null || Number.isNaN(sitioId) ? null : sitioId,
     sitio_nombre: row?.sitio_nombre ?? null,
@@ -46,10 +69,17 @@ const mapIntrusionRow = (row) => {
     descripcion: row?.descripcion ?? "",
     fecha_evento: row?.fecha_evento ? new Date(row.fecha_evento).toISOString() : null,
     fecha_reaccion: row?.fecha_reaccion ? new Date(row.fecha_reaccion).toISOString() : null,
-    fecha_reaccion_fuera: row?.fecha_reaccion_fuera
+    fecha_reaccion_enviada: row?.fecha_reaccion_enviada
+      ? new Date(row.fecha_reaccion_enviada).toISOString()
+      : null,
+    fecha_llegada_fuerza_reaccion: row?.fecha_llegada_fuerza_reaccion
+      ? new Date(row.fecha_llegada_fuerza_reaccion).toISOString()
+      : row?.fecha_reaccion_fuera
       ? new Date(row.fecha_reaccion_fuera).toISOString()
       : null,
-    llego_alerta: Boolean(row?.llego_alerta),
+    no_llego_alerta: noLlegoAlerta,
+    completado,
+    fecha_completado: fechaCompletado,
     medio_comunicacion_id:
       medioId === null || Number.isNaN(medioId) ? null : Number(medioId),
     medio_comunicacion_descripcion: row?.medio_comunicacion_descripcion ?? null,
@@ -106,6 +136,43 @@ const normalizeBooleanParam = (value) => {
   }
 
   return Boolean(value);
+};
+
+const validateCompletionRequirements = (config) => {
+  const {
+    completado,
+    necesitaProtocolo,
+    fechaReaccion,
+    medioComunicacionId,
+    personaId,
+    fechaReaccionEnviada,
+    fechaLlegadaFuerzaReaccion,
+    conclusionEventoId,
+    sustraccionMaterial,
+  } = config;
+
+  if (!completado) {
+    return [];
+  }
+
+  const missing = [];
+
+  if (!fechaReaccion) missing.push("fecha_reaccion");
+  if (!medioComunicacionId) missing.push("medio_comunicacion_id");
+  if (!personaId) missing.push("persona_id");
+
+  if (necesitaProtocolo) {
+    if (!fechaReaccionEnviada) missing.push("fecha_reaccion_enviada");
+    if (!fechaLlegadaFuerzaReaccion) missing.push("fecha_llegada_fuerza_reaccion");
+    if (!conclusionEventoId && conclusionEventoId !== 0) {
+      missing.push("conclusion_evento_id");
+    }
+    if (sustraccionMaterial === undefined || sustraccionMaterial === null) {
+      missing.push("sustraccion_material");
+    }
+  }
+
+  return missing;
 };
 
 const mapConsolidadoRow = (row) => {
@@ -414,6 +481,13 @@ const getIntrusionesMetadata = async () => {
     personaColumn,
     hasFechaReaccionEnviada: columnNames.has("fecha_reaccion_enviada"),
     hasSustraccionPersonal: columnNames.has("sustraccion_personal"),
+    hasNoLlegoAlerta: columnNames.has("no_llego_alerta"),
+    hasHikAlarmEventoId: columnNames.has("hik_alarm_evento_id"),
+    hasOrigen: columnNames.has("origen"),
+    hasCompletado: columnNames.has("completado"),
+    hasFechaCompletado: columnNames.has("fecha_completado"),
+    hasNecesitaProtocolo: columnNames.has("necesita_protocolo"),
+    hasFechaLlegadaFuerzaReaccion: columnNames.has("fecha_llegada_fuerza_reaccion"),
     authorizedColumn,
     authorizedColumnType: authorizedColumn ? columnTypes[authorizedColumn] : null,
   };
@@ -458,6 +532,20 @@ export const listIntrusiones = async (_req, res) => {
     const personaSelect = metadata.personaColumn
       ? `, i.${metadata.personaColumn} AS persona_id, CONCAT_WS(' ', p.nombre, p.apellido) AS persona_nombre, c.descripcion AS cargo_descripcion`
       : "";
+    const origenSelect = metadata.hasOrigen ? ", i.origen" : "";
+    const hikAlarmSelect = metadata.hasHikAlarmEventoId ? ", i.hik_alarm_evento_id" : "";
+    const noLlegoSelect = metadata.hasNoLlegoAlerta
+      ? ", i.no_llego_alerta"
+      : ", i.llego_alerta";
+    const fechaReaccionEnviadaSelect = metadata.hasFechaReaccionEnviada
+      ? ", i.fecha_reaccion_enviada"
+      : "";
+    const fechaLlegadaSelect = metadata.hasFechaLlegadaFuerzaReaccion
+      ? ", i.fecha_llegada_fuerza_reaccion"
+      : ", i.fecha_reaccion_fuera";
+    const completadoSelect = metadata.hasCompletado ? ", i.completado" : "";
+    const fechaCompletadoSelect = metadata.hasFechaCompletado ? ", i.fecha_completado" : "";
+    const necesitaProtocoloSelect = metadata.hasNecesitaProtocolo ? ", i.necesita_protocolo" : "";
 
     const personaJoin = metadata.personaColumn
       ? "LEFT JOIN public.persona AS p ON p.id = i." + metadata.personaColumn +
@@ -467,15 +555,21 @@ export const listIntrusiones = async (_req, res) => {
     const result = await pool.query(
       `SELECT
          i.id,
+         i.descripcion,
          i.ubicacion,
+         i.estado,
          i.sitio_id,
          i.tipo,
-         i.estado,
-         i.descripcion,
          i.fecha_evento,
          i.fecha_reaccion,
-         i.fecha_reaccion_fuera,
-         i.llego_alerta,
+         ${fechaLlegadaSelect},
+         ${noLlegoSelect},
+         ${fechaReaccionEnviadaSelect},
+         ${completadoSelect},
+         ${fechaCompletadoSelect},
+         ${necesitaProtocoloSelect},
+         ${origenSelect},
+         ${hikAlarmSelect},
          i.medio_comunicacion_id,
          i.conclusion_evento_id,
          i.sustraccion_material,
@@ -500,6 +594,168 @@ export const listIntrusiones = async (_req, res) => {
   }
 };
 
+export const listIntrusionesEncoladasHc = async (req, res) => {
+  const { page = 1, limit = 20, search = "", orderBy = "fecha_evento_hc", orderDir = "desc" } =
+    req.query || {};
+
+  const pageNumber = Number(page);
+  const pageSize = Number(limit);
+  const hasPagination = Number.isInteger(pageNumber) && pageNumber > 0 && Number.isInteger(pageSize) && pageSize > 0;
+
+  const orderableColumns = {
+    fecha_evento_hc: "fecha_evento_hc",
+    region: "region",
+    name: "name",
+    trigger_event: "trigger_event",
+    status: "status",
+    alarm_category: "alarm_category",
+  };
+
+  const orderColumn =
+    orderableColumns[String(orderBy).toLowerCase()] || orderableColumns.fecha_evento_hc;
+  const orderDirection = String(orderDir).toLowerCase() === "asc" ? "ASC" : "DESC";
+
+  const filterValues = [];
+  let whereClause = "";
+
+  if (typeof search === "string" && search.trim()) {
+    filterValues.push(`%${search.trim()}%`);
+    whereClause =
+      "WHERE region ILIKE $1 OR name ILIKE $1 OR trigger_event ILIKE $1 OR status ILIKE $1 OR alarm_category ILIKE $1";
+  }
+
+  const values = [...filterValues];
+
+  const paginationClause = hasPagination
+    ? `LIMIT $${values.length + 1} OFFSET $${values.length + 2}`
+    : "";
+
+  if (hasPagination) {
+    values.push(pageSize, (pageNumber - 1) * pageSize);
+  }
+
+  try {
+    const totalResult = await pool.query(
+      `SELECT COUNT(*) AS total FROM public.v_intrusiones_encolados_hc ${whereClause}`,
+      filterValues
+    );
+
+    const result = await pool.query(
+      `SELECT fecha_evento_hc, region, name, trigger_event, status, alarm_category, intrusion_id, completado, hik_alarm_evento_id
+         FROM public.v_intrusiones_encolados_hc
+         ${whereClause}
+         ORDER BY ${orderColumn} ${orderDirection}
+         ${paginationClause}`,
+      values
+    );
+
+    return res.json({ data: result.rows ?? [], total: Number(totalResult.rows?.[0]?.total) || 0 });
+  } catch (error) {
+    console.error("Error al listar intrusiones encoladas de HC:", error);
+    return res.status(500).json({ mensaje: "No se pudieron obtener las intrusiones encoladas." });
+  }
+};
+
+export const openIntrusionDesdeHc = async (req, res) => {
+  const { hikAlarmEventoId } = req.params;
+  const parsedId = Number(hikAlarmEventoId);
+
+  if (!Number.isInteger(parsedId)) {
+    return res.status(400).json({ mensaje: "El identificador del evento de HikCentral no es válido." });
+  }
+
+  let metadata;
+  try {
+    metadata = await getIntrusionesMetadata();
+  } catch (error) {
+    console.error("No se pudo preparar metadata de intrusiones:", error);
+    return res.status(500).json({ mensaje: "No se pudo preparar la apertura de la intrusión." });
+  }
+
+  try {
+    const selectColumns = [
+      "id",
+      "sitio_id",
+      "tipo",
+      "estado",
+      "descripcion",
+      "fecha_evento",
+      "fecha_reaccion",
+      metadata.hasFechaReaccionEnviada ? "fecha_reaccion_enviada" : null,
+      metadata.hasFechaLlegadaFuerzaReaccion ? "fecha_llegada_fuerza_reaccion" : "fecha_reaccion_fuera",
+      metadata.hasNoLlegoAlerta ? "no_llego_alerta" : "llego_alerta",
+      metadata.hasCompletado ? "completado" : null,
+      metadata.hasNecesitaProtocolo ? "necesita_protocolo" : null,
+      metadata.hasOrigen ? "origen" : null,
+      metadata.hasHikAlarmEventoId ? "hik_alarm_evento_id" : null,
+      "medio_comunicacion_id",
+      "conclusion_evento_id",
+      "sustraccion_material",
+      "fuerza_reaccion_id",
+      metadata.personaColumn ? `${metadata.personaColumn} AS persona_id` : null,
+    ].filter(Boolean);
+
+    const existingResult = await pool.query(
+      `SELECT ${selectColumns.join(", ")} FROM public.intrusiones WHERE hik_alarm_evento_id = $1 LIMIT 1`,
+      [parsedId]
+    );
+
+    if (existingResult.rowCount > 0) {
+      return res.json(mapIntrusionRow(existingResult.rows[0]));
+    }
+
+    const columns = [];
+    const values = [];
+
+    if (metadata.hasOrigen) {
+      columns.push("origen");
+      values.push("HC");
+    }
+
+    if (metadata.hasHikAlarmEventoId) {
+      columns.push("hik_alarm_evento_id");
+      values.push(parsedId);
+    }
+
+    if (metadata.hasNoLlegoAlerta) {
+      columns.push("no_llego_alerta");
+      values.push(false);
+    } else {
+      columns.push("llego_alerta");
+      values.push(true);
+    }
+
+    if (metadata.hasCompletado) {
+      columns.push("completado");
+      values.push(false);
+    }
+
+    columns.push("fecha_evento");
+    values.push(new Date());
+
+    const placeholders = columns.map((_, index) => `$${index + 1}`);
+
+    const returningColumns = [
+      "id",
+      metadata.hasOrigen ? "origen" : null,
+      metadata.hasHikAlarmEventoId ? "hik_alarm_evento_id" : null,
+      metadata.hasNoLlegoAlerta ? "no_llego_alerta" : "llego_alerta",
+      metadata.hasCompletado ? "completado" : null,
+      "fecha_evento",
+    ].filter(Boolean);
+
+    const insertResult = await pool.query(
+      `INSERT INTO public.intrusiones (${columns.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING ${returningColumns.join(", ")}`,
+      values
+    );
+
+    return res.status(201).json(mapIntrusionRow(insertResult.rows[0]));
+  } catch (error) {
+    console.error("Error al abrir intrusión desde HC:", error);
+    return res.status(500).json({ mensaje: "No se pudo abrir la intrusión encolada." });
+  }
+};
+
 export const createIntrusion = async (req, res) => {
   const body = req.body || {};
   const rawUbicacion =
@@ -508,9 +764,16 @@ export const createIntrusion = async (req, res) => {
   const rawSitioId = body.sitio_id ?? body.SITIO_ID ?? body.sitioId ?? null;
   const rawFechaEvento = body.fecha_evento ?? body.FECHA_EVENTO ?? null;
   const rawFechaReaccion = body.fecha_reaccion ?? body.FECHA_REACCION ?? null;
-  const rawFechaReaccionFuera =
-    body.fecha_reaccion_fuera ?? body.FECHA_REACCION_FUERA ?? null;
-  const rawLlegoAlerta = body.llego_alerta ?? body.LLEGO_ALERTA;
+  const rawFechaReaccionEnviada =
+    body.fecha_reaccion_enviada ?? body.FECHA_REACCION_ENVIADA ?? null;
+  const rawFechaLlegadaFuerzaReaccion =
+    body.fecha_llegada_fuerza_reaccion ??
+    body.FECHA_LLEGADA_FUERZA_REACCION ??
+    body.fecha_reaccion_fuera ??
+    body.FECHA_REACCION_FUERA ??
+    null;
+  const rawNoLlegoAlerta =
+    body.no_llego_alerta ?? body.NO_LLEGO_ALERTA ?? body.llego_alerta ?? body.LLEGO_ALERTA;
   const rawMedioComunicacionId = body.medio_comunicacion_id ?? body.MEDIO_COMUNICACION_ID;
   const rawConclusionEventoId = body.conclusion_evento_id ?? body.CONCLUSION_EVENTO_ID;
   const rawSustraccionMaterial = body.sustraccion_material ?? body.SUSTRACCION_MATERIAL;
@@ -518,6 +781,10 @@ export const createIntrusion = async (req, res) => {
   const rawPersonaId = body.persona_id ?? body.personal_id ?? body.PERSONA_ID ?? body.PERSONAL_ID;
   const rawEstado = body.estado ?? body.ESTADO ?? null;
   const rawDescripcion = body.descripcion ?? body.DESCRIPCION ?? null;
+  const rawOrigen = body.origen ?? body.ORIGEN ?? "MANUAL";
+  const rawHikAlarmEventoId = body.hik_alarm_evento_id ?? body.HIK_ALARM_EVENTO_ID ?? null;
+  const rawCompletado = body.completado ?? body.COMPLETADO ?? false;
+  const rawNecesitaProtocolo = body.necesita_protocolo ?? body.NECESITA_PROTOCOLO;
 
   let metadata;
   try {
@@ -533,14 +800,18 @@ export const createIntrusion = async (req, res) => {
     tipo: body.tipo ?? body.TIPO,
     sitio_id: rawSitioId,
     persona_id: rawPersonaId,
+    origen: rawOrigen,
+    hik_alarm_evento_id: rawHikAlarmEventoId,
   });
 
   const fechaEventoValue = rawFechaEvento ? parseFechaValue(rawFechaEvento) : new Date();
   const fechaReaccionValue = rawFechaReaccion ? parseFechaValue(rawFechaReaccion) : null;
-  const fechaReaccionFueraValue = rawFechaReaccionFuera
-    ? parseFechaValue(rawFechaReaccionFuera)
+  const fechaReaccionEnviadaValue = rawFechaReaccionEnviada
+    ? parseFechaValue(rawFechaReaccionEnviada)
     : null;
-  const llegoAlertaValue = typeof rawLlegoAlerta === "boolean" ? rawLlegoAlerta : false;
+  const fechaLlegadaFuerzaReaccionValue = rawFechaLlegadaFuerzaReaccion
+    ? parseFechaValue(rawFechaLlegadaFuerzaReaccion)
+    : null;
   const medioComValue =
     rawMedioComunicacionId === null || rawMedioComunicacionId === undefined || rawMedioComunicacionId === ""
       ? null
@@ -555,6 +826,23 @@ export const createIntrusion = async (req, res) => {
       ? parseIntegerOrNull(rawPersonaId)
       : null;
   const tipoTextValue = typeof rawTipoText === "string" ? rawTipoText.trim() : "";
+  const hikAlarmEventoValue = metadata.hasHikAlarmEventoId
+    ? parseIntegerOrNull(rawHikAlarmEventoId)
+    : null;
+  const origenValue = metadata.hasOrigen
+    ? typeof rawOrigen === "string" && rawOrigen.trim()
+      ? rawOrigen.trim().toUpperCase()
+      : "MANUAL"
+    : null;
+  const noLlegoAlertaValue = metadata.hasNoLlegoAlerta
+    ? hikAlarmEventoValue
+      ? false
+      : Boolean(rawNoLlegoAlerta)
+    : false;
+  const completadoValue = metadata.hasCompletado ? Boolean(rawCompletado) : false;
+  const necesitaProtocoloValue = metadata.hasNecesitaProtocolo
+    ? Boolean(rawNecesitaProtocolo)
+    : false;
 
   const missingFields = [];
 
@@ -594,6 +882,20 @@ export const createIntrusion = async (req, res) => {
     });
   }
 
+  if (rawFechaReaccionEnviada && !fechaReaccionEnviadaValue) {
+    return res.status(400).json({
+      message: "La fecha y hora de reacción enviada no es válida.",
+      details: { field: "fecha_reaccion_enviada" },
+    });
+  }
+
+  if (rawFechaLlegadaFuerzaReaccion && !fechaLlegadaFuerzaReaccionValue) {
+    return res.status(400).json({
+      message: "La fecha y hora de llegada de la fuerza de reacción no es válida.",
+      details: { field: "fecha_llegada_fuerza_reaccion" },
+    });
+  }
+
   if (
     fechaReaccionValue &&
     fechaEventoValue &&
@@ -605,32 +907,33 @@ export const createIntrusion = async (req, res) => {
     });
   }
 
-  if (rawFechaReaccionFuera && !fechaReaccionFueraValue) {
+  if (
+    fechaLlegadaFuerzaReaccionValue &&
+    fechaReaccionValue &&
+    fechaLlegadaFuerzaReaccionValue.getTime() <= fechaReaccionValue.getTime()
+  ) {
     return res.status(400).json({
-      message: "La fecha y hora de reacción de fuera no es válida.",
-      details: { field: "fecha_reaccion_fuera" },
+      message: "La fecha de llegada de la fuerza de reacción debe ser posterior a la fecha de reacción.",
+      details: { field: "fecha_llegada_fuerza_reaccion" },
     });
   }
 
   if (
-    fechaReaccionFueraValue &&
-    fechaReaccionValue &&
-    fechaReaccionFueraValue.getTime() <= fechaReaccionValue.getTime()
+    rawConclusionEventoId !== undefined &&
+    rawConclusionEventoId !== null &&
+    conclusionEventoValue === undefined
   ) {
-    return res.status(400).json({
-      message: "La fecha de reacción de fuera debe ser posterior a la fecha de reacción.",
-      details: { field: "fecha_reaccion_fuera" },
-    });
-  }
-
-  if (conclusionEventoValue === undefined) {
     return res.status(400).json({
       message: "El identificador de la conclusión del evento no es válido.",
       details: { field: "conclusion_evento_id" },
     });
   }
 
-  if (fuerzaReaccionValue === undefined) {
+  if (
+    rawFuerzaReaccionId !== undefined &&
+    rawFuerzaReaccionId !== null &&
+    fuerzaReaccionValue === undefined
+  ) {
     return res.status(400).json({
       message: "El identificador de la fuerza de reacción no es válido.",
       details: { field: "fuerza_reaccion_id" },
@@ -644,35 +947,81 @@ export const createIntrusion = async (req, res) => {
     });
   }
 
+  const missingCompletionFields = validateCompletionRequirements({
+    completado: completadoValue,
+    necesitaProtocolo: necesitaProtocoloValue,
+    fechaReaccion: fechaReaccionValue,
+    medioComunicacionId: medioComValue,
+    personaId: personaIdValue,
+    fechaReaccionEnviada: fechaReaccionEnviadaValue,
+    fechaLlegadaFuerzaReaccion: fechaLlegadaFuerzaReaccionValue,
+    conclusionEventoId: conclusionEventoValue,
+    sustraccionMaterial: sustraccionMaterialValue,
+  });
+
+  if (missingCompletionFields.length) {
+    return res.status(400).json({
+      message: "Faltan campos obligatorios para completar la intrusión.",
+      details: { missingFields: missingCompletionFields },
+    });
+  }
+
   try {
     const columns = ["ubicacion", "sitio_id", "tipo"];
     const values = [rawUbicacion ?? null, sitioIdValue, tipoTextValue || null];
 
+    columns.push("estado", "descripcion", "fecha_evento", "fecha_reaccion");
+    values.push(rawEstado ?? null, rawDescripcion ?? null, fechaEventoValue, fechaReaccionValue);
+
+    if (metadata.hasFechaLlegadaFuerzaReaccion) {
+      columns.push("fecha_llegada_fuerza_reaccion");
+      values.push(fechaLlegadaFuerzaReaccionValue);
+    } else {
+      columns.push("fecha_reaccion_fuera");
+      values.push(fechaLlegadaFuerzaReaccionValue);
+    }
+
+    if (metadata.hasFechaReaccionEnviada) {
+      columns.push("fecha_reaccion_enviada");
+      values.push(fechaReaccionEnviadaValue);
+    }
+
+    if (metadata.hasNoLlegoAlerta) {
+      columns.push("no_llego_alerta");
+      values.push(noLlegoAlertaValue);
+    } else {
+      columns.push("llego_alerta");
+      values.push(!noLlegoAlertaValue);
+    }
+
     columns.push(
-      "estado",
-      "descripcion",
-      "fecha_evento",
-      "fecha_reaccion",
-      "fecha_reaccion_fuera",
-      "llego_alerta",
       "medio_comunicacion_id",
       "conclusion_evento_id",
       "sustraccion_material",
       "fuerza_reaccion_id"
     );
 
-    values.push(
-      rawEstado ?? null,
-      rawDescripcion ?? null,
-      fechaEventoValue,
-      fechaReaccionValue,
-      fechaReaccionFueraValue,
-      llegoAlertaValue,
-      medioComValue,
-      conclusionEventoValue,
-      sustraccionMaterialValue,
-      fuerzaReaccionValue
-    );
+    values.push(medioComValue, conclusionEventoValue, sustraccionMaterialValue, fuerzaReaccionValue);
+
+    if (metadata.hasCompletado) {
+      columns.push("completado");
+      values.push(completadoValue);
+    }
+
+    if (metadata.hasNecesitaProtocolo) {
+      columns.push("necesita_protocolo");
+      values.push(necesitaProtocoloValue);
+    }
+
+    if (metadata.hasOrigen) {
+      columns.push("origen");
+      values.push(origenValue);
+    }
+
+    if (metadata.hasHikAlarmEventoId) {
+      columns.push("hik_alarm_evento_id");
+      values.push(hikAlarmEventoValue);
+    }
 
     if (metadata.personaColumn) {
       columns.push(metadata.personaColumn);
@@ -690,8 +1039,14 @@ export const createIntrusion = async (req, res) => {
       "descripcion",
       "fecha_evento",
       "fecha_reaccion",
-      "fecha_reaccion_fuera",
-      "llego_alerta",
+      metadata.hasFechaLlegadaFuerzaReaccion ? "fecha_llegada_fuerza_reaccion" : "fecha_reaccion_fuera",
+      metadata.hasNoLlegoAlerta ? "no_llego_alerta" : "llego_alerta",
+      metadata.hasFechaReaccionEnviada ? "fecha_reaccion_enviada" : null,
+      metadata.hasCompletado ? "completado" : null,
+      metadata.hasFechaCompletado ? "fecha_completado" : null,
+      metadata.hasNecesitaProtocolo ? "necesita_protocolo" : null,
+      metadata.hasOrigen ? "origen" : null,
+      metadata.hasHikAlarmEventoId ? "hik_alarm_evento_id" : null,
       "medio_comunicacion_id",
       "conclusion_evento_id",
       "sustraccion_material",
@@ -718,29 +1073,24 @@ export const createIntrusion = async (req, res) => {
     return res.status(201).json(mapIntrusionRow(created));
   } catch (error) {
     console.error("Error al crear intrusión:", error);
-    return res
-      .status(500)
-      .json({ message: "Error al registrar la intrusión", mensaje: "Error al registrar la intrusión" });
+    if (error?.code === "23514") {
+      return res.status(400).json({
+        message:
+          "No se puede marcar 'No llegó alerta' para eventos provenientes de HikCentral. Verifique el origen del evento.",
+      });
+    }
+
+    const backendDetail = error?.detail || error?.message;
+    return res.status(500).json({
+      message: "Error al registrar la intrusión",
+      mensaje: backendDetail || "Error al registrar la intrusión",
+    });
   }
 };
 
 export const updateIntrusion = async (req, res) => {
   const { id } = req.params;
-  const {
-    ubicacion,
-    tipo,
-    estado,
-    descripcion,
-    fecha_evento,
-    fecha_reaccion,
-    llego_alerta,
-    medio_comunicacion_id,
-    fecha_reaccion_fuera,
-    conclusion_evento_id,
-    sustraccion_material,
-    sitio_id,
-    fuerza_reaccion_id,
-  } = req.body || {};
+  const body = req.body || {};
 
   if (!id) {
     return res
@@ -748,120 +1098,275 @@ export const updateIntrusion = async (req, res) => {
       .json({ mensaje: "El identificador de la intrusión es obligatorio." });
   }
 
+  let metadata;
+  try {
+    metadata = await getIntrusionesMetadata();
+  } catch (error) {
+    console.error("No se pudo obtener metadata de intrusiones:", error);
+    return res.status(500).json({ mensaje: "No se pudo preparar la actualización." });
+  }
+
+  const parsedId = Number(id);
+  if (!Number.isInteger(parsedId)) {
+    return res.status(400).json({ mensaje: "El identificador de la intrusión no es válido." });
+  }
+
+  let currentRow;
+  try {
+    const selectColumns = [
+      "id",
+      "sitio_id",
+      "tipo",
+      "estado",
+      "descripcion",
+      "fecha_evento",
+      "fecha_reaccion",
+      metadata.hasFechaLlegadaFuerzaReaccion ? "fecha_llegada_fuerza_reaccion" : "fecha_reaccion_fuera",
+      metadata.hasFechaReaccionEnviada ? "fecha_reaccion_enviada" : null,
+      metadata.hasNoLlegoAlerta ? "no_llego_alerta" : "llego_alerta",
+      metadata.hasCompletado ? "completado" : null,
+      metadata.hasNecesitaProtocolo ? "necesita_protocolo" : null,
+      metadata.hasOrigen ? "origen" : null,
+      metadata.hasHikAlarmEventoId ? "hik_alarm_evento_id" : null,
+      "medio_comunicacion_id",
+      "conclusion_evento_id",
+      "sustraccion_material",
+      "fuerza_reaccion_id",
+      metadata.personaColumn,
+    ].filter(Boolean);
+
+    const currentResult = await pool.query(
+      `SELECT ${selectColumns.join(", ")} FROM public.intrusiones WHERE id = $1`,
+      [parsedId]
+    );
+
+    if (currentResult.rowCount === 0) {
+      return res.status(404).json({ mensaje: "La intrusión solicitada no existe." });
+    }
+
+    currentRow = currentResult.rows[0];
+  } catch (error) {
+    console.error("No se pudo obtener la intrusión para actualizar:", error);
+    return res.status(500).json({ mensaje: "No se pudo preparar la actualización." });
+  }
+
+  const rawOrigen = body.origen ?? body.ORIGEN ?? currentRow?.origen;
+  const rawHikAlarm = body.hik_alarm_evento_id ?? body.HIK_ALARM_EVENTO_ID ?? currentRow?.hik_alarm_evento_id;
+  const rawNoLlego = body.no_llego_alerta ?? body.NO_LLEGO_ALERTA ?? body.llego_alerta ?? currentRow?.no_llego_alerta ?? currentRow?.llego_alerta;
+  const rawCompletado = body.completado ?? body.COMPLETADO ?? currentRow?.completado;
+  const rawNecesitaProtocolo = body.necesita_protocolo ?? body.NECESITA_PROTOCOLO ?? currentRow?.necesita_protocolo;
+
   const updates = [];
   const values = [];
-
-  let parsedFechaEvento = null;
-  let parsedFechaReaccion = null;
-  let parsedFechaReaccionFuera = null;
 
   const pushUpdate = (column, value) => {
     values.push(value);
     updates.push(`${column} = $${values.length}`);
   };
 
-  if (ubicacion !== undefined) pushUpdate("ubicacion", ubicacion);
-  if (sitio_id !== undefined) {
-    const parsedSitio = parseIntegerOrNull(sitio_id);
-    if (parsedSitio === undefined) {
-      return res
-        .status(400)
-        .json({ mensaje: "El identificador del sitio no es válido." });
-    }
-    pushUpdate("sitio_id", parsedSitio);
+  const sitioValue =
+    body.sitio_id !== undefined ? parseIntegerOrNull(body.sitio_id) : parseIntegerOrNull(currentRow?.sitio_id);
+  if (body.sitio_id !== undefined && sitioValue === undefined) {
+    return res.status(400).json({ mensaje: "El identificador del sitio no es válido." });
   }
-  if (tipo !== undefined) pushUpdate("tipo", tipo);
-  if (estado !== undefined) pushUpdate("estado", estado);
-  if (descripcion !== undefined) pushUpdate("descripcion", descripcion);
-  if (llego_alerta !== undefined)
-    pushUpdate("llego_alerta", typeof llego_alerta === "boolean" ? llego_alerta : false);
-  if (medio_comunicacion_id !== undefined) {
-    const medioValue =
-      medio_comunicacion_id === null || medio_comunicacion_id === ""
-        ? null
-        : Number(medio_comunicacion_id);
-    pushUpdate("medio_comunicacion_id", medioValue);
-  }
+  if (body.sitio_id !== undefined) pushUpdate("sitio_id", sitioValue);
 
-  if (fecha_evento !== undefined) {
-    const parsedDate = parseFechaValue(fecha_evento);
-    if (!parsedDate) {
-      return res
-        .status(400)
-        .json({ mensaje: "La fecha y hora del evento no es válida." });
-    }
-    parsedFechaEvento = parsedDate;
-    pushUpdate("fecha_evento", parsedDate);
-  }
+  const tipoValue = body.tipo ?? currentRow?.tipo;
+  if (body.tipo !== undefined) pushUpdate("tipo", tipoValue);
 
-  if (fecha_reaccion !== undefined) {
-    const parsedDate = parseFechaValue(fecha_reaccion);
-    if (!parsedDate && fecha_reaccion !== null && fecha_reaccion !== "") {
-      return res
-        .status(400)
-        .json({ mensaje: "La fecha y hora de reacción no es válida." });
-    }
-    parsedFechaReaccion = parsedDate;
-    pushUpdate("fecha_reaccion", parsedDate);
-  }
+  if (body.estado !== undefined) pushUpdate("estado", body.estado);
+  if (body.descripcion !== undefined) pushUpdate("descripcion", body.descripcion);
+  if (body.ubicacion !== undefined) pushUpdate("ubicacion", body.ubicacion);
 
-  if (fecha_reaccion_fuera !== undefined) {
-    const parsedDate = parseFechaValue(fecha_reaccion_fuera);
-    if (!parsedDate && fecha_reaccion_fuera !== null && fecha_reaccion_fuera !== "") {
-      return res
-        .status(400)
-        .json({ mensaje: "La fecha y hora de reacción de fuera no es válida." });
-    }
-    parsedFechaReaccionFuera = parsedDate;
-    pushUpdate("fecha_reaccion_fuera", parsedDate);
+  const fechaEventoValue =
+    body.fecha_evento !== undefined ? parseFechaValue(body.fecha_evento) : parseFechaValue(currentRow?.fecha_evento);
+  if (body.fecha_evento !== undefined && !fechaEventoValue) {
+    return res.status(400).json({ mensaje: "La fecha y hora del evento no es válida." });
   }
+  if (body.fecha_evento !== undefined) pushUpdate("fecha_evento", fechaEventoValue);
 
+  const fechaReaccionValue =
+    body.fecha_reaccion !== undefined
+      ? parseFechaValue(body.fecha_reaccion)
+      : parseFechaValue(currentRow?.fecha_reaccion);
+  if (body.fecha_reaccion !== undefined && !fechaReaccionValue && body.fecha_reaccion !== null && body.fecha_reaccion !== "") {
+    return res.status(400).json({ mensaje: "La fecha y hora de reacción no es válida." });
+  }
+  if (body.fecha_reaccion !== undefined) pushUpdate("fecha_reaccion", fechaReaccionValue);
+
+  const fechaReaccionEnviadaValue = metadata.hasFechaReaccionEnviada
+    ? body.fecha_reaccion_enviada !== undefined
+      ? parseFechaValue(body.fecha_reaccion_enviada)
+      : parseFechaValue(currentRow?.fecha_reaccion_enviada)
+    : null;
   if (
-    parsedFechaReaccion &&
-    parsedFechaEvento &&
-    parsedFechaReaccion.getTime() <= parsedFechaEvento.getTime()
+    metadata.hasFechaReaccionEnviada &&
+    body.fecha_reaccion_enviada !== undefined &&
+    !fechaReaccionEnviadaValue &&
+    body.fecha_reaccion_enviada !== null &&
+    body.fecha_reaccion_enviada !== ""
   ) {
-    return res.status(400).json({
-      message:
-        "La fecha y hora de reacción debe ser mayor que la fecha y hora de intrusión.",
-    });
+    return res.status(400).json({ mensaje: "La fecha y hora de reacción enviada no es válida." });
+  }
+  if (metadata.hasFechaReaccionEnviada && body.fecha_reaccion_enviada !== undefined) {
+    pushUpdate("fecha_reaccion_enviada", fechaReaccionEnviadaValue);
+  }
+
+  const fechaLlegadaValue = metadata.hasFechaLlegadaFuerzaReaccion
+    ? body.fecha_llegada_fuerza_reaccion !== undefined
+      ? parseFechaValue(body.fecha_llegada_fuerza_reaccion)
+      : parseFechaValue(currentRow?.fecha_llegada_fuerza_reaccion)
+    : parseFechaValue(body.fecha_reaccion_fuera ?? currentRow?.fecha_reaccion_fuera);
+  if (
+    (body.fecha_llegada_fuerza_reaccion !== undefined || body.fecha_reaccion_fuera !== undefined) &&
+    !fechaLlegadaValue &&
+    body.fecha_llegada_fuerza_reaccion !== null &&
+    body.fecha_llegada_fuerza_reaccion !== "" &&
+    body.fecha_reaccion_fuera !== null &&
+    body.fecha_reaccion_fuera !== ""
+  ) {
+    return res.status(400).json({ mensaje: "La fecha de llegada de la fuerza de reacción no es válida." });
+  }
+
+  if (metadata.hasFechaLlegadaFuerzaReaccion) {
+    if (body.fecha_llegada_fuerza_reaccion !== undefined) {
+      pushUpdate("fecha_llegada_fuerza_reaccion", fechaLlegadaValue);
+    }
+  } else if (body.fecha_reaccion_fuera !== undefined) {
+    pushUpdate("fecha_reaccion_fuera", fechaLlegadaValue);
   }
 
   if (
-    parsedFechaReaccionFuera &&
-    parsedFechaReaccion &&
-    parsedFechaReaccionFuera.getTime() <= parsedFechaReaccion.getTime()
+    fechaReaccionValue &&
+    fechaEventoValue &&
+    fechaReaccionValue.getTime() <= fechaEventoValue.getTime()
+  ) {
+    return res.status(400).json({ mensaje: "La fecha y hora de reacción debe ser mayor que la fecha y hora de intrusión." });
+  }
+
+  if (
+    fechaLlegadaValue &&
+    fechaReaccionValue &&
+    fechaLlegadaValue.getTime() <= fechaReaccionValue.getTime()
   ) {
     return res
       .status(400)
-      .json({ mensaje: "La fecha de reacción de fuera debe ser posterior a la fecha de reacción." });
+      .json({ mensaje: "La fecha de llegada de la fuerza de reacción debe ser posterior a la fecha de reacción." });
   }
 
-  if (conclusion_evento_id !== undefined) {
-    const parsedConclusion = parseIntegerOrNull(conclusion_evento_id);
-    if (parsedConclusion === undefined) {
-      return res
-        .status(400)
-        .json({ mensaje: "El identificador de la conclusión del evento no es válido." });
-    }
-    pushUpdate("conclusion_evento_id", parsedConclusion);
+  const medioValue =
+    body.medio_comunicacion_id !== undefined
+      ? body.medio_comunicacion_id === null || body.medio_comunicacion_id === ""
+        ? null
+        : Number(body.medio_comunicacion_id)
+      : currentRow?.medio_comunicacion_id ?? null;
+  if (body.medio_comunicacion_id !== undefined) {
+    pushUpdate("medio_comunicacion_id", medioValue);
   }
 
-  if (sustraccion_material !== undefined) {
-    pushUpdate(
-      "sustraccion_material",
-      typeof sustraccion_material === "boolean" ? sustraccion_material : false,
-    );
+  const conclusionValue =
+    body.conclusion_evento_id !== undefined
+      ? parseIntegerOrNull(body.conclusion_evento_id)
+      : parseIntegerOrNull(currentRow?.conclusion_evento_id);
+  if (body.conclusion_evento_id !== undefined && conclusionValue === undefined) {
+    return res.status(400).json({ mensaje: "El identificador de la conclusión del evento no es válido." });
+  }
+  if (body.conclusion_evento_id !== undefined) {
+    pushUpdate("conclusion_evento_id", conclusionValue);
   }
 
-  if (fuerza_reaccion_id !== undefined) {
-    const parsedFuerza = parseIntegerOrNull(fuerza_reaccion_id);
-    if (parsedFuerza === undefined) {
-      return res
-        .status(400)
-        .json({ mensaje: "El identificador de la fuerza de reacción no es válido." });
-    }
-    pushUpdate("fuerza_reaccion_id", parsedFuerza);
+  const sustraccionValue =
+    body.sustraccion_material !== undefined
+      ? Boolean(body.sustraccion_material)
+      : Boolean(currentRow?.sustraccion_material);
+  if (body.sustraccion_material !== undefined) {
+    pushUpdate("sustraccion_material", sustraccionValue);
+  }
+
+  const fuerzaValue =
+    body.fuerza_reaccion_id !== undefined
+      ? parseIntegerOrNull(body.fuerza_reaccion_id)
+      : parseIntegerOrNull(currentRow?.fuerza_reaccion_id);
+  if (body.fuerza_reaccion_id !== undefined && fuerzaValue === undefined) {
+    return res.status(400).json({ mensaje: "El identificador de la fuerza de reacción no es válido." });
+  }
+  if (body.fuerza_reaccion_id !== undefined) {
+    pushUpdate("fuerza_reaccion_id", fuerzaValue);
+  }
+
+  const personaValue = metadata.personaColumn
+    ? body[metadata.personaColumn] !== undefined
+      ? parseIntegerOrNull(body[metadata.personaColumn])
+      : parseIntegerOrNull(currentRow?.[metadata.personaColumn])
+    : null;
+  if (metadata.personaColumn && body[metadata.personaColumn] !== undefined && personaValue === undefined) {
+    return res.status(400).json({ mensaje: "El identificador de la persona no es válido." });
+  }
+  if (metadata.personaColumn && body[metadata.personaColumn] !== undefined) {
+    pushUpdate(metadata.personaColumn, personaValue);
+  }
+
+  const hikValue = metadata.hasHikAlarmEventoId
+    ? parseIntegerOrNull(rawHikAlarm)
+    : null;
+  if (metadata.hasHikAlarmEventoId && body.hik_alarm_evento_id !== undefined) {
+    pushUpdate("hik_alarm_evento_id", hikValue);
+  }
+
+  const origenValue = metadata.hasOrigen
+    ? typeof rawOrigen === "string" && rawOrigen.trim()
+      ? rawOrigen.trim().toUpperCase()
+      : currentRow?.origen ?? null
+    : null;
+  if (metadata.hasOrigen && body.origen !== undefined) {
+    pushUpdate("origen", origenValue);
+  }
+
+  const noLlegoValue = metadata.hasNoLlegoAlerta
+    ? hikValue
+      ? false
+      : rawNoLlego === undefined
+      ? Boolean(currentRow?.no_llego_alerta)
+      : Boolean(rawNoLlego)
+    : false;
+  if (metadata.hasNoLlegoAlerta) {
+    pushUpdate("no_llego_alerta", noLlegoValue);
+  } else if (body.llego_alerta !== undefined) {
+    pushUpdate("llego_alerta", typeof body.llego_alerta === "boolean" ? body.llego_alerta : false);
+  }
+
+  const completadoValue = metadata.hasCompletado
+    ? Boolean(rawCompletado ?? currentRow?.completado)
+    : false;
+  const necesitaProtocoloValue = metadata.hasNecesitaProtocolo
+    ? Boolean(rawNecesitaProtocolo ?? currentRow?.necesita_protocolo)
+    : false;
+
+  if (metadata.hasCompletado && body.completado !== undefined) {
+    pushUpdate("completado", completadoValue);
+  }
+
+  if (metadata.hasNecesitaProtocolo && body.necesita_protocolo !== undefined) {
+    pushUpdate("necesita_protocolo", necesitaProtocoloValue);
+  }
+
+  const missingCompletion = validateCompletionRequirements({
+    completado: completadoValue,
+    necesitaProtocolo: necesitaProtocoloValue,
+    fechaReaccion: fechaReaccionValue,
+    medioComunicacionId: medioValue,
+    personaId: personaValue,
+    fechaReaccionEnviada: fechaReaccionEnviadaValue,
+    fechaLlegadaFuerzaReaccion: fechaLlegadaValue,
+    conclusionEventoId: conclusionValue,
+    sustraccionMaterial: sustraccionValue,
+  });
+
+  if (missingCompletion.length) {
+    return res.status(400).json({
+      message: "Faltan campos obligatorios para completar la intrusión.",
+      details: { missingFields: missingCompletion },
+    });
   }
 
   if (updates.length === 0) {
@@ -870,12 +1375,21 @@ export const updateIntrusion = async (req, res) => {
       .json({ mensaje: "No se proporcionaron datos para actualizar." });
   }
 
-  const idParamIndex = values.length + 1;
-  values.push(id);
+  values.push(parsedId);
 
   try {
     const result = await pool.query(
-      `UPDATE public.intrusiones SET ${updates.join(", ")} WHERE id = $${idParamIndex} RETURNING id, ubicacion, sitio_id, tipo, estado, descripcion, fecha_evento, fecha_reaccion, fecha_reaccion_fuera, llego_alerta, medio_comunicacion_id, conclusion_evento_id, sustraccion_material, fuerza_reaccion_id, (SELECT nombre FROM public.sitios WHERE id = sitio_id) AS sitio_nombre, (SELECT descripcion FROM public."catalogo_fuerza_reaccion" WHERE id = fuerza_reaccion_id) AS fuerza_reaccion_descripcion`,
+      `UPDATE public.intrusiones SET ${updates.join(", ")} WHERE id = $${values.length} RETURNING id, ubicacion, sitio_id, tipo, estado, descripcion, fecha_evento, fecha_reaccion, ${
+        metadata.hasFechaLlegadaFuerzaReaccion ? "fecha_llegada_fuerza_reaccion" : "fecha_reaccion_fuera"
+      }, ${metadata.hasNoLlegoAlerta ? "no_llego_alerta" : "llego_alerta"}, ${
+        metadata.hasFechaReaccionEnviada ? "fecha_reaccion_enviada" : "NULL"
+      } AS fecha_reaccion_enviada, ${metadata.hasCompletado ? "completado" : "FALSE"} AS completado, ${
+        metadata.hasNecesitaProtocolo ? "necesita_protocolo" : "FALSE"
+      } AS necesita_protocolo, ${metadata.hasOrigen ? "origen" : "NULL"} AS origen, ${
+        metadata.hasHikAlarmEventoId ? "hik_alarm_evento_id" : "NULL"
+      } AS hik_alarm_evento_id, medio_comunicacion_id, conclusion_evento_id, sustraccion_material, fuerza_reaccion_id, (SELECT nombre FROM public.sitios WHERE id = sitio_id) AS sitio_nombre, (SELECT descripcion FROM public."catalogo_fuerza_reaccion" WHERE id = fuerza_reaccion_id) AS fuerza_reaccion_descripcion${
+        metadata.personaColumn ? `, ${metadata.personaColumn} AS persona_id` : ""
+      }`,
       values
     );
 
@@ -888,6 +1402,13 @@ export const updateIntrusion = async (req, res) => {
     return res.json(mapIntrusionRow(result.rows[0]));
   } catch (error) {
     console.error("Error al actualizar intrusión:", error);
+    if (error?.code === "23514") {
+      return res.status(400).json({
+        message:
+          "No se puede marcar 'No llegó alerta' para eventos provenientes de HikCentral. Verifique el origen del evento.",
+      });
+    }
+
     return res.status(500).json({ mensaje: "Error al actualizar la intrusión" });
   }
 };

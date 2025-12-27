@@ -137,9 +137,17 @@ export interface TechnicalFailureCatalogs {
 
 export interface Intrusion {
   id: number;
+  origen?: string | null;
+  hik_alarm_evento_id?: number | null;
   fecha_evento: string;
   fecha_reaccion: string | null;
+  fecha_reaccion_enviada?: string | null;
+  fecha_llegada_fuerza_reaccion?: string | null;
   fecha_reaccion_fuera: string | null;
+  no_llego_alerta?: boolean;
+  completado?: boolean;
+  fecha_completado?: string | null;
+  necesita_protocolo?: boolean;
   ubicacion: string;
   sitio_id: number | null;
   sitio_nombre?: string | null;
@@ -156,6 +164,18 @@ export interface Intrusion {
   fuerza_reaccion_descripcion?: string | null;
   persona_id?: number | null;
   personal_identificado?: string | null;
+}
+
+export interface IntrusionHcQueueRow {
+  fecha_evento_hc: string | null;
+  region: string | null;
+  name: string | null;
+  trigger_event: string | null;
+  status: string | null;
+  alarm_category: string | null;
+  intrusion_id: number | null;
+  completado: boolean;
+  hik_alarm_evento_id: number;
 }
 
 export interface IntrusionConsolidadoRow {
