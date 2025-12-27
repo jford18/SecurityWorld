@@ -529,63 +529,62 @@ export const listIntrusiones = async (_req, res) => {
   }
 
   try {
-    const personaSelect = metadata.personaColumn
-      ? `, i.${metadata.personaColumn} AS persona_id, CONCAT_WS(' ', p.nombre, p.apellido) AS persona_nombre, c.descripcion AS cargo_descripcion`
-      : "";
-    const origenSelect = metadata.hasOrigen ? ", i.origen" : "";
-    const hikAlarmSelect = metadata.hasHikAlarmEventoId ? ", i.hik_alarm_evento_id" : "";
-    const noLlegoSelect = metadata.hasNoLlegoAlerta
-      ? ", i.no_llego_alerta"
-      : ", i.llego_alerta";
-    const fechaReaccionEnviadaSelect = metadata.hasFechaReaccionEnviada
-      ? ", i.fecha_reaccion_enviada"
-      : "";
-    const fechaLlegadaSelect = metadata.hasFechaLlegadaFuerzaReaccion
-      ? ", i.fecha_llegada_fuerza_reaccion"
-      : ", i.fecha_reaccion_fuera";
-    const completadoSelect = metadata.hasCompletado ? ", i.completado" : "";
-    const fechaCompletadoSelect = metadata.hasFechaCompletado ? ", i.fecha_completado" : "";
-    const necesitaProtocoloSelect = metadata.hasNecesitaProtocolo ? ", i.necesita_protocolo" : "";
+    const selectColumns = [
+      "i.id",
+      "i.descripcion",
+      "i.ubicacion",
+      "i.estado",
+      "i.sitio_id",
+      "i.tipo",
+      "i.fecha_evento",
+      "i.fecha_reaccion",
+      metadata.hasFechaLlegadaFuerzaReaccion
+        ? "i.fecha_llegada_fuerza_reaccion"
+        : "i.fecha_reaccion_fuera",
+      metadata.hasNoLlegoAlerta ? "i.no_llego_alerta" : "i.llego_alerta",
+      metadata.hasFechaReaccionEnviada ? "i.fecha_reaccion_enviada" : null,
+      metadata.hasCompletado ? "i.completado" : null,
+      metadata.hasFechaCompletado ? "i.fecha_completado" : null,
+      metadata.hasNecesitaProtocolo ? "i.necesita_protocolo" : null,
+      metadata.hasOrigen ? "i.origen" : null,
+      metadata.hasHikAlarmEventoId ? "i.hik_alarm_evento_id" : null,
+      "i.medio_comunicacion_id",
+      "i.conclusion_evento_id",
+      "i.sustraccion_material",
+      "i.fuerza_reaccion_id",
+      metadata.personaColumn ? `i.${metadata.personaColumn} AS persona_id` : null,
+      metadata.personaColumn
+        ? "CONCAT_WS(' ', p.nombre, p.apellido) AS persona_nombre"
+        : null,
+      metadata.personaColumn ? "c.descripcion AS cargo_descripcion" : null,
+      "s.nombre AS sitio_nombre",
+      "m.descripcion AS medio_comunicacion_descripcion",
+      "ce.descripcion AS conclusion_evento_descripcion",
+      "fr.descripcion AS fuerza_reaccion_descripcion",
+    ].filter(Boolean);
 
-    const personaJoin = metadata.personaColumn
-      ? "LEFT JOIN public.persona AS p ON p.id = i." + metadata.personaColumn +
-        " LEFT JOIN public.catalogo_cargo AS c ON c.id = p.cargo_id"
-      : "";
+    const joins = [
+      "LEFT JOIN public.sitios AS s ON s.id = i.sitio_id",
+      "LEFT JOIN public.catalogo_medio_comunicacion AS m ON m.id = i.medio_comunicacion_id",
+      "LEFT JOIN public.catalogo_conclusion_evento AS ce ON ce.id = i.conclusion_evento_id",
+      'LEFT JOIN public."catalogo_fuerza_reaccion" AS fr ON fr.id = i.fuerza_reaccion_id',
+    ];
 
-    const result = await pool.query(
-      `SELECT
-         i.id,
-         i.descripcion,
-         i.ubicacion,
-         i.estado,
-         i.sitio_id,
-         i.tipo,
-         i.fecha_evento,
-         i.fecha_reaccion,
-         ${fechaLlegadaSelect},
-         ${noLlegoSelect},
-         ${fechaReaccionEnviadaSelect},
-         ${completadoSelect},
-         ${fechaCompletadoSelect},
-         ${necesitaProtocoloSelect},
-         ${origenSelect},
-         ${hikAlarmSelect},
-         i.medio_comunicacion_id,
-         i.conclusion_evento_id,
-         i.sustraccion_material,
-         i.fuerza_reaccion_id${personaSelect},
-         s.nombre AS sitio_nombre,
-         m.descripcion AS medio_comunicacion_descripcion,
-         ce.descripcion AS conclusion_evento_descripcion,
-         fr.descripcion AS fuerza_reaccion_descripcion
+    if (metadata.personaColumn) {
+      joins.push(
+        `LEFT JOIN public.persona AS p ON p.id = i.${metadata.personaColumn}`,
+        "LEFT JOIN public.catalogo_cargo AS c ON c.id = p.cargo_id"
+      );
+    }
+
+    const sql = `SELECT ${selectColumns.join(", ")}
        FROM public.intrusiones AS i
-       LEFT JOIN public.sitios AS s ON s.id = i.sitio_id
-       LEFT JOIN public.catalogo_medio_comunicacion AS m ON m.id = i.medio_comunicacion_id
-       LEFT JOIN public.catalogo_conclusion_evento AS ce ON ce.id = i.conclusion_evento_id
-       LEFT JOIN public."catalogo_fuerza_reaccion" AS fr ON fr.id = i.fuerza_reaccion_id
-       ${personaJoin}
-       ORDER BY i.fecha_evento DESC NULLS LAST, i.id DESC`
-    );
+       ${joins.join("\n       ")}
+       ORDER BY i.fecha_evento DESC NULLS LAST, i.id DESC`;
+
+    const params = [];
+
+    const result = await pool.query(sql, params);
     const intrusiones = result.rows.map(mapIntrusionRow);
     return res.json(intrusiones);
   } catch (error) {
@@ -602,27 +601,33 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
   const pageSize = Number(limit);
   const hasPagination = Number.isInteger(pageNumber) && pageNumber > 0 && Number.isInteger(pageSize) && pageSize > 0;
 
-  const orderableColumns = {
-    fecha_evento_hc: "fecha_evento_hc",
-    region: "region",
-    name: "name",
-    trigger_event: "trigger_event",
-    status: "status",
-    alarm_category: "alarm_category",
+  const allowedOrderByEncolados = {
+    fecha_evento_hc: "FECHA_EVENTO_HC",
+    region: "REGION",
+    name: "NAME",
+    trigger_event: "TRIGGER_EVENT",
+    status: "STATUS",
+    alarm_category: "ALARM_CATEGORY",
+    prioridad: "PRIORITY",
+    completado: "COMPLETADO",
   };
 
   const orderColumn =
-    orderableColumns[String(orderBy).toLowerCase()] || orderableColumns.fecha_evento_hc;
-  const orderDirection = String(orderDir).toLowerCase() === "asc" ? "ASC" : "DESC";
+    allowedOrderByEncolados[String(orderBy || "").toLowerCase()] ||
+    allowedOrderByEncolados.fecha_evento_hc;
+  const orderDirection = String(orderDir || "").toLowerCase() === "asc" ? "ASC" : "DESC";
 
   const filterValues = [];
-  let whereClause = "";
+  const whereParts = [];
 
   if (typeof search === "string" && search.trim()) {
     filterValues.push(`%${search.trim()}%`);
-    whereClause =
-      "WHERE region ILIKE $1 OR name ILIKE $1 OR trigger_event ILIKE $1 OR status ILIKE $1 OR alarm_category ILIKE $1";
+    whereParts.push(
+      "region ILIKE $1 OR name ILIKE $1 OR trigger_event ILIKE $1 OR status ILIKE $1 OR alarm_category ILIKE $1"
+    );
   }
+
+  const whereClause = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
 
   const values = [...filterValues];
 
@@ -640,14 +645,13 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
       filterValues
     );
 
-    const result = await pool.query(
-      `SELECT fecha_evento_hc, region, name, trigger_event, status, alarm_category, intrusion_id, completado, hik_alarm_evento_id
+    const selectSql = `SELECT fecha_evento_hc, region, name, trigger_event, status, alarm_category, intrusion_id, completado, hik_alarm_evento_id
          FROM public.v_intrusiones_encolados_hc
          ${whereClause}
          ORDER BY ${orderColumn} ${orderDirection}
-         ${paginationClause}`,
-      values
-    );
+         ${paginationClause}`;
+
+    const result = await pool.query(selectSql, values);
 
     return res.json({ data: result.rows ?? [], total: Number(totalResult.rows?.[0]?.total) || 0 });
   } catch (error) {
