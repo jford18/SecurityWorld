@@ -1,10 +1,18 @@
 import apiClient from './apiClient';
-import { Intrusion, IntrusionConsolidadoRow } from '../types';
+import { Intrusion, IntrusionConsolidadoRow, IntrusionHcQueueRow } from '../types';
 
 export interface IntrusionPayload {
+  origen?: string;
+  hik_alarm_evento_id?: number | null;
   fecha_evento?: string;
   fecha_reaccion?: string | null;
+  fecha_reaccion_enviada?: string | null;
+  fecha_llegada_fuerza_reaccion?: string | null;
   fecha_reaccion_fuera?: string | null;
+  no_llego_alerta?: boolean;
+  completado?: boolean;
+  fecha_completado?: string | null;
+  necesita_protocolo?: boolean;
   ubicacion?: string;
   tipo?: string;
   estado?: string;
@@ -67,7 +75,10 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
   const id = Number(base.id);
   const fechaEvento = normalizeFechaValue(base.fecha_evento);
   const fechaReaccion = normalizeFechaValue(base.fecha_reaccion);
-  const fechaReaccionFuera = normalizeFechaValue(base.fecha_reaccion_fuera);
+  const fechaReaccionEnviada = normalizeFechaValue(base.fecha_reaccion_enviada);
+  const fechaLlegadaFuerzaReaccion = normalizeFechaValue(
+    base.fecha_llegada_fuerza_reaccion ?? base.fecha_reaccion_fuera
+  );
 
   if (!Number.isFinite(id) || !fechaEvento) {
     return null;
@@ -108,12 +119,39 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     personaIdValue === null || Number.isNaN(personaIdValue)
       ? null
       : personaIdValue;
+  const hikAlarmEventoIdValue =
+    base.hik_alarm_evento_id === null || base.hik_alarm_evento_id === undefined
+      ? null
+      : Number(base.hik_alarm_evento_id);
+  const hikAlarmEventoId =
+    hikAlarmEventoIdValue === null || Number.isNaN(hikAlarmEventoIdValue)
+      ? null
+      : hikAlarmEventoIdValue;
+  const noLlegoAlerta =
+    typeof (base as { no_llego_alerta?: unknown }).no_llego_alerta === 'boolean'
+      ? (base as { no_llego_alerta: boolean }).no_llego_alerta
+      : (base as { llego_alerta?: unknown }).llego_alerta !== undefined
+      ? !Boolean((base as { llego_alerta?: unknown }).llego_alerta)
+      : false;
+  const completado = typeof (base as { completado?: unknown }).completado === 'boolean'
+    ? (base as { completado: boolean }).completado
+    : Boolean((base as { completado?: unknown }).completado);
 
   return {
     id,
+    origen: base.origen == null ? null : String(base.origen),
+    hik_alarm_evento_id: hikAlarmEventoId,
     fecha_evento: fechaEvento,
     fecha_reaccion: fechaReaccion,
-    fecha_reaccion_fuera: fechaReaccionFuera,
+    fecha_reaccion_enviada: fechaReaccionEnviada,
+    fecha_llegada_fuerza_reaccion: fechaLlegadaFuerzaReaccion,
+    fecha_reaccion_fuera: fechaLlegadaFuerzaReaccion,
+    no_llego_alerta: noLlegoAlerta,
+    completado,
+    fecha_completado: normalizeFechaValue((base as { fecha_completado?: unknown }).fecha_completado),
+    necesita_protocolo: typeof (base as { necesita_protocolo?: unknown }).necesita_protocolo === 'boolean'
+      ? (base as { necesita_protocolo: boolean }).necesita_protocolo
+      : Boolean((base as { necesita_protocolo?: unknown }).necesita_protocolo),
     ubicacion: base.ubicacion == null ? '' : String(base.ubicacion),
     sitio_id: sitioId,
     sitio_nombre:
@@ -149,6 +187,19 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
         : String(base.personal_identificado),
   };
 };
+
+export interface IntrusionesHcFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  orderBy?: string;
+  orderDir?: 'asc' | 'desc';
+}
+
+export interface IntrusionesHcResponse {
+  data: IntrusionHcQueueRow[];
+  total: number;
+}
 
 const normalizeIntrusionArray = (payload: unknown): Intrusion[] => {
   if (Array.isArray(payload)) {
@@ -496,4 +547,43 @@ export const updateIntrusion = async (
 export const deleteIntrusion = async (id: number): Promise<unknown> => {
   const response = await apiClient.delete(`/intrusiones/${id}`);
   return response.data;
+};
+
+export const fetchIntrusionesEncoladasHc = async (
+  params: IntrusionesHcFilters = {}
+): Promise<IntrusionesHcResponse> => {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    searchParams.append(key, String(value));
+  });
+
+  const query = searchParams.toString();
+
+  const { data } = await apiClient.get<IntrusionesHcResponse>(
+    `/intrusiones/encolados-hc${query ? `?${query}` : ''}`
+  );
+
+  const payload = data as Partial<IntrusionesHcResponse> & { data?: unknown };
+  const parsedData = Array.isArray(payload.data)
+    ? (payload.data as IntrusionHcQueueRow[])
+    : [];
+
+  return { data: parsedData, total: payload.total ?? parsedData.length };
+};
+
+export const openIntrusionDesdeHc = async (
+  hikAlarmEventoId: number | string
+): Promise<Intrusion> => {
+  const { data } = await apiClient.post<Intrusion>(
+    `/intrusiones/hc/${hikAlarmEventoId}/abrir`
+  );
+
+  const normalized = normalizeIntrusion(data);
+  if (!normalized) {
+    throw new Error('No se pudo abrir la intrusión encolada.');
+  }
+
+  return normalized;
 };

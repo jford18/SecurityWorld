@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import DateTimeInput, { normalizeDateTimeLocalString, toIsoString } from '../ui/DateTimeInput';
 import { intrusionsData as mockIntrusions } from '../../data/mockData';
-import { Intrusion, IntrusionConsolidadoRow } from '../../types';
+import { Intrusion, IntrusionConsolidadoRow, IntrusionHcQueueRow } from '../../types';
 import {
   createIntrusion,
   fetchIntrusiones,
   IntrusionPayload,
+  fetchIntrusionesEncoladasHc,
+  openIntrusionDesdeHc,
+  updateIntrusion,
 } from '../../services/intrusionesService';
 import {
   getAllMediosComunicacion,
@@ -105,17 +108,23 @@ const normalizeTiposIntrusion = (
 };
 
 type IntrusionFormData = {
+  origen: string;
+  hik_alarm_evento_id: string | null;
   fecha_evento: string;
   fecha_reaccion: string;
+  fecha_reaccion_enviada: string;
   fecha_reaccion_fuera: string;
+  fecha_llegada_fuerza_reaccion: string;
   sitioId: string;
   estado: string;
   descripcion: string;
-  llego_alerta: boolean;
+  no_llego_alerta: boolean;
   medio_comunicacion_id: string;
   conclusion_evento_id: string;
   sustraccion_material: boolean;
   fuerza_reaccion_id: string;
+  completado: boolean;
+  necesita_protocolo: boolean;
 };
 
 type PersonaOption = {
@@ -134,17 +143,23 @@ const getInitialDateTimeValue = () => {
 const getDateTimeInputLimit = () => normalizeDateTimeLocalString(new Date().toISOString());
 
 const buildInitialFormData = (): IntrusionFormData => ({
+  origen: 'MANUAL',
+  hik_alarm_evento_id: null,
   fecha_evento: getInitialDateTimeValue(),
   fecha_reaccion: '',
+  fecha_reaccion_enviada: '',
   fecha_reaccion_fuera: '',
+  fecha_llegada_fuerza_reaccion: '',
   sitioId: '',
   estado: '',
   descripcion: '',
-  llego_alerta: false,
+  no_llego_alerta: false,
   medio_comunicacion_id: '',
   conclusion_evento_id: '',
   sustraccion_material: false,
   fuerza_reaccion_id: '',
+  completado: false,
+  necesita_protocolo: false,
 });
 
 const Intrusions: React.FC = () => {
@@ -162,6 +177,15 @@ const Intrusions: React.FC = () => {
   const [fechaReaccionError, setFechaReaccionError] = useState('');
   const [fechaReaccionFueraError, setFechaReaccionFueraError] = useState('');
   const [disableSave, setDisableSave] = useState(false);
+  const [editingIntrusionId, setEditingIntrusionId] = useState<number | null>(null);
+  const [hcQueue, setHcQueue] = useState<IntrusionHcQueueRow[]>([]);
+  const [hcTotal, setHcTotal] = useState(0);
+  const [hcLoading, setHcLoading] = useState(false);
+  const [hcSearch, setHcSearch] = useState('');
+  const [hcOrderBy, setHcOrderBy] = useState<
+    'fecha_evento_hc' | 'region' | 'name' | 'trigger_event' | 'status' | 'alarm_category'
+  >('fecha_evento_hc');
+  const [hcOrderDir, setHcOrderDir] = useState<'asc' | 'desc'>('desc');
   const { session } = useSession();
   const [sitios, setSitios] = useState<Sitio[]>([]);
   const [fuerzasReaccion, setFuerzasReaccion] = useState<FuerzaReaccionCatalogItem[]>([]);
@@ -268,6 +292,36 @@ const Intrusions: React.FC = () => {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadEncoladosHc = async () => {
+      setHcLoading(true);
+      try {
+        const response = await fetchIntrusionesEncoladasHc({
+          search: hcSearch || undefined,
+          orderBy: hcOrderBy,
+          orderDir: hcOrderDir,
+        });
+        if (!isMounted) return;
+        setHcQueue(response.data || []);
+        setHcTotal(response.total || 0);
+      } catch (err) {
+        console.error('Error al cargar encolados HC:', err);
+      } finally {
+        if (isMounted) {
+          setHcLoading(false);
+        }
+      }
+    };
+
+    loadEncoladosHc();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hcSearch, hcOrderBy, hcOrderDir]);
 
   useEffect(() => {
     let isMounted = true;
@@ -434,16 +488,24 @@ const Intrusions: React.FC = () => {
     setFormData((prev) => ({
       ...prev,
       fecha_reaccion_fuera: value ?? '',
+      fecha_llegada_fuerza_reaccion: value ?? '',
     }));
   };
 
-  const handleLlegoAlertaChange = (
+  const handleFechaReaccionEnviadaChange = (value: string | null) => {
+    setFormData((prev) => ({
+      ...prev,
+      fecha_reaccion_enviada: value ?? '',
+    }));
+  };
+
+  const handleNoLlegoAlertaChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const { checked } = event.target;
     setFormData((prev) => ({
       ...prev,
-      llego_alerta: checked,
+      no_llego_alerta: checked,
     }));
   };
 
@@ -460,10 +522,13 @@ const Intrusions: React.FC = () => {
   const resetProtocoloFields = () => {
     setFormData((prev) => ({
       ...prev,
+      fecha_reaccion_enviada: '',
       fecha_reaccion_fuera: '',
+      fecha_llegada_fuerza_reaccion: '',
       conclusion_evento_id: '',
       sustraccion_material: false,
       fuerza_reaccion_id: '',
+      necesita_protocolo: false,
     }));
   };
 
@@ -493,6 +558,10 @@ const Intrusions: React.FC = () => {
     setTipoDescripcion(selected.descripcion);
     const requiresProtocol = selected.necesita_protocolo === true;
     setRequiereProtocolo(requiresProtocol);
+    setFormData((prev) => ({
+      ...prev,
+      necesita_protocolo: requiresProtocol,
+    }));
 
     if (!requiresProtocol) {
       resetProtocoloFields();
@@ -507,6 +576,76 @@ const Intrusions: React.FC = () => {
       ...prev,
       conclusion_evento_id: value,
     }));
+  };
+
+  const populateFormFromIntrusion = (intrusion: Intrusion) => {
+    setEditingIntrusionId(intrusion.id);
+    setFormData({
+      origen: intrusion.origen ?? 'HC',
+      hik_alarm_evento_id: intrusion.hik_alarm_evento_id
+        ? String(intrusion.hik_alarm_evento_id)
+        : null,
+      fecha_evento: normalizeDateTimeLocalString(intrusion.fecha_evento),
+      fecha_reaccion: intrusion.fecha_reaccion
+        ? normalizeDateTimeLocalString(intrusion.fecha_reaccion)
+        : '',
+      fecha_reaccion_enviada: intrusion.fecha_reaccion_enviada
+        ? normalizeDateTimeLocalString(intrusion.fecha_reaccion_enviada)
+        : '',
+      fecha_reaccion_fuera: intrusion.fecha_reaccion_fuera
+        ? normalizeDateTimeLocalString(intrusion.fecha_reaccion_fuera)
+        : '',
+      fecha_llegada_fuerza_reaccion: intrusion.fecha_llegada_fuerza_reaccion
+        ? normalizeDateTimeLocalString(intrusion.fecha_llegada_fuerza_reaccion)
+        : intrusion.fecha_reaccion_fuera
+        ? normalizeDateTimeLocalString(intrusion.fecha_reaccion_fuera)
+        : '',
+      sitioId: intrusion.sitio_id ? String(intrusion.sitio_id) : '',
+      estado: intrusion.estado ?? '',
+      descripcion: intrusion.descripcion ?? '',
+      no_llego_alerta: intrusion.no_llego_alerta ?? false,
+      medio_comunicacion_id: intrusion.medio_comunicacion_id
+        ? String(intrusion.medio_comunicacion_id)
+        : '',
+      conclusion_evento_id: intrusion.conclusion_evento_id
+        ? String(intrusion.conclusion_evento_id)
+        : '',
+      sustraccion_material: intrusion.sustraccion_material ?? false,
+      fuerza_reaccion_id: intrusion.fuerza_reaccion_id
+        ? String(intrusion.fuerza_reaccion_id)
+        : '',
+      completado: intrusion.completado ?? false,
+      necesita_protocolo: intrusion.necesita_protocolo ?? false,
+    });
+    setRequiereProtocolo(Boolean(intrusion.necesita_protocolo));
+    setTipoDescripcion(intrusion.tipo ?? '');
+    setPersonaId(intrusion.persona_id ?? null);
+    setSitioId(intrusion.sitio_id ?? null);
+  };
+
+  const handleOpenHcRow = async (row: IntrusionHcQueueRow) => {
+    try {
+      const opened = await openIntrusionDesdeHc(row.hik_alarm_evento_id);
+      populateFormFromIntrusion(opened);
+      setError(null);
+    } catch (err) {
+      console.error('No se pudo abrir la intrusión de HC:', err);
+      const backendMessage = err instanceof Error && err.message ? err.message : null;
+      setError(backendMessage || 'No se pudo abrir la intrusión proveniente de HikCentral.');
+    }
+  };
+
+  const handleHcSort = (
+    column: 'fecha_evento_hc' | 'region' | 'name' | 'trigger_event' | 'status' | 'alarm_category'
+  ) => {
+    setHcOrderBy((prev) => {
+      if (prev === column) {
+        setHcOrderDir((dir) => (dir === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setHcOrderDir('desc');
+      return column;
+    });
   };
 
   const handleSustraccionMaterialChange = (
@@ -536,7 +675,7 @@ const Intrusions: React.FC = () => {
         fechaHoraIntrusion: intrusion.fecha_evento ?? null,
         sitio: intrusion.sitio_nombre || intrusion.ubicacion || '',
         tipoIntrusion: intrusion.tipo ?? '',
-        llegoAlerta: intrusion.llego_alerta ?? false,
+        llegoAlerta: !(intrusion.no_llego_alerta ?? false),
         personalIdentificado: intrusion.personal_identificado?.trim() || '',
       })),
     [intrusions]
@@ -692,6 +831,7 @@ const Intrusions: React.FC = () => {
   }, [fechaReaccionError, fechaReaccionFueraError]);
 
   const isButtonDisabled = isSubmitDisabled || disableSave;
+  const noLlegoDisabled = formData.origen === 'HC' || Boolean(formData.hik_alarm_evento_id);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -791,8 +931,6 @@ const Intrusions: React.FC = () => {
       }
     }
 
-    setIsSubmitting(true);
-
     const medioId = formData.medio_comunicacion_id
       ? Number(formData.medio_comunicacion_id)
       : null;
@@ -814,46 +952,88 @@ const Intrusions: React.FC = () => {
 
     const fechaEventoIso = toIsoString(formData.fecha_evento);
     const fechaReaccionIso = toIsoString(formData.fecha_reaccion);
-    const fechaReaccionFueraIso = toIsoString(formData.fecha_reaccion_fuera);
+    const fechaReaccionEnviadaIso = toIsoString(formData.fecha_reaccion_enviada);
+    const fechaLlegadaIso =
+      toIsoString(formData.fecha_llegada_fuerza_reaccion || formData.fecha_reaccion_fuera) ||
+      formData.fecha_llegada_fuerza_reaccion ||
+      formData.fecha_reaccion_fuera;
 
     const ubicacionValue = sitioSeleccionado?.nombre?.trim() || '';
+    const necesitaProtocolo = requiereProtocolo || formData.necesita_protocolo;
+
+    if (formData.completado) {
+      const missing: string[] = [];
+      if (!formData.fecha_reaccion) missing.push('fecha_reaccion');
+      if (!medioComunicacionValue) missing.push('medio_comunicacion_id');
+      if (!personaId) missing.push('persona_id');
+      if (necesitaProtocolo) {
+        if (!formData.fecha_reaccion_enviada) missing.push('fecha_reaccion_enviada');
+        if (!fechaLlegadaIso) missing.push('fecha_llegada_fuerza_reaccion');
+        if (!conclusionEventoValue) missing.push('conclusion_evento_id');
+        if (formData.sustraccion_material === undefined) missing.push('sustraccion_material');
+      }
+
+      if (missing.length) {
+        setError(`Faltan campos obligatorios: ${missing.join(', ')}`);
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
 
     const payload: IntrusionPayload = {
+      origen: formData.origen,
+      hik_alarm_evento_id: formData.hik_alarm_evento_id
+        ? Number(formData.hik_alarm_evento_id)
+        : null,
       fecha_evento: fechaEventoIso || formData.fecha_evento,
       fecha_reaccion: fechaReaccionIso || null,
+      fecha_reaccion_enviada: necesitaProtocolo && formData.fecha_reaccion_enviada
+        ? fechaReaccionEnviadaIso || formData.fecha_reaccion_enviada
+        : null,
+      fecha_llegada_fuerza_reaccion:
+        necesitaProtocolo && fechaLlegadaIso ? fechaLlegadaIso : null,
       fecha_reaccion_fuera:
-        requiereProtocolo && formData.fecha_reaccion_fuera
-          ? fechaReaccionFueraIso || formData.fecha_reaccion_fuera
-          : null,
+        necesitaProtocolo && formData.fecha_reaccion_fuera ? fechaLlegadaIso : null,
       ubicacion: ubicacionValue,
       tipo: tipoValue,
       estado: formData.estado || '',
       descripcion: formData.descripcion?.trim() || '',
-      llego_alerta: formData.llego_alerta,
+      no_llego_alerta:
+        formData.origen === 'HC' || formData.hik_alarm_evento_id ? false : formData.no_llego_alerta,
       medio_comunicacion_id: medioComunicacionValue,
-      conclusion_evento_id: requiereProtocolo ? conclusionEventoValue : null,
-      sustraccion_material: requiereProtocolo ? formData.sustraccion_material : false,
+      conclusion_evento_id: necesitaProtocolo ? conclusionEventoValue : null,
+      sustraccion_material: necesitaProtocolo ? formData.sustraccion_material : false,
       sitio_id: sitioIdNumber,
       fuerza_reaccion_id:
-        requiereProtocolo && fuerzaReaccionValue !== null
-          ? fuerzaReaccionValue
-          : null,
+        necesitaProtocolo && fuerzaReaccionValue !== null ? fuerzaReaccionValue : null,
       persona_id: personaId,
+      completado: formData.completado,
+      necesita_protocolo: necesitaProtocolo,
     };
 
     try {
-      console.log('[INTRUSIONES][UI] payload create:', payload);
-      const created = await createIntrusion(payload);
+      console.log('[INTRUSIONES][UI] payload:', payload);
+      const saved = editingIntrusionId
+        ? await updateIntrusion(editingIntrusionId, payload)
+        : await createIntrusion(payload);
+
       const enriched =
-        created.sitio_nombre || !sitioSeleccionado
-          ? created
-          : { ...created, sitio_nombre: sitioSeleccionado.nombre };
-      setIntrusions((prev) => [enriched, ...prev]);
+        saved.sitio_nombre || !sitioSeleccionado
+          ? saved
+          : { ...saved, sitio_nombre: sitioSeleccionado.nombre };
+
+      setIntrusions((prev) =>
+        editingIntrusionId
+          ? prev.map((item) => (item.id === enriched.id ? enriched : item))
+          : [enriched, ...prev]
+      );
       resetClientePersonaSelection();
       setFormData(buildInitialFormData());
       setTipoIntrusionId('');
       setTipoDescripcion('');
       setRequiereProtocolo(false);
+      setEditingIntrusionId(null);
     } catch (err) {
       console.error('Error al registrar intrusión:', err);
       const backendMessage = err instanceof Error && err.message ? err.message : null;
@@ -870,6 +1050,115 @@ const Intrusions: React.FC = () => {
   return (
     <div>
       <h3 className="text-3xl font-medium text-[#1C2E4A]">Registro de Intrusiones</h3>
+
+      <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h4 className="text-[#1C2E4A] text-lg font-semibold">Encolados HC</h4>
+            <p className="text-xs text-gray-500">Abrir eventos provenientes de HikCentral.</p>
+          </div>
+          <input
+            type="text"
+            value={hcSearch}
+            onChange={(e) => setHcSearch(e.target.value)}
+            placeholder="Buscar por región, nombre o evento"
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+          />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                {[
+                  { key: 'fecha_evento_hc', label: 'Fecha evento HC' },
+                  { key: 'region', label: 'Región' },
+                  { key: 'name', label: 'Nombre' },
+                  { key: 'trigger_event', label: 'Evento' },
+                  { key: 'status', label: 'Estado' },
+                  { key: 'alarm_category', label: 'Categoría' },
+                  { key: 'intrusion_id', label: 'Intrusión vinculada' },
+                  { key: 'completado', label: 'Completado' },
+                  { key: 'acciones', label: 'Acciones' },
+                ].map((column) => (
+                  <th
+                    key={column.key}
+                    className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    {column.key === 'acciones' ? (
+                      column.label
+                    ) : (
+                      <button
+                        type="button"
+                        className="flex items-center gap-1"
+                        onClick={() =>
+                          handleHcSort(
+                            column.key as
+                              | 'fecha_evento_hc'
+                              | 'region'
+                              | 'name'
+                              | 'trigger_event'
+                              | 'status'
+                              | 'alarm_category'
+                          )
+                        }
+                      >
+                        <span>{column.label}</span>
+                        {hcOrderBy === column.key && (
+                          <span className="text-[10px] text-gray-500">{hcOrderDir === 'asc' ? '▲' : '▼'}</span>
+                        )}
+                      </button>
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {hcLoading ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-3 text-center text-gray-500">
+                    Cargando eventos de HC...
+                  </td>
+                </tr>
+              ) : hcQueue.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-3 text-center text-gray-500">
+                    No hay eventos encolados.
+                  </td>
+                </tr>
+              ) : (
+                hcQueue.map((row) => (
+                  <tr key={`${row.hik_alarm_evento_id}-${row.fecha_evento_hc || ''}`} className="hover:bg-gray-50">
+                    <td className="px-4 py-2 text-gray-700">
+                      {row.fecha_evento_hc ? new Date(row.fecha_evento_hc).toLocaleString() : 'Sin fecha'}
+                    </td>
+                    <td className="px-4 py-2 text-gray-700">{row.region || 'Sin región'}</td>
+                    <td className="px-4 py-2 text-gray-700">{row.name || 'Sin nombre'}</td>
+                    <td className="px-4 py-2 text-gray-700">{row.trigger_event || 'Sin evento'}</td>
+                    <td className="px-4 py-2 text-gray-700">{row.status || 'Sin estado'}</td>
+                    <td className="px-4 py-2 text-gray-700">{row.alarm_category || 'Sin categoría'}</td>
+                    <td className="px-4 py-2 text-gray-700">
+                      {row.intrusion_id ? `#${row.intrusion_id}` : 'Sin intrusión'}
+                    </td>
+                    <td className="px-4 py-2 text-gray-700">
+                      {row.completado ? 'Sí' : 'No'}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <button
+                        type="button"
+                        className="px-3 py-1 text-xs font-semibold bg-[#F9C300] text-[#1C2E4A] rounded hover:bg-yellow-400"
+                        onClick={() => handleOpenHcRow(row)}
+                      >
+                        Abrir
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-gray-500 mt-2">Total: {hcTotal}</p>
+      </div>
 
       <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
         <h4 className="text-[#1C2E4A] text-lg font-semibold mb-4">Reportar Nueva Intrusión</h4>
@@ -1014,14 +1303,15 @@ const Intrusions: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <input
                     type="checkbox"
-                    id="llego_alerta"
-                    name="llego_alerta"
-                    checked={formData.llego_alerta}
-                    onChange={handleLlegoAlertaChange}
-                    className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
+                    id="no_llego_alerta"
+                    name="no_llego_alerta"
+                    checked={noLlegoDisabled ? false : formData.no_llego_alerta}
+                    onChange={handleNoLlegoAlertaChange}
+                    disabled={noLlegoDisabled}
+                    className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A] disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
-                  <label htmlFor="llego_alerta" className="text-sm font-medium text-gray-700">
-                    Llegó alerta
+                  <label htmlFor="no_llego_alerta" className="text-sm font-medium text-gray-700">
+                    No llegó alerta
                   </label>
                 </div>
               </div>
@@ -1042,6 +1332,14 @@ const Intrusions: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-4">
+                    <DateTimeInput
+                      id="fecha_reaccion_enviada"
+                      name="fecha_reaccion_enviada"
+                      label="Fecha y hora de reacción enviada"
+                      value={formData.fecha_reaccion_enviada}
+                      onChange={handleFechaReaccionEnviadaChange}
+                      max={getDateTimeInputLimit() || undefined}
+                    />
                     <DateTimeInput
                       id="fecha_reaccion_fuera"
                       name="fecha_reaccion_fuera"
@@ -1111,6 +1409,22 @@ const Intrusions: React.FC = () => {
             )}
           </div>
 
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="completado"
+              name="completado"
+              checked={formData.completado}
+              onChange={(event) =>
+                setFormData((prev) => ({ ...prev, completado: event.target.checked }))
+              }
+              className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
+            />
+            <label htmlFor="completado" className="text-sm font-medium text-gray-700">
+              Marcar como completado
+            </label>
+          </div>
+
           <div className="flex flex-col items-end space-y-2">
             {error && (
               <p className="w-full text-right text-sm text-red-600">{error}</p>
@@ -1124,7 +1438,11 @@ const Intrusions: React.FC = () => {
                   : 'bg-[#F9C300] text-[#1C2E4A] hover:bg-yellow-400'
               }`}
             >
-              {isSubmitting ? 'Registrando...' : 'Registrar Intrusión'}
+              {isSubmitting
+                ? 'Guardando...'
+                : editingIntrusionId
+                ? 'Actualizar Intrusión'
+                : 'Registrar Intrusión'}
             </button>
           </div>
         </form>
