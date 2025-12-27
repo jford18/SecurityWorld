@@ -662,6 +662,8 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
 
 export const openIntrusionDesdeHc = async (req, res) => {
   const { hikAlarmEventoId } = req.params;
+  console.log('[API] abrir HC params=', req.params);
+  console.log('[API] abrir HC hikAlarmEventoId=', req.params.hikAlarmEventoId);
   const parsedId = Number(hikAlarmEventoId);
 
   if (!Number.isInteger(parsedId)) {
@@ -681,10 +683,12 @@ export const openIntrusionDesdeHc = async (req, res) => {
       "id",
     ];
 
+    console.log('[API] abrir HC buscando intrusion por HIK_ALARM_EVENTO_ID...');
     const existingResult = await pool.query(
       `SELECT ${selectColumns.join(", ")} FROM public.intrusiones WHERE hik_alarm_evento_id = $1 LIMIT 1`,
       [parsedId]
     );
+    console.log('[API] abrir HC found=', existingResult?.rows?.[0]);
 
     if (existingResult.rowCount > 0) {
       return res.json({ id: existingResult.rows[0].id });
@@ -723,13 +727,16 @@ export const openIntrusionDesdeHc = async (req, res) => {
 
     const returningColumns = ["id"];
 
+    console.log('[API] abrir HC INSERT intrusiones con hikId=', parsedId);
     const insertResult = await pool.query(
       `INSERT INTO public.intrusiones (${columns.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING ${returningColumns.join(", ")}`,
       values
     );
+    console.log('[API] abrir HC insert result=', insertResult?.rows?.[0]);
 
     return res.status(201).json({ id: insertResult.rows[0].id });
   } catch (error) {
+    console.error('[API] abrir HC ERROR', error);
     console.error("Error al abrir intrusión desde HC:", error);
     return res.status(500).json({ mensaje: "No se pudo abrir la intrusión encolada." });
   }
