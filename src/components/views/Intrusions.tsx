@@ -141,6 +141,24 @@ const getInitialDateTimeValue = () => {
 
 const getDateTimeInputLimit = () => normalizeDateTimeLocalString(new Date().toISOString());
 
+const formatDateTimeForDisplay = (value?: string | null) => {
+  if (!value) return '—';
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return '—';
+  }
+
+  return parsed.toLocaleString('en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
 const buildInitialFormData = (): IntrusionFormData => ({
   origen: 'MANUAL',
   hik_alarm_evento_id: null,
@@ -1374,6 +1392,30 @@ const Intrusions: React.FC = () => {
                   </label>
                 </div>
               </div>
+              {hcSeleccionado && (
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-sm font-medium text-gray-700">Source</label>
+                    <input
+                      type="text"
+                      value={hcSeleccionado.source || '—'}
+                      readOnly
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 text-gray-700 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Alarm Acknowledgment Time
+                    </label>
+                    <input
+                      type="text"
+                      value={formatDateTimeForDisplay(hcSeleccionado.alarm_acknowledgment_time)}
+                      readOnly
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 text-gray-700 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {requiereProtocolo && (

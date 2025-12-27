@@ -623,7 +623,7 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
   if (typeof search === "string" && search.trim()) {
     filterValues.push(`%${search.trim()}%`);
     whereParts.push(
-      "region ILIKE $1 OR name ILIKE $1 OR trigger_event ILIKE $1 OR status ILIKE $1 OR alarm_category ILIKE $1"
+      "v.region ILIKE $1 OR v.name ILIKE $1 OR v.trigger_event ILIKE $1 OR v.status ILIKE $1 OR v.alarm_category ILIKE $1"
     );
   }
 
@@ -641,14 +641,25 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
 
   try {
     const totalResult = await pool.query(
-      `SELECT COUNT(*) AS total FROM public.v_intrusiones_encolados_hc ${whereClause}`,
+      `SELECT COUNT(*) AS total FROM public.v_intrusiones_encolados_hc v ${whereClause}`,
       filterValues
     );
 
-    const selectSql = `SELECT fecha_evento_hc, region, name, trigger_event, status, alarm_category, intrusion_id, completado, hik_alarm_evento_id
-         FROM public.v_intrusiones_encolados_hc
+    const selectSql = `SELECT v.fecha_evento_hc,
+            v.region,
+            v.name,
+            v.trigger_event,
+            v.status,
+            v.alarm_category,
+            v.intrusion_id,
+            v.completado,
+            v.hik_alarm_evento_id,
+            a.source,
+            a.alarm_acknowledgment_time
+         FROM public.v_intrusiones_encolados_hc v
+         LEFT JOIN public.hik_alarm_evento a ON a.hik_alarm_evento_id = v.hik_alarm_evento_id
          ${whereClause}
-         ORDER BY ${orderColumn} ${orderDirection}
+         ORDER BY v.${orderColumn} ${orderDirection}
          ${paginationClause}`;
 
     const result = await pool.query(selectSql, values);

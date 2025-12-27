@@ -176,6 +176,8 @@ export interface IntrusionHcQueueRow {
   intrusion_id: number | null;
   completado: boolean;
   hik_alarm_evento_id: number;
+  source: string | null;
+  alarm_acknowledgment_time: string | null;
 }
 
 export interface IntrusionConsolidadoRow {
