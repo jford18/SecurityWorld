@@ -576,7 +576,11 @@ export const fetchIntrusionesEncoladasHc = async (
 
   const payload = data as Partial<IntrusionesHcResponse> & { data?: unknown };
   const parsedData = Array.isArray(payload.data)
-    ? (payload.data as IntrusionHcQueueRow[])
+    ? (payload.data as IntrusionHcQueueRow[]).map((item) => ({
+        ...item,
+        source: item?.source ?? null,
+        alarm_acknowledgment_time: item?.alarm_acknowledgment_time ?? null,
+      }))
     : [];
 
   return { data: parsedData, total: payload.total ?? parsedData.length };
