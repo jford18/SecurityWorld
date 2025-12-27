@@ -679,25 +679,7 @@ export const openIntrusionDesdeHc = async (req, res) => {
   try {
     const selectColumns = [
       "id",
-      "sitio_id",
-      "tipo",
-      "estado",
-      "descripcion",
-      "fecha_evento",
-      "fecha_reaccion",
-      metadata.hasFechaReaccionEnviada ? "fecha_reaccion_enviada" : null,
-      metadata.hasFechaLlegadaFuerzaReaccion ? "fecha_llegada_fuerza_reaccion" : "fecha_reaccion_fuera",
-      metadata.hasNoLlegoAlerta ? "no_llego_alerta" : "llego_alerta",
-      metadata.hasCompletado ? "completado" : null,
-      metadata.hasNecesitaProtocolo ? "necesita_protocolo" : null,
-      metadata.hasOrigen ? "origen" : null,
-      metadata.hasHikAlarmEventoId ? "hik_alarm_evento_id" : null,
-      "medio_comunicacion_id",
-      "conclusion_evento_id",
-      "sustraccion_material",
-      "fuerza_reaccion_id",
-      metadata.personaColumn ? `${metadata.personaColumn} AS persona_id` : null,
-    ].filter(Boolean);
+    ];
 
     const existingResult = await pool.query(
       `SELECT ${selectColumns.join(", ")} FROM public.intrusiones WHERE hik_alarm_evento_id = $1 LIMIT 1`,
@@ -705,7 +687,7 @@ export const openIntrusionDesdeHc = async (req, res) => {
     );
 
     if (existingResult.rowCount > 0) {
-      return res.json(mapIntrusionRow(existingResult.rows[0]));
+      return res.json({ id: existingResult.rows[0].id });
     }
 
     const columns = [];
@@ -739,21 +721,14 @@ export const openIntrusionDesdeHc = async (req, res) => {
 
     const placeholders = columns.map((_, index) => `$${index + 1}`);
 
-    const returningColumns = [
-      "id",
-      metadata.hasOrigen ? "origen" : null,
-      metadata.hasHikAlarmEventoId ? "hik_alarm_evento_id" : null,
-      metadata.hasNoLlegoAlerta ? "no_llego_alerta" : "llego_alerta",
-      metadata.hasCompletado ? "completado" : null,
-      "fecha_evento",
-    ].filter(Boolean);
+    const returningColumns = ["id"];
 
     const insertResult = await pool.query(
       `INSERT INTO public.intrusiones (${columns.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING ${returningColumns.join(", ")}`,
       values
     );
 
-    return res.status(201).json(mapIntrusionRow(insertResult.rows[0]));
+    return res.status(201).json({ id: insertResult.rows[0].id });
   } catch (error) {
     console.error("Error al abrir intrusión desde HC:", error);
     return res.status(500).json({ mensaje: "No se pudo abrir la intrusión encolada." });
@@ -839,7 +814,7 @@ export const createIntrusion = async (req, res) => {
       : "MANUAL"
     : null;
   const noLlegoAlertaValue = metadata.hasNoLlegoAlerta
-    ? hikAlarmEventoValue
+    ? hikAlarmEventoValue || origenValue === "HC"
       ? false
       : Boolean(rawNoLlegoAlerta)
     : false;
@@ -1327,7 +1302,7 @@ export const updateIntrusion = async (req, res) => {
   }
 
   const noLlegoValue = metadata.hasNoLlegoAlerta
-    ? hikValue
+    ? hikValue || origenValue === "HC" || currentRow?.origen === "HC"
       ? false
       : rawNoLlego === undefined
       ? Boolean(currentRow?.no_llego_alerta)
