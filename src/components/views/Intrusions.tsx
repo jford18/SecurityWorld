@@ -1214,7 +1214,7 @@ const Intrusions: React.FC = () => {
 
       <div id="nueva-intrusion-form" className="mt-8 bg-white p-6 rounded-lg shadow-md">
         <div className="flex items-center justify-between mb-4">
-          <h4 className="text-[#1C2E4A] text-lg font-semibold">Reportar Nueva Intrusión</h4>
+          <h4 className="text-[#1C2E4A] text-lg font-semibold">Reportar Nuevo Evento</h4>
           {hcSeleccionado && (
             <span className="text-xs text-gray-600">
               Evento HC seleccionado #{hcSeleccionado.hik_alarm_evento_id}
@@ -1224,7 +1224,7 @@ const Intrusions: React.FC = () => {
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h3 className="text-[#1C2E4A] text-base font-semibold mb-4">
-              Datos de la intrusión
+              Datos del evento
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-4">
@@ -1269,7 +1269,7 @@ const Intrusions: React.FC = () => {
               <div className="space-y-4">
                 <div>
                   <label htmlFor="tipo" className="block text-sm font-medium text-gray-700">
-                    Tipo de Intrusión
+                    Tipo de Evento
                   </label>
                   <div className="mt-1 flex items-center gap-2">
                     <select
@@ -1382,7 +1382,7 @@ const Intrusions: React.FC = () => {
                   <div>
                     <h3 className="text-[#1C2E4A] text-base font-semibold">Protocolo de reacción</h3>
                     <p className="text-xs text-gray-600">
-                      Campos requeridos para tipos de intrusión que activan protocolo.
+                      Campos requeridos para tipos de evento que activan protocolo.
                     </p>
                   </div>
                   <span className="inline-flex items-center text-[10px] font-semibold px-2 py-1 rounded-full bg-yellow-200 text-yellow-800 uppercase tracking-wide">
@@ -1500,8 +1500,8 @@ const Intrusions: React.FC = () => {
               {isSubmitting
                 ? 'Guardando...'
                 : editingIntrusionId
-                ? 'Actualizar Intrusión'
-                : 'Registrar Intrusión'}
+                ? 'Actualizar Evento'
+                : 'Registrar Evento'}
             </button>
           </div>
         </form>
