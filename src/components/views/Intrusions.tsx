@@ -1231,6 +1231,10 @@ const Intrusions: React.FC = () => {
                   <th
                     key={column.key}
                     className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    style=
+                      column.key === 'name' || column.key === 'trigger_event'
+                        ? { minWidth: 260, whiteSpace: 'normal', wordBreak: 'break-word' }
+                        : undefined
                   >
                     {column.key === 'acciones' ? (
                       column.label
@@ -1275,14 +1279,12 @@ const Intrusions: React.FC = () => {
                 </tr>
               ) : (
                 hcQueue.map((row) => {
-                  const categoria = (row.alarm_category
-                    ?? (row as Record<string, unknown>).ALARM_CATEGORY
-                    ?? (row as Record<string, unknown>).alarmCategory
-                    ?? (row as Record<string, unknown>).category
-                    ?? ""
-                  )
-                    .toString()
-                    .trim();
+                  const categoriaRaw =
+                    row?.alarm_category ??
+                    (row as Record<string, unknown>)?.alarmCategory ??
+                    (row as Record<string, unknown>)?.ALARM_CATEGORY ??
+                    null;
+                  const categoria = (categoriaRaw ?? '').toString().trim();
 
                   return (
                     <tr
@@ -1293,8 +1295,18 @@ const Intrusions: React.FC = () => {
                         {row.fecha_evento_hc ? new Date(row.fecha_evento_hc).toLocaleString() : 'Sin fecha'}
                       </td>
                       <td className="px-4 py-2 text-gray-700">{row.region || 'Sin región'}</td>
-                      <td className="px-4 py-2 text-gray-700">{row.name || 'Sin nombre'}</td>
-                      <td className="px-4 py-2 text-gray-700">{row.trigger_event || 'Sin evento'}</td>
+                      <td
+                        className="px-4 py-2 text-gray-700"
+                        style={{ minWidth: 260, whiteSpace: 'normal', wordBreak: 'break-word' }}
+                      >
+                        {row.name || 'Sin nombre'}
+                      </td>
+                      <td
+                        className="px-4 py-2 text-gray-700"
+                        style={{ minWidth: 260, whiteSpace: 'normal', wordBreak: 'break-word' }}
+                      >
+                        {row.trigger_event || 'Sin evento'}
+                      </td>
                       <td className="px-4 py-2 text-gray-700">{row.status || 'Sin estado'}</td>
                       <td className="px-4 py-2 text-gray-700">{categoria ? categoria : 'Sin categoría'}</td>
                       <td className="px-4 py-2 text-gray-700">

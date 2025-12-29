@@ -663,8 +663,10 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
          ${paginationClause}`;
 
     const result = await pool.query(selectSql, values);
+    const rows = result.rows ?? [];
+    console.log('[ENCOLADOS HC] sample row=', rows?.[0]);
 
-    return res.json({ data: result.rows ?? [], total: Number(totalResult.rows?.[0]?.total) || 0 });
+    return res.json({ data: rows, total: Number(totalResult.rows?.[0]?.total) || 0 });
   } catch (error) {
     console.error("Error al listar intrusiones encoladas de HC:", error);
     return res.status(500).json({ mensaje: "No se pudieron obtener las intrusiones encoladas." });
