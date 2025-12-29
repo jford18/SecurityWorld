@@ -474,33 +474,6 @@ const Intrusions: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!hcSeleccionado) return;
-
-    const hcCategory = (hcSeleccionado.alarm_category || '').trim().toLowerCase();
-    const map: Record<string, string> = {
-      'no autorizado': 'No autorizado',
-      'evento de robo': 'Evento de robo',
-      verdadera: 'Autorizado',
-      'recurrente verdadera': 'Autorizado',
-    };
-
-    const targetLabel = map[hcCategory] || hcSeleccionado.alarm_category || '';
-    const matchedOption = findTipoIntrusionByLabel(targetLabel, tiposIntrusionConFallback);
-
-    if (matchedOption) {
-      applyTipoIntrusionSelection(matchedOption);
-      return;
-    }
-
-    applyTipoIntrusionSelection(null);
-  }, [
-    applyTipoIntrusionSelection,
-    findTipoIntrusionByLabel,
-    hcSeleccionado,
-    tiposIntrusionConFallback,
-  ]);
-
-  useEffect(() => {
     let isMounted = true;
 
     const fetchMedios = async () => {
@@ -649,6 +622,33 @@ const Intrusions: React.FC = () => {
     },
     [resetProtocoloFields]
   );
+
+  useEffect(() => {
+    if (!hcSeleccionado) return;
+
+    const hcCategory = (hcSeleccionado.alarm_category || '').trim().toLowerCase();
+    const map: Record<string, string> = {
+      'no autorizado': 'No autorizado',
+      'evento de robo': 'Evento de robo',
+      verdadera: 'Autorizado',
+      'recurrente verdadera': 'Autorizado',
+    };
+
+    const targetLabel = map[hcCategory] || hcSeleccionado.alarm_category || '';
+    const matchedOption = findTipoIntrusionByLabel(targetLabel, tiposIntrusionConFallback);
+
+    if (matchedOption) {
+      applyTipoIntrusionSelection(matchedOption);
+      return;
+    }
+
+    applyTipoIntrusionSelection(null);
+  }, [
+    applyTipoIntrusionSelection,
+    findTipoIntrusionByLabel,
+    hcSeleccionado,
+    tiposIntrusionConFallback,
+  ]);
 
   const handleTipoIntrusionChange = (
     event: React.ChangeEvent<HTMLSelectElement>
