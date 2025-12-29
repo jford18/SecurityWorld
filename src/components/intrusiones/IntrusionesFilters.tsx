@@ -6,6 +6,8 @@ import { ClienteResumen, getClientesActivos } from '@/services/clientes.service'
 import { HaciendaResumen, getHaciendasActivas } from '@/services/haciendas.service';
 import * as tipoIntrusionService from '@/services/tipoIntrusion.service';
 import * as personaService from '@/services/persona.service';
+import { useSession } from '../context/SessionContext';
+import { resolveConsolaIdByName } from '@/services/consolasService';
 
 interface TipoIntrusionItem {
   id: number;
@@ -54,10 +56,32 @@ const IntrusionesFilters: React.FC<IntrusionesFiltersProps> = ({
   const [haciendas, setHaciendas] = useState<HaciendaResumen[]>([]);
   const [tiposIntrusion, setTiposIntrusion] = useState<TipoIntrusionItem[]>([]);
   const [personas, setPersonas] = useState<PersonaItem[]>([]);
+  const { session } = useSession();
+
+  const resolveConsolaId = useCallback(async () => {
+    const consoleValue = session.console ?? localStorage.getItem('selectedConsole');
+    if (!consoleValue) {
+      return null;
+    }
+
+    const parsedId = Number(consoleValue);
+    if (Number.isInteger(parsedId)) {
+      return parsedId;
+    }
+
+    return resolveConsolaIdByName(consoleValue);
+  }, [session.console]);
 
   const fetchSitiosByCliente = useCallback(
     async (clienteId?: number | string, haciendaId?: number | string) => {
       try {
+        const consolaId = await resolveConsolaId();
+
+        if (consolaId === null) {
+          setSitios([]);
+          return;
+        }
+
         const normalizedParams: { clienteId?: number | string; haciendaId?: number | string } = {};
 
         if (clienteId !== undefined && clienteId !== null && clienteId !== '') {
@@ -68,15 +92,13 @@ const IntrusionesFilters: React.FC<IntrusionesFiltersProps> = ({
           normalizedParams.haciendaId = haciendaId;
         }
 
-        const sitiosData = await getSitios(
-          Object.keys(normalizedParams).length > 0 ? normalizedParams : undefined
-        );
+        const sitiosData = await getSitios({ ...normalizedParams, consolaId });
         setSitios(sitiosData ?? []);
       } catch (catalogError) {
         console.error('Error al cargar sitios para el consolidado de intrusiones:', catalogError);
       }
     },
-    []
+    [resolveConsolaId]
   );
 
   const loadCatalogos = useCallback(async () => {

@@ -395,8 +395,8 @@ const Intrusions: React.FC = () => {
     let isMounted = true;
 
     const fetchSitiosPorConsola = async () => {
-      const consoleName = session.console ?? localStorage.getItem('selectedConsole');
-      if (!consoleName) {
+      const consoleValue = session.console ?? localStorage.getItem('selectedConsole');
+      if (!consoleValue) {
         if (isMounted) {
           setSitios([]);
           clearSitioSeleccion();
@@ -405,7 +405,10 @@ const Intrusions: React.FC = () => {
       }
 
       try {
-        const consolaId = await resolveConsolaIdByName(consoleName);
+        const parsedId = Number(consoleValue);
+        const consolaId = Number.isInteger(parsedId)
+          ? parsedId
+          : await resolveConsolaIdByName(consoleValue);
 
         if (!isMounted) return;
 
