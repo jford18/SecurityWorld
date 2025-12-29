@@ -199,13 +199,11 @@ const Intrusions: React.FC = () => {
   const [disableSave, setDisableSave] = useState(false);
   const [editingIntrusionId, setEditingIntrusionId] = useState<number | null>(null);
   const [hcQueue, setHcQueue] = useState<IntrusionHcQueueRow[]>([]);
-  const [hcTotal, setHcTotal] = useState(0);
   const [hcLoading, setHcLoading] = useState(false);
   const [hcSearch, setHcSearch] = useState('');
-  const [hcOrderBy, setHcOrderBy] = useState<
-    'fecha_evento_hc' | 'region' | 'name' | 'trigger_event' | 'status' | 'alarm_category'
-  >('fecha_evento_hc');
-  const [hcOrderDir, setHcOrderDir] = useState<'asc' | 'desc'>('desc');
+  const [pageHC, setPageHC] = useState(0);
+  const [rowsPerPageHC] = useState(20);
+  const [totalHC, setTotalHC] = useState(0);
   const [hcSeleccionado, setHcSeleccionado] = useState<IntrusionHcQueueRow | null>(null);
   const { session } = useSession();
   const [sitios, setSitios] = useState<Sitio[]>([]);
@@ -348,12 +346,12 @@ const Intrusions: React.FC = () => {
       try {
         const response = await fetchIntrusionesEncoladasHc({
           search: hcSearch || undefined,
-          orderBy: hcOrderBy,
-          orderDir: hcOrderDir,
+          page: pageHC,
+          rowsPerPage: rowsPerPageHC,
         });
         if (!isMounted) return;
         setHcQueue(response.data || []);
-        setHcTotal(response.total || 0);
+        setTotalHC(response.total || 0);
       } catch (err) {
         console.error('Error al cargar encolados HC:', err);
       } finally {
@@ -368,7 +366,7 @@ const Intrusions: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [hcSearch, hcOrderBy, hcOrderDir]);
+  }, [hcSearch, pageHC, rowsPerPageHC]);
 
   useEffect(() => {
     let isMounted = true;
@@ -744,19 +742,6 @@ const Intrusions: React.FC = () => {
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const handleHcSort = (
-    column: 'fecha_evento_hc' | 'region' | 'name' | 'trigger_event' | 'status' | 'alarm_category'
-  ) => {
-    setHcOrderBy((prev) => {
-      if (prev === column) {
-        setHcOrderDir((dir) => (dir === 'asc' ? 'desc' : 'asc'));
-        return prev;
-      }
-      setHcOrderDir('desc');
-      return column;
-    });
-  };
-
   const handleSustraccionMaterialChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -776,6 +761,8 @@ const Intrusions: React.FC = () => {
       fuerza_reaccion_id: value,
     }));
   };
+
+  const totalPagesHC = Math.ceil(totalHC / rowsPerPageHC);
 
   const intrusionesTableData = useMemo<IntrusionConsolidadoRow[]>(
     () =>
@@ -1208,7 +1195,10 @@ const Intrusions: React.FC = () => {
           <input
             type="text"
             value={hcSearch}
-            onChange={(e) => setHcSearch(e.target.value)}
+            onChange={(e) => {
+              setHcSearch(e.target.value);
+              setPageHC(0);
+            }}
             placeholder="Buscar por región, nombre o evento"
             className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
           />
@@ -1228,39 +1218,16 @@ const Intrusions: React.FC = () => {
                   { key: 'completado', label: 'Completado' },
                   { key: 'acciones', label: 'Acciones' },
                 ].map((column) => (
-                    <th
-                      key={column.key}
-                      className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      style={
-                        column.key === 'name' || column.key === 'trigger_event'
-                          ? { minWidth: 260, whiteSpace: 'normal', wordBreak: 'break-word' }
-                          : undefined
-                      }
-                    >
-                    {column.key === 'acciones' ? (
-                      column.label
-                    ) : (
-                      <button
-                        type="button"
-                        className="flex items-center gap-1"
-                        onClick={() =>
-                          handleHcSort(
-                            column.key as
-                              | 'fecha_evento_hc'
-                              | 'region'
-                              | 'name'
-                              | 'trigger_event'
-                              | 'status'
-                              | 'alarm_category'
-                          )
-                        }
-                      >
-                        <span>{column.label}</span>
-                        {hcOrderBy === column.key && (
-                          <span className="text-[10px] text-gray-500">{hcOrderDir === 'asc' ? '▲' : '▼'}</span>
-                        )}
-                      </button>
-                    )}
+                  <th
+                    key={column.key}
+                    className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    style={
+                      column.key === 'name' || column.key === 'trigger_event'
+                        ? { minWidth: 260, whiteSpace: 'normal', wordBreak: 'break-word' }
+                        : undefined
+                    }
+                  >
+                    {column.label}
                   </th>
                 ))}
               </tr>
@@ -1330,7 +1297,32 @@ const Intrusions: React.FC = () => {
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-500 mt-2">Total: {hcTotal}</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-2 text-xs text-gray-500">
+          <span>Total: {totalHC}</span>
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            <span>
+              Página {totalPagesHC > 0 ? pageHC + 1 : 0} de {totalPagesHC || 0}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+                onClick={() => setPageHC((prev) => Math.max(prev - 1, 0))}
+                disabled={pageHC === 0}
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+                onClick={() => setPageHC((prev) => prev + 1)}
+                disabled={totalPagesHC === 0 || pageHC >= totalPagesHC - 1}
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div id="nueva-intrusion-form" className="mt-8 bg-white p-6 rounded-lg shadow-md">

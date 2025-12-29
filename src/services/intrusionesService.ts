@@ -190,10 +190,8 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
 
 export interface IntrusionesHcFilters {
   page?: number;
-  limit?: number;
+  rowsPerPage?: number;
   search?: string;
-  orderBy?: string;
-  orderDir?: 'asc' | 'desc';
 }
 
 export interface IntrusionesHcResponse {

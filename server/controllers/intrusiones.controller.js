@@ -594,29 +594,13 @@ export const listIntrusiones = async (_req, res) => {
 };
 
 export const listIntrusionesEncoladasHc = async (req, res) => {
-  const { page = 1, limit = 20, search = "", orderBy = "fecha_evento_hc", orderDir = "desc" } =
-    req.query || {};
+  const { page = 0, rowsPerPage = 20, search = "" } = req.query || {};
 
   console.log('[ENCOLADOS HC] req.query=', req.query);
 
   const pageNumber = Number(page);
-  const pageSize = Number(limit);
-  const hasPagination = Number.isInteger(pageNumber) && pageNumber > 0 && Number.isInteger(pageSize) && pageSize > 0;
-
-  const allowedOrderByEncolados = {
-    fecha_evento_hc: "V.FECHA_EVENTO_HC",
-    region: "V.REGION",
-    name: "V.NAME",
-    trigger_event: "V.TRIGGER_EVENT",
-    status: "V.STATUS",
-    alarm_category: "V.ALARM_CATEGORY",
-    completado: "V.COMPLETADO",
-  };
-
-  const orderColumn =
-    allowedOrderByEncolados[String(orderBy || "").toLowerCase()] ||
-    allowedOrderByEncolados.fecha_evento_hc;
-  const orderDirection = String(orderDir || "").toLowerCase() === "asc" ? "ASC" : "DESC";
+  const pageSize = Number(rowsPerPage);
+  const hasPagination = Number.isInteger(pageNumber) && pageNumber >= 0 && Number.isInteger(pageSize) && pageSize > 0;
 
   const filterValues = [];
   const whereParts = [];
@@ -625,7 +609,7 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
     filterValues.push(`%${search.trim()}%`);
     const placeholder = `$${filterValues.length}`;
     whereParts.push(
-      `(V.REGION ILIKE ${placeholder} OR V.NAME ILIKE ${placeholder} OR V.TRIGGER_EVENT ILIKE ${placeholder} OR V.STATUS ILIKE ${placeholder} OR V.ALARM_CATEGORY ILIKE ${placeholder})`
+      `(V.REGION ILIKE ${placeholder} OR V.NAME ILIKE ${placeholder} OR V.TRIGGER_EVENT ILIKE ${placeholder} OR V.STATUS ILIKE ${placeholder} OR COALESCE(E.ALARM_CATEGORY, V.ALARM_CATEGORY) ILIKE ${placeholder})`
     );
   }
 
@@ -638,7 +622,7 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
     : "";
 
   if (hasPagination) {
-    values.push(pageSize, (pageNumber - 1) * pageSize);
+    values.push(pageSize, pageNumber * pageSize);
   }
 
   try {
@@ -664,7 +648,7 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
          FROM public.v_intrusiones_encolados_hc V
          LEFT JOIN public.hik_alarm_evento E ON (E.ID = V.HIK_ALARM_EVENTO_ID)
          ${whereClause}
-         ORDER BY ${orderColumn} ${orderDirection}
+         ORDER BY CASE WHEN NULLIF(TRIM(COALESCE(E.ALARM_CATEGORY, V.ALARM_CATEGORY)), '') IS NULL THEN 1 ELSE 0 END ASC, V.FECHA_EVENTO_HC DESC
          ${paginationClause}`;
 
     console.log('================= [ENCOLADOS HC] SQL DATA =================');
@@ -674,10 +658,12 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
     console.log('======================================================');
     const result = await pool.query(selectSql, values);
     const rows = result.rows ?? [];
+    const total = Number(totalResult.rows?.[0]?.total) || 0;
+    console.log('[ENCOLADOS HC] page=', pageNumber, 'rowsPerPage=', pageSize, 'total=', total);
     console.log('[ENCOLADOS HC] rows=', result.rowCount);
     console.log('[ENCOLADOS HC] sample row=', rows?.[0]);
 
-    return res.json({ data: rows, total: Number(totalResult.rows?.[0]?.total) || 0 });
+    return res.json({ data: rows, total });
   } catch (error) {
     console.error("Error al listar intrusiones encoladas de HC:", error);
     return res.status(500).json({ mensaje: "No se pudieron obtener las intrusiones encoladas." });
