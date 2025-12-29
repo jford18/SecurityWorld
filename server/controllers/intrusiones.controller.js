@@ -595,6 +595,7 @@ export const listIntrusiones = async (_req, res) => {
 
 export const listIntrusionesEncoladasHc = async (req, res) => {
   const { page = 0, rowsPerPage = 20, search = "" } = req.query || {};
+  const consolaId = Number(req.query?.consolaId || 0);
 
   console.log('[ENCOLADOS HC] req.query=', req.query);
 
@@ -604,12 +605,24 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
 
   const filterValues = [];
   const whereParts = [];
+  const joinParts = [
+    "LEFT JOIN public.hik_alarm_evento B ON (B.ID = A.HIK_ALARM_EVENTO_ID)",
+  ];
+
+  if (consolaId > 0) {
+    filterValues.push(consolaId);
+    const placeholder = `$${filterValues.length}`;
+    joinParts.push(
+      "JOIN public.sitios C ON ((UPPER(TRIM(C.NOMBRE)) = UPPER(TRIM(A.REGION))) OR (UPPER(TRIM(C.DESCRIPCION)) = UPPER(TRIM(A.REGION))))"
+    );
+    whereParts.push(`C.CONSOLA_ID = ${placeholder}`);
+  }
 
   if (typeof search === "string" && search.trim()) {
     filterValues.push(`%${search.trim()}%`);
     const placeholder = `$${filterValues.length}`;
     whereParts.push(
-      `(V.REGION ILIKE ${placeholder} OR V.NAME ILIKE ${placeholder} OR V.TRIGGER_EVENT ILIKE ${placeholder} OR V.STATUS ILIKE ${placeholder} OR COALESCE(E.ALARM_CATEGORY, V.ALARM_CATEGORY) ILIKE ${placeholder})`
+      `(A.REGION ILIKE ${placeholder} OR A.NAME ILIKE ${placeholder} OR A.TRIGGER_EVENT ILIKE ${placeholder} OR A.STATUS ILIKE ${placeholder} OR COALESCE(B.ALARM_CATEGORY, A.ALARM_CATEGORY) ILIKE ${placeholder})`
     );
   }
 
@@ -625,8 +638,12 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
     values.push(pageSize, pageNumber * pageSize);
   }
 
+  const fromClause = ["FROM public.v_intrusiones_encolados_hc A", ...joinParts].join("\n         ");
+
   try {
-    const totalSql = `SELECT COUNT(*) AS total FROM public.v_intrusiones_encolados_hc v LEFT JOIN public.hik_alarm_evento e ON (e.id = v.hik_alarm_evento_id) ${whereClause}`;
+    const totalSql = `SELECT COUNT(1) AS total
+         ${fromClause}
+         ${whereClause}`;
     console.log('================= [ENCOLADOS HC] SQL TOTAL =================');
     console.log(totalSql);
     console.log('================= [ENCOLADOS HC] PARAMS TOTAL ===============');
@@ -634,21 +651,20 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
     console.log('======================================================');
     const totalResult = await pool.query(totalSql, filterValues);
 
-    const selectSql = `SELECT V.HIK_ALARM_EVENTO_ID,
-            V.FECHA_EVENTO_HC,
-            V.REGION,
-            V.NAME,
-            V.TRIGGER_EVENT,
-            V.STATUS,
-            COALESCE(E.ALARM_CATEGORY, V.ALARM_CATEGORY) AS ALARM_CATEGORY,
-            V.INTRUSION_ID,
-            V.COMPLETADO,
-            E.SOURCE,
-            E.ALARM_ACKNOWLEDGMENT_TIME
-         FROM public.v_intrusiones_encolados_hc V
-         LEFT JOIN public.hik_alarm_evento E ON (E.ID = V.HIK_ALARM_EVENTO_ID)
+    const selectSql = `SELECT A.HIK_ALARM_EVENTO_ID,
+            A.FECHA_EVENTO_HC,
+            A.REGION,
+            A.NAME,
+            A.TRIGGER_EVENT,
+            A.STATUS,
+            COALESCE(B.ALARM_CATEGORY, A.ALARM_CATEGORY) AS ALARM_CATEGORY,
+            A.INTRUSION_ID,
+            A.COMPLETADO,
+            B.SOURCE,
+            B.ALARM_ACKNOWLEDGMENT_TIME
+         ${fromClause}
          ${whereClause}
-         ORDER BY CASE WHEN NULLIF(TRIM(COALESCE(E.ALARM_CATEGORY, V.ALARM_CATEGORY)), '') IS NULL THEN 1 ELSE 0 END ASC, V.FECHA_EVENTO_HC DESC
+         ORDER BY CASE WHEN NULLIF(TRIM(COALESCE(B.ALARM_CATEGORY, A.ALARM_CATEGORY)), '') IS NULL THEN 1 ELSE 0 END ASC, A.FECHA_EVENTO_HC DESC
          ${paginationClause}`;
 
     console.log('================= [ENCOLADOS HC] SQL DATA =================');

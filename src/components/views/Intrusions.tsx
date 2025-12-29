@@ -208,6 +208,7 @@ const Intrusions: React.FC = () => {
   const [totalHC, setTotalHC] = useState(0);
   const [hcSeleccionado, setHcSeleccionado] = useState<IntrusionHcQueueRow | null>(null);
   const { session } = useSession();
+  const [consolaIdSeleccionada, setConsolaIdSeleccionada] = useState<number | null>(null);
   const [sitios, setSitios] = useState<Sitio[]>([]);
   const [fuerzasReaccion, setFuerzasReaccion] = useState<FuerzaReaccionCatalogItem[]>([]);
   const [sitioId, setSitioId] = useState<number | null>(null);
@@ -341,6 +342,10 @@ const Intrusions: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    setPageHC(0);
+  }, [consolaIdSeleccionada]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const loadEncoladosHc = async () => {
@@ -350,6 +355,7 @@ const Intrusions: React.FC = () => {
           search: hcSearch || undefined,
           page: pageHC,
           rowsPerPage: rowsPerPageHC,
+          consolaId: consolaIdSeleccionada ?? undefined,
         });
         if (!isMounted) return;
         setHcQueue(response.data || []);
@@ -368,7 +374,7 @@ const Intrusions: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [hcSearch, pageHC, rowsPerPageHC]);
+  }, [consolaIdSeleccionada, hcSearch, pageHC, rowsPerPageHC]);
 
   useEffect(() => {
     let isMounted = true;
@@ -398,6 +404,7 @@ const Intrusions: React.FC = () => {
       const consoleValue = session.console ?? localStorage.getItem('selectedConsole');
       if (!consoleValue) {
         if (isMounted) {
+          setConsolaIdSeleccionada(null);
           setSitios([]);
           clearSitioSeleccion();
         }
@@ -413,10 +420,13 @@ const Intrusions: React.FC = () => {
         if (!isMounted) return;
 
         if (consolaId === null) {
+          setConsolaIdSeleccionada(null);
           setSitios([]);
           clearSitioSeleccion();
           return;
         }
+
+        setConsolaIdSeleccionada(consolaId);
 
         const data = await getSitios({ consolaId });
         if (!isMounted) return;
@@ -440,6 +450,7 @@ const Intrusions: React.FC = () => {
       } catch (err) {
         console.error('Error cargando sitios por consola', err);
         if (isMounted) {
+          setConsolaIdSeleccionada(null);
           setSitios([]);
           clearSitioSeleccion();
         }
