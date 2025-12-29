@@ -116,6 +116,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       } catch (caughtError: unknown) {
         console.error('Error al iniciar sesión:', caughtError);
         const possibleResponse = caughtError as {
+          code?: string;
+          message?: string;
           response?: {
             status?: number;
             data?: {
@@ -128,6 +130,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         const messageToShow =
           typeof serverMessage === 'string' && serverMessage.trim().length > 0
             ? serverMessage
+            : possibleResponse?.code === 'ECONNABORTED'
+            ? 'El servidor no respondió a tiempo. Intente nuevamente.'
             : possibleResponse?.response?.status === 401
             ? 'Usuario o contraseña incorrectos'
             : 'Error de autenticación';
