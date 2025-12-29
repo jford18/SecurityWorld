@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import DateTimeInput, { normalizeDateTimeLocalString, toIsoString } from '../ui/DateTimeInput';
 import { intrusionsData as mockIntrusions } from '../../data/mockData';
 import { Intrusion, IntrusionConsolidadoRow, IntrusionHcQueueRow } from '../../types';
@@ -47,8 +47,11 @@ const toBoolean = (value: unknown, defaultValue = false): boolean => {
   return Boolean(value);
 };
 
+const NO_DEFINIDO_VALUE = 'NO_DEFINIDO';
+const NO_DEFINIDO_OPTION_LABEL = 'Tipo de evento no definido';
+
 type TipoIntrusionCatalogItem = {
-  id: number;
+  id: number | string;
   descripcion: string;
   necesita_protocolo: boolean;
 };
@@ -185,7 +188,7 @@ const Intrusions: React.FC = () => {
   const [mediosComunicacion, setMediosComunicacion] = useState<MedioComunicacionDTO[]>([]);
   const [tiposIntrusion, setTiposIntrusion] = useState<TipoIntrusionCatalogItem[]>([]);
   const [conclusionesEvento, setConclusionesEvento] = useState<ConclusionEventoDTO[]>([]);
-  const [tipoIntrusionId, setTipoIntrusionId] = useState<number | ''>('');
+  const [tipoIntrusionId, setTipoIntrusionId] = useState<number | string | ''>('');
   const [tipoDescripcion, setTipoDescripcion] = useState('');
   const [requiereProtocolo, setRequiereProtocolo] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -216,6 +219,28 @@ const Intrusions: React.FC = () => {
     'fechaHoraIntrusion'
   );
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+  const tiposIntrusionConFallback = useMemo(() => {
+    const hasNoDefinidoOption = tiposIntrusion.some(
+      (item) =>
+        String(item.id) === NO_DEFINIDO_VALUE ||
+        item.descripcion.trim().toLowerCase() === NO_DEFINIDO_OPTION_LABEL.trim().toLowerCase()
+    );
+
+    const normalizedList = tiposIntrusion.map((item) => ({
+      ...item,
+      id: item.id,
+    }));
+
+    if (hasNoDefinidoOption) {
+      return normalizedList;
+    }
+
+    return [
+      ...normalizedList,
+      { id: NO_DEFINIDO_VALUE, descripcion: NO_DEFINIDO_OPTION_LABEL, necesita_protocolo: false },
+    ];
+  }, [tiposIntrusion]);
 
   const isNoLlegoDisabled = (intrusion?: Partial<IntrusionFormData> | null) =>
     String(intrusion?.origen || '').toUpperCase() === 'HC' ||
@@ -449,6 +474,33 @@ const Intrusions: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!hcSeleccionado) return;
+
+    const hcCategory = (hcSeleccionado.alarm_category || '').trim().toLowerCase();
+    const map: Record<string, string> = {
+      'no autorizado': 'No autorizado',
+      'evento de robo': 'Evento de robo',
+      verdadera: 'Autorizado',
+      'recurrente verdadera': 'Autorizado',
+    };
+
+    const targetLabel = map[hcCategory] || hcSeleccionado.alarm_category || '';
+    const matchedOption = findTipoIntrusionByLabel(targetLabel, tiposIntrusionConFallback);
+
+    if (matchedOption) {
+      applyTipoIntrusionSelection(matchedOption);
+      return;
+    }
+
+    applyTipoIntrusionSelection(null);
+  }, [
+    applyTipoIntrusionSelection,
+    findTipoIntrusionByLabel,
+    hcSeleccionado,
+    tiposIntrusionConFallback,
+  ]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const fetchMedios = async () => {
@@ -541,7 +593,7 @@ const Intrusions: React.FC = () => {
     }));
   };
 
-  const resetProtocoloFields = () => {
+  const resetProtocoloFields = useCallback(() => {
     setFormData((prev) => ({
       ...prev,
       fecha_reaccion_enviada: '',
@@ -552,7 +604,51 @@ const Intrusions: React.FC = () => {
       fuerza_reaccion_id: '',
       necesita_protocolo: false,
     }));
-  };
+  }, []);
+
+  const findTipoIntrusionByLabel = useCallback(
+    (
+      label: string | null,
+      options: TipoIntrusionCatalogItem[]
+    ): TipoIntrusionCatalogItem | null => {
+      const normalizedLabel = (label || '').trim().toLowerCase();
+      if (!normalizedLabel) return null;
+
+      return (
+        options.find(
+          (tipo) => tipo.descripcion.trim().toLowerCase() === normalizedLabel
+        ) || null
+      );
+    },
+    []
+  );
+
+  const applyTipoIntrusionSelection = useCallback(
+    (option: TipoIntrusionCatalogItem | null) => {
+      if (!option) {
+        setTipoIntrusionId(NO_DEFINIDO_VALUE);
+        setTipoDescripcion(NO_DEFINIDO_OPTION_LABEL);
+        setRequiereProtocolo(false);
+        setFormData((prev) => ({ ...prev, necesita_protocolo: false }));
+        resetProtocoloFields();
+        return;
+      }
+
+      setTipoIntrusionId(option.id);
+      setTipoDescripcion(option.descripcion);
+      const requiresProtocol = option.necesita_protocolo === true;
+      setRequiereProtocolo(requiresProtocol);
+      setFormData((prev) => ({
+        ...prev,
+        necesita_protocolo: requiresProtocol,
+      }));
+
+      if (!requiresProtocol) {
+        resetProtocoloFields();
+      }
+    },
+    [resetProtocoloFields]
+  );
 
   const handleTipoIntrusionChange = (
     event: React.ChangeEvent<HTMLSelectElement>
@@ -566,28 +662,10 @@ const Intrusions: React.FC = () => {
       return;
     }
 
-    const parsedId = Number(value);
-    setTipoIntrusionId(Number.isNaN(parsedId) ? '' : parsedId);
-
-    const selected = tiposIntrusion.find((tipo) => tipo.id === parsedId);
-    if (!selected) {
-      setTipoDescripcion('');
-      setRequiereProtocolo(false);
-      resetProtocoloFields();
-      return;
-    }
-
-    setTipoDescripcion(selected.descripcion);
-    const requiresProtocol = selected.necesita_protocolo === true;
-    setRequiereProtocolo(requiresProtocol);
-    setFormData((prev) => ({
-      ...prev,
-      necesita_protocolo: requiresProtocol,
-    }));
-
-    if (!requiresProtocol) {
-      resetProtocoloFields();
-    }
+    const selected = tiposIntrusionConFallback.find(
+      (tipo) => String(tipo.id) === String(value)
+    );
+    applyTipoIntrusionSelection(selected ?? null);
   };
 
   const handleConclusionEventoChange = (
@@ -1289,25 +1367,32 @@ const Intrusions: React.FC = () => {
                   <label htmlFor="tipo" className="block text-sm font-medium text-gray-700">
                     Tipo de Evento
                   </label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <select
-                      name="tipo"
-                      id="tipo"
-                      value={tipoIntrusionId === '' ? '' : String(tipoIntrusionId)}
-                      onChange={handleTipoIntrusionChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    >
-                      <option value="">Seleccione...</option>
-                      {tiposIntrusion.map((tipoIntrusion) => (
-                        <option key={tipoIntrusion.id} value={tipoIntrusion.id}>
-                          {tipoIntrusion.descripcion}
-                        </option>
-                      ))}
-                    </select>
-                    {requiereProtocolo && (
-                      <span className="inline-flex items-center text-[10px] font-semibold px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 uppercase tracking-wide">
-                        Con protocolo
-                      </span>
+                  <div className="mt-1 flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <select
+                        name="tipo"
+                        id="tipo"
+                        value={tipoIntrusionId === '' ? '' : String(tipoIntrusionId)}
+                        onChange={handleTipoIntrusionChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      >
+                        <option value="">Seleccione...</option>
+                        {tiposIntrusionConFallback.map((tipoIntrusion) => (
+                          <option key={tipoIntrusion.id} value={tipoIntrusion.id}>
+                            {tipoIntrusion.descripcion}
+                          </option>
+                        ))}
+                      </select>
+                      {requiereProtocolo && (
+                        <span className="inline-flex items-center text-[10px] font-semibold px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 uppercase tracking-wide">
+                          Con protocolo
+                        </span>
+                      )}
+                    </div>
+                    {String(tipoIntrusionId) === NO_DEFINIDO_VALUE && (
+                      <p className="text-xs text-gray-500">
+                        No se encontró coincidencia con el evento de HC. Seleccione manualmente.
+                      </p>
                     )}
                   </div>
                 </div>
