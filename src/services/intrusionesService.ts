@@ -192,6 +192,7 @@ export interface IntrusionesHcFilters {
   page?: number;
   rowsPerPage?: number;
   search?: string;
+  consolaId?: number | string;
 }
 
 export interface IntrusionesHcResponse {
