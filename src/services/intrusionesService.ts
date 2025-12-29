@@ -576,6 +576,7 @@ export const fetchIntrusionesEncoladasHc = async (
   const parsedData = Array.isArray(payload.data)
     ? (payload.data as IntrusionHcQueueRow[]).map((item) => ({
         ...item,
+        trigger_event: item?.trigger_event ?? null,
         source: item?.source ?? null,
         alarm_acknowledgment_time: item?.alarm_acknowledgment_time ?? null,
       }))
