@@ -34,7 +34,7 @@ export const loginUser = async (req, res) => {
     if (userResult.rows.length === 0) {
       return res
         .status(401)
-        .json({ message: "Usuario o contraseña incorrectos" });
+        .json({ message: "Credenciales inválidas" });
     }
 
     const user = userResult.rows[0];
@@ -42,7 +42,7 @@ export const loginUser = async (req, res) => {
     if (!user.activo || user.contrasena !== contrasena) {
       return res
         .status(401)
-        .json({ message: "Usuario o contraseña incorrectos" });
+        .json({ message: "Credenciales inválidas" });
     }
 
     const rolesResult = await db.query(
@@ -95,7 +95,7 @@ export const loginUser = async (req, res) => {
       console.error("[AUTH] No se pudo registrar el logeo de usuario", logError);
     }
 
-    return res.json({
+    return res.status(200).json({
       usuario_id: user.id,
       nombre_usuario: user.nombre_usuario,
       rol_id: primaryRole.rol_id,
@@ -105,7 +105,7 @@ export const loginUser = async (req, res) => {
     });
   } catch (error) {
     console.error("Error en loginUser:", error);
-    res.status(500).json({ message: "Error interno del servidor" });
+    return res.status(500).json({ message: "Error al iniciar sesión" });
   }
 };
 

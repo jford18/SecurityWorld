@@ -13,7 +13,11 @@ export const login = async (
   nombre_usuario: string,
   contrasena: string
 ): Promise<LoginResponse> => {
-  const { data } = await api.post('/login', { nombre_usuario, contrasena });
+  const { data } = await api.post(
+    '/login',
+    { nombre_usuario, contrasena },
+    { timeout: 10000 }
+  );
   return {
     usuario_id: Number(data.usuario_id),
     nombre_usuario: data.nombre_usuario,
