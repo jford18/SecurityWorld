@@ -651,7 +651,7 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
             V.NAME,
             V.TRIGGER_EVENT,
             V.STATUS,
-            V.ALARM_CATEGORY,
+            COALESCE(E.ALARM_CATEGORY, V.ALARM_CATEGORY) AS ALARM_CATEGORY,
             V.INTRUSION_ID,
             V.COMPLETADO,
             E.SOURCE,

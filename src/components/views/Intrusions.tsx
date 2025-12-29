@@ -1274,33 +1274,45 @@ const Intrusions: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                hcQueue.map((row) => (
-                  <tr key={`${row.hik_alarm_evento_id}-${row.fecha_evento_hc || ''}`} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 text-gray-700">
-                      {row.fecha_evento_hc ? new Date(row.fecha_evento_hc).toLocaleString() : 'Sin fecha'}
-                    </td>
-                    <td className="px-4 py-2 text-gray-700">{row.region || 'Sin región'}</td>
-                    <td className="px-4 py-2 text-gray-700">{row.name || 'Sin nombre'}</td>
-                    <td className="px-4 py-2 text-gray-700">{row.trigger_event || 'Sin evento'}</td>
-                    <td className="px-4 py-2 text-gray-700">{row.status || 'Sin estado'}</td>
-                    <td className="px-4 py-2 text-gray-700">{row.alarm_category || 'Sin categoría'}</td>
-                    <td className="px-4 py-2 text-gray-700">
-                      {row.intrusion_id ? `#${row.intrusion_id}` : 'Sin intrusión'}
-                    </td>
-                    <td className="px-4 py-2 text-gray-700">
-                      {row.completado ? 'Sí' : 'No'}
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <button
-                        type="button"
-                        className="px-3 py-1 text-xs font-semibold bg-[#F9C300] text-[#1C2E4A] rounded hover:bg-yellow-400"
-                        onClick={() => handleAbrirEncolado(row)}
-                      >
-                        Abrir
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                hcQueue.map((row) => {
+                  const categoria = (row.alarm_category
+                    ?? (row as Record<string, unknown>).ALARM_CATEGORY
+                    ?? (row as Record<string, unknown>).alarmCategory
+                    ?? (row as Record<string, unknown>).category
+                    ?? ""
+                  )
+                    .toString()
+                    .trim();
+
+                  return (
+                    <tr
+                      key={`${row.hik_alarm_evento_id}-${row.fecha_evento_hc || ''}`}
+                      className="hover:bg-gray-50"
+                    >
+                      <td className="px-4 py-2 text-gray-700">
+                        {row.fecha_evento_hc ? new Date(row.fecha_evento_hc).toLocaleString() : 'Sin fecha'}
+                      </td>
+                      <td className="px-4 py-2 text-gray-700">{row.region || 'Sin región'}</td>
+                      <td className="px-4 py-2 text-gray-700">{row.name || 'Sin nombre'}</td>
+                      <td className="px-4 py-2 text-gray-700">{row.trigger_event || 'Sin evento'}</td>
+                      <td className="px-4 py-2 text-gray-700">{row.status || 'Sin estado'}</td>
+                      <td className="px-4 py-2 text-gray-700">{categoria ? categoria : 'Sin categoría'}</td>
+                      <td className="px-4 py-2 text-gray-700">
+                        {row.intrusion_id ? `#${row.intrusion_id}` : 'Sin intrusión'}
+                      </td>
+                      <td className="px-4 py-2 text-gray-700">{row.completado ? 'Sí' : 'No'}</td>
+                      <td className="px-4 py-2 text-right">
+                        <button
+                          type="button"
+                          className="px-3 py-1 text-xs font-semibold bg-[#F9C300] text-[#1C2E4A] rounded hover:bg-yellow-400"
+                          onClick={() => handleAbrirEncolado(row)}
+                        >
+                          Abrir
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
