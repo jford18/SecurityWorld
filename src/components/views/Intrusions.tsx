@@ -1228,14 +1228,15 @@ const Intrusions: React.FC = () => {
                   { key: 'completado', label: 'Completado' },
                   { key: 'acciones', label: 'Acciones' },
                 ].map((column) => (
-                  <th
-                    key={column.key}
-                    className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    style=
-                      column.key === 'name' || column.key === 'trigger_event'
-                        ? { minWidth: 260, whiteSpace: 'normal', wordBreak: 'break-word' }
-                        : undefined
-                  >
+                    <th
+                      key={column.key}
+                      className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      style={
+                        column.key === 'name' || column.key === 'trigger_event'
+                          ? { minWidth: 260, whiteSpace: 'normal', wordBreak: 'break-word' }
+                          : undefined
+                      }
+                    >
                     {column.key === 'acciones' ? (
                       column.label
                     ) : (
