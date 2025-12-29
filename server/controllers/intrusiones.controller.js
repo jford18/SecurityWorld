@@ -597,6 +597,8 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
   const { page = 1, limit = 20, search = "", orderBy = "fecha_evento_hc", orderDir = "desc" } =
     req.query || {};
 
+  console.log('[ENCOLADOS HC] req.query=', req.query);
+
   const pageNumber = Number(page);
   const pageSize = Number(limit);
   const hasPagination = Number.isInteger(pageNumber) && pageNumber > 0 && Number.isInteger(pageSize) && pageSize > 0;
@@ -640,10 +642,13 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
   }
 
   try {
-    const totalResult = await pool.query(
-      `SELECT COUNT(*) AS total FROM public.v_intrusiones_encolados_hc v LEFT JOIN public.hik_alarm_evento e ON (e.id = v.hik_alarm_evento_id) ${whereClause}`,
-      filterValues
-    );
+    const totalSql = `SELECT COUNT(*) AS total FROM public.v_intrusiones_encolados_hc v LEFT JOIN public.hik_alarm_evento e ON (e.id = v.hik_alarm_evento_id) ${whereClause}`;
+    console.log('================= [ENCOLADOS HC] SQL TOTAL =================');
+    console.log(totalSql);
+    console.log('================= [ENCOLADOS HC] PARAMS TOTAL ===============');
+    console.log(filterValues);
+    console.log('======================================================');
+    const totalResult = await pool.query(totalSql, filterValues);
 
     const selectSql = `SELECT V.HIK_ALARM_EVENTO_ID,
             V.FECHA_EVENTO_HC,
@@ -662,8 +667,14 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
          ORDER BY ${orderColumn} ${orderDirection}
          ${paginationClause}`;
 
+    console.log('================= [ENCOLADOS HC] SQL DATA =================');
+    console.log(selectSql);
+    console.log('================= [ENCOLADOS HC] PARAMS DATA ===============');
+    console.log(values);
+    console.log('======================================================');
     const result = await pool.query(selectSql, values);
     const rows = result.rows ?? [];
+    console.log('[ENCOLADOS HC] rows=', result.rowCount);
     console.log('[ENCOLADOS HC] sample row=', rows?.[0]);
 
     return res.json({ data: rows, total: Number(totalResult.rows?.[0]?.total) || 0 });
