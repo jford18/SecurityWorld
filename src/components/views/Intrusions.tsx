@@ -112,6 +112,7 @@ const normalizeTiposIntrusion = (
 type IntrusionFormData = {
   origen: string;
   hik_alarm_evento_id: string | null;
+  trigger_event_hc: string | null;
   fecha_evento: string;
   fecha_reaccion: string;
   fecha_reaccion_enviada: string;
@@ -165,6 +166,7 @@ const formatDateTimeForDisplay = (value?: string | null) => {
 const buildInitialFormData = (): IntrusionFormData => ({
   origen: 'MANUAL',
   hik_alarm_evento_id: null,
+  trigger_event_hc: null,
   fecha_evento: getInitialDateTimeValue(),
   fecha_reaccion: '',
   fecha_reaccion_enviada: '',
@@ -683,6 +685,7 @@ const Intrusions: React.FC = () => {
       hik_alarm_evento_id: intrusion.hik_alarm_evento_id
         ? String(intrusion.hik_alarm_evento_id)
         : null,
+      trigger_event_hc: null,
       fecha_evento: normalizeDateTimeLocalString(intrusion.fecha_evento),
       fecha_reaccion: intrusion.fecha_reaccion
         ? normalizeDateTimeLocalString(intrusion.fecha_reaccion)
@@ -733,6 +736,7 @@ const Intrusions: React.FC = () => {
         row?.hik_alarm_evento_id !== undefined && row?.hik_alarm_evento_id !== null
           ? String(row.hik_alarm_evento_id)
           : null,
+      trigger_event_hc: row?.trigger_event ?? null,
       fecha_evento: normalizeDateTimeLocalString(row?.fecha_evento_hc || '') || prev.fecha_evento,
       no_llego_alerta: false,
     }));
@@ -961,6 +965,15 @@ const Intrusions: React.FC = () => {
   }, [fechaReaccionError, fechaReaccionFueraError]);
 
   const isButtonDisabled = isSubmitDisabled || disableSave;
+  const hasHcEventSelected = Boolean(formData.hik_alarm_evento_id);
+
+  const triggerEventForDisplay = useMemo(() => {
+    const candidate = hcSeleccionado?.trigger_event ?? formData.trigger_event_hc;
+    if (typeof candidate !== 'string') return '—';
+
+    const trimmed = candidate.trim();
+    return trimmed || '—';
+  }, [formData.trigger_event_hc, hcSeleccionado?.trigger_event]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -1494,13 +1507,13 @@ const Intrusions: React.FC = () => {
                   </label>
                 </div>
               </div>
-              {hcSeleccionado && (
-                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {hasHcEventSelected && (
+                <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                   <div className="space-y-1">
                     <label className="block text-sm font-medium text-gray-700">Source</label>
                     <input
                       type="text"
-                      value={hcSeleccionado.source || '—'}
+                      value={hcSeleccionado?.source || '—'}
                       readOnly
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 text-gray-700 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     />
@@ -1512,6 +1525,15 @@ const Intrusions: React.FC = () => {
                     <input
                       type="text"
                       value={formatDateTimeForDisplay(hcSeleccionado.alarm_acknowledgment_time)}
+                      readOnly
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 text-gray-700 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-sm font-medium text-gray-700">Trigger Event</label>
+                    <input
+                      type="text"
+                      value={triggerEventForDisplay}
                       readOnly
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 text-gray-700 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     />
