@@ -215,33 +215,146 @@ def registrar_ejecucion_y_pasos(
         print(f"[ERROR] No se pudo registrar el rendimiento en la base de datos: {e}")
 
 
-def abrir_event_and_alarm(driver, timer: StepTimer | None = None, timeout: int = 40):
-    wait = WebDriverWait(driver, timeout)
-
-    print("[3] Abrir Applications...")
+def safe_click(driver, element):
+    driver.execute_script(
+        "arguments[0].scrollIntoView({block: 'center', inline: 'center'});", element
+    )
     try:
-        app_btn = wait.until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "i.app-btn[title='Applications']"))
-        )
-    except TimeoutException:
-        app_btn = wait.until(
-            EC.element_to_be_clickable(
-                (By.XPATH, "//*[@title='Applications' and contains(@class,'app-btn')]")
+        element.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", element)
+
+
+def cerrar_overlays(driver):
+    posibles_overlays = [
+        (By.CSS_SELECTOR, "button.close-button"),
+        (By.CSS_SELECTOR, ".el-dialog__headerbtn"),
+    ]
+    for by, selector in posibles_overlays:
+        try:
+            elementos = driver.find_elements(by, selector)
+            for el in elementos:
+                if el.is_displayed():
+                    safe_click(driver, el)
+        except Exception:
+            continue
+
+
+def validar_event_and_alarm_abierto(driver, timeout: int = 10):
+    try:
+        WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located(
+                (
+                    By.XPATH,
+                    "//*[contains(@class,'top-nav') or contains(@class,'nav') or contains(@class,'tab')]/"
+                    "descendant::*[@title='Event and Alarm' or normalize-space()='Event and Alarm']",
+                )
             )
         )
-    driver.execute_script("arguments[0].click();", app_btn)
-    if timer:
-        timer.mark("[3] Abrir Applications")
+        return True
+    except TimeoutException:
+        return False
 
-    print("[4] Seleccionar Event and Alarm...")
-    event_item = wait.until(
-        EC.element_to_be_clickable(
-            (By.XPATH, "//li[@title='Event and Alarm' or .//div[normalize-space()='Event and Alarm']]")
+
+def abrir_event_and_alarm(driver, timer: StepTimer | None = None, timeout: int = 40):
+    wait = WebDriverWait(driver, timeout)
+    top_nav_xpath = (
+        "//*[self::div or self::span or self::a][normalize-space()='Event and Alarm' "
+        "and not(ancestor-or-self::*[contains(@style,'display: none')])]"
+    )
+
+    print("[3] Navegando a Event and Alarm...")
+    cerrar_overlays(driver)
+    wait.until(
+        EC.presence_of_element_located(
+            (
+                By.XPATH,
+                "//*[contains(@class,'top-nav') or contains(@class,'header') or @role='navigation']",
+            )
         )
     )
-    driver.execute_script("arguments[0].click();", event_item)
+
+    usado = None
+
+    # Fallback A: Tab superior visible
+    try:
+        print("[3A] Intentando abrir pestaña superior 'Event and Alarm'...")
+        tab_superior = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.XPATH, top_nav_xpath))
+        )
+        safe_click(driver, tab_superior)
+        if validar_event_and_alarm_abierto(driver):
+            usado = "A"
+            print("[INFO] Apertura por pestaña superior exitosa.")
+    except TimeoutException:
+        pass
+
+    # Fallback B: Menú de más pestañas
+    if not usado:
+        try:
+            print("[3B] Intentando abrir desde menú de más pestañas...")
+            more_tabs_btn = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR, "i.icon-svg-common_more_hori_btn.el-dropdown-selfdefine")
+                )
+            )
+            safe_click(driver, more_tabs_btn)
+
+            dropdown_item = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//ul[contains(@class,'top-nav-menu')]//li[@title='Event and Alarm' "
+                    "and contains(@class,'el-dropdown-menu__item')]",
+                )
+                )
+            )
+            safe_click(driver, dropdown_item)
+            if validar_event_and_alarm_abierto(driver):
+                usado = "B"
+                print("[INFO] Apertura por menú de pestañas exitosa.")
+        except TimeoutException:
+            pass
+
+    # Fallback C: Launcher Applications
+    if not usado:
+        print("[3C] Intentando abrir desde launcher de Applications...")
+        try:
+            apps_container = wait.until(
+                EC.element_to_be_clickable(
+                    (
+                        By.XPATH,
+                        "(//i[@title='Applications' and contains(@class,'app-btn')]/"
+                        "ancestor::span[contains(@class,'el-popover-wrap')])[1]",
+                    )
+                )
+            )
+            safe_click(driver, apps_container)
+            usado = "C"
+
+            event_card = wait.until(
+                EC.element_to_be_clickable(
+                    (
+                        By.XPATH,
+                        "(//span[@title='Event and Alarm Search' and contains(@class,'sub-name-key')]/"
+                        "ancestor::div[contains(@class,'item-card')])[1]",
+                    )
+                )
+            )
+            safe_click(driver, event_card)
+        except TimeoutException:
+            raise TimeoutException("No se pudo abrir Event and Alarm por ningún método")
+
     if timer:
-        timer.mark("[4] Seleccionar Event and Alarm")
+        if usado == "A":
+            timer.mark("[3] Event and Alarm - pestaña superior")
+            timer.mark("[4] Abrir Event and Alarm Search")
+        elif usado == "B":
+            timer.mark("[3] Event and Alarm - menú de pestañas")
+            timer.mark("[4] Abrir Event and Alarm Search")
+        elif usado == "C":
+            timer.mark("[3] Abrir Applications (fallback)")
+            timer.mark("[4] Abrir Event and Alarm Search")
 
     print("[5] Validar Event and Alarm Search visible...")
     wait.until(
@@ -343,6 +456,14 @@ def run():
     except Exception as e:
         print(f"[ERROR] Ocurrió un problema en el flujo Event and Alarm: {e}")
         traceback.print_exc()
+        if driver:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            error_screenshot = LOG_DIR / f"event_and_alarm_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            try:
+                driver.save_screenshot(str(error_screenshot))
+                print(f"[INFO] Screenshot de error guardado en: {error_screenshot}")
+            except Exception:
+                print("[WARN] No se pudo guardar el screenshot de error.")
         if timer:
             timer.mark("[ERROR] Fin por excepción")
         raise
