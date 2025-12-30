@@ -267,31 +267,61 @@ def cerrar_buscador_global_si_abrio(driver):
 
 
 def click_lupa_sidebar(driver, timeout=20):
-    WebDriverWait(driver, timeout).until(lambda d: d.execute_script("return document.readyState") == "complete")
+    # SOLO la lupa del sidebar de Event&Alarm (h-icon-search)
+    WebDriverWait(driver, timeout).until(
+        lambda d: d.execute_script(
+            "return Array.from(document.querySelectorAll('i.h-icon-search')).some(e => e && e.offsetParent !== null);"
+        )
+    )
 
     el = driver.execute_script(
         """
-        const candidates = Array.from(document.querySelectorAll("i.h-icon-search, i[class*='h-icon-search'], i[title*='Search'], i[aria-label*='Search']"));
-        const visible = candidates.filter(e => e && e.offsetParent !== null);
-        if (!visible.length) return null;
-
-        // Elegir el elemento más a la izquierda (sidebar), evitando el header (normalmente está a la derecha)
-        visible.sort((a,b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-        return visible[0];
-        """
+        const els = Array.from(document.querySelectorAll('i.h-icon-search'))
+            .filter(e => e && e.offsetParent !== null);
+        if (!els.length) return null;
+        els.sort((a,b)=>a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+        return els[0];
+    """
     )
     if not el:
-        raise TimeoutException("No se encontró lupa visible para sidebar.")
+        raise TimeoutException("No se encontró lupa del sidebar (i.h-icon-search).")
     safe_js_click(driver, el)
 
 
-def click_event_and_alarm_search_item(driver, timeout=20):
-    # Espera a que exista un popper/menú visible y luego click en el item
-    item_xpath = (
-        "(//div[contains(@class,'el-popper') and not(contains(@style,'display: none'))]"
-        "//*[normalize-space()='Event and Alarm Search' or @title='Event and Alarm Search'])[1]"
+def click_tab_event_and_alarm(driver, timeout=30):
+    cerrar_overlays(driver)
+    cerrar_buscador_global_si_abrio(driver)
+
+    tab_xpath = (
+        "//*[self::a or self::div or self::span]"
+        "[normalize-space()='Event and Alarm' or @title='Event and Alarm']"
     )
-    item = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.XPATH, item_xpath)))
+    tab = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.XPATH, tab_xpath)))
+    safe_js_click(driver, tab)
+
+    # Esperar que aparezca la lupa del sidebar propia del módulo
+    WebDriverWait(driver, timeout).until(
+        lambda d: d.execute_script(
+            "return Array.from(document.querySelectorAll('i.h-icon-search')).some(e => e && e.offsetParent !== null);"
+        )
+    )
+
+
+def click_event_and_alarm_search_item(driver, timeout=20):
+    # El menú que sale tras la lupa NO siempre es el-popper; buscar por texto visible y “más a la izquierda”
+    def _find(d):
+        return d.execute_script(
+            """
+            const target = 'Event and Alarm Search';
+            const els = Array.from(document.querySelectorAll('li,div,span,a'))
+              .filter(el => el && el.offsetParent !== null)
+              .filter(el => (el.innerText || '').trim() === target);
+            if (!els.length) return null;
+            els.sort((a,b)=>a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+            return els[0];
+        """
+        )
+    item = WebDriverWait(driver, timeout).until(_find)
     safe_js_click(driver, item)
 
 
@@ -335,7 +365,13 @@ def validar_event_and_alarm_abierto(driver, timeout: int = 10):
 
 def abrir_event_and_alarm(driver, timer: StepTimer | None = None, timeout: int = 40):
     print("[3] Navegando a Event and Alarm Search...")
-    cerrar_overlays(driver)
+
+    # 1) Asegurar TAB Event and Alarm
+    click_tab_event_and_alarm(driver, timeout=timeout)
+    if timer:
+        timer.mark("[3] CLICK_TAB_EVENT_AND_ALARM")
+
+    # 2) Luego lupa y opción
     ir_a_event_and_alarm_search_por_lupa(driver, timeout=timeout, timer=timer)
 
 
@@ -405,6 +441,7 @@ def run():
             EC.element_to_be_clickable((By.XPATH, "//*[normalize-space(text())='Log In']"))
         )
         login_button.click()
+        wait.until(EC.presence_of_element_located((By.XPATH, "//*[normalize-space()='Maintenance']")))
         if timer:
             timer.mark("[2] LOGIN")
 
