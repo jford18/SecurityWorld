@@ -8,7 +8,11 @@ import psutil
 import psycopg2
 from dotenv import load_dotenv
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import (
+    ElementClickInterceptedException,
+    StaleElementReferenceException,
+    TimeoutException,
+)
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -215,14 +219,18 @@ def registrar_ejecucion_y_pasos(
         print(f"[ERROR] No se pudo registrar el rendimiento en la base de datos: {e}")
 
 
-def safe_click(driver, element):
-    driver.execute_script(
-        "arguments[0].scrollIntoView({block: 'center', inline: 'center'});", element
-    )
+def safe_click(driver, el):
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
     try:
-        element.click()
-    except Exception:
-        driver.execute_script("arguments[0].click();", element)
+        el.click()
+    except (ElementClickInterceptedException, StaleElementReferenceException):
+        driver.execute_script("arguments[0].click();", el)
+
+
+def wait_click(driver, by, value, timeout=20):
+    el = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((by, value)))
+    safe_click(driver, el)
+    return el
 
 
 def cerrar_overlays(driver):
@@ -238,6 +246,67 @@ def cerrar_overlays(driver):
                     safe_click(driver, el)
         except Exception:
             continue
+
+
+def ir_a_event_and_alarm_search_por_lupa(driver, timeout=30, timer: StepTimer | None = None):
+    wait = WebDriverWait(driver, timeout)
+
+    lupa_xpath = (
+        "(//i[contains(@class,'h-icon-search') "
+        "and not(contains(@class,'el-input__icon')) "
+        "and not(ancestor::*[contains(@class,'el-input')]) "
+        "and not(ancestor-or-self::*[contains(@style,'display: none')])])[1]"
+    )
+
+    try:
+        wait_click(driver, By.XPATH, lupa_xpath, timeout=timeout)
+    except TimeoutException:
+        try:
+            wait_click(
+                driver,
+                By.XPATH,
+                "(//*[@title='Search' or @aria-label='Search' or @title='search'])[1]",
+                timeout=timeout,
+            )
+        except TimeoutException:
+            # Fallback: menú global
+            wait_click(driver, By.CSS_SELECTOR, "#navigation_addMenuBtn", timeout=timeout)
+            wait_click(
+                driver,
+                By.CSS_SELECTOR,
+                ".item-card span.sub-name-key[title='Event and Alarm Search']",
+                timeout=timeout,
+            )
+            if timer:
+                timer.mark("[3] CLICK_LUPA")
+                timer.mark("[4] CLICK_EVENT_AND_ALARM_SEARCH")
+            wait.until(
+                EC.presence_of_element_located(
+                    (By.XPATH, "//*[contains(normalize-space(.),'Event and Alarm Search')]")
+                )
+            )
+            if timer:
+                timer.mark("[5] VALIDAR_EVENT_AND_ALARM_SEARCH")
+            return
+
+    if timer:
+        timer.mark("[3] CLICK_LUPA")
+
+    item_xpath = (
+        "//*[self::div or self::li or self::span]"
+        "[@title='Event and Alarm Search' or normalize-space()='Event and Alarm Search']"
+    )
+    wait_click(driver, By.XPATH, item_xpath, timeout=timeout)
+    if timer:
+        timer.mark("[4] CLICK_EVENT_AND_ALARM_SEARCH")
+
+    wait.until(
+        EC.presence_of_element_located(
+            (By.XPATH, "//*[contains(normalize-space(.),'Event and Alarm Search')]")
+        )
+    )
+    if timer:
+        timer.mark("[5] VALIDAR_EVENT_AND_ALARM_SEARCH")
 
 
 def validar_event_and_alarm_abierto(driver, timeout: int = 10):
@@ -257,116 +326,9 @@ def validar_event_and_alarm_abierto(driver, timeout: int = 10):
 
 
 def abrir_event_and_alarm(driver, timer: StepTimer | None = None, timeout: int = 40):
-    wait = WebDriverWait(driver, timeout)
-    top_nav_xpath = (
-        "//*[self::div or self::span or self::a][normalize-space()='Event and Alarm' "
-        "and not(ancestor-or-self::*[contains(@style,'display: none')])]"
-    )
-
-    print("[3] Navegando a Event and Alarm...")
+    print("[3] Navegando a Event and Alarm Search...")
     cerrar_overlays(driver)
-    wait.until(
-        EC.presence_of_element_located(
-            (
-                By.XPATH,
-                "//*[contains(@class,'top-nav') or contains(@class,'header') or @role='navigation']",
-            )
-        )
-    )
-
-    usado = None
-
-    # Fallback A: Tab superior visible
-    try:
-        print("[3A] Intentando abrir pestaña superior 'Event and Alarm'...")
-        tab_superior = WebDriverWait(driver, 5).until(
-            EC.element_to_be_clickable((By.XPATH, top_nav_xpath))
-        )
-        safe_click(driver, tab_superior)
-        if validar_event_and_alarm_abierto(driver):
-            usado = "A"
-            print("[INFO] Apertura por pestaña superior exitosa.")
-    except TimeoutException:
-        pass
-
-    # Fallback B: Menú de más pestañas
-    if not usado:
-        try:
-            print("[3B] Intentando abrir desde menú de más pestañas...")
-            more_tabs_btn = WebDriverWait(driver, 5).until(
-                EC.element_to_be_clickable(
-                    (By.CSS_SELECTOR, "i.icon-svg-common_more_hori_btn.el-dropdown-selfdefine")
-                )
-            )
-            safe_click(driver, more_tabs_btn)
-
-            dropdown_item = WebDriverWait(driver, 5).until(
-                EC.element_to_be_clickable(
-                (
-                    By.XPATH,
-                    "//ul[contains(@class,'top-nav-menu')]//li[@title='Event and Alarm' "
-                    "and contains(@class,'el-dropdown-menu__item')]",
-                )
-                )
-            )
-            safe_click(driver, dropdown_item)
-            if validar_event_and_alarm_abierto(driver):
-                usado = "B"
-                print("[INFO] Apertura por menú de pestañas exitosa.")
-        except TimeoutException:
-            pass
-
-    # Fallback C: Launcher Applications
-    if not usado:
-        print("[3C] Intentando abrir desde launcher de Applications...")
-        try:
-            apps_container = wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        "(//i[@title='Applications' and contains(@class,'app-btn')]/"
-                        "ancestor::span[contains(@class,'el-popover-wrap')])[1]",
-                    )
-                )
-            )
-            safe_click(driver, apps_container)
-            usado = "C"
-
-            event_card = wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        "(//span[@title='Event and Alarm Search' and contains(@class,'sub-name-key')]/"
-                        "ancestor::div[contains(@class,'item-card')])[1]",
-                    )
-                )
-            )
-            safe_click(driver, event_card)
-        except TimeoutException:
-            raise TimeoutException("No se pudo abrir Event and Alarm por ningún método")
-
-    if timer:
-        if usado == "A":
-            timer.mark("[3] Event and Alarm - pestaña superior")
-            timer.mark("[4] Abrir Event and Alarm Search")
-        elif usado == "B":
-            timer.mark("[3] Event and Alarm - menú de pestañas")
-            timer.mark("[4] Abrir Event and Alarm Search")
-        elif usado == "C":
-            timer.mark("[3] Abrir Applications (fallback)")
-            timer.mark("[4] Abrir Event and Alarm Search")
-
-    print("[5] Validar Event and Alarm Search visible...")
-    wait.until(
-        EC.visibility_of_element_located(
-            (
-                By.XPATH,
-                "//*[normalize-space()='Event and Alarm Search' or @title='Event and Alarm Search']",
-            )
-        )
-    )
-    if timer:
-        timer.mark("[5] Validar Event and Alarm Search visible")
+    ir_a_event_and_alarm_search_por_lupa(driver, timeout=timeout, timer=timer)
 
 
 def crear_driver() -> webdriver.Chrome:
