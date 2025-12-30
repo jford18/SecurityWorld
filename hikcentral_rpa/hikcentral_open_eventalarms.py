@@ -475,6 +475,40 @@ def crear_driver() -> webdriver.Chrome:
     return driver
 
 
+def cerrar_sesion(driver, wait: WebDriverWait):
+    """Intenta cerrar sesión y limpiar las cookies para evitar sesiones pegadas."""
+
+    try:
+        driver.switch_to.default_content()
+
+        perfil_button = wait.until(
+            EC.element_to_be_clickable(
+                (
+                    By.CSS_SELECTOR,
+                    "div.top-right-area__avatar, div.head-user__wrapper, div.user-avatar",
+                )
+            )
+        )
+        perfil_button.click()
+
+        logout_button = wait.until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//li[.//span[normalize-space()='Log Out'] or normalize-space()='Log Out']"
+                    " | //*[normalize-space(text())='Log Out']",
+                )
+            )
+        )
+        logout_button.click()
+
+        wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, 'input[placeholder="User Name"]'))
+        )
+    except Exception:
+        print("[WARN] No se pudo cerrar sesión limpiamente.")
+
+
 def run():
     global step_timer, performance_recorder
 
@@ -490,6 +524,7 @@ def run():
         performance_recorder.record_baseline(baseline_cpu, baseline_ram)
 
     driver = None
+    wait: WebDriverWait | None = None
     step_timer = StepTimer(
         start_time=performance_recorder.start_time if performance_recorder else None,
         recorder=performance_recorder,
@@ -501,6 +536,8 @@ def run():
         wait = WebDriverWait(driver, 30)
 
         print("[1] Abriendo URL de login...")
+        driver.get(URL)
+        driver.delete_all_cookies()
         driver.get(URL)
         if timer:
             timer.mark("[1] ABRIR_URL_LOGIN")
@@ -523,7 +560,7 @@ def run():
             EC.element_to_be_clickable((By.XPATH, "//*[normalize-space(text())='Log In']"))
         )
         login_button.click()
-        wait.until(EC.presence_of_element_located((By.XPATH, "//*[normalize-space()='Maintenance']")))
+        wait.until(lambda d: "/portal" in d.current_url)
         if timer:
             timer.mark("[2] LOGIN")
 
@@ -559,6 +596,11 @@ def run():
 
     finally:
         if driver:
+            try:
+                if wait:
+                    cerrar_sesion(driver, wait)
+            except Exception:
+                pass
             driver.quit()
 
         final_cpu = psutil.cpu_percent(interval=1)
