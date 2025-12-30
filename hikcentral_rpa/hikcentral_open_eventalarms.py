@@ -128,7 +128,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = BASE_DIR / ".env"
 load_dotenv(ENV_PATH)
 
-URL = "http://172.16.9.10/#/"
+URL = "http://172.16.9.10/#/portal"
 SCRIPT_NAME = "hikcentral_open_eventalarms.py"
 HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
 HIK_PASSWORD = os.getenv("HIK_PASSWORD", "SW2112asm")
@@ -375,6 +375,88 @@ def abrir_event_and_alarm(driver, timer: StepTimer | None = None, timeout: int =
     ir_a_event_and_alarm_search_por_lupa(driver, timeout=timeout, timer=timer)
 
 
+def open_applications_menu(driver, timeout: int = 20):
+    for attempt in range(3):
+        try:
+            applications_btn = WebDriverWait(driver, timeout).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 'i.app-btn[title="Applications"]'))
+            )
+            safe_js_click(driver, applications_btn)
+
+            WebDriverWait(driver, timeout).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div.first_level_menu_icon-event_and_alarm"))
+            )
+            return
+        except (StaleElementReferenceException, TimeoutException):
+            try:
+                driver.switch_to.active_element.send_keys("\ue00c")
+            except Exception:
+                pass
+            if attempt == 2:
+                raise
+
+
+def go_event_and_alarm_search_from_applications(
+    driver, timeout: int = 30, timer: StepTimer | None = None
+):
+    mark_applications = True
+    mark_module = True
+    mark_submenu = True
+
+    for attempt in range(3):
+        try:
+            open_applications_menu(driver, timeout=timeout)
+            if timer and mark_applications:
+                timer.mark("[3] ABRIR_APPLICATIONS")
+                mark_applications = False
+
+            try:
+                event_alarm_module = WebDriverWait(driver, timeout).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, "div.first_level_menu_icon-event_and_alarm"))
+                )
+            except TimeoutException:
+                event_alarm_module = WebDriverWait(driver, timeout).until(
+                    EC.element_to_be_clickable(
+                        (By.XPATH, "//div[@title='Event and Alarm' and contains(@class,'name')]")
+                    )
+                )
+
+            safe_js_click(driver, event_alarm_module)
+            if timer and mark_module:
+                timer.mark("[4] CLICK_MOD_EVENT_AND_ALARM")
+                mark_module = False
+
+            current_url = driver.current_url
+            submenu_item = WebDriverWait(driver, timeout).until(
+                EC.element_to_be_clickable(
+                    (
+                        By.XPATH,
+                        "//span[contains(@class,'sub-name-key') and (@title='Event and Alarm Search' or normalize-space()='Event and Alarm Search')]",
+                    )
+                )
+            )
+            safe_js_click(driver, submenu_item)
+            if timer and mark_submenu:
+                timer.mark("[5] CLICK_EVENT_AND_ALARM_SEARCH")
+                mark_submenu = False
+
+            WebDriverWait(driver, timeout).until(
+                lambda d: d.current_url != current_url
+                or d.find_elements(
+                    By.XPATH,
+                    "//*[not(ancestor::div[contains(@class,'el-popper')]) and contains(normalize-space(),'Event and Alarm Search')]",
+                )
+            )
+            return
+        except (StaleElementReferenceException, TimeoutException):
+            try:
+                driver.switch_to.active_element.send_keys("\ue00c")
+            except Exception:
+                pass
+            if attempt == 2:
+                raise
+
+
 def crear_driver() -> webdriver.Chrome:
     """Configura y devuelve un driver de Chrome."""
 
@@ -447,7 +529,7 @@ def run():
 
         print("[3] Navegando a Event and Alarm...")
         driver.switch_to.default_content()
-        abrir_event_and_alarm(driver, timer=timer)
+        go_event_and_alarm_search_from_applications(driver, timer=timer)
 
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         screenshot_path = LOG_DIR / f"event_and_alarm_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
