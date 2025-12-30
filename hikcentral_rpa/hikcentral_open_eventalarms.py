@@ -8,7 +8,7 @@ import psutil
 import psycopg2
 from dotenv import load_dotenv
 from selenium import webdriver
-from selenium.common.exceptions import ElementClickInterceptedException
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -215,6 +215,47 @@ def registrar_ejecucion_y_pasos(
         print(f"[ERROR] No se pudo registrar el rendimiento en la base de datos: {e}")
 
 
+def abrir_event_and_alarm(driver, timer: StepTimer | None = None, timeout: int = 40):
+    wait = WebDriverWait(driver, timeout)
+
+    print("[3] Abrir Applications...")
+    try:
+        app_btn = wait.until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "i.app-btn[title='Applications']"))
+        )
+    except TimeoutException:
+        app_btn = wait.until(
+            EC.element_to_be_clickable(
+                (By.XPATH, "//*[@title='Applications' and contains(@class,'app-btn')]")
+            )
+        )
+    driver.execute_script("arguments[0].click();", app_btn)
+    if timer:
+        timer.mark("[3] Abrir Applications")
+
+    print("[4] Seleccionar Event and Alarm...")
+    event_item = wait.until(
+        EC.element_to_be_clickable(
+            (By.XPATH, "//li[@title='Event and Alarm' or .//div[normalize-space()='Event and Alarm']]")
+        )
+    )
+    driver.execute_script("arguments[0].click();", event_item)
+    if timer:
+        timer.mark("[4] Seleccionar Event and Alarm")
+
+    print("[5] Validar Event and Alarm Search visible...")
+    wait.until(
+        EC.visibility_of_element_located(
+            (
+                By.XPATH,
+                "//*[normalize-space()='Event and Alarm Search' or @title='Event and Alarm Search']",
+            )
+        )
+    )
+    if timer:
+        timer.mark("[5] Validar Event and Alarm Search visible")
+
+
 def crear_driver() -> webdriver.Chrome:
     """Configura y devuelve un driver de Chrome."""
 
@@ -286,40 +327,18 @@ def run():
 
         print("[3] Navegando a Event and Alarm...")
         driver.switch_to.default_content()
-        event_tab = wait.until(
-            EC.element_to_be_clickable(
-                (
-                    By.XPATH,
-                    "//*[self::a or self::div or self::span][contains(normalize-space(.), 'Event and Alarm')]",
-                )
-            )
-        )
-        try:
-            event_tab.click()
-        except ElementClickInterceptedException:
-            driver.execute_script("arguments[0].click();", event_tab)
-        if timer:
-            timer.mark("[3] IR_EVENT_AND_ALARM")
-
-        print("[4] Validando Event and Alarm Search...")
-        wait.until(
-            EC.presence_of_element_located(
-                (By.XPATH, "//*[contains(normalize-space(.), 'Event and Alarm Search')]")
-            )
-        )
-        if timer:
-            timer.mark("[4] VALIDAR_EVENT_AND_ALARM_SEARCH")
+        abrir_event_and_alarm(driver, timer=timer)
 
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         screenshot_path = LOG_DIR / f"event_and_alarm_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         driver.save_screenshot(str(screenshot_path))
         print(f"[INFO] Screenshot guardado en: {screenshot_path}")
         if timer:
-            timer.mark("[5] SCREENSHOT_FINAL")
+            timer.mark("[6] SCREENSHOT_FINAL")
 
         print("[OK] Flujo Event and Alarm completado.")
         if timer:
-            timer.mark("[6] FIN_OK")
+            timer.mark("[7] FIN_OK")
 
     except Exception as e:
         print(f"[ERROR] Ocurrió un problema en el flujo Event and Alarm: {e}")
