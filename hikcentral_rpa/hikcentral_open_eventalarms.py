@@ -440,42 +440,42 @@ def validar_event_and_alarm_search_screen(driver, timeout=30, timer: StepTimer |
 
 
 def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = None):
-    print("[7] Haciendo clic en el botón 'Trigger Alarm'...")
+    """
+    En la pantalla 'Event and Alarm Search' hace clic en el botón 'Trigger Alarm'
+    dentro del grupo de filtros Trigger Alarm (All / Not Trigger Alarm / Trigger Alarm).
+    """
 
-    panel = WebDriverWait(driver, timeout).until(
+    # Asegurar que la pantalla de Event and Alarm Search está cargada
+    WebDriverWait(driver, timeout).until(
         EC.presence_of_element_located(
-            (By.XPATH, "//*[normalize-space(text())='Trigger Alarm']/ancestor::*[1]")
+            (By.XPATH, "//*[contains(normalize-space(),'Event and Alarm Search')]")
         )
     )
 
-    try:
-        btn = panel.find_element(
-            By.XPATH,
-            ".//button[normalize-space()='Trigger Alarm' or .//span[normalize-space()='Trigger Alarm']]",
-        )
-    except Exception:
-        btn = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable(
-                (
-                    By.XPATH,
-                    "//button[normalize-space()='Trigger Alarm' or .//span[normalize-space()='Trigger Alarm']]",
-                )
-            )
-        )
+    # XPath específico para el botón Trigger Alarm
+    btn_xpath = (
+        "//div[@title='Trigger Alarm' "
+        "and contains(@class,'button') "
+        "and normalize-space()='Trigger Alarm']"
+    )
 
+    # Esperar a que el botón sea clickable
+    btn = WebDriverWait(driver, timeout).until(
+        EC.element_to_be_clickable((By.XPATH, btn_xpath))
+    )
+
+    # Scroll y clic con JS para asegurarnos de disparar el evento
     driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
     driver.execute_script("arguments[0].click();", btn)
 
-    try:
-        WebDriverWait(driver, 5).until(
-            lambda d: 'is-checked' in btn.get_attribute('class')
-            or 'is-active' in btn.get_attribute('class')
-        )
-    except TimeoutException:
-        print("[WARN] No se pudo confirmar visualmente el estado activo de 'Trigger Alarm'.")
+    # Esperar a que el botón quede marcado (class incluye 'select')
+    WebDriverWait(driver, timeout).until(
+        lambda d: "select" in d.find_element(By.XPATH, btn_xpath).get_attribute("class")
+    )
 
+    print("[9] Botón 'Trigger Alarm' seleccionado correctamente.")
     if timer:
-        timer.mark("[7] CLICK_TRIGGER_ALARM")
+        timer.mark("[9] CLICK_TRIGGER_ALARM")
 
 
 
