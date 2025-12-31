@@ -301,6 +301,56 @@ def ir_a_event_and_alarm(driver, wait: WebDriverWait):
         print("[WARN] No se pudo validar visualmente la pantalla de Alarm Analysis.")
 
 
+def click_boton_buscar_event_and_alarm(driver, wait: WebDriverWait, timeout: int = 20):
+    """
+    Dentro del módulo 'Event and Alarm' hace clic en el icono de búsqueda
+    del menú lateral (lupa).
+    """
+    print("[5] Haciendo clic en el botón de búsqueda (lupa)...")
+
+    # Asegurar documento principal
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+
+    # Esperar a que la vista de Alarm Analysis esté cargada
+    try:
+        WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located(
+                (
+                    By.XPATH,
+                    "//*[contains(normalize-space(),'Alarm Analysis') "
+                    "or contains(normalize-space(),'Alarm Trend')]",
+                )
+            )
+        )
+    except TimeoutException:
+        print("[WARN] No se pudo validar visualmente Alarm Analysis antes de buscar la lupa.")
+
+    # Buscar el icono de lupa del menú lateral
+    lupa_xpath = (
+        "//i[contains(@class,'icon-svg-nav_search') or contains(@class,'nav_search')]"
+        "/ancestor::*[contains(@class,'el-submenu__title') or self::li][1]"
+    )
+
+    try:
+        lupa_container = wait.until(
+            EC.element_to_be_clickable((By.XPATH, lupa_xpath))
+        )
+    except TimeoutException:
+        # Fallback: clic directo sobre el <i> por si el contenedor cambia
+        lupa_xpath = "//i[contains(@class,'icon-svg-nav_search') or contains(@class,'nav_search')]"
+        lupa_container = wait.until(
+            EC.element_to_be_clickable((By.XPATH, lupa_xpath))
+        )
+
+    safe_js_click(driver, lupa_container)
+
+    if step_timer:
+        step_timer.mark("[5] CLICK_BOTON_BUSCAR")
+
+
 def wait_visible(driver, by, value, timeout=20):
     return WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((by, value)))
 
@@ -450,7 +500,10 @@ def run():
         print("[3] Navegando a Event and Alarm...")
         ir_a_event_and_alarm(driver, wait)
         if timer:
-            timer.mark("[3] Event and Alarm abierto")
+            timer.mark("[4] EVENT_AND_ALARM_ABIERTO")
+
+        # Nuevo paso: clic en el botón de búsqueda del menú lateral
+        click_boton_buscar_event_and_alarm(driver, wait)
 
         # Screenshot para validar que llegamos a Event and Alarm
         LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -458,11 +511,11 @@ def run():
         driver.save_screenshot(str(screenshot_path))
         print(f"[INFO] Screenshot guardado en: {screenshot_path}")
         if timer:
-            timer.mark("[5] SCREENSHOT_EVENT_AND_ALARM")
+            timer.mark("[6] SCREENSHOT_EVENT_AND_ALARM")
 
         print("[OK] Flujo hasta pestaña Event and Alarm completado.")
         if timer:
-            timer.mark("[6] FIN_OK")
+            timer.mark("[7] FIN_OK")
 
     except Exception as e:
         print(f"[ERROR] Ocurrió un problema en el flujo Event and Alarm: {e}")
