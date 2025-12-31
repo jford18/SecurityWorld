@@ -410,6 +410,86 @@ def cerrar_buscador_global_si_abrio(driver):
         pass
 
 
+def click_sidebar_alarm_search(driver, timeout=20, timer: StepTimer | None = None):
+    """
+    Hace clic en el icono de lupa del menú lateral (Search).
+    Debe usar el icono más a la izquierda para evitar el buscador del header.
+    """
+    WebDriverWait(driver, timeout).until(
+        lambda d: d.execute_script("return document.readyState") == "complete"
+    )
+
+    icon = driver.execute_script(
+        """
+        const candidates = Array.from(
+            document.querySelectorAll("i.icon-svg-nav_search, i.h-icon-search, i[class*='nav_search']")
+        );
+        const visibles = candidates.filter(e => e && e.offsetParent !== null);
+        if (!visibles.length) return null;
+        // el botón de la barra lateral es el más a la izquierda
+        visibles.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+        return visibles[0];
+        """
+    )
+
+    if not icon:
+        raise TimeoutException("No se encontró el icono de búsqueda del menú lateral.")
+
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", icon)
+    driver.execute_script("arguments[0].click();", icon)
+
+    if timer:
+        timer.mark("[4] CLICK_SIDEBAR_SEARCH")
+
+
+def click_sidebar_event_and_alarm_search(driver, timeout=20, timer: StepTimer | None = None):
+    """
+    Después de abrir el submenú con la lupa, hace clic en la opción 'Event and Alarm Search'.
+    """
+    # Opción principal: ítem del submenú lateral
+    item_xpath = (
+        "//li[contains(@class,'el-menu-item') and "
+        ".//span[normalize-space()='Event and Alarm Search']]"
+    )
+
+    try:
+        item = WebDriverWait(driver, timeout).until(
+            EC.element_to_be_clickable((By.XPATH, item_xpath))
+        )
+    except TimeoutException:
+        # Respaldo: enlace con title/botón en Recently Viewed
+        fallback_xpath = (
+            "//*[@title='Event and Alarm Search' or "
+            "normalize-space(text())='Event and Alarm Search']"
+        )
+        item = WebDriverWait(driver, timeout).until(
+            EC.element_to_be_clickable((By.XPATH, fallback_xpath))
+        )
+
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", item)
+    driver.execute_script("arguments[0].click();", item)
+
+    if timer:
+        timer.mark("[5] CLICK_EVENT_AND_ALARM_SEARCH")
+
+
+def validar_event_and_alarm_search_screen(driver, timeout=30, timer: StepTimer | None = None):
+    """
+    Valida que la pantalla actual corresponde a 'Event and Alarm Search'.
+    Basta con encontrar algún título o texto visible con ese nombre.
+    """
+    WebDriverWait(driver, timeout).until(
+        EC.presence_of_element_located(
+            (
+                By.XPATH,
+                "//*[contains(normalize-space(),'Event and Alarm Search')]"
+            )
+        )
+    )
+    if timer:
+        timer.mark("[6] VALIDAR_EVENT_AND_ALARM_SEARCH")
+
+
 
 
 def crear_driver() -> webdriver.Chrome:
@@ -527,8 +607,10 @@ def run():
         if timer:
             timer.mark("[4] EVENT_AND_ALARM_ABIERTO")
 
-        # Nuevo paso: clic en el botón de búsqueda del menú lateral
-        click_boton_buscar_event_and_alarm(driver, wait)
+        # Abrir el menú Search del lateral y navegar a Event and Alarm Search
+        click_sidebar_alarm_search(driver, timeout=30, timer=timer)
+        click_sidebar_event_and_alarm_search(driver, timeout=30, timer=timer)
+        validar_event_and_alarm_search_screen(driver, timeout=40, timer=timer)
 
         # Screenshot para validar que llegamos a Event and Alarm
         LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -536,11 +618,11 @@ def run():
         driver.save_screenshot(str(screenshot_path))
         print(f"[INFO] Screenshot guardado en: {screenshot_path}")
         if timer:
-            timer.mark("[6] SCREENSHOT_EVENT_AND_ALARM")
+            timer.mark("[7] SCREENSHOT_EVENT_AND_ALARM")
 
         print("[OK] Flujo hasta pestaña Event and Alarm completado.")
         if timer:
-            timer.mark("[7] FIN_OK")
+            timer.mark("[8] FIN_OK")
 
     except Exception as e:
         print(f"[ERROR] Ocurrió un problema en el flujo Event and Alarm: {e}")
