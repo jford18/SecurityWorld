@@ -785,12 +785,19 @@ const TechnicalFailuresOperador: React.FC = () => {
 
     SET_LOADING_CAMARAS(true);
     SET_CAMERA_ID(null);
+    SET_CAMARAS([]);
 
     api
-      .get(`/api/catalogos/camaras-por-sitio/${sitioId}`)
+      .get('/api/hikcentral/camaras', { params: { sitioId } })
       .then(({ data }) => {
         console.log('[CAMARAS] response length=', data?.length, 'sample=', data?.[0]);
-        const lista = Array.isArray(data) ? data : [];
+        const lista = Array.isArray(data)
+          ? data.map((camara: any) => ({
+              id: camara.id,
+              name: camara.name ?? camara.camera_name ?? '',
+              ip_address: camara.ip_address ?? camara.ipAddress ?? '',
+            }))
+          : [];
         SET_CAMARAS(lista);
       })
       .catch((err) => {
@@ -1034,7 +1041,7 @@ const TechnicalFailuresOperador: React.FC = () => {
                 setFormData((prev) => ({
                   ...prev,
                   camara: selectedCamera
-                    ? `${selectedCamera.camera_name} - ${selectedCamera.ip_address ?? ''}`
+                    ? `${selectedCamera.name} - ${selectedCamera.ip_address ?? ''}`
                     : '',
                 }));
                 setErrors((prev) => {
@@ -1047,7 +1054,7 @@ const TechnicalFailuresOperador: React.FC = () => {
             >
               <option value="">Seleccione una cámara</option>
               {CAMARAS.map((cam) => {
-                const label = `${cam.camera_name} - ${cam.ip_address ?? ''}`;
+                const label = `${cam.name} - ${cam.ip_address ?? ''}`;
                 return (
                   <option key={cam.id} value={cam.id}>
                     {label}
