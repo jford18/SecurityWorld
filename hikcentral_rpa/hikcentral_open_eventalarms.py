@@ -128,7 +128,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = BASE_DIR / ".env"
 load_dotenv(ENV_PATH)
 
-URL = "http://172.16.9.10/#/portal"
+URL = "http://172.16.9.10/#/"
 SCRIPT_NAME = "hikcentral_open_eventalarms.py"
 HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
 HIK_PASSWORD = os.getenv("HIK_PASSWORD", "SW2112asm")
@@ -363,6 +363,27 @@ def validar_event_and_alarm_abierto(driver, timeout: int = 10):
         return False
 
 
+def ir_a_pestana_event_and_alarm(driver, wait):
+    """
+    Abre la pestaña superior 'Event and Alarm'.
+    No usar lupa ni Applications todavía, solo el tab principal.
+    """
+    print("[4] Abriendo pestaña Event and Alarm...")
+
+    tab_xpath = (
+        "//div[contains(@class,'el-tabs__nav') or contains(@class,'top-nav') or contains(@class,'nav')]"
+        "//*[self::div or self::span or self::a]"
+        "[normalize-space()='Event and Alarm' or @title='Event and Alarm']"
+    )
+
+    tab = wait.until(EC.element_to_be_clickable((By.XPATH, tab_xpath)))
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", tab)
+    driver.execute_script("arguments[0].click();", tab)
+
+    if step_timer:
+        step_timer.mark("[4] Pestaña Event and Alarm")
+
+
 def abrir_event_and_alarm(driver, timer: StepTimer | None = None, timeout: int = 40):
     print("[3] Navegando a Event and Alarm Search...")
 
@@ -535,14 +556,13 @@ def run():
         driver = crear_driver()
         wait = WebDriverWait(driver, 30)
 
-        print("[1] Abriendo URL de login...")
-        driver.get(URL)
-        driver.delete_all_cookies()
+        print("[1] Navegando a la URL...")
         driver.get(URL)
         if timer:
-            timer.mark("[1] ABRIR_URL_LOGIN")
+            timer.mark("[1] Navegando a la URL")
 
         print("[2] Iniciando sesión...")
+
         user_input = wait.until(
             EC.presence_of_element_located((By.CSS_SELECTOR, 'input[placeholder="User Name"]'))
         )
@@ -560,24 +580,26 @@ def run():
             EC.element_to_be_clickable((By.XPATH, "//*[normalize-space(text())='Log In']"))
         )
         login_button.click()
+        if timer:
+            timer.mark("[2] Login")
+
+        print("[3] Esperando carga del portal principal...")
         wait.until(lambda d: "/portal" in d.current_url)
         if timer:
-            timer.mark("[2] LOGIN")
+            timer.mark("[3] Portal principal cargado")
 
-        print("[3] Navegando a Event and Alarm...")
-        driver.switch_to.default_content()
-        go_event_and_alarm_search_from_applications(driver, timer=timer)
+        ir_a_pestana_event_and_alarm(driver, wait)
 
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         screenshot_path = LOG_DIR / f"event_and_alarm_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         driver.save_screenshot(str(screenshot_path))
         print(f"[INFO] Screenshot guardado en: {screenshot_path}")
         if timer:
-            timer.mark("[6] SCREENSHOT_FINAL")
+            timer.mark("[5] SCREENSHOT_EVENT_AND_ALARM")
 
-        print("[OK] Flujo Event and Alarm completado.")
+        print("[OK] Flujo hasta pestaña Event and Alarm completado.")
         if timer:
-            timer.mark("[7] FIN_OK")
+            timer.mark("[6] FIN_OK")
 
     except Exception as e:
         print(f"[ERROR] Ocurrió un problema en el flujo Event and Alarm: {e}")
