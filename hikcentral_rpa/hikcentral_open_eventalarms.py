@@ -374,64 +374,53 @@ def click_sidebar_alarm_search(driver, timeout=20, timer: StepTimer | None = Non
 
 
 def click_sidebar_event_and_alarm_search(driver, timeout=20, timer: StepTimer | None = None):
-    """
-    Después de abrir el submenú con la lupa, hace clic en la opción
-    'Event and Alarm Search'.
+    print("[5] Abriendo Event and Alarm Search desde el menú Search...")
 
-    Busca en TODO el DOM cualquier elemento visible cuyo texto o
-    atributo title sea exactamente 'Event and Alarm Search', y hace clic
-    sobre su contenedor clickeable (li, div.recently-visited-menu, etc.).
-    """
-    js = """
-        function isVisible(el) {
-            if (!el) return false;
-            if (!(el.offsetWidth || el.offsetHeight || el.getClientRects().length)) return false;
-            const style = window.getComputedStyle(el);
-            if (style.visibility === 'hidden' || style.display === 'none') return false;
-            if (parseFloat(style.opacity || '1') === 0) return false;
-            return true;
-        }
+    try:
+        WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located(
+                (By.XPATH, "//*[normalize-space(text())='Trigger Alarm']")
+            )
+        )
+        print("[5] Event and Alarm Search ya está visible, no es necesario abrirla.")
+        if timer:
+            timer.mark("[5] EVENT_AND_ALARM_SEARCH_YA_VISIBLE")
+        return
+    except TimeoutException:
+        pass
 
-        // Candidatos por title
-        let candidates = Array.from(
-            document.querySelectorAll('[title="Event and Alarm Search"]')
-        );
-
-        // Candidatos por texto exacto
-        const textNodes = Array.from(
-            document.querySelectorAll('span,div,a')
-        ).filter(e => e.textContent && e.textContent.trim() === 'Event and Alarm Search');
-
-        candidates = candidates.concat(textNodes);
-
-        for (const el of candidates) {
-            if (!isVisible(el)) continue;
-
-            // Buscar un contenedor clickeable cercano
-            let clickable =
-                el.closest('li.el-menu-item') ||
-                el.closest('div.recently-visited-menu') ||
-                el.closest('button') ||
-                el.closest('a') ||
-                el.closest('div') ||
-                el;
-
-            clickable.scrollIntoView({ block: 'center' });
-            clickable.click();
-            return true;
-        }
-
-        return false;
-    """
-
-    # Esperar hasta que el JS encuentre y haga clic en 'Event and Alarm Search'
-    WebDriverWait(driver, timeout).until(
-        lambda d: d.execute_script(js)
+    item_xpath = (
+        "//li[contains(@class,'el-menu-item') and "
+        ".//span[normalize-space()='Event and Alarm Search']]"
     )
 
-    print("[5] Opción 'Event and Alarm Search' clickeada.")
+    try:
+        item = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.XPATH, item_xpath))
+        )
+    except TimeoutException:
+        fallback_xpath = (
+            "//*[@title='Event and Alarm Search' or "
+            "normalize-space(text())='Event and Alarm Search' or "
+            ".//span[normalize-space()='Event and Alarm Search']]"
+        )
+        item = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.XPATH, fallback_xpath))
+        )
+
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", item)
+    driver.execute_script("arguments[0].click();", item)
+
+    WebDriverWait(driver, timeout).until(
+        EC.presence_of_element_located(
+            (By.XPATH, "//*[normalize-space(text())='Trigger Alarm']")
+        )
+    )
+
+    print("[5] Pantalla Event and Alarm Search abierta.")
     if timer:
         timer.mark("[5] CLICK_EVENT_AND_ALARM_SEARCH")
+
 
 def validar_event_and_alarm_search_screen(driver, timeout=30, timer: StepTimer | None = None):
     """
@@ -449,6 +438,44 @@ def validar_event_and_alarm_search_screen(driver, timeout=30, timer: StepTimer |
     if timer:
         timer.mark("[6] VALIDAR_EVENT_AND_ALARM_SEARCH")
 
+
+def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = None):
+    print("[7] Haciendo clic en el botón 'Trigger Alarm'...")
+
+    panel = WebDriverWait(driver, timeout).until(
+        EC.presence_of_element_located(
+            (By.XPATH, "//*[normalize-space(text())='Trigger Alarm']/ancestor::*[1]")
+        )
+    )
+
+    try:
+        btn = panel.find_element(
+            By.XPATH,
+            ".//button[normalize-space()='Trigger Alarm' or .//span[normalize-space()='Trigger Alarm']]",
+        )
+    except Exception:
+        btn = WebDriverWait(driver, timeout).until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//button[normalize-space()='Trigger Alarm' or .//span[normalize-space()='Trigger Alarm']]",
+                )
+            )
+        )
+
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
+    driver.execute_script("arguments[0].click();", btn)
+
+    try:
+        WebDriverWait(driver, 5).until(
+            lambda d: 'is-checked' in btn.get_attribute('class')
+            or 'is-active' in btn.get_attribute('class')
+        )
+    except TimeoutException:
+        print("[WARN] No se pudo confirmar visualmente el estado activo de 'Trigger Alarm'.")
+
+    if timer:
+        timer.mark("[7] CLICK_TRIGGER_ALARM")
 
 
 
@@ -569,6 +596,7 @@ def run():
         click_sidebar_alarm_search(driver, timeout=30, timer=timer)
         click_sidebar_event_and_alarm_search(driver, timeout=30, timer=timer)
         validar_event_and_alarm_search_screen(driver, timeout=40, timer=timer)
+        click_trigger_alarm_button(driver, timeout=30, timer=timer)
 
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         screenshot_path = LOG_DIR / f"event_and_alarm_search_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
