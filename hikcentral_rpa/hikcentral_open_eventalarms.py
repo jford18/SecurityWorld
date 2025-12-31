@@ -128,7 +128,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = BASE_DIR / ".env"
 load_dotenv(ENV_PATH)
 
-URL = "http://172.16.9.10/#/portal"
+URL = "http://172.16.9.10/#/"
 SCRIPT_NAME = "hikcentral_open_eventalarms.py"
 HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
 HIK_PASSWORD = os.getenv("HIK_PASSWORD", "SW2112asm")
@@ -241,8 +241,7 @@ def ir_a_event_and_alarm(driver, wait: WebDriverWait):
     """
     Abre el módulo 'Event and Alarm' usando el menú principal de HikCentral.
     1) Abre el popup de menús (navigation_addMenuBtn)
-    2) Dentro de navigation_menuPop hace clic en la tarjeta Event and Alarm
-       (nav_box_s_menu_alarm_event).
+    2) Dentro de navigation_menuPop hace clic en la tarjeta Event and Alarm.
     """
     print("[3] Abriendo módulo Event and Alarm...")
 
@@ -252,7 +251,6 @@ def ir_a_event_and_alarm(driver, wait: WebDriverWait):
     except Exception:
         pass
 
-    # 1) Abrir el popup de menús si no está visible
     visible = False
     try:
         menu_pop = driver.find_element(By.ID, "navigation_menuPop")
@@ -264,9 +262,8 @@ def ir_a_event_and_alarm(driver, wait: WebDriverWait):
         menu_btn = wait.until(
             EC.element_to_be_clickable((By.ID, "navigation_addMenuBtn"))
         )
-        _safe_js_click(driver, menu_btn)
+        driver.execute_script("arguments[0].click();", menu_btn)
 
-    # 2) Dentro del popup, hacer clic en la tarjeta Event and Alarm
     try:
         tile_xpath = (
             "//div[@id='navigation_menuPop']"
@@ -275,7 +272,6 @@ def ir_a_event_and_alarm(driver, wait: WebDriverWait):
         )
         tile = wait.until(EC.element_to_be_clickable((By.XPATH, tile_xpath)))
     except TimeoutException:
-        # Fallback: cualquier quick-entry con Event and Alarm
         tile_xpath = (
             "//div[@id='navigation_menuPop']"
             "//div[contains(@class,'nav-pop-quick-entry-list')]"
@@ -283,22 +279,16 @@ def ir_a_event_and_alarm(driver, wait: WebDriverWait):
         )
         tile = wait.until(EC.element_to_be_clickable((By.XPATH, tile_xpath)))
 
-    _safe_js_click(driver, tile)
+    driver.execute_script("arguments[0].click();", tile)
 
-    # Pequeña espera a que cargue el módulo (Alarm Analysis)
-    try:
-        WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located(
-                (
-                    By.XPATH,
-                    "//*[contains(normalize-space(),'Alarm Analysis') "
-                    "or contains(normalize-space(),'Alarm Trend')]",
-                )
+    WebDriverWait(driver, 30).until(
+        EC.presence_of_element_located(
+            (
+                By.XPATH,
+                "//*[contains(normalize-space(),'Alarm Analysis') or contains(normalize-space(),'Alarm Trend')]",
             )
         )
-    except TimeoutException:
-        # No lanzamos excepción dura, solo dejamos el log
-        print("[WARN] No se pudo validar visualmente la pantalla de Alarm Analysis.")
+    )
 
 
 def click_boton_buscar_event_and_alarm(driver, wait: WebDriverWait, timeout: int = 25):
@@ -412,32 +402,48 @@ def cerrar_buscador_global_si_abrio(driver):
 
 def click_sidebar_alarm_search(driver, timeout=20, timer: StepTimer | None = None):
     """
-    Hace clic en el icono de lupa del menú lateral (Search).
-    Debe usar el icono más a la izquierda para evitar el buscador del header.
+    Hace clic en el icono de lupa del menú lateral (Search),
+    usando el contenedor .el-submenu__title.
     """
     WebDriverWait(driver, timeout).until(
         lambda d: d.execute_script("return document.readyState") == "complete"
     )
 
-    icon = driver.execute_script(
+    sidebar_container = driver.execute_script(
         """
-        const candidates = Array.from(
+        const icons = Array.from(
             document.querySelectorAll("i.icon-svg-nav_search, i.h-icon-search, i[class*='nav_search']")
         );
-        const visibles = candidates.filter(e => e && e.offsetParent !== null);
+        const visibles = icons.filter(e => e && e.offsetParent !== null);
         if (!visibles.length) return null;
-        // el botón de la barra lateral es el más a la izquierda
         visibles.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-        return visibles[0];
+        const icon = visibles[0];
+        let container = icon;
+        let node = icon;
+        while (node) {
+            if (node.classList && node.classList.contains('el-submenu__title')) {
+                container = node;
+                break;
+            }
+            node = node.parentElement;
+        }
+        return container;
         """
     )
 
-    if not icon:
-        raise TimeoutException("No se encontró el icono de búsqueda del menú lateral.")
+    if not sidebar_container:
+        raise TimeoutException("No se encontró el menú Search del lateral.")
 
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", icon)
-    driver.execute_script("arguments[0].click();", icon)
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", sidebar_container)
+    driver.execute_script("arguments[0].click();", sidebar_container)
 
+    WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located(
+            (By.XPATH, "//span[normalize-space()='Event and Alarm Search']")
+        )
+    )
+
+    print("[4] Menú Search desplegado.")
     if timer:
         timer.mark("[4] CLICK_SIDEBAR_SEARCH")
 
@@ -572,8 +578,6 @@ def run():
 
         print("[1] Abriendo URL de login...")
         driver.get(URL)
-        driver.delete_all_cookies()
-        driver.get(URL)
         if timer:
             timer.mark("[1] ABRIR_URL_LOGIN")
 
@@ -595,32 +599,31 @@ def run():
             EC.element_to_be_clickable((By.XPATH, "//*[normalize-space(text())='Log In']"))
         )
         login_button.click()
+        if timer:
+            timer.mark("[2] LOGIN")
+
         print("[3] Esperando carga del portal principal...")
         wait.until(lambda d: "/portal" in d.current_url)
         if timer:
-            timer.mark("[2] LOGIN")
-            timer.mark("[3] Portal principal cargado")
+            timer.mark("[3] PORTAL_PRINCIPAL_CARGADO")
 
-        # Después de esperar que la URL contenga /portal o que el portal principal esté listo
         print("[3] Navegando a Event and Alarm...")
         ir_a_event_and_alarm(driver, wait)
         if timer:
             timer.mark("[4] EVENT_AND_ALARM_ABIERTO")
 
-        # Abrir el menú Search del lateral y navegar a Event and Alarm Search
         click_sidebar_alarm_search(driver, timeout=30, timer=timer)
         click_sidebar_event_and_alarm_search(driver, timeout=30, timer=timer)
         validar_event_and_alarm_search_screen(driver, timeout=40, timer=timer)
 
-        # Screenshot para validar que llegamos a Event and Alarm
         LOG_DIR.mkdir(parents=True, exist_ok=True)
-        screenshot_path = LOG_DIR / f"event_and_alarm_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        screenshot_path = LOG_DIR / f"event_and_alarm_search_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         driver.save_screenshot(str(screenshot_path))
         print(f"[INFO] Screenshot guardado en: {screenshot_path}")
         if timer:
-            timer.mark("[7] SCREENSHOT_EVENT_AND_ALARM")
+            timer.mark("[7] SCREENSHOT_EVENT_AND_ALARM_SEARCH")
 
-        print("[OK] Flujo hasta pestaña Event and Alarm completado.")
+        print("[OK] Flujo Event and Alarm Search completado.")
         if timer:
             timer.mark("[8] FIN_OK")
 
