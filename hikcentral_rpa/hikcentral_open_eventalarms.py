@@ -459,28 +459,45 @@ def click_sidebar_event_and_alarm_search(driver, timeout=20, timer: StepTimer | 
     """
     Después de abrir el submenú con la lupa, hace clic en la opción 'Event and Alarm Search'.
     """
-    # Opción principal: ítem del submenú lateral
-    item_xpath = (
-        "//li[contains(@class,'el-menu-item') and "
-        ".//span[normalize-space()='Event and Alarm Search']]"
+    WebDriverWait(driver, timeout).until(
+        lambda d: d.execute_script("return document.readyState") == "complete"
     )
 
-    try:
-        item = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable((By.XPATH, item_xpath))
-        )
-    except TimeoutException:
-        # Respaldo: enlace con title/botón en Recently Viewed
-        fallback_xpath = (
-            "//*[@title='Event and Alarm Search' or "
-            "normalize-space(text())='Event and Alarm Search']"
-        )
-        item = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable((By.XPATH, fallback_xpath))
-        )
+    js = """
+        const LABEL = 'Event and Alarm Search';
+        function norm(t) { return t ? t.trim().replace(/\\s+/g, ' ') : ''; }
 
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", item)
-    driver.execute_script("arguments[0].click();", item)
+        const nodes = Array.from(document.querySelectorAll('li, span, a, div'));
+        const candidates = [];
+
+        for (const el of nodes) {
+            const inner = norm(el.innerText || el.textContent);
+            const title = norm(el.getAttribute && el.getAttribute('title'));
+            if (inner === LABEL || title === LABEL) {
+                candidates.push(el);
+            }
+        }
+
+        const visibles = candidates.filter(e => e && e.offsetParent !== null);
+        if (!visibles.length) {
+            return null;
+        }
+
+        // Preferimos el <li> padre si existe
+        const base = visibles[0];
+        const target = base.closest('li.el-menu-item') || base;
+
+        target.scrollIntoView({block: 'center'});
+        target.click();
+        return true;
+    """
+
+    ok = WebDriverWait(driver, timeout).until(
+        lambda d: d.execute_script(js) is True
+    )
+
+    if not ok:
+        raise TimeoutException("No se pudo hacer clic en 'Event and Alarm Search'.")
 
     if timer:
         timer.mark("[5] CLICK_EVENT_AND_ALARM_SEARCH")
