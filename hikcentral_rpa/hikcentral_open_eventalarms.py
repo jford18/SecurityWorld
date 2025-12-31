@@ -437,13 +437,20 @@ def click_sidebar_alarm_search(driver, timeout=20, timer: StepTimer | None = Non
     driver.execute_script("arguments[0].scrollIntoView({block:'center'});", sidebar_container)
     driver.execute_script("arguments[0].click();", sidebar_container)
 
-    WebDriverWait(driver, 10).until(
-        EC.visibility_of_element_located(
-            (By.XPATH, "//span[normalize-space()='Event and Alarm Search']")
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located(
+                (By.XPATH, "//span[normalize-space()='Event and Alarm Search']")
+            )
         )
-    )
+        print("[4] Menú Search desplegado.")
+    except TimeoutException:
+        # No re-lanzar la excepción, solo avisar y continuar
+        print(
+            "[WARN] Después de hacer clic en la lupa no se pudo validar "
+            "'Event and Alarm Search', pero continúo de todas formas."
+        )
 
-    print("[4] Menú Search desplegado.")
     if timer:
         timer.mark("[4] CLICK_SIDEBAR_SEARCH")
 
