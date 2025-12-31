@@ -232,6 +232,75 @@ def safe_js_click(driver, el):
     driver.execute_script("arguments[0].click();", el)
 
 
+def _safe_js_click(driver, el):
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+    driver.execute_script("arguments[0].click();", el)
+
+
+def ir_a_event_and_alarm(driver, wait: WebDriverWait):
+    """
+    Abre el módulo 'Event and Alarm' usando el menú principal de HikCentral.
+    1) Abre el popup de menús (navigation_addMenuBtn)
+    2) Dentro de navigation_menuPop hace clic en la tarjeta Event and Alarm
+       (nav_box_s_menu_alarm_event).
+    """
+    print("[3] Abriendo módulo Event and Alarm...")
+
+    # Asegurar que estamos en el documento principal
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+
+    # 1) Abrir el popup de menús si no está visible
+    visible = False
+    try:
+        menu_pop = driver.find_element(By.ID, "navigation_menuPop")
+        visible = menu_pop.is_displayed()
+    except Exception:
+        visible = False
+
+    if not visible:
+        menu_btn = wait.until(
+            EC.element_to_be_clickable((By.ID, "navigation_addMenuBtn"))
+        )
+        _safe_js_click(driver, menu_btn)
+
+    # 2) Dentro del popup, hacer clic en la tarjeta Event and Alarm
+    try:
+        tile_xpath = (
+            "//div[@id='navigation_menuPop']"
+            "//div[contains(@id,'nav_box_s_menu_alarm_event')]"
+            "//*[normalize-space()='Event and Alarm' or @title='Event and Alarm']"
+        )
+        tile = wait.until(EC.element_to_be_clickable((By.XPATH, tile_xpath)))
+    except TimeoutException:
+        # Fallback: cualquier quick-entry con Event and Alarm
+        tile_xpath = (
+            "//div[@id='navigation_menuPop']"
+            "//div[contains(@class,'nav-pop-quick-entry-list')]"
+            "//*[normalize-space()='Event and Alarm' or @title='Event and Alarm']"
+        )
+        tile = wait.until(EC.element_to_be_clickable((By.XPATH, tile_xpath)))
+
+    _safe_js_click(driver, tile)
+
+    # Pequeña espera a que cargue el módulo (Alarm Analysis)
+    try:
+        WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located(
+                (
+                    By.XPATH,
+                    "//*[contains(normalize-space(),'Alarm Analysis') "
+                    "or contains(normalize-space(),'Alarm Trend')]",
+                )
+            )
+        )
+    except TimeoutException:
+        # No lanzamos excepción dura, solo dejamos el log
+        print("[WARN] No se pudo validar visualmente la pantalla de Alarm Analysis.")
+
+
 def wait_visible(driver, by, value, timeout=20):
     return WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((by, value)))
 
@@ -266,231 +335,6 @@ def cerrar_buscador_global_si_abrio(driver):
         pass
 
 
-def click_lupa_sidebar(driver, timeout=20):
-    # SOLO la lupa del sidebar de Event&Alarm (h-icon-search)
-    WebDriverWait(driver, timeout).until(
-        lambda d: d.execute_script(
-            "return Array.from(document.querySelectorAll('i.h-icon-search')).some(e => e && e.offsetParent !== null);"
-        )
-    )
-
-    el = driver.execute_script(
-        """
-        const els = Array.from(document.querySelectorAll('i.h-icon-search'))
-            .filter(e => e && e.offsetParent !== null);
-        if (!els.length) return null;
-        els.sort((a,b)=>a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-        return els[0];
-    """
-    )
-    if not el:
-        raise TimeoutException("No se encontró lupa del sidebar (i.h-icon-search).")
-    safe_js_click(driver, el)
-
-
-def click_tab_event_and_alarm(driver, timeout: int = 20):
-    """
-    Hace clic en la pestaña superior 'Event and Alarm'.
-    No usa lupa ni Applications todavía, solo el tab principal.
-    """
-    wait = WebDriverWait(driver, timeout)
-
-    print("[4] Haciendo clic en pestaña 'Event and Alarm'...")
-
-    driver.switch_to.default_content()
-
-    tab_xpath = (
-        "//div[contains(@class,'el-tabs__nav') or contains(@class,'top-nav') or contains(@class,'nav')]"
-        "//*[self::div or self::span or self::a]"
-        "[normalize-space()='Event and Alarm' or @title='Event and Alarm']"
-    )
-
-    tab = wait.until(EC.element_to_be_clickable((By.XPATH, tab_xpath)))
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", tab)
-
-    # Usa el helper que ya tiene el script
-    try:
-        safe_click(driver, tab)
-    except Exception:
-        driver.execute_script("arguments[0].click();", tab)
-
-    if step_timer:
-        step_timer.mark("[4] CLICK_TAB_EVENT_AND_ALARM")
-
-    # Validar que quedó seleccionada (clase is-active o similar)
-    try:
-        wait.until(
-            EC.presence_of_element_located(
-                (
-                    By.XPATH,
-                    tab_xpath + "[contains(@class,'is-active') or contains(@class,'active')]",
-                )
-            )
-        )
-    except TimeoutException:
-        # Si no encontramos clase activa, al menos esperamos que aparezca un texto típico de la vista de alarmas
-        try:
-            wait.until(
-                EC.presence_of_element_located(
-                    (
-                        By.XPATH,
-                        "//*[contains(normalize-space(),'Alarm Analysis') or contains(normalize-space(),'Alarm Trend')]",
-                    )
-                )
-            )
-        except TimeoutException:
-            # Solo log, no romper todo el flujo
-            print("[WARN] No se pudo confirmar visualmente que la pestaña 'Event and Alarm' quedó activa.")
-
-
-def click_event_and_alarm_search_item(driver, timeout=20):
-    # El menú que sale tras la lupa NO siempre es el-popper; buscar por texto visible y “más a la izquierda”
-    def _find(d):
-        return d.execute_script(
-            """
-            const target = 'Event and Alarm Search';
-            const els = Array.from(document.querySelectorAll('li,div,span,a'))
-              .filter(el => el && el.offsetParent !== null)
-              .filter(el => (el.innerText || '').trim() === target);
-            if (!els.length) return null;
-            els.sort((a,b)=>a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-            return els[0];
-        """
-        )
-    item = WebDriverWait(driver, timeout).until(_find)
-    safe_js_click(driver, item)
-
-
-def validar_event_and_alarm_search(driver, timeout=30):
-    WebDriverWait(driver, timeout).until(
-        EC.presence_of_element_located((By.XPATH, "//*[contains(normalize-space(.),'Event and Alarm Search')]"))
-    )
-
-
-def ir_a_event_and_alarm_search_por_lupa(driver, timeout=30, timer: StepTimer | None = None):
-    cerrar_buscador_global_si_abrio(driver)
-
-    click_lupa_sidebar(driver, timeout=timeout)
-    if timer:
-        timer.mark("[3] CLICK_LUPA")
-
-    click_event_and_alarm_search_item(driver, timeout=timeout)
-    if timer:
-        timer.mark("[4] CLICK_EVENT_AND_ALARM_SEARCH")
-
-    validar_event_and_alarm_search(driver, timeout=timeout)
-    if timer:
-        timer.mark("[5] VALIDAR_EVENT_AND_ALARM_SEARCH")
-
-
-def validar_event_and_alarm_abierto(driver, timeout: int = 10):
-    try:
-        WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located(
-                (
-                    By.XPATH,
-                    "//*[contains(@class,'top-nav') or contains(@class,'nav') or contains(@class,'tab')]/"
-                    "descendant::*[@title='Event and Alarm' or normalize-space()='Event and Alarm']",
-                )
-            )
-        )
-        return True
-    except TimeoutException:
-        return False
-
-
-def abrir_event_and_alarm(driver, timer: StepTimer | None = None, timeout: int = 40):
-    print("[3] Navegando a Event and Alarm Search...")
-
-    # 1) Asegurar TAB Event and Alarm
-    click_tab_event_and_alarm(driver, timeout=timeout)
-    if timer:
-        timer.mark("[3] CLICK_TAB_EVENT_AND_ALARM")
-
-    # 2) Luego lupa y opción
-    ir_a_event_and_alarm_search_por_lupa(driver, timeout=timeout, timer=timer)
-
-
-def open_applications_menu(driver, timeout: int = 20):
-    for attempt in range(3):
-        try:
-            applications_btn = WebDriverWait(driver, timeout).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, 'i.app-btn[title="Applications"]'))
-            )
-            safe_js_click(driver, applications_btn)
-
-            WebDriverWait(driver, timeout).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div.first_level_menu_icon-event_and_alarm"))
-            )
-            return
-        except (StaleElementReferenceException, TimeoutException):
-            try:
-                driver.switch_to.active_element.send_keys("\ue00c")
-            except Exception:
-                pass
-            if attempt == 2:
-                raise
-
-
-def go_event_and_alarm_search_from_applications(
-    driver, timeout: int = 30, timer: StepTimer | None = None
-):
-    mark_applications = True
-    mark_module = True
-    mark_submenu = True
-
-    for attempt in range(3):
-        try:
-            open_applications_menu(driver, timeout=timeout)
-            if timer and mark_applications:
-                timer.mark("[3] ABRIR_APPLICATIONS")
-                mark_applications = False
-
-            try:
-                event_alarm_module = WebDriverWait(driver, timeout).until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, "div.first_level_menu_icon-event_and_alarm"))
-                )
-            except TimeoutException:
-                event_alarm_module = WebDriverWait(driver, timeout).until(
-                    EC.element_to_be_clickable(
-                        (By.XPATH, "//div[@title='Event and Alarm' and contains(@class,'name')]")
-                    )
-                )
-
-            safe_js_click(driver, event_alarm_module)
-            if timer and mark_module:
-                timer.mark("[4] CLICK_MOD_EVENT_AND_ALARM")
-                mark_module = False
-
-            current_url = driver.current_url
-            submenu_item = WebDriverWait(driver, timeout).until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        "//span[contains(@class,'sub-name-key') and (@title='Event and Alarm Search' or normalize-space()='Event and Alarm Search')]",
-                    )
-                )
-            )
-            safe_js_click(driver, submenu_item)
-            if timer and mark_submenu:
-                timer.mark("[5] CLICK_EVENT_AND_ALARM_SEARCH")
-                mark_submenu = False
-
-            WebDriverWait(driver, timeout).until(
-                lambda d: d.current_url != current_url
-                or d.find_elements(
-                    By.XPATH,
-                    "//*[not(ancestor::div[contains(@class,'el-popper')]) and contains(normalize-space(),'Event and Alarm Search')]",
-                )
-            )
-            return
-        except (StaleElementReferenceException, TimeoutException):
-            try:
-                driver.switch_to.active_element.send_keys("\ue00c")
-            except Exception:
-                pass
-            if attempt == 2:
-                raise
 
 
 def crear_driver() -> webdriver.Chrome:
@@ -602,8 +446,11 @@ def run():
             timer.mark("[2] LOGIN")
             timer.mark("[3] Portal principal cargado")
 
-        # Nuevo paso: hacer clic en la pestaña Event and Alarm
-        click_tab_event_and_alarm(driver, timeout=30)
+        # Después de esperar que la URL contenga /portal o que el portal principal esté listo
+        print("[3] Navegando a Event and Alarm...")
+        ir_a_event_and_alarm(driver, wait)
+        if timer:
+            timer.mark("[3] Event and Alarm abierto")
 
         # Screenshot para validar que llegamos a Event and Alarm
         LOG_DIR.mkdir(parents=True, exist_ok=True)
