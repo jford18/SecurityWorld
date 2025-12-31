@@ -788,7 +788,7 @@ const TechnicalFailuresOperador: React.FC = () => {
     SET_CAMARAS([]);
 
     api
-      .get('/api/hikcentral/camaras', { params: { sitioId } })
+      .get('/hikcentral/camaras', { params: { sitioId } })
       .then(({ data }) => {
         console.log('[CAMARAS] response length=', data?.length, 'sample=', data?.[0]);
         const lista = Array.isArray(data)
