@@ -291,81 +291,6 @@ def ir_a_event_and_alarm(driver, wait: WebDriverWait):
     )
 
 
-def click_boton_buscar_event_and_alarm(driver, wait: WebDriverWait, timeout: int = 25):
-    """
-    Dentro del módulo 'Event and Alarm' hace clic en el menú lateral 'Search'
-    (icono de lupa) para que se despliegue la lista con 'Overview' y
-    'Event and Alarm Search'.
-    """
-    print("[5] Abriendo menú Search (lupa)...")
-
-    # Asegurar que estamos en el documento principal
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
-
-    # Intentar validar que estamos en la vista de Alarm Analysis antes de buscar la lupa
-    try:
-        WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located(
-                (
-                    By.XPATH,
-                    "//*[contains(normalize-space(),'Alarm Analysis') "
-                    "or contains(normalize-space(),'Alarm Trend')]",
-                )
-            )
-        )
-    except TimeoutException:
-        print("[WARN] No se pudo validar 'Alarm Analysis', continúo igual.")
-
-    # Distintos selectores para localizar el menú Search
-    xpaths_candidates = [
-        # 1) Por texto Search en el título del submenu
-        ("//span[contains(@class,'el-submenu__title-text') "
-         "and normalize-space()='Search']/ancestor::div[contains(@class,'el-submenu__title')][1]"),
-        # 2) Por el icono de lupa y el contenedor de título
-        ("//i[contains(@class,'icon-svg-nav_search') "
-         "or contains(@class,'nav_search')]/ancestor::div[contains(@class,'el-submenu__title')][1]"),
-        # 3) Fallback: por el <li> que contiene el icono Search
-        ("//i[contains(@class,'icon-svg-nav_search') "
-         "or contains(@class,'nav_search')]/ancestor::li[1]"),
-    ]
-
-    last_error = None
-    search_element = None
-
-    for xp in xpaths_candidates:
-        try:
-            search_element = wait.until(
-                EC.element_to_be_clickable((By.XPATH, xp))
-            )
-            break
-        except Exception as e:
-            last_error = e
-            continue
-
-    if not search_element:
-        raise TimeoutException(f"No se pudo localizar el menú Search. Último error: {last_error}")
-
-    # Clic con JS para asegurarnos de disparar el evento del menú
-    safe_js_click(driver, search_element)
-
-    # Validar que se desplegó el menú: debe aparecer 'Event and Alarm Search'
-    try:
-        WebDriverWait(driver, 10).until(
-            EC.visibility_of_element_located(
-                (By.XPATH, "//span[normalize-space()='Event and Alarm Search']")
-            )
-        )
-        print("[5] Menú Search desplegado correctamente.")
-    except TimeoutException:
-        print("[WARN] Después del clic no se vio 'Event and Alarm Search', pero continúo.")
-
-    if step_timer:
-        step_timer.mark("[5] CLICK_MENU_SEARCH")
-
-
 def wait_visible(driver, by, value, timeout=20):
     return WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((by, value)))
 
@@ -402,106 +327,111 @@ def cerrar_buscador_global_si_abrio(driver):
 
 def click_sidebar_alarm_search(driver, timeout=20, timer: StepTimer | None = None):
     """
-    Hace clic en el icono de lupa del menú lateral (Search),
-    usando el contenedor .el-submenu__title.
+    Hace clic en el icono de lupa del menú lateral (Search).
+    IMPORTANTE: esta función SOLO abre el panel de Search; no intenta
+    encontrar 'Event and Alarm Search'. Eso se hace en
+    click_sidebar_event_and_alarm_search.
     """
+    # Esperar a que la página esté completamente cargada
     WebDriverWait(driver, timeout).until(
-        lambda d: d.execute_script("return document.readyState") == "complete"
+        lambda d: d.execute_script("return document.readyState === 'complete'")
     )
 
-    sidebar_container = driver.execute_script(
-        """
+    js = """
         const icons = Array.from(
             document.querySelectorAll("i.icon-svg-nav_search, i.h-icon-search, i[class*='nav_search']")
         );
         const visibles = icons.filter(e => e && e.offsetParent !== null);
-        if (!visibles.length) return null;
+        if (!visibles.length) {
+            return false;
+        }
+        // La lupa del menú lateral es la que está más a la izquierda
         visibles.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
         const icon = visibles[0];
-        let container = icon;
-        let node = icon;
-        while (node) {
-            if (node.classList && node.classList.contains('el-submenu__title')) {
-                container = node;
-                break;
-            }
-            node = node.parentElement;
+
+        // Buscar el contenedor clickeable (el-submenu__title) o usar el propio ícono
+        let container = icon.closest('.el-submenu__title');
+        if (!container) {
+            container = icon;
         }
-        return container;
-        """
+
+        container.scrollIntoView({ block: 'center' });
+        container.click();
+        return true;
+    """
+
+    # Ejecutar el JS hasta que haga clic correctamente en la lupa
+    WebDriverWait(driver, timeout).until(
+        lambda d: d.execute_script(js)
     )
 
-    if not sidebar_container:
-        raise TimeoutException("No se encontró el menú Search del lateral.")
+    # Dar un pequeño tiempo para que el menú se despliegue
+    time.sleep(1.5)
 
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", sidebar_container)
-    driver.execute_script("arguments[0].click();", sidebar_container)
-
-    try:
-        WebDriverWait(driver, 10).until(
-            EC.visibility_of_element_located(
-                (By.XPATH, "//span[normalize-space()='Event and Alarm Search']")
-            )
-        )
-        print("[4] Menú Search desplegado.")
-    except TimeoutException:
-        # No re-lanzar la excepción, solo avisar y continuar
-        print(
-            "[WARN] Después de hacer clic en la lupa no se pudo validar "
-            "'Event and Alarm Search', pero continúo de todas formas."
-        )
-
+    print("[4] Menú Search (lupa) clickeado.")
     if timer:
         timer.mark("[4] CLICK_SIDEBAR_SEARCH")
 
 
 def click_sidebar_event_and_alarm_search(driver, timeout=20, timer: StepTimer | None = None):
     """
-    Después de abrir el submenú con la lupa, hace clic en la opción 'Event and Alarm Search'.
-    """
-    WebDriverWait(driver, timeout).until(
-        lambda d: d.execute_script("return document.readyState") == "complete"
-    )
+    Después de abrir el submenú con la lupa, hace clic en la opción
+    'Event and Alarm Search'.
 
+    Busca en TODO el DOM cualquier elemento visible cuyo texto o
+    atributo title sea exactamente 'Event and Alarm Search', y hace clic
+    sobre su contenedor clickeable (li, div.recently-visited-menu, etc.).
+    """
     js = """
-        const LABEL = 'Event and Alarm Search';
-        function norm(t) { return t ? t.trim().replace(/\\s+/g, ' ') : ''; }
-
-        const nodes = Array.from(document.querySelectorAll('li, span, a, div'));
-        const candidates = [];
-
-        for (const el of nodes) {
-            const inner = norm(el.innerText || el.textContent);
-            const title = norm(el.getAttribute && el.getAttribute('title'));
-            if (inner === LABEL || title === LABEL) {
-                candidates.push(el);
-            }
+        function isVisible(el) {
+            if (!el) return false;
+            if (!(el.offsetWidth || el.offsetHeight || el.getClientRects().length)) return false;
+            const style = window.getComputedStyle(el);
+            if (style.visibility === 'hidden' || style.display === 'none') return false;
+            if (parseFloat(style.opacity || '1') === 0) return false;
+            return true;
         }
 
-        const visibles = candidates.filter(e => e && e.offsetParent !== null);
-        if (!visibles.length) {
-            return null;
+        // Candidatos por title
+        let candidates = Array.from(
+            document.querySelectorAll('[title="Event and Alarm Search"]')
+        );
+
+        // Candidatos por texto exacto
+        const textNodes = Array.from(
+            document.querySelectorAll('span,div,a')
+        ).filter(e => e.textContent && e.textContent.trim() === 'Event and Alarm Search');
+
+        candidates = candidates.concat(textNodes);
+
+        for (const el of candidates) {
+            if (!isVisible(el)) continue;
+
+            // Buscar un contenedor clickeable cercano
+            let clickable =
+                el.closest('li.el-menu-item') ||
+                el.closest('div.recently-visited-menu') ||
+                el.closest('button') ||
+                el.closest('a') ||
+                el.closest('div') ||
+                el;
+
+            clickable.scrollIntoView({ block: 'center' });
+            clickable.click();
+            return true;
         }
 
-        // Preferimos el <li> padre si existe
-        const base = visibles[0];
-        const target = base.closest('li.el-menu-item') || base;
-
-        target.scrollIntoView({block: 'center'});
-        target.click();
-        return true;
+        return false;
     """
 
-    ok = WebDriverWait(driver, timeout).until(
-        lambda d: d.execute_script(js) is True
+    # Esperar hasta que el JS encuentre y haga clic en 'Event and Alarm Search'
+    WebDriverWait(driver, timeout).until(
+        lambda d: d.execute_script(js)
     )
 
-    if not ok:
-        raise TimeoutException("No se pudo hacer clic en 'Event and Alarm Search'.")
-
+    print("[5] Opción 'Event and Alarm Search' clickeada.")
     if timer:
         timer.mark("[5] CLICK_EVENT_AND_ALARM_SEARCH")
-
 
 def validar_event_and_alarm_search_screen(driver, timeout=30, timer: StepTimer | None = None):
     """
