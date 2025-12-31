@@ -288,23 +288,59 @@ def click_lupa_sidebar(driver, timeout=20):
     safe_js_click(driver, el)
 
 
-def click_tab_event_and_alarm(driver, timeout=30):
-    cerrar_overlays(driver)
-    cerrar_buscador_global_si_abrio(driver)
+def click_tab_event_and_alarm(driver, timeout: int = 20):
+    """
+    Hace clic en la pestaña superior 'Event and Alarm'.
+    No usa lupa ni Applications todavía, solo el tab principal.
+    """
+    wait = WebDriverWait(driver, timeout)
+
+    print("[4] Haciendo clic en pestaña 'Event and Alarm'...")
+
+    driver.switch_to.default_content()
 
     tab_xpath = (
-        "//*[self::a or self::div or self::span]"
+        "//div[contains(@class,'el-tabs__nav') or contains(@class,'top-nav') or contains(@class,'nav')]"
+        "//*[self::div or self::span or self::a]"
         "[normalize-space()='Event and Alarm' or @title='Event and Alarm']"
     )
-    tab = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.XPATH, tab_xpath)))
-    safe_js_click(driver, tab)
 
-    # Esperar que aparezca la lupa del sidebar propia del módulo
-    WebDriverWait(driver, timeout).until(
-        lambda d: d.execute_script(
-            "return Array.from(document.querySelectorAll('i.h-icon-search')).some(e => e && e.offsetParent !== null);"
+    tab = wait.until(EC.element_to_be_clickable((By.XPATH, tab_xpath)))
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", tab)
+
+    # Usa el helper que ya tiene el script
+    try:
+        safe_click(driver, tab)
+    except Exception:
+        driver.execute_script("arguments[0].click();", tab)
+
+    if step_timer:
+        step_timer.mark("[4] CLICK_TAB_EVENT_AND_ALARM")
+
+    # Validar que quedó seleccionada (clase is-active o similar)
+    try:
+        wait.until(
+            EC.presence_of_element_located(
+                (
+                    By.XPATH,
+                    tab_xpath + "[contains(@class,'is-active') or contains(@class,'active')]",
+                )
+            )
         )
-    )
+    except TimeoutException:
+        # Si no encontramos clase activa, al menos esperamos que aparezca un texto típico de la vista de alarmas
+        try:
+            wait.until(
+                EC.presence_of_element_located(
+                    (
+                        By.XPATH,
+                        "//*[contains(normalize-space(),'Alarm Analysis') or contains(normalize-space(),'Alarm Trend')]",
+                    )
+                )
+            )
+        except TimeoutException:
+            # Solo log, no romper todo el flujo
+            print("[WARN] No se pudo confirmar visualmente que la pestaña 'Event and Alarm' quedó activa.")
 
 
 def click_event_and_alarm_search_item(driver, timeout=20):
@@ -560,24 +596,26 @@ def run():
             EC.element_to_be_clickable((By.XPATH, "//*[normalize-space(text())='Log In']"))
         )
         login_button.click()
+        print("[3] Esperando carga del portal principal...")
         wait.until(lambda d: "/portal" in d.current_url)
         if timer:
             timer.mark("[2] LOGIN")
+            timer.mark("[3] Portal principal cargado")
 
-        print("[3] Navegando a Event and Alarm...")
-        driver.switch_to.default_content()
-        go_event_and_alarm_search_from_applications(driver, timer=timer)
+        # Nuevo paso: hacer clic en la pestaña Event and Alarm
+        click_tab_event_and_alarm(driver, timeout=30)
 
+        # Screenshot para validar que llegamos a Event and Alarm
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         screenshot_path = LOG_DIR / f"event_and_alarm_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         driver.save_screenshot(str(screenshot_path))
         print(f"[INFO] Screenshot guardado en: {screenshot_path}")
         if timer:
-            timer.mark("[6] SCREENSHOT_FINAL")
+            timer.mark("[5] SCREENSHOT_EVENT_AND_ALARM")
 
-        print("[OK] Flujo Event and Alarm completado.")
+        print("[OK] Flujo hasta pestaña Event and Alarm completado.")
         if timer:
-            timer.mark("[7] FIN_OK")
+            timer.mark("[6] FIN_OK")
 
     except Exception as e:
         print(f"[ERROR] Ocurrió un problema en el flujo Event and Alarm: {e}")
