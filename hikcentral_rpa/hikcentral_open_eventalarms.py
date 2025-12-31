@@ -301,20 +301,21 @@ def ir_a_event_and_alarm(driver, wait: WebDriverWait):
         print("[WARN] No se pudo validar visualmente la pantalla de Alarm Analysis.")
 
 
-def click_boton_buscar_event_and_alarm(driver, wait: WebDriverWait, timeout: int = 20):
+def click_boton_buscar_event_and_alarm(driver, wait: WebDriverWait, timeout: int = 25):
     """
-    Dentro del módulo 'Event and Alarm' hace clic en el icono de búsqueda
-    del menú lateral (lupa).
+    Dentro del módulo 'Event and Alarm' hace clic en el menú lateral 'Search'
+    (icono de lupa) para que se despliegue la lista con 'Overview' y
+    'Event and Alarm Search'.
     """
-    print("[5] Haciendo clic en el botón de búsqueda (lupa)...")
+    print("[5] Abriendo menú Search (lupa)...")
 
-    # Asegurar documento principal
+    # Asegurar que estamos en el documento principal
     try:
         driver.switch_to.default_content()
     except Exception:
         pass
 
-    # Esperar a que la vista de Alarm Analysis esté cargada
+    # Intentar validar que estamos en la vista de Alarm Analysis antes de buscar la lupa
     try:
         WebDriverWait(driver, timeout).until(
             EC.presence_of_element_located(
@@ -326,29 +327,53 @@ def click_boton_buscar_event_and_alarm(driver, wait: WebDriverWait, timeout: int
             )
         )
     except TimeoutException:
-        print("[WARN] No se pudo validar visualmente Alarm Analysis antes de buscar la lupa.")
+        print("[WARN] No se pudo validar 'Alarm Analysis', continúo igual.")
 
-    # Buscar el icono de lupa del menú lateral
-    lupa_xpath = (
-        "//i[contains(@class,'icon-svg-nav_search') or contains(@class,'nav_search')]"
-        "/ancestor::*[contains(@class,'el-submenu__title') or self::li][1]"
-    )
+    # Distintos selectores para localizar el menú Search
+    xpaths_candidates = [
+        # 1) Por texto Search en el título del submenu
+        ("//span[contains(@class,'el-submenu__title-text') "
+         "and normalize-space()='Search']/ancestor::div[contains(@class,'el-submenu__title')][1]"),
+        # 2) Por el icono de lupa y el contenedor de título
+        ("//i[contains(@class,'icon-svg-nav_search') "
+         "or contains(@class,'nav_search')]/ancestor::div[contains(@class,'el-submenu__title')][1]"),
+        # 3) Fallback: por el <li> que contiene el icono Search
+        ("//i[contains(@class,'icon-svg-nav_search') "
+         "or contains(@class,'nav_search')]/ancestor::li[1]"),
+    ]
 
+    last_error = None
+    search_element = None
+
+    for xp in xpaths_candidates:
+        try:
+            search_element = wait.until(
+                EC.element_to_be_clickable((By.XPATH, xp))
+            )
+            break
+        except Exception as e:
+            last_error = e
+            continue
+
+    if not search_element:
+        raise TimeoutException(f"No se pudo localizar el menú Search. Último error: {last_error}")
+
+    # Clic con JS para asegurarnos de disparar el evento del menú
+    safe_js_click(driver, search_element)
+
+    # Validar que se desplegó el menú: debe aparecer 'Event and Alarm Search'
     try:
-        lupa_container = wait.until(
-            EC.element_to_be_clickable((By.XPATH, lupa_xpath))
+        WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located(
+                (By.XPATH, "//span[normalize-space()='Event and Alarm Search']")
+            )
         )
+        print("[5] Menú Search desplegado correctamente.")
     except TimeoutException:
-        # Fallback: clic directo sobre el <i> por si el contenedor cambia
-        lupa_xpath = "//i[contains(@class,'icon-svg-nav_search') or contains(@class,'nav_search')]"
-        lupa_container = wait.until(
-            EC.element_to_be_clickable((By.XPATH, lupa_xpath))
-        )
-
-    safe_js_click(driver, lupa_container)
+        print("[WARN] Después del clic no se vio 'Event and Alarm Search', pero continúo.")
 
     if step_timer:
-        step_timer.mark("[5] CLICK_BOTON_BUSCAR")
+        step_timer.mark("[5] CLICK_MENU_SEARCH")
 
 
 def wait_visible(driver, by, value, timeout=20):
