@@ -334,6 +334,39 @@ def wait_click(driver, by, value, timeout=20):
     return el
 
 
+def handle_export_password_dialog_if_needed(driver, password: str, timeout: int = 10):
+    """
+    Si el diálogo de Export pide password:
+    - llena el campo Password con la misma clave del login
+    - hace clic en Save
+    Si no aparece el campo, intenta directamente hacer clic en Save.
+    Lanza TimeoutException solo si ni el campo ni el botón Save aparecen en el tiempo dado.
+    """
+    wait = WebDriverWait(driver, timeout)
+
+    # Primero intentamos encontrar el campo de password (caso en que lo pida)
+    try:
+        pwd_input = wait.until(
+            EC.visibility_of_element_located(
+                (By.XPATH, "//input[@placeholder='Password' and @type='password']")
+            )
+        )
+        pwd_input.clear()
+        pwd_input.send_keys(password)
+    except TimeoutException:
+        # No apareció el campo Password. En versiones futuras puede no ser obligatorio.
+        # En este caso simplemente seguimos adelante e intentamos hacer clic en Save.
+        pass
+
+    # Siempre intentamos hacer clic en el botón Save del diálogo de Export
+    save_btn = wait.until(
+        EC.element_to_be_clickable(
+            (By.XPATH, "//button[contains(@class,'el-button--primary') and .//span[normalize-space()='Save']]")
+        )
+    )
+    save_btn.click()
+
+
 def cerrar_overlays(driver):
     posibles_overlays = [
         (By.CSS_SELECTOR, "button.close-button"),
@@ -715,8 +748,6 @@ def click_export_event_and_alarm(
             timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_ERROR_NO_DIALOG")
         return None
 
-    fill_export_password_if_needed(driver, password, timeout=10, timer=timer)
-
     excel_option_xpath = (
         "//div[contains(@class,'el-dialog__wrapper')]//label[contains(@class,'el-radio') and "
         "(contains(translate(@title,'excel','EXCEL'),'EXCEL') or .//span[contains(translate(normalize-space(),'excel','EXCEL'),'EXCEL')])]"
@@ -732,14 +763,14 @@ def click_export_event_and_alarm(
             timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_ERROR_NO_EXCEL")
         return None
 
-    save_button_xpath = "//div[contains(@class,'el-dialog__wrapper')]//button[@title='Save']"
     try:
-        save_button = wait.until(
-            EC.element_to_be_clickable((By.XPATH, save_button_xpath))
+        handle_export_password_dialog_if_needed(
+            driver, password=password, timeout=10
         )
-        safe_js_click(driver, save_button)
     except TimeoutException:
-        print("[WARN] No se encontró el botón 'Save' en el diálogo de Export.")
+        print(
+            "[WARN] No se encontró el campo Password ni el botón 'Save' en el diálogo de Export."
+        )
         if timer:
             timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_ERROR_NO_SAVE")
         return None
