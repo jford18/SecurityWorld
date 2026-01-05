@@ -712,6 +712,7 @@ def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = Non
 
 
 def wait_for_download(download_dir: Path, prefix: str, timeout: int = 180) -> Path:
+    # Reutilizada de hikcentral_export_resourcestatus.py
     download_dir.mkdir(parents=True, exist_ok=True)
 
     fin = time.time() + timeout
