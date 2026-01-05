@@ -489,48 +489,27 @@ def click_export_event_and_alarm(driver, timeout: int = 30, timer: StepTimer | N
     """
     print("[7] Abriendo panel Export en Event and Alarm Search...")
 
-    # Asegurarnos de que la página terminó de renderizar
-    WebDriverWait(driver, timeout).until(
-        lambda d: d.execute_script("return document.readyState") == "complete"
+    wait = WebDriverWait(driver, timeout)
+
+    wait.until(lambda d: d.execute_script("return document.readyState") == "complete")
+
+    export_xpath = (
+        "//button[.//span[normalize-space()='Export'] or @title='Export']"
+        " | //*[@title='Export' and (self::button or self::div)]"
     )
 
-    # Distintos XPATH para ubicar el botón o icono de Export
-    xpaths = [
-        # 1) Elemento con title='Export' que sea botón o esté dentro de uno
-        "//*[@title='Export']/ancestor-or-self::button[1]",
-        # 2) Span con texto 'Export' dentro de un botón
-        "//span[normalize-space()='Export']/ancestor::button[1]",
-        # 3) Cualquier elemento con title='Export' (icono, div, etc.)
-        "//*[@title='Export']",
-        # 4) Cualquier elemento visible cuyo texto sea exactamente 'Export'
-        "//*[normalize-space(text())='Export']",
-    ]
+    export_btn = wait.until(
+        EC.element_to_be_clickable((By.XPATH, export_xpath))
+    )
 
-    export_el = None
-    last_error = None
+    safe_js_click(driver, export_btn)
+    print("[7] Botón Export cliqueado en Event and Alarm Search.")
+    if timer:
+        timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
 
-    for xp in xpaths:
-        try:
-            export_el = WebDriverWait(driver, 5).until(
-                EC.presence_of_element_located((By.XPATH, xp))
-            )
-            # Si lo encontramos, ya no probamos más XPATH
-            break
-        except Exception as e:
-            last_error = e
-            continue
+    archivos_previos = os.listdir(DOWNLOAD_DIR)
 
-    if not export_el:
-        # Si después de probar todos los XPATH no tenemos elemento, lanzamos TimeoutException
-        raise TimeoutException(f"No se encontró el botón/icono Export. Último error: {last_error}")
-
-    # Hacemos clic con JS para evitar problemas de overlays o de "element not clickable"
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", export_el)
-    driver.execute_script("arguments[0].click();", export_el)
-
-    print("[7] Botón Export clickeado en Event and Alarm Search.")
-
-    WebDriverWait(driver, timeout).until(
+    wait.until(
         EC.visibility_of_element_located(
             (
                 By.XPATH,
@@ -539,30 +518,39 @@ def click_export_event_and_alarm(driver, timeout: int = 30, timer: StepTimer | N
         )
     )
 
-    try:
-        search_button = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable(
-                (
-                    By.XPATH,
-                    "//div[contains(@class,'drawer')]//button[contains(@class,'el-button--primary') and normalize-space()='Search']",
-                )
-            )
-        )
-    except Exception:
-        search_button = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable(
-                (
-                    By.XPATH,
-                    "//button[contains(@class,'el-button--primary') and normalize-space()='Search']",
-                )
-            )
-        )
+    if timer:
+        timer.mark("[7] EXPORT_PANEL_OPEN")
 
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", search_button)
-    driver.execute_script("arguments[0].click();", search_button)
+    print("[8] Seleccionando opción de Export (Excel) en el panel y confirmando...")
+
+    excel_options = driver.find_elements(
+        By.XPATH,
+        "//div[contains(@class,'drawer')]//label[contains(@class,'el-radio') and (translate(@title,'excel','EXCEL')='EXCEL' or .//span[normalize-space()='Excel'])]",
+    )
+    if excel_options:
+        excel_option = wait.until(EC.element_to_be_clickable(excel_options[0]))
+        safe_js_click(driver, excel_option)
+
+    export_confirm_button = wait.until(
+        EC.element_to_be_clickable(
+            (
+                By.XPATH,
+                "(//div[contains(@class,'drawer') or contains(@class,'el-dialog__footer')]//button[.//div[normalize-space()='Export']])[last()]",
+            )
+        )
+    )
+    safe_js_click(driver, export_confirm_button)
 
     if timer:
-        timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
+        timer.mark("[8] EXPORT_LAUNCHED")
+
+    print(f"[8] Esperando a que se descargue el archivo en: {DOWNLOAD_DIR}")
+    archivo_descargado = esperar_descarga(DOWNLOAD_DIR, archivos_previos, timeout=180)
+
+    print(f"[OK] Descarga Event and Alarm completada. Archivo: {archivo_descargado}")
+    if timer:
+        timer.mark("[9] EXPORT_DOWNLOAD_COMPLETED")
+    return Path(archivo_descargado)
 
 
 def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = None):
@@ -857,18 +845,13 @@ def run():
         click_search_button(driver, timeout=30, timer=timer)
 
         limpiar_descargas(DOWNLOAD_DIR)
-        click_export_event_and_alarm(driver, timeout=30, timer=timer)
-
-        print("[8] Esperando descarga de Event and Alarm Search...")
-        archivo = esperar_descarga_event_and_alarm(timeout=180)
+        archivo = click_export_event_and_alarm(driver, timeout=30, timer=timer)
 
         if archivo is None:
             print("[ERROR] No se detectó ningún archivo descargado desde Event and Alarm Search.")
         else:
             size_mb = archivo.stat().st_size / (1024 * 1024)
             print(f"[8] Archivo de Event and Alarm Search descargado: {archivo} ({size_mb:.2f} MB)")
-            if timer:
-                timer.mark("[8] EXPORT_DOWNLOAD_OK")
 
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         screenshot_path = LOG_DIR / f"event_and_alarm_search_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
