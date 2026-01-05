@@ -137,6 +137,36 @@ HIK_PASSWORD = os.getenv("HIK_PASSWORD", "SW2112asm")
 LOG_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\logs")
 DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")
 
+
+def esperar_descarga(download_dir: Path, archivos_previos, timeout: int = 120) -> str:
+    """Espera hasta detectar un nuevo archivo .xlsx o .xls en download_dir."""
+
+    print("[9] Esperando archivo descargado...")
+    inicio = time.time()
+
+    while True:
+        archivos_actuales = os.listdir(download_dir)
+        nuevos = [
+            f
+            for f in archivos_actuales
+            if f not in archivos_previos
+            and not f.endswith(".crdownload")
+            and (f.endswith(".xlsx") or f.endswith(".xls"))
+        ]
+
+        if nuevos:
+            archivo = nuevos[0]
+            ruta = str(download_dir / archivo)
+            print(f"[9] Archivo encontrado: {ruta}")
+            if step_timer:
+                step_timer.mark("[9] Descarga detectada")
+            return ruta
+
+        if time.time() - inicio > timeout:
+            raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
+
+        time.sleep(2)
+
 cpu_measurements: list[float] = []
 step_timer: StepTimer | None = None
 performance_recorder: PerformanceRecorder | None = None
@@ -609,13 +639,16 @@ def click_export_event_and_alarm(driver, timeout: int = 30, timer: StepTimer | N
     - Espera el panel 'Export'.
     - Clic en Export dentro del panel.
     - Si aparece cuadro de contraseña, escribe HIK_PASSWORD y confirma.
-    - Espera la descarga del archivo en disco (usando wait_for_download).
+    - Espera la descarga del archivo en disco (usando esperar_descarga).
     Devuelve la ruta completa del archivo descargado, o None si no se pudo confirmar.
     """
 
     wait = WebDriverWait(driver, timeout)
 
     print("[7] Abriendo panel Export en Event and Alarm Search...")
+
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    archivos_previos = os.listdir(DOWNLOAD_DIR)
 
     # 1) Botón Export de la pantalla principal
     export_btn = wait.until(
@@ -664,7 +697,8 @@ def click_export_event_and_alarm(driver, timeout: int = 30, timer: StepTimer | N
 
     # 5) Esperar la descarga del archivo en disco
     try:
-        archivo = wait_for_download(DOWNLOAD_DIR, prefix="EventAndAlarm", timeout=180)
+        ruta_archivo = esperar_descarga(DOWNLOAD_DIR, archivos_previos, timeout=180)
+        archivo = Path(ruta_archivo)
         print(f"[7] Archivo de export descargado: {archivo}")
         return archivo
     except Exception as e:
@@ -711,44 +745,6 @@ def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = Non
         timer.mark("[9] CLICK_TRIGGER_ALARM")
 
 
-def wait_for_download(download_dir: Path, prefix: str, timeout: int = 180) -> Path:
-    # Reutilizada de hikcentral_export_resourcestatus.py
-    download_dir.mkdir(parents=True, exist_ok=True)
-
-    fin = time.time() + timeout
-    existentes = {f.name for f in download_dir.glob("*") if f.is_file()}
-    candidato: Path | None = None
-
-    while time.time() < fin:
-        archivos = [
-            f
-            for f in download_dir.glob(f"{prefix}*")
-            if f.is_file() and not f.name.endswith(".crdownload")
-        ]
-
-        nuevos = [f for f in archivos if f.name not in existentes]
-
-        if archivos:
-            if nuevos:
-                candidato = max(nuevos, key=lambda f: f.stat().st_mtime)
-            elif candidato is None:
-                candidato = max(archivos, key=lambda f: f.stat().st_mtime)
-            else:
-                candidato = max([candidato, *archivos], key=lambda f: f.stat().st_mtime)
-
-            size1 = candidato.stat().st_size
-            time.sleep(1)
-            size2 = candidato.stat().st_size
-            if size1 == size2 and size2 > 0:
-                return candidato
-
-        time.sleep(1)
-
-    raise TimeoutError(
-        f"No se encontró archivo descargado con prefijo {prefix} en {timeout} segundos."
-    )
-
-
 def limpiar_descargas(download_dir: Path = DOWNLOAD_DIR):
     """Elimina archivos previos en la carpeta de descargas para identificar el nuevo Excel."""
     for f in download_dir.glob("*"):
@@ -756,36 +752,6 @@ def limpiar_descargas(download_dir: Path = DOWNLOAD_DIR):
             f.unlink()
         except Exception:
             pass
-
-
-def esperar_descarga(download_dir: Path, archivos_previos, timeout: int = 120) -> str:
-    """Espera hasta detectar un nuevo archivo .xlsx o .xls en download_dir."""
-
-    print("[9] Esperando archivo descargado...")
-    inicio = time.time()
-
-    while True:
-        archivos_actuales = os.listdir(download_dir)
-        nuevos = [
-            f
-            for f in archivos_actuales
-            if f not in archivos_previos
-            and not f.endswith(".crdownload")
-            and (f.endswith(".xlsx") or f.endswith(".xls"))
-        ]
-
-        if nuevos:
-            archivo = nuevos[0]
-            ruta = str(download_dir / archivo)
-            print(f"[9] Archivo encontrado: {ruta}")
-            if step_timer:
-                step_timer.mark("[9] Descarga detectada")
-            return ruta
-
-        if time.time() - inicio > timeout:
-            raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
-
-        time.sleep(2)
 
 
 def esperar_descarga_archivo(nombre_parcial: str | None = None, timeout: int = 180) -> Path | None:
