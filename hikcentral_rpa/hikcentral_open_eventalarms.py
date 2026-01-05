@@ -483,59 +483,44 @@ def click_search_button(driver, timeout: int = 20, timer: StepTimer | None = Non
 
 def click_export_event_and_alarm(driver, timeout: int = 30, timer: StepTimer | None = None):
     """
-    En la pantalla 'Event and Alarm Search' hace clic en el botón/icono 'Export'
-    que aparece en la parte superior derecha de la grilla.
-    Debe funcionar aunque el botón sea un <button>, <div>, <span> o un icono con title='Export'.
+    Desde la pantalla 'Event and Alarm Search':
+    - Hace clic en el botón Export (arriba a la derecha del grid).
+    - Abre el panel Export.
+    - Selecciona formato Excel.
+    - Hace clic en Export del panel.
+    - Espera la descarga del archivo en DOWNLOAD_DIR y devuelve la ruta.
     """
+
     print("[7] Abriendo panel Export en Event and Alarm Search...")
 
-    wait = WebDriverWait(driver, timeout)
+    WebDriverWait(driver, timeout).until(
+        lambda d: d.execute_script("return document.readyState") == "complete"
+    )
 
-    # Esperar a que la página esté lista
-    wait.until(lambda d: d.execute_script("return document.readyState") == "complete")
-
-    def _find_export_button(d):
-        js = """
-        const isVisible = (el) => !!(el && el.offsetParent !== null);
-        const texts = ['Export'];
-        const all = Array.from(document.querySelectorAll('*'));
-        const candidates = all.filter(el => {
-            if (!isVisible(el)) return false;
-            const t = (el.textContent || '').trim();
-            if (!t) return false;
-            return texts.some(tx => t === tx || t.includes(tx));
-        });
-        if (!candidates.length) return null;
-
-        candidates.sort((a, b) => b.getBoundingClientRect().right - a.getBoundingClientRect().right);
-        let target = candidates[0];
-
-        let node = target;
-        while (node) {
-            if (node.tagName === 'BUTTON' ||
-                node.getAttribute('role') === 'button' ||
-                typeof node.onclick === 'function') {
-                target = node;
-                break;
-            }
-            node = node.parentElement;
-        }
-        return target;
+    export_btn = driver.execute_script(
         """
-        return d.execute_script(js)
+        const spans = Array.from(document.querySelectorAll("span"));
+        const candidates = spans
+            .filter(s => s.textContent.trim() === "Export")
+            .map(s => s.closest("button") || s.parentElement)
+            .filter(el => el && el.offsetParent !== null);
+        return candidates.length ? candidates[0] : null;
+        """
+    )
 
-    export_btn = wait.until(_find_export_button)
+    if not export_btn:
+        raise TimeoutException("No se encontró el botón Export visible en Event and Alarm Search.")
 
     driver.execute_script("arguments[0].scrollIntoView({block:'center'});", export_btn)
     driver.execute_script("arguments[0].click();", export_btn)
+    print("[7] Botón Export clickeado en Event and Alarm Search.")
 
-    print("[7] Botón Export cliqueado en Event and Alarm Search.")
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
 
     archivos_previos = os.listdir(DOWNLOAD_DIR)
 
-    wait.until(
+    panel = WebDriverWait(driver, timeout).until(
         EC.visibility_of_element_located(
             (
                 By.XPATH,
@@ -544,20 +529,17 @@ def click_export_event_and_alarm(driver, timeout: int = 30, timer: StepTimer | N
         )
     )
 
-    if timer:
-        timer.mark("[7] EXPORT_PANEL_OPEN")
-
-    print("[8] Seleccionando opción de Export (Excel) en el panel y confirmando...")
-
-    excel_options = driver.find_elements(
-        By.XPATH,
-        "//div[contains(@class,'drawer')]//label[contains(@class,'el-radio') and (translate(@title,'excel','EXCEL')='EXCEL' or .//span[normalize-space()='Excel'])]",
+    excel_option = WebDriverWait(driver, timeout).until(
+        EC.element_to_be_clickable(
+            (
+                By.XPATH,
+                "//div[contains(@class,'drawer')]//label[contains(@class,'el-radio') and (translate(@title,'excel','EXCEL')='EXCEL' or .//span[normalize-space()='Excel'])]",
+            )
+        )
     )
-    if excel_options:
-        excel_option = wait.until(EC.element_to_be_clickable(excel_options[0]))
-        safe_js_click(driver, excel_option)
+    driver.execute_script("arguments[0].click();", excel_option)
 
-    export_confirm_button = wait.until(
+    export_panel_btn = WebDriverWait(driver, timeout).until(
         EC.element_to_be_clickable(
             (
                 By.XPATH,
@@ -565,17 +547,17 @@ def click_export_event_and_alarm(driver, timeout: int = 30, timer: StepTimer | N
             )
         )
     )
-    safe_js_click(driver, export_confirm_button)
+    driver.execute_script("arguments[0].click();", export_panel_btn)
+
+    print("[8] Export desde panel ejecutado, esperando descarga de archivo...")
+
+    archivo_descargado = esperar_descarga(DOWNLOAD_DIR, archivos_previos, timeout=120)
+
+    print(f"[8] Archivo descargado desde Event and Alarm Search: {archivo_descargado}")
 
     if timer:
-        timer.mark("[8] EXPORT_LAUNCHED")
+        timer.mark("[8] EXPORT_COMPLETADO")
 
-    print(f"[8] Esperando a que se descargue el archivo en: {DOWNLOAD_DIR}")
-    archivo_descargado = esperar_descarga(DOWNLOAD_DIR, archivos_previos, timeout=180)
-
-    print(f"[OK] Descarga Event and Alarm completada. Archivo: {archivo_descargado}")
-    if timer:
-        timer.mark("[9] EXPORT_DOWNLOAD_COMPLETED")
     return Path(archivo_descargado)
 
 
@@ -872,6 +854,8 @@ def run():
 
         limpiar_descargas(DOWNLOAD_DIR)
         archivo = click_export_event_and_alarm(driver, timeout=30, timer=timer)
+
+        print(f"[INFO] Ruta final del archivo exportado: {archivo}")
 
         if archivo is None:
             print("[ERROR] No se detectó ningún archivo descargado desde Event and Alarm Search.")
