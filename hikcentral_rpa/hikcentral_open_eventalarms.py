@@ -439,6 +439,47 @@ def validar_event_and_alarm_search_screen(driver, timeout=30, timer: StepTimer |
         timer.mark("[6] VALIDAR_EVENT_AND_ALARM_SEARCH")
 
 
+def click_search_button(driver, timeout: int = 20, timer: StepTimer | None = None):
+    """
+    En la pantalla 'Event and Alarm Search' hace clic en el botón rojo 'Search'
+    para ejecutar la consulta con los filtros actuales.
+    """
+    print("[6] Haciendo clic en botón Search...")
+
+    btn = WebDriverWait(driver, timeout).until(
+        EC.element_to_be_clickable(
+            (
+                By.XPATH,
+                "//button[contains(@class,'el-button') and "
+                "(normalize-space()='Search' or @title='Search')]",
+            )
+        )
+    )
+
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
+    driver.execute_script("arguments[0].click();", btn)
+
+    # Esperar a que se carguen los resultados (al menos una celda en la tabla)
+    try:
+        WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located(
+                (
+                    By.XPATH,
+                    "//div[contains(@class,'hik-table')]//table//tr[1]//td",
+                )
+            )
+        )
+    except TimeoutException:
+        # No lanzamos error duro, solo dejamos log
+        print(
+            "[WARN] No se pudo validar visualmente la carga de resultados después de Search."
+        )
+
+    print("[6] CLICK_SEARCH_BUTTON")
+    if timer:
+        timer.mark("[6] CLICK_SEARCH_BUTTON")
+
+
 def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = None):
     """
     En la pantalla 'Event and Alarm Search' hace clic en el botón 'Trigger Alarm'
@@ -597,6 +638,7 @@ def run():
         click_sidebar_event_and_alarm_search(driver, timeout=30, timer=timer)
         validar_event_and_alarm_search_screen(driver, timeout=40, timer=timer)
         click_trigger_alarm_button(driver, timeout=30, timer=timer)
+        click_search_button(driver, timeout=30, timer=timer)
 
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         screenshot_path = LOG_DIR / f"event_and_alarm_search_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
