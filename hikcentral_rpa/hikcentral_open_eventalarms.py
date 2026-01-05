@@ -134,6 +134,7 @@ HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
 HIK_PASSWORD = os.getenv("HIK_PASSWORD", "SW2112asm")
 
 LOG_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\logs")
+DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")
 
 cpu_measurements: list[float] = []
 step_timer: StepTimer | None = None
@@ -480,6 +481,60 @@ def click_search_button(driver, timeout: int = 20, timer: StepTimer | None = Non
         timer.mark("[6] CLICK_SEARCH_BUTTON")
 
 
+def click_export_event_and_alarm(driver, timeout: int = 30, timer: StepTimer | None = None):
+    """
+    En la pantalla 'Event and Alarm Search' abre el panel de Export,
+    deja el formato Excel y confirma la exportación para que se descargue el archivo.
+    """
+
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    archivos_previos = os.listdir(DOWNLOAD_DIR)
+
+    print("[7] Abriendo panel Export en Event and Alarm Search...")
+
+    export_btn = WebDriverWait(driver, timeout).until(
+        EC.element_to_be_clickable(
+            (By.XPATH, "//span[normalize-space()='Export']/ancestor::button[1]")
+        )
+    )
+    safe_js_click(driver, export_btn)
+
+    WebDriverWait(driver, timeout).until(
+        EC.visibility_of_element_located(
+            (
+                By.XPATH,
+                "//div[contains(@class,'drawer')]//span[contains(@class,'drawer-head-title') and normalize-space()='Export']",
+            )
+        )
+    )
+
+    excel_options = driver.find_elements(
+        By.XPATH,
+        "//div[contains(@class,'drawer')]//label[contains(@class,'el-radio') and (translate(@title,'excel','EXCEL')='EXCEL' or .//span[normalize-space()='Excel'])]",
+    )
+    if excel_options:
+        excel_option = WebDriverWait(driver, timeout).until(
+            EC.element_to_be_clickable(excel_options[0])
+        )
+        driver.execute_script("arguments[0].click();", excel_option)
+
+    export_confirm_button = WebDriverWait(driver, timeout).until(
+        EC.element_to_be_clickable(
+            (
+                By.XPATH,
+                "(//div[contains(@class,'drawer') or contains(@class,'el-dialog__footer')]//button[.//div[normalize-space()='Export']])[last()]",
+            )
+        )
+    )
+    driver.execute_script("arguments[0].click();", export_confirm_button)
+
+    archivo_descargado = esperar_descarga(DOWNLOAD_DIR, archivos_previos, timeout=180)
+    print(f"[10] Archivo descargado en: {archivo_descargado}")
+
+    if timer:
+        timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
+
+
 def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = None):
     """
     En la pantalla 'Event and Alarm Search' hace clic en el botón 'Trigger Alarm'
@@ -518,12 +573,63 @@ def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = Non
     if timer:
         timer.mark("[9] CLICK_TRIGGER_ALARM")
 
+def limpiar_descargas(download_dir: Path = DOWNLOAD_DIR):
+    """Elimina archivos previos en la carpeta de descargas para identificar el nuevo Excel."""
+    for f in download_dir.glob("*"):
+        try:
+            f.unlink()
+        except Exception:
+            pass
+
+
+def esperar_descarga(download_dir: Path, archivos_previos, timeout: int = 120) -> str:
+    """Espera hasta detectar un nuevo archivo .xlsx o .xls en download_dir."""
+
+    print("[9] Esperando archivo descargado...")
+    inicio = time.time()
+
+    while True:
+        archivos_actuales = os.listdir(download_dir)
+        nuevos = [
+            f
+            for f in archivos_actuales
+            if f not in archivos_previos
+            and not f.endswith(".crdownload")
+            and (f.endswith(".xlsx") or f.endswith(".xls"))
+        ]
+
+        if nuevos:
+            archivo = nuevos[0]
+            ruta = str(download_dir / archivo)
+            print(f"[9] Archivo encontrado: {ruta}")
+            if step_timer:
+                step_timer.mark("[9] Descarga detectada")
+            return ruta
+
+        if time.time() - inicio > timeout:
+            raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
+
+        time.sleep(2)
 
 
 def crear_driver() -> webdriver.Chrome:
-    """Configura y devuelve un driver de Chrome."""
+    """Configura y devuelve un driver de Chrome listo para descargar archivos."""
+
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
     chrome_options = Options()
+
+    prefs = {
+        "download.default_directory": str(DOWNLOAD_DIR),
+        "download.prompt_for_download": False,
+        "download.directory_upgrade": True,
+        "safebrowsing.enabled": False,
+        "safebrowsing.disable_download_protection": True,
+        "profile.default_content_setting_values.automatic_downloads": 1,
+        "profile.default_content_setting_values.popups": 0,
+    }
+    chrome_options.add_experimental_option("prefs", prefs)
+
     chrome_options.add_argument("--ignore-certificate-errors")
     chrome_options.add_argument("--allow-running-insecure-content")
     chrome_options.add_argument("--safebrowsing-disable-download-protection")
@@ -534,7 +640,16 @@ def crear_driver() -> webdriver.Chrome:
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
+    driver.execute_cdp_cmd(
+        "Page.setDownloadBehavior",
+        {
+            "behavior": "allow",
+            "downloadPath": str(DOWNLOAD_DIR),
+        },
+    )
+
     driver.maximize_window()
+    print(f"[DEBUG] DOWNLOAD_DIR = {DOWNLOAD_DIR}")
     return driver
 
 
@@ -640,16 +755,19 @@ def run():
         click_trigger_alarm_button(driver, timeout=30, timer=timer)
         click_search_button(driver, timeout=30, timer=timer)
 
+        limpiar_descargas(DOWNLOAD_DIR)
+        click_export_event_and_alarm(driver, timeout=30, timer=timer)
+
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         screenshot_path = LOG_DIR / f"event_and_alarm_search_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         driver.save_screenshot(str(screenshot_path))
         print(f"[INFO] Screenshot guardado en: {screenshot_path}")
         if timer:
-            timer.mark("[7] SCREENSHOT_EVENT_AND_ALARM_SEARCH")
+            timer.mark("[8] SCREENSHOT_EVENT_AND_ALARM_SEARCH")
 
-        print("[OK] Flujo Event and Alarm Search completado.")
+        print("[OK] Flujo Event and Alarm Search + Export completado.")
         if timer:
-            timer.mark("[8] FIN_OK")
+            timer.mark("[9] FIN_OK")
 
     except Exception as e:
         print(f"[ERROR] Ocurrió un problema en el flujo Event and Alarm: {e}")
