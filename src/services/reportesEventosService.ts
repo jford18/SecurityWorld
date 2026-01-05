@@ -44,11 +44,15 @@ const buildQueryString = (filters: IntrusionConsolidadoFilters) => {
   const searchParams = new URLSearchParams();
 
   Object.entries(filters).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === '') {
+    const normalizedValue = value instanceof Date
+      ? (Number.isNaN(value.getTime()) ? null : value.toISOString())
+      : value;
+
+    if (normalizedValue === undefined || normalizedValue === null || normalizedValue === '') {
       return;
     }
 
-    searchParams.append(key, String(value));
+    searchParams.append(key, String(normalizedValue));
   });
 
   const query = searchParams.toString();

@@ -140,7 +140,7 @@ const IntrusionesFilters: React.FC<IntrusionesFiltersProps> = ({
 
   const emitFiltersChange = (
     field: keyof IntrusionConsolidadoFilters,
-    value: string | number | boolean | undefined
+    value: string | number | boolean | Date | undefined | null
   ) => {
     const updatedFilters: IntrusionConsolidadoFilters = {
       ...filters,
@@ -159,8 +159,10 @@ const IntrusionesFilters: React.FC<IntrusionesFiltersProps> = ({
     _: string | null,
     helpers: { isoString: string | null; dateValue?: Date | null },
   ) => {
-    const sanitizedValue = helpers.isoString || undefined;
-    emitFiltersChange(field, sanitizedValue);
+    const dateValue = helpers.dateValue && !Number.isNaN(helpers.dateValue.getTime())
+      ? helpers.dateValue
+      : undefined;
+    emitFiltersChange(field, dateValue);
   };
 
   const handleClearFilters = () => {

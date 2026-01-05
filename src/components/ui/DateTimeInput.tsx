@@ -11,10 +11,10 @@ export const buildDateTimeLocalValue = (date?: string, time?: string) => {
   return `${date}T${sanitizedTime}`;
 };
 
-export const normalizeDateTimeLocalString = (value?: string | null) => {
+export const normalizeDateTimeLocalString = (value?: string | Date | null) => {
   if (!value) return '';
 
-  const parsed = new Date(value);
+  const parsed = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return '';
   }
@@ -23,7 +23,7 @@ export const normalizeDateTimeLocalString = (value?: string | null) => {
   return withOffset.toISOString().slice(0, 16);
 };
 
-export const splitDateTimeLocalValue = (value?: string | null): DateTimeParts => {
+export const splitDateTimeLocalValue = (value?: string | Date | null): DateTimeParts => {
   const normalizedValue = normalizeDateTimeLocalString(value);
   if (!normalizedValue) {
     return { date: undefined, time: undefined };
@@ -33,10 +33,10 @@ export const splitDateTimeLocalValue = (value?: string | null): DateTimeParts =>
   return { date: datePart || undefined, time: timePart || undefined };
 };
 
-export const toIsoString = (value?: string | null) => {
+export const toIsoString = (value?: string | Date | null) => {
   if (!value) return null;
 
-  const parsed = new Date(value);
+  const parsed = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return null;
   }
@@ -48,7 +48,7 @@ export const toIsoString = (value?: string | null) => {
 interface DateTimeInputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange'> {
   label?: string;
-  value?: string | null;
+  value?: string | Date | null;
   error?: string;
   onChange: (
     value: string | null,
@@ -73,7 +73,7 @@ const DateTimeInput: React.FC<DateTimeInputProps> = ({
   const normalizedValue = React.useMemo(() => {
     if (!value) return '';
 
-    if (isDateTimeLocalFormat(value)) {
+    if (typeof value === 'string' && isDateTimeLocalFormat(value)) {
       return value;
     }
 
