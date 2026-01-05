@@ -9,15 +9,15 @@ interface Props {
 }
 
 const ECUADOR_CENTER: [number, number] = [-1.831239, -78.183406];
-const MIN_RADIUS = 6;
-const MAX_RADIUS = 26;
+const MIN_RADIUS = 3;
+const MAX_RADIUS = 14;
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 const calculateRadius = (count: number, maxCount: number) => {
-  const safeMax = Math.max(1, maxCount);
-  const safeCount = Math.max(0, count || 0);
-  const ratio = Math.sqrt(safeCount) / Math.sqrt(safeMax);
+  const safeCount = Math.max(0, Number(count) || 0);
+  const safeMax = Math.max(1, Number(maxCount) || 1);
+  const ratio = Math.log1p(safeCount) / Math.log1p(safeMax);
 
   return clamp(MIN_RADIUS + (MAX_RADIUS - MIN_RADIUS) * ratio, MIN_RADIUS, MAX_RADIUS);
 };
@@ -28,14 +28,11 @@ const MapaEventosPorSitio: React.FC<Props> = ({ data, loading }) => {
     [data],
   );
 
-  const maxEventos = useMemo(
-    () =>
-      Math.max(
-        ...sitiosConCoordenadas.map((sitio) => Math.max(0, sitio.total_eventos || 0)),
-        1,
-      ),
-    [sitiosConCoordenadas],
-  );
+  const maxEventos = useMemo(() => {
+    const valores = sitiosConCoordenadas.map((sitio) => Number(sitio.total_eventos ?? 0));
+
+    return Math.max(1, ...valores.filter((v) => Number.isFinite(v)));
+  }, [sitiosConCoordenadas]);
 
   const center: [number, number] = useMemo(() => {
     if (!sitiosConCoordenadas.length) {
@@ -89,7 +86,7 @@ const MapaEventosPorSitio: React.FC<Props> = ({ data, loading }) => {
                 key={`${sitio.sitio_id}-${sitio.sitio_nombre}`}
                 center={[lat, lng]}
                 radius={radius}
-                pathOptions={{ weight: 1, fillOpacity: 0.45 }}
+                pathOptions={{ weight: 1, fillOpacity: 0.3 }}
               >
                 <Tooltip direction="top" offset={[0, -2]} opacity={1} sticky>
                   {`${sitio.sitio_nombre} - ${sitio.total_eventos.toLocaleString('es-MX')} eventos`}
