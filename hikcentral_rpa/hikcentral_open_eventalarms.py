@@ -367,6 +367,47 @@ def handle_password_confirm_if_present(driver, timeout: int = 10):
         print(f"[WARN] Error manejando diálogo de password: {e}")
 
 
+def fill_export_password_if_needed(driver, wait: WebDriverWait, timeout: int = 8):
+    """
+    Si el panel de Export pide una contraseña (Confirm password),
+    escribir la misma contraseña usada en el login (HIK_PASSWORD) y
+    pulsar el botón Confirm/OK. Si no aparece el cuadro, simplemente salir.
+    """
+
+    wait_password = wait if wait else WebDriverWait(driver, timeout)
+
+    try:
+        password_input = wait_password.until(
+            EC.presence_of_element_located(
+                (
+                    By.XPATH,
+                    "//div[contains(@class,'drawer') or contains(@class,'el-dialog')]"
+                    "//input[@type='password' or contains(@placeholder,'Password') or contains(@placeholder,'password')]",
+                )
+            )
+        )
+    except TimeoutException:
+        print("[INFO] No apareció cuadro de confirmación de contraseña en Export (continuo sin password).")
+        return
+
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", password_input)
+        password_input.clear()
+        password_input.send_keys(HIK_PASSWORD)
+        print("[INFO] Password de export ingresado en cuadro de confirmación.")
+
+        confirm_btn = password_input.find_element(
+            By.XPATH,
+            "./ancestor::div[contains(@class,'drawer') or contains(@class,'el-dialog')]"
+            "//button[.//span[normalize-space()='Confirm'] or .//span[normalize-space()='OK'] or .//span[contains(normalize-space(),'Confirm')] ]",
+        )
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", confirm_btn)
+        driver.execute_script("arguments[0].click();", confirm_btn)
+        print("[INFO] Botón Confirm/OK del cuadro de password clickeado.")
+    except Exception as e:
+        print(f"[WARN] Problema rellenando la contraseña de export: {e}")
+
+
 def click_sidebar_alarm_search(driver, timeout=20, timer: StepTimer | None = None):
     """
     Hace clic en el icono de lupa del menú lateral (Search).
@@ -538,37 +579,19 @@ def click_export_event_and_alarm(driver, timeout: int = 30, timer: StepTimer | N
         lambda d: d.execute_script("return document.readyState") == "complete"
     )
 
-    export_btn = driver.execute_script(
-        """
-        const spans = Array.from(document.querySelectorAll("span"));
-        const candidates = spans
-            .filter(s => s.textContent.trim() === "Export")
-            .map(s => s.closest("button") || s.parentElement)
-            .filter(el => el && el.offsetParent !== null);
-        return candidates.length ? candidates[0] : null;
-        """
+    export_icon_xpath = "//*[@title='Export']/ancestor::button[1]"
+    export_icon_btn = WebDriverWait(driver, timeout).until(
+        EC.element_to_be_clickable((By.XPATH, export_icon_xpath))
+    )
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", export_icon_btn)
+    driver.execute_script("arguments[0].click();", export_icon_btn)
+
+    drawer_xpath = "//div[contains(@class,'drawer') and .//span[normalize-space()='Export']]"
+    drawer = WebDriverWait(driver, timeout).until(
+        EC.visibility_of_element_located((By.XPATH, drawer_xpath))
     )
 
-    if not export_btn:
-        raise TimeoutException("No se encontró el botón Export visible en Event and Alarm Search.")
-
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", export_btn)
-    driver.execute_script("arguments[0].click();", export_btn)
-    print("[7] Botón Export clickeado en Event and Alarm Search.")
-
-    if timer:
-        timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
-
-    archivos_previos = os.listdir(DOWNLOAD_DIR)
-
-    panel = WebDriverWait(driver, timeout).until(
-        EC.visibility_of_element_located(
-            (
-                By.XPATH,
-                "//div[contains(@class,'drawer')]//span[contains(@class,'drawer-head-title') and normalize-space()='Export']",
-            )
-        )
-    )
+    fill_export_password_if_needed(driver, WebDriverWait(driver, timeout))
 
     excel_option = WebDriverWait(driver, timeout).until(
         EC.element_to_be_clickable(
@@ -580,28 +603,32 @@ def click_export_event_and_alarm(driver, timeout: int = 30, timer: StepTimer | N
     )
     driver.execute_script("arguments[0].click();", excel_option)
 
-    export_panel_btn = WebDriverWait(driver, timeout).until(
-        EC.element_to_be_clickable(
-            (
-                By.XPATH,
-                "(//div[contains(@class,'drawer') or contains(@class,'el-dialog__footer')]//button[.//div[normalize-space()='Export']])[last()]",
-            )
-        )
+    export_xpath = (
+        "//div[contains(@class,'drawer')]"
+        "//button[contains(@class,'el-button--primary') and .//span[normalize-space()='Export']]"
     )
-    driver.execute_script("arguments[0].click();", export_panel_btn)
+    export_btn = WebDriverWait(driver, timeout).until(
+        EC.element_to_be_clickable((By.XPATH, export_xpath))
+    )
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", export_btn)
+    driver.execute_script("arguments[0].click();", export_btn)
+    print("[7] Botón Export clickeado en Event and Alarm Search.")
 
-    handle_password_confirm_if_present(driver, timeout=15)
+    if timer:
+        timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
 
     print("[8] Export desde panel ejecutado, esperando descarga de archivo...")
 
-    archivo_descargado = esperar_descarga(DOWNLOAD_DIR, archivos_previos, timeout=120)
+    archivo_descargado = esperar_descarga_y_renombrar(
+        DOWNLOAD_DIR, prefix="event_and_alarm", timeout=180
+    )
 
-    print(f"[8] Archivo descargado desde Event and Alarm Search: {archivo_descargado}")
+    print(f"[INFO] Archivo de Event and Alarm exportado: {archivo_descargado}")
 
     if timer:
         timer.mark("[8] EXPORT_COMPLETADO")
 
-    return Path(archivo_descargado)
+    return archivo_descargado
 
 
 def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = None):
@@ -750,6 +777,50 @@ def esperar_descarga_event_and_alarm(timeout: int = 180) -> Path | None:
         time.sleep(1)
 
     return None
+
+
+def esperar_descarga_y_renombrar(
+    download_dir: Path = DOWNLOAD_DIR,
+    prefix: str = "event_and_alarm",
+    timeout: int = 180,
+) -> Path:
+    """
+    Espera la finalización de una descarga en download_dir y renombra el archivo
+    con el prefijo indicado.
+    """
+
+    download_dir.mkdir(parents=True, exist_ok=True)
+    existentes = {f.name for f in download_dir.glob("*") if f.is_file()}
+    fin = time.time() + timeout
+    ultimo_archivo: Path | None = None
+
+    while time.time() < fin:
+        archivos = [f for f in download_dir.glob("*") if f.is_file()]
+        nuevos = [f for f in archivos if f.name not in existentes]
+
+        if nuevos:
+            ultimo_archivo = max(nuevos, key=lambda f: f.stat().st_mtime)
+
+            if ultimo_archivo.suffix == ".crdownload":
+                time.sleep(1)
+                continue
+
+            size1 = ultimo_archivo.stat().st_size
+            time.sleep(1)
+            size2 = ultimo_archivo.stat().st_size
+            if size1 == size2 and size2 > 0:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nuevo_nombre = f"{prefix}_{timestamp}{ultimo_archivo.suffix}"
+                destino = download_dir / nuevo_nombre
+                ultimo_archivo = ultimo_archivo.rename(destino)
+                print(f"[INFO] Archivo descargado y renombrado a: {ultimo_archivo}")
+                if step_timer:
+                    step_timer.mark("[9] Descarga detectada")
+                return ultimo_archivo
+
+        time.sleep(1)
+
+    raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
 
 
 def crear_driver() -> webdriver.Chrome:
