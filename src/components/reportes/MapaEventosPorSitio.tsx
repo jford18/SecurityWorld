@@ -1,17 +1,7 @@
 import React, { useMemo } from 'react';
-import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
-import L from 'leaflet';
+import { CircleMarker, MapContainer, TileLayer, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { EventoPorSitio } from '../../services/reportesEventosService';
-
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-});
 
 interface Props {
   data: EventoPorSitio[];
@@ -19,11 +9,32 @@ interface Props {
 }
 
 const ECUADOR_CENTER: [number, number] = [-1.831239, -78.183406];
+const MIN_RADIUS = 6;
+const MAX_RADIUS = 26;
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+const calculateRadius = (count: number, maxCount: number) => {
+  const safeMax = Math.max(1, maxCount);
+  const safeCount = Math.max(0, count || 0);
+  const ratio = Math.sqrt(safeCount) / Math.sqrt(safeMax);
+
+  return clamp(MIN_RADIUS + (MAX_RADIUS - MIN_RADIUS) * ratio, MIN_RADIUS, MAX_RADIUS);
+};
 
 const MapaEventosPorSitio: React.FC<Props> = ({ data, loading }) => {
   const sitiosConCoordenadas = useMemo(
     () => data.filter((sitio) => sitio.latitud !== null && sitio.longitud !== null),
     [data],
+  );
+
+  const maxEventos = useMemo(
+    () =>
+      Math.max(
+        ...sitiosConCoordenadas.map((sitio) => Math.max(0, sitio.total_eventos || 0)),
+        1,
+      ),
+    [sitiosConCoordenadas],
   );
 
   const center: [number, number] = useMemo(() => {
@@ -65,19 +76,27 @@ const MapaEventosPorSitio: React.FC<Props> = ({ data, loading }) => {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          {sitiosConCoordenadas.map((sitio) => (
-            <Marker key={`${sitio.sitio_id}-${sitio.sitio_nombre}`} position={[sitio.latitud!, sitio.longitud!]}> 
-              <Popup>
-                <div className="space-y-1">
-                  <p className="font-semibold text-[#1C2E4A]">{sitio.sitio_nombre}</p>
-                  <p className="text-sm text-gray-700">
-                    Total de eventos:{' '}
-                    <span className="font-semibold">{sitio.total_eventos.toLocaleString('es-MX')}</span>
-                  </p>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+          {sitiosConCoordenadas.map((sitio) => {
+            const lat = Number(sitio.latitud);
+            const lng = Number(sitio.longitud);
+
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+            const radius = calculateRadius(sitio.total_eventos, maxEventos);
+
+            return (
+              <CircleMarker
+                key={`${sitio.sitio_id}-${sitio.sitio_nombre}`}
+                center={[lat, lng]}
+                radius={radius}
+                pathOptions={{ weight: 1, fillOpacity: 0.45 }}
+              >
+                <Tooltip direction="top" offset={[0, -2]} opacity={1} sticky>
+                  {`${sitio.sitio_nombre} - ${sitio.total_eventos.toLocaleString('es-MX')} eventos`}
+                </Tooltip>
+              </CircleMarker>
+            );
+          })}
         </MapContainer>
       ) : (
         <div className="h-[450px] flex items-center justify-center text-sm text-gray-500 bg-gray-50 rounded-md">
