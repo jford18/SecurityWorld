@@ -13,6 +13,7 @@ from selenium.common.exceptions import (
     StaleElementReferenceException,
     TimeoutException,
 )
+from selenium.common.exceptions import TimeoutException as SeleniumTimeout
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -326,6 +327,46 @@ def cerrar_buscador_global_si_abrio(driver):
         pass
 
 
+def handle_password_confirm_if_present(driver, timeout: int = 10):
+    """
+    Si aparece el diálogo de confirmación de contraseña al exportar,
+    ingresa HIK_PASSWORD y confirma. Si no aparece, no lanza error.
+    """
+    try:
+        wait = WebDriverWait(driver, timeout)
+
+        dialog = wait.until(
+            EC.visibility_of_element_located(
+                (
+                    By.XPATH,
+                    "//*[contains(normalize-space(),'Confirm') and contains(normalize-space(),'Password')]/ancestor::div[contains(@class,'el-dialog') or contains(@class,'drawer-main')][1]",
+                )
+            )
+        )
+
+        pwd_input = dialog.find_element(By.XPATH, ".//input[@type='password' or @placeholder='Password']")
+
+        pwd_input.clear()
+        pwd_input.send_keys(HIK_PASSWORD)
+
+        confirm_btn = dialog.find_element(
+            By.XPATH,
+            ".//button[.//span[normalize-space()='OK' or normalize-space()='Confirm' or normalize-space()='Aceptar']]",
+        )
+
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", confirm_btn)
+        driver.execute_script("arguments[0].click();", confirm_btn)
+
+        WebDriverWait(driver, timeout).until(EC.invisibility_of_element(dialog))
+
+        print("[INFO] Diálogo de confirmación de password resuelto correctamente.")
+
+    except SeleniumTimeout:
+        print("[INFO] No apareció diálogo de confirmación de password, continúo.")
+    except Exception as e:
+        print(f"[WARN] Error manejando diálogo de password: {e}")
+
+
 def click_sidebar_alarm_search(driver, timeout=20, timer: StepTimer | None = None):
     """
     Hace clic en el icono de lupa del menú lateral (Search).
@@ -548,6 +589,8 @@ def click_export_event_and_alarm(driver, timeout: int = 30, timer: StepTimer | N
         )
     )
     driver.execute_script("arguments[0].click();", export_panel_btn)
+
+    handle_password_confirm_if_present(driver, timeout=15)
 
     print("[8] Export desde panel ejecutado, esperando descarga de archivo...")
 
