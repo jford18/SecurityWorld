@@ -220,8 +220,8 @@ const normalizeIntrusionArray = (payload: unknown): Intrusion[] => {
 };
 
 export interface IntrusionConsolidadoFilters {
-  fechaDesde?: string;
-  fechaHasta?: string;
+  fechaDesde?: string | Date | null;
+  fechaHasta?: string | Date | null;
   clienteId?: number | string;
   haciendaId?: number | string;
   sitioId?: number | string;
@@ -299,12 +299,21 @@ export interface EventosNoAutorizadosDashboardResponse {
 const buildQueryString = (params: IntrusionConsolidadoFilters) => {
   const searchParams = new URLSearchParams();
 
+  const normalizeValue = (value: unknown) => {
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value.toISOString();
+    }
+    return value;
+  };
+
   Object.entries(params).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === '') {
+    const normalizedValue = normalizeValue(value);
+
+    if (normalizedValue === undefined || normalizedValue === null || normalizedValue === '') {
       return;
     }
 
-    searchParams.append(key, String(value));
+    searchParams.append(key, String(normalizedValue));
   });
 
   const query = searchParams.toString();
@@ -322,11 +331,15 @@ export const fetchIntrusionesConsolidado = async (
   const searchParams = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === '') {
+    const normalizedValue = value instanceof Date
+      ? (Number.isNaN(value.getTime()) ? null : value.toISOString())
+      : value;
+
+    if (normalizedValue === undefined || normalizedValue === null || normalizedValue === '') {
       return;
     }
 
-    searchParams.append(key, String(value));
+    searchParams.append(key, String(normalizedValue));
   });
 
   const query = searchParams.toString();
@@ -358,11 +371,15 @@ export const exportIntrusionesConsolidado = async (
       return;
     }
 
-    if (value === undefined || value === null || value === '') {
+    const normalizedValue = value instanceof Date
+      ? (Number.isNaN(value.getTime()) ? null : value.toISOString())
+      : value;
+
+    if (normalizedValue === undefined || normalizedValue === null || normalizedValue === '') {
       return;
     }
 
-    searchParams.append(key, String(value));
+    searchParams.append(key, String(normalizedValue));
   });
 
   const query = searchParams.toString();
