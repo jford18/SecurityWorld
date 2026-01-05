@@ -327,6 +327,45 @@ def cerrar_buscador_global_si_abrio(driver):
         pass
 
 
+def handle_export_password_if_needed(driver, timeout: int = 8):
+    """
+    Si al exportar aparece un cuadro de diálogo pidiendo password,
+    escribe la misma clave del login (HIK_PASSWORD) y hace clic en Confirm / OK.
+    Si no aparece nada, sigue de largo sin lanzar excepción.
+    """
+    try:
+        dialog = WebDriverWait(driver, timeout).until(
+            EC.visibility_of_element_located(
+                (
+                    By.XPATH,
+                    "//div[contains(@class,'el-message-box') and .//input[@type='password']]",
+                )
+            )
+        )
+        print("[7] Diálogo de contraseña de export detectado.")
+    except TimeoutException:
+        print("[7] No apareció diálogo de contraseña, continúo sin password.")
+        return
+
+    # input de password dentro del cuadro
+    password_input = dialog.find_element(By.XPATH, ".//input[@type='password']")
+    password_input.clear()
+    password_input.send_keys(HIK_PASSWORD)
+
+    # botón Confirm / OK dentro del mismo cuadro
+    try:
+        confirm_btn = dialog.find_element(
+            By.XPATH, ".//button[.//span[normalize-space()='Confirm']]"
+        )
+    except Exception:
+        confirm_btn = dialog.find_element(
+            By.XPATH, ".//button[.//span[normalize-space()='OK']]"
+        )
+
+    safe_js_click(driver, confirm_btn)
+    print("[7] Contraseña de export ingresada y confirmada.")
+
+
 def handle_password_confirm_if_present(driver, timeout: int = 10):
     """
     Si aparece el diálogo de confirmación de contraseña al exportar,
@@ -566,69 +605,71 @@ def click_search_button(driver, timeout: int = 20, timer: StepTimer | None = Non
 def click_export_event_and_alarm(driver, timeout: int = 30, timer: StepTimer | None = None):
     """
     Desde la pantalla 'Event and Alarm Search':
-    - Hace clic en el botón Export (arriba a la derecha del grid).
-    - Abre el panel Export.
-    - Selecciona formato Excel.
-    - Hace clic en Export del panel.
-    - Espera la descarga del archivo en DOWNLOAD_DIR y devuelve la ruta.
+    - Clic en botón Export (arriba derecha de la tabla).
+    - Espera el panel 'Export'.
+    - Clic en Export dentro del panel.
+    - Si aparece cuadro de contraseña, escribe HIK_PASSWORD y confirma.
+    - Espera la descarga del archivo en disco (usando wait_for_download).
+    Devuelve la ruta completa del archivo descargado, o None si no se pudo confirmar.
     """
+
+    wait = WebDriverWait(driver, timeout)
 
     print("[7] Abriendo panel Export en Event and Alarm Search...")
 
-    WebDriverWait(driver, timeout).until(
-        lambda d: d.execute_script("return document.readyState") == "complete"
-    )
-
-    export_icon_xpath = "//*[@title='Export']/ancestor::button[1]"
-    export_icon_btn = WebDriverWait(driver, timeout).until(
-        EC.element_to_be_clickable((By.XPATH, export_icon_xpath))
-    )
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", export_icon_btn)
-    driver.execute_script("arguments[0].click();", export_icon_btn)
-
-    drawer_xpath = "//div[contains(@class,'drawer') and .//span[normalize-space()='Export']]"
-    drawer = WebDriverWait(driver, timeout).until(
-        EC.visibility_of_element_located((By.XPATH, drawer_xpath))
-    )
-
-    fill_export_password_if_needed(driver, WebDriverWait(driver, timeout))
-
-    excel_option = WebDriverWait(driver, timeout).until(
+    # 1) Botón Export de la pantalla principal
+    export_btn = wait.until(
         EC.element_to_be_clickable(
-            (
-                By.XPATH,
-                "//div[contains(@class,'drawer')]//label[contains(@class,'el-radio') and (translate(@title,'excel','EXCEL')='EXCEL' or .//span[normalize-space()='Excel'])]",
-            )
+            (By.XPATH, "//span[normalize-space()='Export']/ancestor::button[1]")
         )
     )
-    driver.execute_script("arguments[0].click();", excel_option)
-
-    export_xpath = (
-        "//div[contains(@class,'drawer')]"
-        "//button[contains(@class,'el-button--primary') and .//span[normalize-space()='Export']]"
-    )
-    export_btn = WebDriverWait(driver, timeout).until(
-        EC.element_to_be_clickable((By.XPATH, export_xpath))
-    )
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", export_btn)
-    driver.execute_script("arguments[0].click();", export_btn)
+    safe_js_click(driver, export_btn)
     print("[7] Botón Export clickeado en Event and Alarm Search.")
 
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
 
-    print("[8] Export desde panel ejecutado, esperando descarga de archivo...")
+    # 2) Esperar que el panel Export esté visible
+    try:
+        wait.until(
+            EC.visibility_of_element_located(
+                (
+                    By.XPATH,
+                    "//div[contains(@class,'el-drawer__header')]//span[normalize-space()='Export']",
+                )
+            )
+        )
+        print("[7] Panel Export visible.")
+    except TimeoutException:
+        print("[WARN] No se pudo validar visualmente el panel Export, continúo igual.")
 
-    archivo_descargado = esperar_descarga_y_renombrar(
-        DOWNLOAD_DIR, prefix="event_and_alarm", timeout=180
+    # 3) Botón Export dentro del panel (footer)
+    panel_export_btn = wait.until(
+        EC.element_to_be_clickable(
+            (
+                By.XPATH,
+                "//div[contains(@class,'el-drawer__footer')]"
+                "//span[normalize-space()='Export']/ancestor::button[1]",
+            )
+        )
     )
+    safe_js_click(driver, panel_export_btn)
+    print("[7] Botón Export del panel clickeado.")
 
-    print(f"[INFO] Archivo de Event and Alarm exportado: {archivo_descargado}")
+    # 4) Manejar password si aparece
+    handle_export_password_if_needed(driver, timeout=8)
 
     if timer:
-        timer.mark("[8] EXPORT_COMPLETADO")
+        timer.mark("[7] EXPORT_PASSWORD_HANDLED")
 
-    return archivo_descargado
+    # 5) Esperar la descarga del archivo en disco
+    try:
+        archivo = wait_for_download(DOWNLOAD_DIR, prefix="EventAndAlarm", timeout=180)
+        print(f"[7] Archivo de export descargado: {archivo}")
+        return archivo
+    except Exception as e:
+        print(f"[WARN] No se pudo confirmar la descarga del archivo de Event and Alarm: {e}")
+        return None
 
 
 def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = None):
@@ -668,6 +709,44 @@ def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = Non
     print("[9] Botón 'Trigger Alarm' seleccionado correctamente.")
     if timer:
         timer.mark("[9] CLICK_TRIGGER_ALARM")
+
+
+def wait_for_download(download_dir: Path, prefix: str, timeout: int = 180) -> Path:
+    download_dir.mkdir(parents=True, exist_ok=True)
+
+    fin = time.time() + timeout
+    existentes = {f.name for f in download_dir.glob("*") if f.is_file()}
+    candidato: Path | None = None
+
+    while time.time() < fin:
+        archivos = [
+            f
+            for f in download_dir.glob(f"{prefix}*")
+            if f.is_file() and not f.name.endswith(".crdownload")
+        ]
+
+        nuevos = [f for f in archivos if f.name not in existentes]
+
+        if archivos:
+            if nuevos:
+                candidato = max(nuevos, key=lambda f: f.stat().st_mtime)
+            elif candidato is None:
+                candidato = max(archivos, key=lambda f: f.stat().st_mtime)
+            else:
+                candidato = max([candidato, *archivos], key=lambda f: f.stat().st_mtime)
+
+            size1 = candidato.stat().st_size
+            time.sleep(1)
+            size2 = candidato.stat().st_size
+            if size1 == size2 and size2 > 0:
+                return candidato
+
+        time.sleep(1)
+
+    raise TimeoutError(
+        f"No se encontró archivo descargado con prefijo {prefix} en {timeout} segundos."
+    )
+
 
 def limpiar_descargas(download_dir: Path = DOWNLOAD_DIR):
     """Elimina archivos previos en la carpeta de descargas para identificar el nuevo Excel."""
