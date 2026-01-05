@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.common.exceptions import (
     ElementClickInterceptedException,
+    NoSuchElementException,
     StaleElementReferenceException,
     TimeoutException,
 )
@@ -638,7 +639,45 @@ def click_search_button(driver, timeout=30, timer: StepTimer | None = None):
         timer.mark("[6] CLICK_SEARCH_BUTTON")
 
 
-def click_export_event_and_alarm(driver, timeout=30, timer: StepTimer | None = None):
+def fill_export_password_if_needed(driver, password, timeout=10, timer=None):
+    """
+    Rellena Password / Confirm password en el popup de Export si aparecen.
+    Si no aparecen, simplemente no hace nada.
+    """
+    wait = WebDriverWait(driver, timeout)
+
+    try:
+        # Campo principal de password
+        pwd_input = wait.until(
+            EC.visibility_of_element_located(
+                (By.XPATH, "//div[contains(@class,'el-dialog')]//input[@type='password' and contains(@placeholder,'assword')]")
+            )
+        )
+        pwd_input.clear()
+        pwd_input.send_keys(password)
+
+        # Campo opcional de confirm password (si existe)
+        try:
+            confirm_input = driver.find_element(
+                By.XPATH,
+                "//div[contains(@class,'el-dialog')]//input[@type='password' and (contains(@placeholder,'Confirm') or contains(@placeholder,'confirm'))]",
+            )
+            confirm_input.clear()
+            confirm_input.send_keys(password)
+        except NoSuchElementException:
+            # En algunos casos no piden confirmación, no es error
+            pass
+
+    except TimeoutException:
+        # Si no aparece ningún campo de password asumimos que no se requiere
+        if timer:
+            print("[EXPORT] No apareció cuadro de password en Export, se asume que no es requerido.")
+        return
+
+
+def click_export_event_and_alarm(
+    driver, password, timeout=30, timer: StepTimer | None = None
+):
     """
     Abre el panel 'Export' en Event and Alarm Search, introduce password si se solicita
     y hace clic en la opción de exportar (Excel) para disparar la descarga.
@@ -647,19 +686,13 @@ def click_export_event_and_alarm(driver, timeout=30, timer: StepTimer | None = N
 
     wait = WebDriverWait(driver, timeout)
 
-    # Botón Export: usa el ícono h-icon-export y el texto 'Export'
-    export_btn_xpath = (
-        "//button[contains(@class,'el-button') "
-        " and .//i[contains(@class,'h-icon-export')] "
-        " and .//div[contains(@class,'el-button-slot-wrapper') and normalize-space()='Export']]"
-    )
+    export_icon_xpath = "//i[contains(@class,'h-icon-export')]/ancestor::button[1]"
 
     try:
         export_btn = wait.until(
-            EC.element_to_be_clickable((By.XPATH, export_btn_xpath))
+            EC.element_to_be_clickable((By.XPATH, export_icon_xpath))
         )
     except TimeoutException:
-        # Fallback extra: cualquier botón que tenga texto 'Export'
         fallback_xpath = "//*[normalize-space()='Export']/ancestor::button[1]"
         export_btn = wait.until(
             EC.element_to_be_clickable((By.XPATH, fallback_xpath))
@@ -669,70 +702,55 @@ def click_export_event_and_alarm(driver, timeout=30, timer: StepTimer | None = N
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_BUTTON")
 
-    # Esperar a que se abra el diálogo de Export
     export_dialog_xpath = (
-        "//div[contains(@class,'el-dialog') and .//span[normalize-space()='Export']]"
+        "//div[contains(@class,'el-dialog__wrapper')]//span[contains(@class,'el-dialog__title') and contains(normalize-space(),'Export')]"
     )
     try:
-        export_dialog = WebDriverWait(driver, timeout).until(
+        WebDriverWait(driver, timeout).until(
             EC.visibility_of_element_located((By.XPATH, export_dialog_xpath))
         )
     except TimeoutException:
         print("[WARN] No se mostró el diálogo de Export después de hacer clic en el botón.")
         if timer:
             timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_ERROR_NO_DIALOG")
-        return
+        return None
 
-    # Si aparece un campo de password, usar la misma clave del login (HIK_PASSWORD) y confirmar
-    try:
-        pwd_input = WebDriverWait(driver, 5).until(
-            EC.visibility_of_element_located(
-                (
-                    By.XPATH,
-                    "//div[contains(@class,'el-dialog')]//input[@type='password']",
-                )
-            )
-        )
-        pwd_input.clear()
-        pwd_input.send_keys(HIK_PASSWORD)
+    fill_export_password_if_needed(driver, password, timeout=10, timer=timer)
 
-        confirm_xpath = (
-            "//div[contains(@class,'el-dialog')]"
-            "//button[contains(@class,'el-button--primary') "
-            "and (.//span[normalize-space()='Confirm'] "
-            "     or .//span[normalize-space()='OK'] "
-            "     or .//span[normalize-space()='Aceptar'])]"
-        )
-        confirm_btn = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, confirm_xpath))
-        )
-        safe_js_click(driver, confirm_btn)
-    except TimeoutException:
-        # No pidió password, continuar normal
-        print("[INFO] Diálogo de Export no solicitó password.")
-
-    # Botón/acción para exportar a Excel dentro del diálogo.
-    # Reutiliza el mismo concepto que en hikcentral_export_resourcestatus.py
-    excel_xpath = (
-        "//div[contains(@class,'el-dialog')]"
-        "//*[contains(translate(normalize-space(),'excel','EXCEL'),'EXCEL')]/ancestor::button[1]"
+    excel_option_xpath = (
+        "//div[contains(@class,'el-dialog__wrapper')]//label[contains(@class,'el-radio') and "
+        "(contains(translate(@title,'excel','EXCEL'),'EXCEL') or .//span[contains(translate(normalize-space(),'excel','EXCEL'),'EXCEL')])]"
     )
     try:
-        excel_btn = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable((By.XPATH, excel_xpath))
+        excel_option = wait.until(
+            EC.element_to_be_clickable((By.XPATH, excel_option_xpath))
         )
-        safe_js_click(driver, excel_btn)
+        safe_js_click(driver, excel_option)
     except TimeoutException:
-        print("[WARN] No se encontró el botón de exportar a Excel dentro del diálogo.")
+        print("[WARN] No se encontró la opción de formato Excel en el diálogo de Export.")
         if timer:
             timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_ERROR_NO_EXCEL")
-        return
+        return None
 
-    # Esperar unos segundos para que se dispare la descarga
-    time.sleep(5)
+    save_button_xpath = "//div[contains(@class,'el-dialog__wrapper')]//button[@title='Save']"
+    try:
+        save_button = wait.until(
+            EC.element_to_be_clickable((By.XPATH, save_button_xpath))
+        )
+        safe_js_click(driver, save_button)
+    except TimeoutException:
+        print("[WARN] No se encontró el botón 'Save' en el diálogo de Export.")
+        if timer:
+            timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_ERROR_NO_SAVE")
+        return None
 
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
+
+    archivo_descargado = esperar_descarga_y_renombrar(
+        download_dir=DOWNLOAD_DIR, prefix="event_and_alarm", timeout=180
+    )
+    return archivo_descargado
 
 
 def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = None):
@@ -1042,7 +1060,7 @@ def run():
         click_search_button(driver, timeout=40, timer=timer)
 
         limpiar_descargas(DOWNLOAD_DIR)
-        archivo = click_export_event_and_alarm(driver, timeout=30, timer=timer)
+        archivo = click_export_event_and_alarm(driver, HIK_PASSWORD, timeout=30, timer=timer)
 
         print(f"[INFO] Ruta final del archivo exportado: {archivo}")
 
