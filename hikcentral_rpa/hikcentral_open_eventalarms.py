@@ -529,6 +529,38 @@ def click_export_event_and_alarm(driver, timeout: int = 30, timer: StepTimer | N
     driver.execute_script("arguments[0].click();", export_el)
 
     print("[7] Botón Export clickeado en Event and Alarm Search.")
+
+    WebDriverWait(driver, timeout).until(
+        EC.visibility_of_element_located(
+            (
+                By.XPATH,
+                "//div[contains(@class,'drawer')]//span[contains(@class,'drawer-head-title') and normalize-space()='Export']",
+            )
+        )
+    )
+
+    try:
+        search_button = WebDriverWait(driver, timeout).until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//div[contains(@class,'drawer')]//button[contains(@class,'el-button--primary') and normalize-space()='Search']",
+                )
+            )
+        )
+    except Exception:
+        search_button = WebDriverWait(driver, timeout).until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//button[contains(@class,'el-button--primary') and normalize-space()='Search']",
+                )
+            )
+        )
+
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", search_button)
+    driver.execute_script("arguments[0].click();", search_button)
+
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
 
@@ -608,6 +640,77 @@ def esperar_descarga(download_dir: Path, archivos_previos, timeout: int = 120) -
             raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
 
         time.sleep(2)
+
+
+def esperar_descarga_archivo(nombre_parcial: str | None = None, timeout: int = 180) -> Path | None:
+    """
+    Espera a que se descargue un archivo en DOWNLOAD_DIR.
+
+    Si se especifica `nombre_parcial`, busca archivos cuyo nombre contenga esa
+    cadena (excluyendo extensiones temporales). Valida que el archivo no tenga
+    la extensión .crdownload y que su tamaño se mantenga estable antes de
+    devolverlo.
+    """
+
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+    fin = time.time() + timeout
+    candidato: Path | None = None
+
+    while time.time() < fin:
+        archivos = [
+            f
+            for f in DOWNLOAD_DIR.glob("*")
+            if f.is_file()
+            and not f.name.endswith(".crdownload")
+            and (nombre_parcial is None or nombre_parcial in f.name)
+        ]
+
+        if archivos:
+            candidato = max(archivos, key=lambda f: f.stat().st_mtime)
+            size1 = candidato.stat().st_size
+            time.sleep(1)
+            size2 = candidato.stat().st_size
+            if size1 == size2 and size2 > 0:
+                return candidato
+
+        time.sleep(1)
+
+    return candidato
+
+
+def esperar_descarga_event_and_alarm(timeout: int = 180) -> Path | None:
+    """
+    Espera a que aparezca un nuevo archivo de export de Event and Alarm Search
+    en DOWNLOAD_DIR y devuelve el Path cuando la descarga termina.
+    """
+
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+    existentes = {f.name for f in DOWNLOAD_DIR.glob("*") if f.is_file()}
+
+    fin = time.time() + timeout
+    candidato: Path | None = None
+
+    while time.time() < fin:
+        archivos = [
+            f
+            for f in DOWNLOAD_DIR.glob("*")
+            if f.is_file() and not f.name.endswith(".crdownload")
+        ]
+        nuevos = [f for f in archivos if f.name not in existentes]
+
+        if nuevos:
+            candidato = max(nuevos, key=lambda f: f.stat().st_mtime)
+            size1 = candidato.stat().st_size
+            time.sleep(1)
+            size2 = candidato.stat().st_size
+            if size1 == size2 and size2 > 0:
+                return candidato
+
+        time.sleep(1)
+
+    return None
 
 
 def crear_driver() -> webdriver.Chrome:
@@ -756,16 +859,27 @@ def run():
         limpiar_descargas(DOWNLOAD_DIR)
         click_export_event_and_alarm(driver, timeout=30, timer=timer)
 
+        print("[8] Esperando descarga de Event and Alarm Search...")
+        archivo = esperar_descarga_event_and_alarm(timeout=180)
+
+        if archivo is None:
+            print("[ERROR] No se detectó ningún archivo descargado desde Event and Alarm Search.")
+        else:
+            size_mb = archivo.stat().st_size / (1024 * 1024)
+            print(f"[8] Archivo de Event and Alarm Search descargado: {archivo} ({size_mb:.2f} MB)")
+            if timer:
+                timer.mark("[8] EXPORT_DOWNLOAD_OK")
+
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         screenshot_path = LOG_DIR / f"event_and_alarm_search_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         driver.save_screenshot(str(screenshot_path))
         print(f"[INFO] Screenshot guardado en: {screenshot_path}")
         if timer:
-            timer.mark("[8] SCREENSHOT_EVENT_AND_ALARM_SEARCH")
+            timer.mark("[9] SCREENSHOT_EVENT_AND_ALARM_SEARCH")
 
         print("[OK] Flujo Event and Alarm Search + Export completado.")
         if timer:
-            timer.mark("[9] FIN_OK")
+            timer.mark("[10] FIN_OK")
 
     except Exception as e:
         print(f"[ERROR] Ocurrió un problema en el flujo Event and Alarm: {e}")
