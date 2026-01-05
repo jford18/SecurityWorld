@@ -491,18 +491,44 @@ def click_export_event_and_alarm(driver, timeout: int = 30, timer: StepTimer | N
 
     wait = WebDriverWait(driver, timeout)
 
+    # Esperar a que la página esté lista
     wait.until(lambda d: d.execute_script("return document.readyState") == "complete")
 
-    export_xpath = (
-        "//button[.//span[normalize-space()='Export'] or @title='Export']"
-        " | //*[@title='Export' and (self::button or self::div)]"
-    )
+    def _find_export_button(d):
+        js = """
+        const isVisible = (el) => !!(el && el.offsetParent !== null);
+        const texts = ['Export'];
+        const all = Array.from(document.querySelectorAll('*'));
+        const candidates = all.filter(el => {
+            if (!isVisible(el)) return false;
+            const t = (el.textContent || '').trim();
+            if (!t) return false;
+            return texts.some(tx => t === tx || t.includes(tx));
+        });
+        if (!candidates.length) return null;
 
-    export_btn = wait.until(
-        EC.element_to_be_clickable((By.XPATH, export_xpath))
-    )
+        candidates.sort((a, b) => b.getBoundingClientRect().right - a.getBoundingClientRect().right);
+        let target = candidates[0];
 
-    safe_js_click(driver, export_btn)
+        let node = target;
+        while (node) {
+            if (node.tagName === 'BUTTON' ||
+                node.getAttribute('role') === 'button' ||
+                typeof node.onclick === 'function') {
+                target = node;
+                break;
+            }
+            node = node.parentElement;
+        }
+        return target;
+        """
+        return d.execute_script(js)
+
+    export_btn = wait.until(_find_export_button)
+
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", export_btn)
+    driver.execute_script("arguments[0].click();", export_btn)
+
     print("[7] Botón Export cliqueado en Event and Alarm Search.")
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
