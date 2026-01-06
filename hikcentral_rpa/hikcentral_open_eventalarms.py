@@ -755,6 +755,27 @@ def fill_export_password_if_needed(driver, password, timeout=10, timer=None):
         return
 
 
+def click_export_save_button(driver, timeout: int = 10, timer=None):
+    """
+    Hace clic en el botón Save del cuadro de diálogo Export.
+    Si el botón no aparece dentro del timeout, lanza TimeoutException.
+    """
+    wait = WebDriverWait(driver, timeout)
+
+    save_btn = wait.until(
+        EC.element_to_be_clickable(
+            (By.XPATH, "//button[contains(@class,'el-button--primary') and .//span[normalize-space()='Save']]")
+        )
+    )
+    save_btn.click()
+
+    if timer:
+        if hasattr(timer, "step"):
+            timer.step("CLICK_EXPORT_SAVE_BUTTON")
+        else:
+            timer.mark("CLICK_EXPORT_SAVE_BUTTON")
+
+
 def click_export_event_and_alarm(
     driver, password, timeout=30, timer: StepTimer | None = None
 ):
@@ -782,7 +803,10 @@ def click_export_event_and_alarm(
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_BUTTON")
 
-    handle_export_password_and_save(driver, password=password, timeout=10, timer=timer)
+    fill_export_password_if_needed(driver, password=password, timeout=10, timer=timer)
+
+    # Hacer clic en el botón Save del diálogo Export
+    click_export_save_button(driver, timeout=10, timer=timer)
 
     export_dialog_xpath = (
         "//div[contains(@class,'el-dialog__wrapper')]//span[contains(@class,'el-dialog__title') and contains(normalize-space(),'Export')]"
