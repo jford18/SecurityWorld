@@ -388,11 +388,6 @@ def click_export_save_button(driver, timeout=10, timer=None):
     """
     step_name = "[7] CLICK_EXPORT_EVENT_AND_ALARM_SAVE_BUTTON"
 
-    # Si el proyecto ya tiene un helper de performance (perf_step),
-    # usa el mismo patrón que el resto del script. Si no, deja el try/finally simple.
-    if timer is not None:
-        timer.start_step(step_name)
-
     try:
         wait = WebDriverWait(driver, timeout)
         save_btn = wait.until(
@@ -409,13 +404,12 @@ def click_export_save_button(driver, timeout=10, timer=None):
 
         log_info("[EXPORT] Botón Save del cuadro Export clickeado correctamente.")
 
+        if timer is not None:
+            timer.mark(step_name)
+
     except TimeoutException:
         log_error("[EXPORT] No se pudo localizar/clic el botón Save del cuadro Export (timeout).")
         raise
-
-    finally:
-        if timer is not None:
-            timer.end_step(step_name)
 
 
 def cerrar_overlays(driver):
