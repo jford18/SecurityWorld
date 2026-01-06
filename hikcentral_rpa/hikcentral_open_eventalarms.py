@@ -334,77 +334,70 @@ def wait_click(driver, by, value, timeout=20):
 
 
 # XPaths específicos para el diálogo Export de Event and Alarm Search
-EXPORT_DIALOG_XPATH = "//div[contains(@class,'el-dialog') and .//span[normalize-space()='Export']]"
-EXPORT_PASSWORD_INPUT_XPATH = EXPORT_DIALOG_XPATH + "//input[@type='password' or @placeholder='Password']"
+EXPORT_PASSWORD_INPUT_XPATH = (
+    "//input[@type='password' and @placeholder='Password'"
+    " and contains(@class,'el-input__inner')]"
+)
+
 EXPORT_SAVE_BUTTON_XPATH = (
-    EXPORT_DIALOG_XPATH
-    + "//button[contains(@class,'el-button--primary') and @title='Save' and .//span[normalize-space()='Save']]"
+    "(//div[contains(@class,'el-button-slot-wrapper')"
+    " and normalize-space()='Save']/ancestor::button)[1]"
 )
 
 
 def type_export_password_if_needed(driver, timeout=8, timer=None):
     """
-    Si el cuadro Export muestra el campo Password, escribe la misma clave HIK_PASSWORD del login.
-    Si no aparece el campo, continúa sin error.
+    Si el cuadro Export muestra el campo Password, escribe la misma
+    contraseña HIK_PASSWORD usada en el login.
+    Si no aparece el campo, continuar sin error.
     """
     wait = WebDriverWait(driver, timeout)
 
+    logger_warn = globals().get("log_warn", print)
+    logger_info = globals().get("log_info", print)
+
     try:
-        password_input = wait.until(
+        pwd_input = wait.until(
             EC.visibility_of_element_located((By.XPATH, EXPORT_PASSWORD_INPUT_XPATH))
         )
     except TimeoutException:
-        print("[EXPORT] No apareció cuadro de password en Export, se asume que no es requerido.")
-        if timer:
-            if hasattr(timer, "step"):
-                timer.step("EXPORT_PASSWORD_NOT_FOUND")
-            else:
-                timer.mark("EXPORT_PASSWORD_NOT_FOUND")
+        logger_warn(
+            "[EXPORT] No apareció cuadro de password en Export, se asume que no es requerido."
+        )
         return False
 
-    password_input.click()
-    password_input.clear()
-    password_input.send_keys(HIK_PASSWORD)
+    pwd_input.click()
+    pwd_input.clear()
+    pwd_input.send_keys(HIK_PASSWORD)
 
-    print("[EXPORT] Password escrito correctamente en el cuadro Export.")
-    if timer:
-        if hasattr(timer, "step"):
-            timer.step("EXPORT_PASSWORD_TYPED")
-        else:
-            timer.mark("EXPORT_PASSWORD_TYPED")
-
+    logger_info("[EXPORT] Password escrito correctamente en el cuadro Export.")
     return True
 
 
 def click_export_save_button(driver, timeout=10, timer=None):
     """
     Hace clic en el botón Save del diálogo Export.
-    Usa un XPATH que apunta SOLO al botón Save del cuadro Export
-    para evitar coincidir con otros botones Save ocultos en la página.
+    Debe encontrar el botón correcto usando EXPORT_SAVE_BUTTON_XPATH
+    (el button que contiene el div.el-button-slot-wrapper con texto 'Save').
     """
     wait = WebDriverWait(driver, timeout)
+
+    logger_info = globals().get("log_info", print)
+    logger_error = globals().get("log_error", print)
 
     try:
         save_btn = wait.until(
             EC.element_to_be_clickable((By.XPATH, EXPORT_SAVE_BUTTON_XPATH))
         )
     except TimeoutException:
-        print("[EXPORT] No se pudo encontrar el botón Save en el cuadro Export.")
-        if timer:
-            if hasattr(timer, "step"):
-                timer.step("CLICK_EXPORT_SAVE_BUTTON")
-            else:
-                timer.mark("CLICK_EXPORT_SAVE_BUTTON")
-        return
+        logger_error(
+            "[EXPORT] No se pudo hacer clic en el botón Save del cuadro Export (timeout)."
+        )
+        raise
 
     save_btn.click()
 
-    print("[EXPORT] Botón Save del cuadro Export clickeado correctamente.")
-    if timer:
-        if hasattr(timer, "step"):
-            timer.step("CLICK_EXPORT_SAVE_BUTTON")
-        else:
-            timer.mark("CLICK_EXPORT_SAVE_BUTTON")
+    logger_info("[EXPORT] Botón Save del cuadro Export clickeado correctamente.")
 
 
 def cerrar_overlays(driver):
