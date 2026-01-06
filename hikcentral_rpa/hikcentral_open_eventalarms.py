@@ -340,8 +340,14 @@ EXPORT_PASSWORD_INPUT_XPATH = (
 )
 
 EXPORT_SAVE_BUTTON_XPATH = (
-    "(//div[contains(@class,'el-button-slot-wrapper')"
-    " and normalize-space()='Save']/ancestor::button)[1]"
+    "("
+    "//button[@title='Save'"
+    "        and contains(@class,'el-button')"
+    "        and contains(@class,'el-button--primary')"
+    "        and .//div[contains(@class,'el-button-slot-wrapper')"
+    "                 and normalize-space()='Save']"
+    "]"
+    ")[1]"
 )
 
 
@@ -376,28 +382,40 @@ def type_export_password_if_needed(driver, timeout=8, timer=None):
 
 def click_export_save_button(driver, timeout=10, timer=None):
     """
-    Hace clic en el botón Save del diálogo Export.
-    Debe encontrar el botón correcto usando EXPORT_SAVE_BUTTON_XPATH
-    (el button que contiene el div.el-button-slot-wrapper con texto 'Save').
+    Hace clic en el botón Save del cuadro Export.
+    Usa EXPORT_SAVE_BUTTON_XPATH, que apunta al <button> con título 'Save'
+    y cuyo interior contiene el div.el-button-slot-wrapper con texto 'Save'.
     """
-    wait = WebDriverWait(driver, timeout)
+    step_name = "[7] CLICK_EXPORT_EVENT_AND_ALARM_SAVE_BUTTON"
 
-    logger_info = globals().get("log_info", print)
-    logger_error = globals().get("log_error", print)
+    # Si el proyecto ya tiene un helper de performance (perf_step),
+    # usa el mismo patrón que el resto del script. Si no, deja el try/finally simple.
+    if timer is not None:
+        timer.start_step(step_name)
 
     try:
+        wait = WebDriverWait(driver, timeout)
         save_btn = wait.until(
             EC.element_to_be_clickable((By.XPATH, EXPORT_SAVE_BUTTON_XPATH))
         )
+
+        log_info("[EXPORT] Botón Save localizado, haciendo clic...")
+
+        # A veces Selenium .click() falla por overlays; usa JS click como refuerzo.
+        try:
+            save_btn.click()
+        except Exception:
+            driver.execute_script("arguments[0].click();", save_btn)
+
+        log_info("[EXPORT] Botón Save del cuadro Export clickeado correctamente.")
+
     except TimeoutException:
-        logger_error(
-            "[EXPORT] No se pudo hacer clic en el botón Save del cuadro Export (timeout)."
-        )
+        log_error("[EXPORT] No se pudo localizar/clic el botón Save del cuadro Export (timeout).")
         raise
 
-    save_btn.click()
-
-    logger_info("[EXPORT] Botón Save del cuadro Export clickeado correctamente.")
+    finally:
+        if timer is not None:
+            timer.end_step(step_name)
 
 
 def cerrar_overlays(driver):
