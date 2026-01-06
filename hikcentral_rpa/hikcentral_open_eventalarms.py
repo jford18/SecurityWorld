@@ -387,6 +387,7 @@ def click_export_save_button(driver, timeout=10, timer=None):
     y cuyo interior contiene el div.el-button-slot-wrapper con texto 'Save'.
     """
     step_name = "[7] CLICK_EXPORT_EVENT_AND_ALARM_SAVE_BUTTON"
+    logger_info = globals().get("log_info", print)
 
     try:
         wait = WebDriverWait(driver, timeout)
@@ -394,7 +395,7 @@ def click_export_save_button(driver, timeout=10, timer=None):
             EC.element_to_be_clickable((By.XPATH, EXPORT_SAVE_BUTTON_XPATH))
         )
 
-        log_info("[EXPORT] Botón Save localizado, haciendo clic...")
+        logger_info("[EXPORT] Botón Save localizado, haciendo clic...")
 
         # A veces Selenium .click() falla por overlays; usa JS click como refuerzo.
         try:
@@ -402,7 +403,7 @@ def click_export_save_button(driver, timeout=10, timer=None):
         except Exception:
             driver.execute_script("arguments[0].click();", save_btn)
 
-        log_info("[EXPORT] Botón Save del cuadro Export clickeado correctamente.")
+        logger_info("[EXPORT] Botón Save del cuadro Export clickeado correctamente.")
 
         if timer is not None:
             timer.mark(step_name)
