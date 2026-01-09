@@ -1133,11 +1133,29 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
         logger_info(f"[DB] Leyendo archivo Excel de Alarm Report: {file_path}")
 
         df = pd.read_excel(file_path)
+        df.columns = [str(c).strip() for c in df.columns]
+        logger_info(f"[EVENT] Columnas encontradas en Alarm_Report: {list(df.columns)}")
+
+        col_event_key = None
+        for c in df.columns:
+            if str(c).strip().lower() == "event key":
+                col_event_key = c
+                break
+
+        if not col_event_key:
+            logger_error("[EVENT] No se encontró columna 'Event Key' en Alarm_Report, se aborta la carga.")
+            return
+
         total_original = len(df)
-        df = df[df["Event Key"].notna()].copy()
+        df[col_event_key] = df[col_event_key].astype(str).str.strip()
+        df = df[
+            (df[col_event_key].notna())
+            & (df[col_event_key] != "")
+            & (df[col_event_key].str.lower() != "nan")
+        ].copy()
         filtradas = total_original - len(df)
         if filtradas > 0:
-            logger_info(f"[EVENT] Filas descartadas por Event Key nulo: {filtradas}")
+            logger_info(f"[EVENT] Filas descartadas por Event Key vacío o NaN: {filtradas}")
         df = df.where(pd.notnull(df), None)
 
         column_map = {
@@ -1155,7 +1173,7 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
             "Alarm Category": "alarm_category",
             "Remarks": "remarks",
             "More": "more",
-            "Event Key": "event_key",
+            col_event_key: "event_key",
         }
 
         columnas_disponibles = [col for col in column_map.keys() if col in df.columns]
@@ -1182,12 +1200,12 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
 
         registros = []
         for _, row in df.iterrows():
-            raw_event_key = row.get("Event Key")
+            raw_event_key = row.get(col_event_key)
             if raw_event_key is None:
                 continue
 
             event_key = str(raw_event_key).strip()
-            if not event_key:
+            if not event_key or event_key.lower() == "nan":
                 continue
 
             triggering_time = normalize_ts(row.get("Triggering Time (Client)"))
@@ -1219,6 +1237,8 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
         if not registros:
             logger_info("[DB] No hay registros de Alarm Report para insertar.")
             return
+
+        logger_info(f"[EVENT] Registros a insertar en hik_alarm_evento: {len(registros)}")
 
         sql = """
             INSERT INTO public.hik_alarm_evento (
