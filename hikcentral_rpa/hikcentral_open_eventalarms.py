@@ -1133,6 +1133,11 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
         logger_info(f"[DB] Leyendo archivo Excel de Alarm Report: {file_path}")
 
         df = pd.read_excel(file_path)
+        total_original = len(df)
+        df = df[df["Event Key"].notna()].copy()
+        filtradas = total_original - len(df)
+        if filtradas > 0:
+            logger_info(f"[EVENT] Filas descartadas por Event Key nulo: {filtradas}")
         df = df.where(pd.notnull(df), None)
 
         column_map = {
@@ -1158,54 +1163,58 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
             logger_info("[DB] No se encontraron columnas válidas en el Alarm Report.")
             return
 
-        df = df[columnas_disponibles].rename(columns=column_map)
+        df = df[columnas_disponibles]
         df["id_extraccion"] = id_extraccion
 
-        if "triggering_time_client" in df.columns:
-            df["triggering_time_client"] = pd.to_datetime(
-                df["triggering_time_client"], errors="coerce"
+        if "Triggering Time (Client)" in df.columns:
+            df["Triggering Time (Client)"] = pd.to_datetime(
+                df["Triggering Time (Client)"], errors="coerce"
             )
         df["periodo"] = pd.NA
 
-        if "alarm_acknowledgment_time" in df.columns:
-            df["alarm_acknowledgment_time"] = pd.to_datetime(
-                df["alarm_acknowledgment_time"], errors="coerce"
+        if "Alarm Acknowledgment Time" in df.columns:
+            df["Alarm Acknowledgment Time"] = pd.to_datetime(
+                df["Alarm Acknowledgment Time"], errors="coerce"
             )
 
         df["fecha_creacion"] = datetime.now()
         df = df.where(pd.notnull(df), None)
 
-        columnas_insert = [
-            "id_extraccion",
-            "mark",
-            "name",
-            "trigger_alarm",
-            "priority",
-            "triggering_time_client",
-            "source",
-            "region",
-            "trigger_event",
-            "description",
-            "status",
-            "alarm_acknowledgment_time",
-            "alarm_category",
-            "remarks",
-            "more",
-            "event_key",
-            "periodo",
-            "fecha_creacion",
-        ]
+        registros = []
+        for _, row in df.iterrows():
+            raw_event_key = row.get("Event Key")
+            if raw_event_key is None:
+                continue
 
-        df_to_insert = df[[col for col in columnas_insert if col in df.columns]]
-        registros = df_to_insert.to_dict(orient="records")
-        for registro in registros:
-            registro["triggering_time_client"] = normalize_ts(
-                registro.get("triggering_time_client")
+            event_key = str(raw_event_key).strip()
+            if not event_key:
+                continue
+
+            triggering_time = normalize_ts(row.get("Triggering Time (Client)"))
+            alarm_ack_time = normalize_ts(row.get("Alarm Acknowledgment Time"))
+            periodo = calcular_periodo(triggering_time)
+
+            registros.append(
+                (
+                    id_extraccion,
+                    row.get("Mark"),
+                    row.get("Name"),
+                    row.get("Trigger Alarm"),
+                    row.get("Priority"),
+                    triggering_time,
+                    row.get("Source"),
+                    row.get("Region"),
+                    row.get("Trigger Event"),
+                    row.get("Description"),
+                    row.get("Status"),
+                    alarm_ack_time,
+                    row.get("Alarm Category"),
+                    row.get("Remarks"),
+                    row.get("More"),
+                    event_key,
+                    periodo,
+                )
             )
-            registro["alarm_acknowledgment_time"] = normalize_ts(
-                registro.get("alarm_acknowledgment_time")
-            )
-            registro["periodo"] = calcular_periodo(registro.get("triggering_time_client"))
 
         if not registros:
             logger_info("[DB] No hay registros de Alarm Report para insertar.")
@@ -1229,27 +1238,25 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
                 remarks,
                 more,
                 event_key,
-                periodo,
-                fecha_creacion
+                periodo
             ) VALUES (
-                %(id_extraccion)s,
-                %(mark)s,
-                %(name)s,
-                %(trigger_alarm)s,
-                %(priority)s,
-                %(triggering_time_client)s,
-                %(source)s,
-                %(region)s,
-                %(trigger_event)s,
-                %(description)s,
-                %(status)s,
-                %(alarm_acknowledgment_time)s,
-                %(alarm_category)s,
-                %(remarks)s,
-                %(more)s,
-                %(event_key)s,
-                %(periodo)s,
-                %(fecha_creacion)s
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s
             );
         """
 
