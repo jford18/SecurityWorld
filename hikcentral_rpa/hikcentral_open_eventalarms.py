@@ -256,6 +256,21 @@ def get_pg_connection():
     )
 
 
+def normalize_ts(value):
+    """
+    Devuelve None si el valor es NaT/NaN/None.
+    Si es un Timestamp de pandas, lo convierte a datetime nativo sin tz.
+    Si es un datetime ya nativo, lo deja igual.
+    """
+    if pd.isna(value):
+        return None
+    if isinstance(value, pd.Timestamp):
+        return value.to_pydatetime().replace(tzinfo=None)
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None)
+    return value
+
+
 def registrar_ejecucion_y_pasos(
     opcion: str,
     duracion_total_seg: float,
@@ -1003,12 +1018,20 @@ def insertar_alarm_evento_from_excel(excel_path: Path, id_extraccion: int) -> No
     else:
         df["triggering_time_client"] = pd.NaT
 
+    ack_time_col = "Alarm Acknowledgment Time"
+    if ack_time_col in df.columns:
+        df["alarm_acknowledgment_time"] = pd.to_datetime(df[ack_time_col], errors="coerce")
+    else:
+        df["alarm_acknowledgment_time"] = pd.NaT
+
     df["periodo"] = df["triggering_time_client"].dt.strftime("%Y%m%d").astype("Int64")
     df = df.where(pd.notnull(df), None)
 
     now = datetime.now()
     rows = []
     for _, row in df.iterrows():
+        triggering_time = normalize_ts(row.get("triggering_time_client"))
+        ack_time = normalize_ts(row.get("alarm_acknowledgment_time"))
         rows.append(
             (
                 id_extraccion,
@@ -1016,20 +1039,18 @@ def insertar_alarm_evento_from_excel(excel_path: Path, id_extraccion: int) -> No
                 row.get("Name"),
                 row.get("Trigger Alarm"),
                 row.get("Priority"),
-                row.get("triggering_time_client"),
+                triggering_time,
                 row.get("Source"),
                 row.get("Region"),
                 row.get("Trigger Event"),
                 row.get("Description"),
                 row.get("Status"),
-                row.get("Alarm Acknowledgment Time")
-                if "Alarm Acknowledgment Time" in df.columns
-                else None,
+                ack_time,
                 row.get("Alarm Category"),
                 row.get("Remarks"),
                 row.get("More"),
                 row.get("Event Key"),
-                int(row["periodo"]) if pd.notna(row["periodo"]) else None,
+                int(row["periodo"]) if row["periodo"] is not None else None,
                 now,
             )
         )
@@ -1126,6 +1147,11 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
         else:
             df["periodo"] = pd.NA
 
+        if "alarm_acknowledgment_time" in df.columns:
+            df["alarm_acknowledgment_time"] = pd.to_datetime(
+                df["alarm_acknowledgment_time"], errors="coerce"
+            )
+
         df["fecha_creacion"] = datetime.now()
         df = df.where(pd.notnull(df), None)
 
@@ -1152,6 +1178,13 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
 
         df_to_insert = df[[col for col in columnas_insert if col in df.columns]]
         registros = df_to_insert.to_dict(orient="records")
+        for registro in registros:
+            registro["triggering_time_client"] = normalize_ts(
+                registro.get("triggering_time_client")
+            )
+            registro["alarm_acknowledgment_time"] = normalize_ts(
+                registro.get("alarm_acknowledgment_time")
+            )
 
         if not registros:
             logger_info("[DB] No hay registros de Alarm Report para insertar.")
