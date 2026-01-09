@@ -271,6 +271,28 @@ def normalize_ts(value):
     return value
 
 
+def calcular_periodo(value):
+    """
+    Calcula el periodo (YYYYMMDD) a partir de un valor de fecha/hora.
+    Si el valor es NaT/NaN/None o no es una fecha válida, devuelve None.
+    """
+    if pd.isna(value):
+        return None
+
+    v = value
+    if isinstance(v, pd.Timestamp):
+        v = v.to_pydatetime().replace(tzinfo=None)
+    elif isinstance(v, datetime):
+        v = v.replace(tzinfo=None)
+    else:
+        try:
+            v = pd.to_datetime(v).to_pydatetime().replace(tzinfo=None)
+        except Exception:
+            return None
+
+    return int(v.strftime("%Y%m%d"))
+
+
 def registrar_ejecucion_y_pasos(
     opcion: str,
     duracion_total_seg: float,
@@ -1024,7 +1046,6 @@ def insertar_alarm_evento_from_excel(excel_path: Path, id_extraccion: int) -> No
     else:
         df["alarm_acknowledgment_time"] = pd.NaT
 
-    df["periodo"] = df["triggering_time_client"].dt.strftime("%Y%m%d").astype("Int64")
     df = df.where(pd.notnull(df), None)
 
     now = datetime.now()
@@ -1032,6 +1053,7 @@ def insertar_alarm_evento_from_excel(excel_path: Path, id_extraccion: int) -> No
     for _, row in df.iterrows():
         triggering_time = normalize_ts(row.get("triggering_time_client"))
         ack_time = normalize_ts(row.get("alarm_acknowledgment_time"))
+        periodo = calcular_periodo(row.get(trigger_time_col))
         rows.append(
             (
                 id_extraccion,
@@ -1050,7 +1072,7 @@ def insertar_alarm_evento_from_excel(excel_path: Path, id_extraccion: int) -> No
                 row.get("Remarks"),
                 row.get("More"),
                 row.get("Event Key"),
-                int(row["periodo"]) if row["periodo"] is not None else None,
+                periodo,
                 now,
             )
         )
@@ -1143,9 +1165,7 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
             df["triggering_time_client"] = pd.to_datetime(
                 df["triggering_time_client"], errors="coerce"
             )
-            df["periodo"] = df["triggering_time_client"].dt.strftime("%Y%m%d").astype("Int64")
-        else:
-            df["periodo"] = pd.NA
+        df["periodo"] = pd.NA
 
         if "alarm_acknowledgment_time" in df.columns:
             df["alarm_acknowledgment_time"] = pd.to_datetime(
@@ -1185,6 +1205,7 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
             registro["alarm_acknowledgment_time"] = normalize_ts(
                 registro.get("alarm_acknowledgment_time")
             )
+            registro["periodo"] = calcular_periodo(registro.get("triggering_time_client"))
 
         if not registros:
             logger_info("[DB] No hay registros de Alarm Report para insertar.")
