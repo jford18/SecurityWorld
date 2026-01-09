@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
   PieChart,
@@ -78,6 +78,178 @@ const formatMonthLabel = (mes: string) => {
   const date = new Date(year, month - 1, 1);
   return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
 };
+
+const CHART_CARD_STYLE = { contain: 'layout paint', transform: 'translateZ(0)' };
+const STACKED_CHART_MARGIN = { top: 10, right: 30, left: 20, bottom: 10 };
+const TENDENCIA_CHART_MARGIN = { top: 10, right: 30, left: 0, bottom: 10 };
+const STACKED_Y_AXIS_LABEL = {
+  value: 'Tipo de afectación y problema',
+  angle: -90,
+  position: 'insideLeft',
+  style: { textAnchor: 'middle' as const },
+};
+
+type DonutDatum = {
+  name: string;
+  value: number;
+};
+
+type StackedDatum = Record<string, number | string> & {
+  problema_label: string;
+  total?: number;
+};
+
+type TendenciaDatum = {
+  mes: string;
+  mes_label: string;
+  num_fallos: number;
+  pct_tg: number;
+};
+
+const DonutChart = React.memo(({ data }: { data: DonutDatum[] }) => {
+  if (!data.length) {
+    return <p className="mt-8 text-center text-sm text-gray-400">Sin datos de pendientes.</p>;
+  }
+
+  return (
+    <div className="h-72">
+      <ResponsiveContainer width="100%" height="100%" debounce={200}>
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            innerRadius={60}
+            outerRadius={90}
+            dataKey="value"
+            // @ts-ignore - recharts label callback params inferred as any in this context
+            label={({ percent }: { percent: number }) => formatPercent(percent * 100)}
+          >
+            {data.map((entry, index) => {
+              void entry;
+              return (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={CHART_COLORS[index % CHART_COLORS.length]}
+                />
+              );
+            })}
+          </Pie>
+          <Tooltip formatter={(value: number) => formatInteger(Number(value))} />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
+
+DonutChart.displayName = 'DonutChart';
+
+const StackedBarChartCard = React.memo(
+  ({ data, haciendaKeys }: { data: StackedDatum[]; haciendaKeys: string[] }) => {
+    if (!data.length) {
+      return <p className="mt-8 text-center text-sm text-gray-400">Sin datos de pendientes.</p>;
+    }
+
+    return (
+      <div className="h-72">
+        <ResponsiveContainer width="100%" height="100%" debounce={200}>
+          <BarChart data={data} layout="vertical" margin={STACKED_CHART_MARGIN}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis type="number" tickFormatter={(value) => formatInteger(Number(value))} />
+            <YAxis
+              type="category"
+              dataKey="problema_label"
+              width={160}
+              label={STACKED_Y_AXIS_LABEL}
+            />
+            <Tooltip formatter={(value: number) => formatInteger(Number(value))} />
+            <Legend />
+            {haciendaKeys.map((hacienda, index) => {
+              const isLast = index === haciendaKeys.length - 1;
+              return (
+                <Bar
+                  key={hacienda}
+                  dataKey={hacienda}
+                  stackId="pendientes"
+                  fill={CHART_COLORS[index % CHART_COLORS.length]}
+                  name={hacienda}
+                >
+                  <LabelList
+                    dataKey={hacienda}
+                    position="center"
+                    formatter={(value: number) => (value ? formatInteger(Number(value)) : '')}
+                    fill="#fff"
+                  />
+                  {isLast && (
+                    <LabelList
+                      dataKey="total"
+                      position="right"
+                      formatter={(value: number) => (value ? formatInteger(Number(value)) : '')}
+                    />
+                  )}
+                </Bar>
+              );
+            })}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  },
+);
+
+StackedBarChartCard.displayName = 'StackedBarChartCard';
+
+const TendenciaChart = React.memo(({ data }: { data: TendenciaDatum[] }) => {
+  if (!data.length) {
+    return <p className="mt-8 text-center text-sm text-gray-400">Sin datos de tendencia.</p>;
+  }
+
+  return (
+    <div className="h-72">
+      <ResponsiveContainer width="100%" height="100%" debounce={200}>
+        <ComposedChart data={data} margin={TENDENCIA_CHART_MARGIN}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="mes_label" />
+          <YAxis
+            yAxisId="left"
+            tickFormatter={(value) => formatInteger(Number(value))}
+            allowDecimals={false}
+          />
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            tickFormatter={(value) => formatPercent(Number(value))}
+          />
+          <Tooltip
+            formatter={(value: number, name: string) =>
+              name === '%TG' ? formatPercent(Number(value)) : formatInteger(Number(value))
+            }
+          />
+          <Legend />
+          <Bar yAxisId="left" dataKey="num_fallos" name="N° fallos" fill="#E15759">
+            <LabelList
+              dataKey="num_fallos"
+              position="top"
+              formatter={(value: number) => (value ? formatInteger(Number(value)) : '')}
+            />
+          </Bar>
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="pct_tg"
+            name="%TG"
+            stroke="#4C6FFF"
+            strokeWidth={2}
+            dot={{ r: 3 }}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
+
+TendenciaChart.displayName = 'TendenciaChart';
 
 const DashboardHome: React.FC = () => {
   const { session } = useSession();
@@ -255,7 +427,7 @@ const DashboardHome: React.FC = () => {
       !dashboard.tabla_clientes.length &&
       !dashboard.tendencia_pendientes_mes.length);
 
-  const handleToggleCliente = (id: number) => {
+  const handleToggleCliente = useCallback((id: number) => {
     setSelectedClienteIds((prev) => {
       if (prev.includes(id)) {
         return prev.filter((item) => item !== id);
@@ -265,11 +437,32 @@ const DashboardHome: React.FC = () => {
       }
       return [...prev, id];
     });
-  };
+  }, []);
 
-  const handleToggleTodosClientes = () => {
+  const handleToggleTodosClientes = useCallback(() => {
     setSelectedClienteIds([]);
-  };
+  }, []);
+
+  const handleHaciendaChange = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      setSelectedHaciendaId(event.target.value);
+    },
+    [],
+  );
+
+  const handleMesChange = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      setSelectedMes(event.target.value);
+    },
+    [],
+  );
+
+  const handleProblemaChange = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      setSelectedProblemaId(event.target.value);
+    },
+    [],
+  );
 
   const kpis = dashboard?.kpis ?? {
     fallos_reportados: 0,
@@ -287,7 +480,7 @@ const DashboardHome: React.FC = () => {
             <select
               className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
               value={selectedHaciendaId}
-              onChange={(event) => setSelectedHaciendaId(event.target.value)}
+              onChange={handleHaciendaChange}
             >
               <option value="">Todas</option>
               {haciendas.map((hacienda) => (
@@ -338,7 +531,7 @@ const DashboardHome: React.FC = () => {
               <select
                 className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
                 value={selectedMes}
-                onChange={(event) => setSelectedMes(event.target.value)}
+                onChange={handleMesChange}
               >
                 <option value="">Todos</option>
                 {meses.map((mes) => (
@@ -355,7 +548,7 @@ const DashboardHome: React.FC = () => {
               <select
                 className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
                 value={selectedProblemaId}
-                onChange={(event) => setSelectedProblemaId(event.target.value)}
+                onChange={handleProblemaChange}
               >
                 <option value="">Todas</option>
                 {problemas.map((problema) => (
@@ -392,6 +585,7 @@ const DashboardHome: React.FC = () => {
             <div
               key={kpi.key}
               className="border border-gray-300 bg-white px-4 py-3 text-center"
+              style={CHART_CARD_STYLE}
             >
               <p className="text-2xl font-semibold text-gray-800">{displayValue}</p>
               <p className="text-xs font-semibold text-gray-500">{kpi.label}</p>
@@ -401,107 +595,23 @@ const DashboardHome: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="border border-gray-300 bg-white p-4">
+        <div className="border border-gray-300 bg-white p-4" style={CHART_CARD_STYLE}>
           <h4 className="text-sm font-semibold text-gray-600">
             Fallos pendientes por Departamento
           </h4>
-          <div className="h-72">
-            {donutData.length ? (
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={donutData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={90}
-                    dataKey="value"
-                    // @ts-ignore - recharts label callback params inferred as any in this context
-                    label={({ percent }: { percent: number }) => formatPercent(percent * 100)}
-                  >
-                    {donutData.map((entry, index) => {
-                      void entry;
-                      return <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />;
-                    })}
-                  </Pie>
-                  <Tooltip formatter={(value: number) => formatInteger(value)} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="mt-8 text-center text-sm text-gray-400">Sin datos de pendientes.</p>
-            )}
-          </div>
+          <DonutChart data={donutData} />
         </div>
 
-        <div className="border border-gray-300 bg-white p-4">
+        <div className="border border-gray-300 bg-white p-4" style={CHART_CARD_STYLE}>
           <h4 className="text-sm font-semibold text-gray-600">
             Fallos pendientes por Problema y HACIENDA
           </h4>
-          <div className="h-72">
-            {stackedData.length ? (
-              <ResponsiveContainer>
-                <BarChart
-                  data={stackedData}
-                  layout="vertical"
-                  margin={{ top: 10, right: 30, left: 20, bottom: 10 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" tickFormatter={(value) => formatInteger(Number(value))} />
-                  <YAxis
-                    type="category"
-                    dataKey="problema_label"
-                    width={160}
-                    label={{
-                      value: 'Tipo de afectación y problema',
-                      angle: -90,
-                      position: 'insideLeft',
-                      style: { textAnchor: 'middle' },
-                    }}
-                  />
-                  <Tooltip formatter={(value: number) => formatInteger(value)} />
-                  <Legend />
-                  {haciendaKeys.map((hacienda, index) => {
-                    const isLast = index === haciendaKeys.length - 1;
-                    return (
-                      <Bar
-                        key={hacienda}
-                        dataKey={hacienda}
-                        stackId="pendientes"
-                        fill={CHART_COLORS[index % CHART_COLORS.length]}
-                        name={hacienda}
-                      >
-                        <LabelList
-                          dataKey={hacienda}
-                          position="center"
-                          formatter={(value: number) =>
-                            value ? formatInteger(Number(value)) : ''
-                          }
-                          fill="#fff"
-                        />
-                        {isLast && (
-                          <LabelList
-                            dataKey="total"
-                            position="right"
-                            formatter={(value: number) =>
-                              value ? formatInteger(Number(value)) : ''
-                            }
-                          />
-                        )}
-                      </Bar>
-                    );
-                  })}
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="mt-8 text-center text-sm text-gray-400">Sin datos de pendientes.</p>
-            )}
-          </div>
+          <StackedBarChartCard data={stackedData} haciendaKeys={haciendaKeys} />
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="border border-gray-300 bg-white p-4">
+        <div className="border border-gray-300 bg-white p-4" style={CHART_CARD_STYLE}>
           <h4 className="text-sm font-semibold text-gray-600">Fallos pendientes por Cliente</h4>
           <div className="mt-3 overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -544,62 +654,12 @@ const DashboardHome: React.FC = () => {
           </div>
         </div>
 
-        <div className="border border-gray-300 bg-white p-4">
+        <div className="border border-gray-300 bg-white p-4" style={CHART_CARD_STYLE}>
           <h4 className="text-sm font-semibold text-gray-600">
             %TG Recuento de ID y N° fallos por Mes y Estatus final
           </h4>
           <p className="text-xs text-gray-500">Estatus final: PENDIENTE</p>
-          <div className="h-72">
-            {tendenciaData.length ? (
-              <ResponsiveContainer>
-                <ComposedChart data={tendenciaData} margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mes_label" />
-                  <YAxis
-                    yAxisId="left"
-                    tickFormatter={(value) => formatInteger(Number(value))}
-                    allowDecimals={false}
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    tickFormatter={(value) => formatPercent(Number(value))}
-                  />
-                  <Tooltip
-                    formatter={(value: number, name: string) =>
-                      name === '%TG' ? formatPercent(Number(value)) : formatInteger(Number(value))
-                    }
-                  />
-                  <Legend />
-                  <Bar
-                    yAxisId="left"
-                    dataKey="num_fallos"
-                    name="N° fallos"
-                    fill="#E15759"
-                  >
-                    <LabelList
-                      dataKey="num_fallos"
-                      position="top"
-                      formatter={(value: number) =>
-                        value ? formatInteger(Number(value)) : ''
-                      }
-                    />
-                  </Bar>
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="pct_tg"
-                    name="%TG"
-                    stroke="#4C6FFF"
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="mt-8 text-center text-sm text-gray-400">Sin datos de tendencia.</p>
-            )}
-          </div>
+          <TendenciaChart data={tendenciaData} />
         </div>
       </div>
     </div>
