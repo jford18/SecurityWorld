@@ -995,6 +995,7 @@ def esperar_descarga_y_renombrar(
 def insertar_alarm_evento_from_excel(excel_path: Path, id_extraccion: int) -> None:
     print(f"[INFO] Leyendo Alarm Report desde: {excel_path}")
     df = pd.read_excel(excel_path)
+    df = df.where(pd.notnull(df), None)
 
     trigger_time_col = "Triggering Time (Client)"
     if trigger_time_col in df.columns:
@@ -1003,6 +1004,7 @@ def insertar_alarm_evento_from_excel(excel_path: Path, id_extraccion: int) -> No
         df["triggering_time_client"] = pd.NaT
 
     df["periodo"] = df["triggering_time_client"].dt.strftime("%Y%m%d").astype("Int64")
+    df = df.where(pd.notnull(df), None)
 
     now = datetime.now()
     rows = []
@@ -1088,6 +1090,7 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
         logger_info(f"[DB] Leyendo archivo Excel de Alarm Report: {file_path}")
 
         df = pd.read_excel(file_path)
+        df = df.where(pd.notnull(df), None)
 
         column_map = {
             "Mark": "mark",
@@ -1124,24 +1127,7 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
             df["periodo"] = pd.NA
 
         df["fecha_creacion"] = datetime.now()
-
-        text_cols = [
-            "mark",
-            "name",
-            "trigger_alarm",
-            "source",
-            "region",
-            "trigger_event",
-            "description",
-            "status",
-            "alarm_category",
-            "remarks",
-            "more",
-            "event_key",
-        ]
-        for col in text_cols:
-            if col in df.columns:
-                df[col] = df[col].fillna("")
+        df = df.where(pd.notnull(df), None)
 
         columnas_insert = [
             "id_extraccion",
