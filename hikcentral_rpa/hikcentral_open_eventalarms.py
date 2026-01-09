@@ -170,6 +170,38 @@ def find_latest_alarm_report() -> Path | None:
     return candidates[0]
 
 
+def find_last_alarm_report_file() -> Path | None:
+    """
+    Busca el último archivo Alarm_Report_* en la carpeta:
+    C:/Users/<usuario>/Downloads/Downloadcenter recorriendo subcarpetas.
+
+    Devuelve un Path o None si no encuentra nada.
+    """
+    base_dir = Path.home() / "Downloads" / "Downloadcenter"
+    if not base_dir.exists():
+        print(f"[ERROR] Carpeta de Downloadcenter no existe: {base_dir}")
+        return None
+
+    candidates: list[Path] = []
+    for path in base_dir.rglob("*"):
+        if not path.is_file():
+            continue
+        name = path.name
+        if not name.startswith("Alarm_Report_"):
+            continue
+        if not name.lower().endswith((".xlsx", ".xls")):
+            continue
+        candidates.append(path)
+
+    if not candidates:
+        print("[ERROR] No se encontró ningún archivo Alarm_Report_* en Downloadcenter.")
+        return None
+
+    last_file = max(candidates, key=lambda p: p.stat().st_mtime)
+    print(f"[INFO] Último Alarm_Report encontrado: {last_file}")
+    return last_file
+
+
 def esperar_descarga(download_dir: Path, archivos_previos, timeout: int = 120) -> str:
     """Espera hasta detectar un nuevo archivo .xlsx o .xls en download_dir."""
 
@@ -954,6 +986,87 @@ def esperar_descarga_y_renombrar(
     raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
 
 
+def insertar_alarm_evento_from_excel(excel_path: Path, id_extraccion: int) -> None:
+    print(f"[INFO] Leyendo Alarm Report desde: {excel_path}")
+    df = pd.read_excel(excel_path)
+
+    trigger_time_col = "Triggering Time (Client)"
+    if trigger_time_col in df.columns:
+        df["triggering_time_client"] = pd.to_datetime(df[trigger_time_col], errors="coerce")
+    else:
+        df["triggering_time_client"] = pd.NaT
+
+    df["periodo"] = df["triggering_time_client"].dt.strftime("%Y%m%d").astype("Int64")
+
+    now = datetime.now()
+    rows = []
+    for _, row in df.iterrows():
+        rows.append(
+            (
+                id_extraccion,
+                row.get("Mark"),
+                row.get("Name"),
+                row.get("Trigger Alarm"),
+                row.get("Priority"),
+                row.get("triggering_time_client"),
+                row.get("Source"),
+                row.get("Region"),
+                row.get("Trigger Event"),
+                row.get("Description"),
+                row.get("Status"),
+                row.get("Alarm Acknowledgment Time")
+                if "Alarm Acknowledgment Time" in df.columns
+                else None,
+                row.get("Alarm Category"),
+                row.get("Remarks"),
+                row.get("More"),
+                row.get("Event Key"),
+                int(row["periodo"]) if pd.notna(row["periodo"]) else None,
+                now,
+            )
+        )
+
+    if not rows:
+        print("[INFO] No hay filas para insertar en hik_alarm_evento.")
+        return
+
+    conn = get_pg_connection()
+    try:
+        with conn, conn.cursor() as cur:
+            cur.executemany(
+                """
+                INSERT INTO public.hik_alarm_evento (
+                    id_extraccion,
+                    mark,
+                    name,
+                    trigger_alarm,
+                    priority,
+                    triggering_time_client,
+                    source,
+                    region,
+                    trigger_event,
+                    description,
+                    status,
+                    alarm_acknowledgment_time,
+                    alarm_category,
+                    remarks,
+                    more,
+                    event_key,
+                    periodo,
+                    fecha_creacion
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                """,
+                rows,
+            )
+        print(f"[INFO] Insertadas {len(rows)} filas en hik_alarm_evento.")
+    finally:
+        conn.close()
+
+
 def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) -> None:
     """
     Lee el archivo Excel de Alarm Report exportado desde HikCentral y
@@ -1331,8 +1444,15 @@ def run():
             recorder=performance_recorder,
         )
 
-        if export_file_path and id_ejecucion and timer:
-            procesar_alarm_report(str(export_file_path), id_ejecucion, timer)
+        if id_ejecucion:
+            alarm_file = find_last_alarm_report_file()
+            if alarm_file is None:
+                print("[ERROR] No se encontró archivo Alarm_Report para cargar en hik_alarm_evento.")
+            else:
+                try:
+                    insertar_alarm_evento_from_excel(alarm_file, id_ejecucion)
+                except Exception as e:
+                    print(f"[ERROR] Falló la carga a hik_alarm_evento: {e}")
 
 
 if __name__ == "__main__":
