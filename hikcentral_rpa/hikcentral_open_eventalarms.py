@@ -256,6 +256,29 @@ def get_pg_connection():
     )
 
 
+def crear_registro_extraccion(conn, archivo_nombre: str) -> int:
+    """
+    Inserta una fila en hik_alarm_extraccion con estado EN_PROCESO
+    y devuelve el id generado.
+    """
+    log_info = globals().get("log_info", print)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO public.hik_alarm_extraccion (archivo_nombre)
+            VALUES (%s)
+            RETURNING id;
+            """,
+            (archivo_nombre,),
+        )
+        extraccion_id = cur.fetchone()[0]
+    conn.commit()
+    log_info(
+        f"[EVENT] Creado registro hik_alarm_extraccion id={extraccion_id} para archivo {archivo_nombre}"
+    )
+    return extraccion_id
+
+
 def normalize_ts(value):
     """
     Devuelve None si el valor es NaT/NaN/None.
@@ -1029,106 +1052,158 @@ def esperar_descarga_y_renombrar(
     raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
 
 
-def insertar_alarm_evento_from_excel(excel_path: Path, id_extraccion: int) -> None:
-    print(f"[INFO] Leyendo Alarm Report desde: {excel_path}")
-    df = pd.read_excel(excel_path)
-    df = df.where(pd.notnull(df), None)
-
-    trigger_time_col = "Triggering Time (Client)"
-    if trigger_time_col in df.columns:
-        df["triggering_time_client"] = pd.to_datetime(df[trigger_time_col], errors="coerce")
-    else:
-        df["triggering_time_client"] = pd.NaT
-
-    ack_time_col = "Alarm Acknowledgment Time"
-    if ack_time_col in df.columns:
-        df["alarm_acknowledgment_time"] = pd.to_datetime(df[ack_time_col], errors="coerce")
-    else:
-        df["alarm_acknowledgment_time"] = pd.NaT
-
-    df = df.where(pd.notnull(df), None)
-
-    now = datetime.now()
-    rows = []
-    for _, row in df.iterrows():
-        triggering_time = normalize_ts(row.get("triggering_time_client"))
-        ack_time = normalize_ts(row.get("alarm_acknowledgment_time"))
-        periodo = calcular_periodo(row.get(trigger_time_col))
-        rows.append(
-            (
-                id_extraccion,
-                row.get("Mark"),
-                row.get("Name"),
-                row.get("Trigger Alarm"),
-                row.get("Priority"),
-                triggering_time,
-                row.get("Source"),
-                row.get("Region"),
-                row.get("Trigger Event"),
-                row.get("Description"),
-                row.get("Status"),
-                ack_time,
-                row.get("Alarm Category"),
-                row.get("Remarks"),
-                row.get("More"),
-                row.get("Event Key"),
-                periodo,
-                now,
-            )
-        )
-
-    if not rows:
-        print("[INFO] No hay filas para insertar en hik_alarm_evento.")
-        return
+def insertar_alarm_evento_from_excel(excel_path: Path) -> None:
+    log_info = globals().get("log_info", print)
+    log_error = globals().get("log_error", print)
 
     conn = get_pg_connection()
+    id_extraccion = None
     try:
-        with conn, conn.cursor() as cur:
-            cur.executemany(
-                """
-                INSERT INTO public.hik_alarm_evento (
+        archivo_nombre = os.path.basename(excel_path)
+        id_extraccion = crear_registro_extraccion(conn, archivo_nombre)
+
+        log_info(f"[INFO] Leyendo Alarm Report desde: {excel_path}")
+        df = pd.read_excel(excel_path)
+        df = df.where(pd.notnull(df), None)
+
+        trigger_time_col = "Triggering Time (Client)"
+        if trigger_time_col in df.columns:
+            df["triggering_time_client"] = pd.to_datetime(df[trigger_time_col], errors="coerce")
+        else:
+            df["triggering_time_client"] = pd.NaT
+
+        ack_time_col = "Alarm Acknowledgment Time"
+        if ack_time_col in df.columns:
+            df["alarm_acknowledgment_time"] = pd.to_datetime(df[ack_time_col], errors="coerce")
+        else:
+            df["alarm_acknowledgment_time"] = pd.NaT
+
+        df = df.where(pd.notnull(df), None)
+
+        now = datetime.now()
+        rows = []
+        for _, row in df.iterrows():
+            triggering_time = normalize_ts(row.get("triggering_time_client"))
+            ack_time = normalize_ts(row.get("alarm_acknowledgment_time"))
+            periodo = calcular_periodo(row.get(trigger_time_col))
+            rows.append(
+                (
                     id_extraccion,
-                    mark,
-                    name,
-                    trigger_alarm,
-                    priority,
-                    triggering_time_client,
-                    source,
-                    region,
-                    trigger_event,
-                    description,
-                    status,
-                    alarm_acknowledgment_time,
-                    alarm_category,
-                    remarks,
-                    more,
-                    event_key,
+                    row.get("Mark"),
+                    row.get("Name"),
+                    row.get("Trigger Alarm"),
+                    row.get("Priority"),
+                    triggering_time,
+                    row.get("Source"),
+                    row.get("Region"),
+                    row.get("Trigger Event"),
+                    row.get("Description"),
+                    row.get("Status"),
+                    ack_time,
+                    row.get("Alarm Category"),
+                    row.get("Remarks"),
+                    row.get("More"),
+                    row.get("Event Key"),
                     periodo,
-                    fecha_creacion
+                    now,
                 )
-                VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s
-                )
-                """,
-                rows,
             )
-        print(f"[INFO] Insertadas {len(rows)} filas en hik_alarm_evento.")
+
+        total_filas = len(df)
+        total_nuevos = len(rows)
+        total_duplicados = total_filas - total_nuevos
+
+        if not rows:
+            log_info("[INFO] No hay filas para insertar en hik_alarm_evento.")
+        else:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """
+                    INSERT INTO public.hik_alarm_evento (
+                        id_extraccion,
+                        mark,
+                        name,
+                        trigger_alarm,
+                        priority,
+                        triggering_time_client,
+                        source,
+                        region,
+                        trigger_event,
+                        description,
+                        status,
+                        alarm_acknowledgment_time,
+                        alarm_category,
+                        remarks,
+                        more,
+                        event_key,
+                        periodo,
+                        fecha_creacion
+                    )
+                    VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s
+                    )
+                    """,
+                    rows,
+                )
+            conn.commit()
+            log_info(f"[INFO] Insertadas {len(rows)} filas en hik_alarm_evento.")
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE public.hik_alarm_extraccion
+                SET fecha_fin = now(),
+                    total_filas = %s,
+                    total_nuevos = %s,
+                    total_duplicados = %s,
+                    estado = 'OK'
+                WHERE id = %s;
+                """,
+                (total_filas, total_nuevos, total_duplicados, id_extraccion),
+            )
+        conn.commit()
+
+    except Exception as exc:
+        log_error(f"[ERROR] Falló la carga a hik_alarm_evento: {exc}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        if id_extraccion is not None:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.hik_alarm_extraccion
+                    SET fecha_fin = now(),
+                        estado = 'ERROR',
+                        observacion = %s
+                    WHERE id = %s;
+                    """,
+                    (str(exc), id_extraccion),
+                )
+            conn.commit()
+        raise
     finally:
         conn.close()
 
 
-def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) -> None:
+def procesar_alarm_report(file_path: str, timer: StepTimer) -> None:
     """
     Lee el archivo Excel de Alarm Report exportado desde HikCentral y
     lo inserta en la tabla hik_alarm_evento.
-    id_extraccion: normalmente será el id_ejecucion del LOG_RPA_EJECUCION.
     """
     step_name = "[10] DB_PROCESAR_ALARM_REPORT"
     logger_info = globals().get("log_info", print)
     logger_error = globals().get("log_error", print)
 
+    conn = get_pg_connection()
+    id_extraccion = None
+
     try:
+        archivo_nombre = os.path.basename(file_path)
+        id_extraccion = crear_registro_extraccion(conn, archivo_nombre)
+
         logger_info("[DB] Procesar Alarm Report e insertar en hik_alarm_evento")
         logger_info(f"[DB] Leyendo archivo Excel de Alarm Report: {file_path}")
 
@@ -1143,8 +1218,9 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
                 break
 
         if not col_event_key:
-            logger_error("[EVENT] No se encontró columna 'Event Key' en Alarm_Report, se aborta la carga.")
-            return
+            raise ValueError(
+                "[EVENT] No se encontró columna 'Event Key' en Alarm_Report, se aborta la carga."
+            )
 
         total_original = len(df)
         df[col_event_key] = df[col_event_key].astype(str).str.strip()
@@ -1178,8 +1254,7 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
 
         columnas_disponibles = [col for col in column_map.keys() if col in df.columns]
         if not columnas_disponibles:
-            logger_info("[DB] No se encontraron columnas válidas en el Alarm Report.")
-            return
+            raise ValueError("[DB] No se encontraron columnas válidas en el Alarm Report.")
 
         df = df[columnas_disponibles]
         df["id_extraccion"] = id_extraccion
@@ -1236,6 +1311,23 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
 
         if not registros:
             logger_info("[DB] No hay registros de Alarm Report para insertar.")
+            total_filas = len(df)
+            total_nuevos = len(registros)
+            total_duplicados = total_filas - total_nuevos
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.hik_alarm_extraccion
+                    SET fecha_fin = now(),
+                        total_filas = %s,
+                        total_nuevos = %s,
+                        total_duplicados = %s,
+                        estado = 'OK'
+                    WHERE id = %s;
+                    """,
+                    (total_filas, total_nuevos, total_duplicados, id_extraccion),
+                )
+            conn.commit()
             return
 
         logger_info(f"[EVENT] Registros a insertar en hik_alarm_evento: {len(registros)}")
@@ -1279,25 +1371,57 @@ def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) 
                 %s
             );
         """
+        with conn.cursor() as cur:
+            execute_batch(cur, sql, registros, page_size=500)
+        conn.commit()
+        logger_info(
+            f"[DB] Se insertaron {len(registros)} registros en hik_alarm_evento "
+            f"(id_extraccion={id_extraccion})."
+        )
 
-        conn = get_pg_connection()
-        try:
-            with conn:
-                with conn.cursor() as cur:
-                    execute_batch(cur, sql, registros, page_size=500)
-            logger_info(
-                f"[DB] Se insertaron {len(registros)} registros en hik_alarm_evento "
-                f"(id_extraccion={id_extraccion})."
+        total_filas = len(df)
+        total_nuevos = len(registros)
+        total_duplicados = total_filas - total_nuevos
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE public.hik_alarm_extraccion
+                SET fecha_fin = now(),
+                    total_filas = %s,
+                    total_nuevos = %s,
+                    total_duplicados = %s,
+                    estado = 'OK'
+                WHERE id = %s;
+                """,
+                (total_filas, total_nuevos, total_duplicados, id_extraccion),
             )
-        finally:
-            conn.close()
+        conn.commit()
 
         if timer:
             timer.mark(step_name)
 
     except Exception as exc:
         logger_error(f"[DB] Error al procesar Alarm Report: {exc}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        if id_extraccion is not None:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.hik_alarm_extraccion
+                    SET fecha_fin = now(),
+                        estado = 'ERROR',
+                        observacion = %s
+                    WHERE id = %s;
+                    """,
+                    (str(exc), id_extraccion),
+                )
+            conn.commit()
         raise
+    finally:
+        conn.close()
 
 
 def crear_driver() -> webdriver.Chrome:
@@ -1523,7 +1647,7 @@ def run():
                 print("[ERROR] No se encontró archivo Alarm_Report para cargar en hik_alarm_evento.")
             else:
                 try:
-                    insertar_alarm_evento_from_excel(alarm_file, id_ejecucion)
+                    insertar_alarm_evento_from_excel(alarm_file)
                 except Exception as e:
                     print(f"[ERROR] Falló la carga a hik_alarm_evento: {e}")
 
