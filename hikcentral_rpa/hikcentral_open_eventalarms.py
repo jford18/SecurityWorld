@@ -4,9 +4,11 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
 import psutil
 import psycopg2
 from dotenv import load_dotenv
+from psycopg2.extras import execute_batch
 from selenium import webdriver
 from selenium.common.exceptions import (
     ElementClickInterceptedException,
@@ -247,8 +249,10 @@ def registrar_ejecucion_y_pasos(
                     )
 
         print("[INFO] Registro de rendimiento y pasos insertado correctamente.")
+        return id_ejecucion
     except Exception as e:
         print(f"[ERROR] No se pudo registrar el rendimiento en la base de datos: {e}")
+        return None
 
 
 def safe_click(driver, el):
@@ -909,6 +913,166 @@ def esperar_descarga_y_renombrar(
     raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
 
 
+def procesar_alarm_report(file_path: str, id_extraccion: int, timer: StepTimer) -> None:
+    """
+    Lee el archivo Excel de Alarm Report exportado desde HikCentral y
+    lo inserta en la tabla hik_alarm_evento.
+    id_extraccion: normalmente será el id_ejecucion del LOG_RPA_EJECUCION.
+    """
+    step_name = "[10] DB_PROCESAR_ALARM_REPORT"
+    logger_info = globals().get("log_info", print)
+    logger_error = globals().get("log_error", print)
+
+    try:
+        logger_info("[DB] Procesar Alarm Report e insertar en hik_alarm_evento")
+        logger_info(f"[DB] Leyendo archivo Excel de Alarm Report: {file_path}")
+
+        df = pd.read_excel(file_path)
+
+        column_map = {
+            "Mark": "mark",
+            "Name": "name",
+            "Trigger Alarm": "trigger_alarm",
+            "Priority": "priority",
+            "Triggering Time (Client)": "triggering_time_client",
+            "Source": "source",
+            "Region": "region",
+            "Trigger Event": "trigger_event",
+            "Description": "description",
+            "Status": "status",
+            "Alarm Acknowledgment Time": "alarm_acknowledgment_time",
+            "Alarm Category": "alarm_category",
+            "Remarks": "remarks",
+            "More": "more",
+            "Event Key": "event_key",
+        }
+
+        columnas_disponibles = [col for col in column_map.keys() if col in df.columns]
+        if not columnas_disponibles:
+            logger_info("[DB] No se encontraron columnas válidas en el Alarm Report.")
+            return
+
+        df = df[columnas_disponibles].rename(columns=column_map)
+        df["id_extraccion"] = id_extraccion
+
+        if "triggering_time_client" in df.columns:
+            df["triggering_time_client"] = pd.to_datetime(
+                df["triggering_time_client"], errors="coerce"
+            )
+            df["periodo"] = df["triggering_time_client"].dt.strftime("%Y%m%d").astype("Int64")
+        else:
+            df["periodo"] = pd.NA
+
+        df["fecha_creacion"] = datetime.now()
+
+        text_cols = [
+            "mark",
+            "name",
+            "trigger_alarm",
+            "source",
+            "region",
+            "trigger_event",
+            "description",
+            "status",
+            "alarm_category",
+            "remarks",
+            "more",
+            "event_key",
+        ]
+        for col in text_cols:
+            if col in df.columns:
+                df[col] = df[col].fillna("")
+
+        columnas_insert = [
+            "id_extraccion",
+            "mark",
+            "name",
+            "trigger_alarm",
+            "priority",
+            "triggering_time_client",
+            "source",
+            "region",
+            "trigger_event",
+            "description",
+            "status",
+            "alarm_acknowledgment_time",
+            "alarm_category",
+            "remarks",
+            "more",
+            "event_key",
+            "periodo",
+            "fecha_creacion",
+        ]
+
+        df_to_insert = df[[col for col in columnas_insert if col in df.columns]]
+        registros = df_to_insert.to_dict(orient="records")
+
+        if not registros:
+            logger_info("[DB] No hay registros de Alarm Report para insertar.")
+            return
+
+        sql = """
+            INSERT INTO public.hik_alarm_evento (
+                id_extraccion,
+                mark,
+                name,
+                trigger_alarm,
+                priority,
+                triggering_time_client,
+                source,
+                region,
+                trigger_event,
+                description,
+                status,
+                alarm_acknowledgment_time,
+                alarm_category,
+                remarks,
+                more,
+                event_key,
+                periodo,
+                fecha_creacion
+            ) VALUES (
+                %(id_extraccion)s,
+                %(mark)s,
+                %(name)s,
+                %(trigger_alarm)s,
+                %(priority)s,
+                %(triggering_time_client)s,
+                %(source)s,
+                %(region)s,
+                %(trigger_event)s,
+                %(description)s,
+                %(status)s,
+                %(alarm_acknowledgment_time)s,
+                %(alarm_category)s,
+                %(remarks)s,
+                %(more)s,
+                %(event_key)s,
+                %(periodo)s,
+                %(fecha_creacion)s
+            );
+        """
+
+        conn = get_pg_connection()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    execute_batch(cur, sql, registros, page_size=500)
+            logger_info(
+                f"[DB] Se insertaron {len(registros)} registros en hik_alarm_evento "
+                f"(id_extraccion={id_extraccion})."
+            )
+        finally:
+            conn.close()
+
+        if timer:
+            timer.mark(step_name)
+
+    except Exception as exc:
+        logger_error(f"[DB] Error al procesar Alarm Report: {exc}")
+        raise
+
+
 def crear_driver() -> webdriver.Chrome:
     """Configura y devuelve un driver de Chrome listo para descargar archivos."""
 
@@ -1006,6 +1170,8 @@ def run():
     )
     timer = step_timer
 
+    export_file_path: Path | None = None
+
     try:
         driver = crear_driver()
         wait = WebDriverWait(driver, 30)
@@ -1053,17 +1219,20 @@ def run():
         click_search_button(driver, timeout=40, timer=timer)
 
         limpiar_descargas(DOWNLOAD_DIR)
-        archivo = click_export_event_and_alarm(
+        export_file_path = click_export_event_and_alarm(
             driver, password=HIK_PASSWORD, timeout=30, timer=timer
         )
 
-        print(f"[INFO] Ruta final del archivo exportado: {archivo}")
+        print(f"[INFO] Ruta final del archivo exportado: {export_file_path}")
 
-        if archivo is None:
+        if export_file_path is None:
             print("[ERROR] No se detectó ningún archivo descargado desde Event and Alarm Search.")
         else:
-            size_mb = archivo.stat().st_size / (1024 * 1024)
-            print(f"[8] Archivo de Event and Alarm Search descargado: {archivo} ({size_mb:.2f} MB)")
+            size_mb = export_file_path.stat().st_size / (1024 * 1024)
+            print(
+                f"[8] Archivo de Event and Alarm Search descargado: {export_file_path} "
+                f"({size_mb:.2f} MB)"
+            )
 
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         screenshot_path = LOG_DIR / f"event_and_alarm_search_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
@@ -1113,13 +1282,16 @@ def run():
             time.perf_counter() - performance_recorder.start_time if performance_recorder else 0.0
         )
 
-        registrar_ejecucion_y_pasos(
+        id_ejecucion = registrar_ejecucion_y_pasos(
             opcion="Event and Alarm",
             duracion_total_seg=duracion_total_seg,
             cpu_final=final_cpu,
             ram_final=final_ram,
             recorder=performance_recorder,
         )
+
+        if export_file_path and id_ejecucion and timer:
+            procesar_alarm_report(str(export_file_path), id_ejecucion, timer)
 
 
 if __name__ == "__main__":
