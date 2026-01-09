@@ -150,10 +150,9 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ menus }) => {
   }, [effectiveMenus]);
 
   if (!effectiveMenus.length) {
-    console.warn('[Menús] Respuesta vacía del backend en SidebarMenu:', menus);
     return (
       <div className="px-4 py-2 text-sm text-gray-400">
-        No hay menús disponibles para el rol seleccionado.
+        Sin menús asignados.
       </div>
     );
   }

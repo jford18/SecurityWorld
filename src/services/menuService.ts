@@ -12,6 +12,7 @@ export type MenuPayload = {
 type GetMenusOptions = {
   roleId?: number | null;
   userId?: number | null;
+  signal?: AbortSignal;
 };
 
 export const getMenusForManagement = async () => {
@@ -20,7 +21,7 @@ export const getMenusForManagement = async () => {
 };
 
 export const getMenus = async (options: GetMenusOptions = {}) => {
-  const { roleId = null, userId = null } = options;
+  const { roleId = null, userId = null, signal } = options;
   const params: Record<string, number> = {};
 
   if (userId !== null) {
@@ -33,6 +34,7 @@ export const getMenus = async (options: GetMenusOptions = {}) => {
 
   const { data } = await api.get('/menus', {
     params: Object.keys(params).length ? params : undefined,
+    signal,
   });
 
   return data;
