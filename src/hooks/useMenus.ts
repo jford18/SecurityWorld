@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getMenus as fetchMenusByRole } from '../services/menuService';
 
 export interface MenuNode {
@@ -53,46 +53,9 @@ export const useMenus = (token: string | null, roleId: number | null, userId: nu
   const [menus, setMenus] = useState<MenuNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const didFetchRef = useRef<string | null>(null);
+  const fetchKeyRef = useRef<string>('');
+  const abortRef = useRef<AbortController | null>(null);
   const loggedEmptyRef = useRef<string | null>(null);
-
-  const fetchMenus = useCallback(async (signal?: AbortSignal) => {
-    if (!token || !roleId || !userId) {
-      setMenus([]);
-      setError(null);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const data = await fetchMenusByRole({ roleId, userId, signal });
-      const parsedMenus = ensureArray(data);
-
-      if (parsedMenus.length === 0) {
-        const currentKey = `${token}|${roleId}|${userId}`;
-        if (import.meta.env.DEV && loggedEmptyRef.current !== currentKey) {
-          console.info(
-            '[Menús] Backend devolvió [] (sin menús asignados o filtros aplicados).'
-          );
-          loggedEmptyRef.current = currentKey;
-        }
-      }
-
-      setMenus(parsedMenus);
-      setError(null);
-    } catch (err) {
-      const errorName = (err as { name?: string }).name;
-      const errorCode = (err as { code?: string }).code;
-      if (errorName === 'CanceledError' || errorCode === 'ERR_CANCELED') {
-        return;
-      }
-      console.error('Error al cargar menús autorizados:', err);
-      setMenus([]);
-      setError('No se pudo cargar el menú del usuario.');
-    } finally {
-      setLoading(false);
-    }
-  }, [token, roleId, userId]);
 
   useEffect(() => {
     if (!token || !roleId || !userId) {
@@ -102,18 +65,50 @@ export const useMenus = (token: string | null, roleId: number | null, userId: nu
     }
 
     const currentKey = `${token}|${roleId}|${userId}`;
-    if (didFetchRef.current === currentKey) {
+    if (fetchKeyRef.current === currentKey) {
       return;
     }
-    didFetchRef.current = currentKey;
+    fetchKeyRef.current = currentKey;
 
+    abortRef.current?.abort();
     const controller = new AbortController();
-    void fetchMenus(controller.signal);
+    abortRef.current = controller;
+
+    (async () => {
+      try {
+        setLoading(true);
+        const data = await fetchMenusByRole({ roleId, userId, signal: controller.signal });
+        const parsedMenus = ensureArray(data);
+
+        if (parsedMenus.length === 0) {
+          if (import.meta.env.DEV && loggedEmptyRef.current !== currentKey) {
+            console.info(
+              '[Menús] Backend devolvió [] (sin menús asignados o filtros aplicados).'
+            );
+            loggedEmptyRef.current = currentKey;
+          }
+        }
+
+        setMenus(parsedMenus);
+        setError(null);
+      } catch (err) {
+        const errorName = (err as { name?: string }).name;
+        const errorCode = (err as { code?: string }).code;
+        if (errorName === 'AbortError' || errorName === 'CanceledError' || errorCode === 'ERR_CANCELED') {
+          return;
+        }
+        console.error('Error al cargar menús autorizados:', err);
+        setMenus([]);
+        setError('No se pudo cargar el menú del usuario.');
+      } finally {
+        setLoading(false);
+      }
+    })();
 
     return () => controller.abort();
-  }, [fetchMenus]);
+  }, [token, roleId, userId]);
 
-  return { menus, loading, error, reload: fetchMenus };
+  return { menus, loading, error };
 };
 
 export const flattenMenuRoutes = (nodes: MenuNode[]): string[] => {

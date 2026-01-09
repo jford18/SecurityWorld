@@ -9,6 +9,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ menus, loading, error }) => {
+  console.count('[SIDEBAR_RENDER]');
   return (
     <aside className="w-72 bg-[#1C2E4A] text-white flex-shrink-0 flex flex-col">
       <div className="flex items-center justify-center py-4 border-b border-white/5">
