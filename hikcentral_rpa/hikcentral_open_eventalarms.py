@@ -140,6 +140,12 @@ LOG_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\logs")
 DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")
 
 
+def get_downloadcenter_root() -> Path:
+    user_home = Path(os.environ["USERPROFILE"])
+    root = user_home / "HCWebControlService" / "Downloadcenter"
+    return root
+
+
 def take_screenshot(driver, label: str) -> Path:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -155,7 +161,7 @@ def find_latest_alarm_report() -> Path | None:
     HikCentral crea una carpeta 'Alarm_Report_YYYYMMDDHHMMSS' y dentro un archivo
     'Alarm_Report_YYYYMMDDHHMMSS.xlsx'.
     """
-    base_dir = Path(DOWNLOAD_DIR)
+    base_dir = get_downloadcenter_root()
     candidates: list[Path] = []
 
     for folder in base_dir.glob("Alarm_Report_*"):
@@ -173,11 +179,11 @@ def find_latest_alarm_report() -> Path | None:
 def find_last_alarm_report_file() -> Path | None:
     """
     Busca el último archivo Alarm_Report_* en la carpeta:
-    C:/Users/<usuario>/Downloads/Downloadcenter recorriendo subcarpetas.
+    C:/Users/<usuario>/HCWebControlService/Downloadcenter recorriendo subcarpetas.
 
     Devuelve un Path o None si no encuentra nada.
     """
-    base_dir = Path.home() / "Downloads" / "Downloadcenter"
+    base_dir = get_downloadcenter_root()
     if not base_dir.exists():
         print(f"[ERROR] Carpeta de Downloadcenter no existe: {base_dir}")
         return None
