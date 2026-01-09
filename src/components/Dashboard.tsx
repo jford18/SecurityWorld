@@ -4,6 +4,9 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import type { MenuNode } from '../hooks/useMenus';
 
+const LayoutContent = React.memo(() => <Outlet />);
+LayoutContent.displayName = 'LayoutContent';
+
 interface DashboardProps {
   menus: MenuNode[];
   menuLoading: boolean;
@@ -11,6 +14,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ menus, menuLoading, menuError }) => {
+  console.count('[LAYOUT_RENDER]');
   return (
     <div className="flex h-screen bg-[#F5F6F8]">
       <Sidebar menus={menus} loading={menuLoading} error={menuError} />
@@ -18,7 +22,7 @@ const Dashboard: React.FC<DashboardProps> = ({ menus, menuLoading, menuError }) 
         <Header />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-[#F5F6F8]">
           <div className="container mx-auto px-6 py-8">
-            <Outlet />
+            <LayoutContent />
           </div>
         </main>
       </div>

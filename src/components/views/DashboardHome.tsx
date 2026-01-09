@@ -113,7 +113,7 @@ const DonutChart = React.memo(({ data }: { data: DonutDatum[] }) => {
 
   return (
     <div className="h-72">
-      <ResponsiveContainer width="100%" height="100%" debounce={200}>
+      <ResponsiveContainer width="100%" height="100%" debounce={250}>
         <PieChart>
           <Pie
             data={data}
@@ -122,6 +122,7 @@ const DonutChart = React.memo(({ data }: { data: DonutDatum[] }) => {
             innerRadius={60}
             outerRadius={90}
             dataKey="value"
+            isAnimationActive={false}
             // @ts-ignore - recharts label callback params inferred as any in this context
             label={({ percent }: { percent: number }) => formatPercent(percent * 100)}
           >
@@ -153,7 +154,7 @@ const StackedBarChartCard = React.memo(
 
     return (
       <div className="h-72">
-        <ResponsiveContainer width="100%" height="100%" debounce={200}>
+        <ResponsiveContainer width="100%" height="100%" debounce={250}>
           <BarChart data={data} layout="vertical" margin={STACKED_CHART_MARGIN}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis type="number" tickFormatter={(value) => formatInteger(Number(value))} />
@@ -174,6 +175,7 @@ const StackedBarChartCard = React.memo(
                   stackId="pendientes"
                   fill={CHART_COLORS[index % CHART_COLORS.length]}
                   name={hacienda}
+                  isAnimationActive={false}
                 >
                   <LabelList
                     dataKey={hacienda}
@@ -207,7 +209,7 @@ const TendenciaChart = React.memo(({ data }: { data: TendenciaDatum[] }) => {
 
   return (
     <div className="h-72">
-      <ResponsiveContainer width="100%" height="100%" debounce={200}>
+      <ResponsiveContainer width="100%" height="100%" debounce={250}>
         <ComposedChart data={data} margin={TENDENCIA_CHART_MARGIN}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="mes_label" />
@@ -227,7 +229,13 @@ const TendenciaChart = React.memo(({ data }: { data: TendenciaDatum[] }) => {
             }
           />
           <Legend />
-          <Bar yAxisId="left" dataKey="num_fallos" name="N° fallos" fill="#E15759">
+          <Bar
+            yAxisId="left"
+            dataKey="num_fallos"
+            name="N° fallos"
+            fill="#E15759"
+            isAnimationActive={false}
+          >
             <LabelList
               dataKey="num_fallos"
               position="top"
@@ -242,6 +250,7 @@ const TendenciaChart = React.memo(({ data }: { data: TendenciaDatum[] }) => {
             stroke="#4C6FFF"
             strokeWidth={2}
             dot={{ r: 3 }}
+            isAnimationActive={false}
           />
         </ComposedChart>
       </ResponsiveContainer>
@@ -252,6 +261,7 @@ const TendenciaChart = React.memo(({ data }: { data: TendenciaDatum[] }) => {
 TendenciaChart.displayName = 'TendenciaChart';
 
 const DashboardHome: React.FC = () => {
+  console.count('[DASHBOARD_RENDER]');
   const { session } = useSession();
   const [dashboard, setDashboard] = useState<DashboardFallosTecnicosResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
