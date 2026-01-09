@@ -140,6 +140,36 @@ LOG_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\logs")
 DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")
 
 
+def take_screenshot(driver, label: str) -> Path:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    screenshot_path = LOG_DIR / f"{label}_{timestamp}.png"
+    driver.save_screenshot(str(screenshot_path))
+    print(f"[INFO] Screenshot guardado en: {screenshot_path}")
+    return screenshot_path
+
+
+def find_latest_alarm_report() -> Path | None:
+    """
+    Busca recursivamente en DOWNLOAD_DIR la última hoja de cálculo de Event & Alarm Search.
+    HikCentral crea una carpeta 'Alarm_Report_YYYYMMDDHHMMSS' y dentro un archivo
+    'Alarm_Report_YYYYMMDDHHMMSS.xlsx'.
+    """
+    base_dir = Path(DOWNLOAD_DIR)
+    candidates: list[Path] = []
+
+    for folder in base_dir.glob("Alarm_Report_*"):
+        if folder.is_dir():
+            for file in folder.glob("*.xls*"):
+                candidates.append(file)
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates[0]
+
+
 def esperar_descarga(download_dir: Path, archivos_previos, timeout: int = 120) -> str:
     """Espera hasta detectar un nuevo archivo .xlsx o .xls en download_dir."""
 
@@ -708,6 +738,9 @@ def click_export_event_and_alarm(
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_BUTTON")
 
+    log_info = globals().get("log_info", print)
+    log_error = globals().get("log_error", print)
+
     type_export_password_if_needed(driver, timeout=8, timer=timer)
 
     # Hacer clic en el botón Save del diálogo Export
@@ -744,10 +777,18 @@ def click_export_event_and_alarm(
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
 
-    archivo_descargado = esperar_descarga_y_renombrar(
-        download_dir=DOWNLOAD_DIR, prefix="event_and_alarm", timeout=180
-    )
-    return archivo_descargado
+    log_info("[EXPORT] Buscando archivo Alarm_Report_* en subcarpetas de Downloadcenter...")
+
+    archivo = find_latest_alarm_report()
+
+    log_info(f"[EXPORT] Ruta final del archivo exportado: {archivo}")
+
+    if not archivo:
+        log_error("[ERROR] No se detectó ningún archivo descargado desde Event and Alarm Search.")
+        take_screenshot(driver, "event_and_alarm_search")
+        return None
+
+    return archivo
 
 
 def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = None):
