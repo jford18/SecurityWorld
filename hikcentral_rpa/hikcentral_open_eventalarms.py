@@ -1,6 +1,7 @@
 import os
 import time
 import traceback
+from typing import List, Optional
 from datetime import datetime
 from pathlib import Path
 
@@ -138,6 +139,23 @@ HIK_PASSWORD = os.getenv("HIK_PASSWORD", "SW2112asm")
 
 LOG_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\logs")
 DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")
+# Carpeta por defecto donde HikCentral guarda el Alarm Report
+WINDOWS_DOWNLOADCENTER_DIR = Path.home() / "Downloads" / "Downloadcenter"
+
+ALARM_REPORT_PREFIX = "Alarm_Report_"
+ALARM_REPORT_EXTS = (".xlsx", ".xls")
+
+if "log_info" not in globals():
+    def log_info(message: str) -> None:
+        print(message)
+
+if "log_error" not in globals():
+    def log_error(message: str) -> None:
+        print(message)
+
+if "log_warn" not in globals():
+    def log_warn(message: str) -> None:
+        print(message)
 
 
 def take_screenshot(driver, label: str) -> Path:
@@ -168,6 +186,85 @@ def find_latest_alarm_report() -> Path | None:
 
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return candidates[0]
+
+
+def find_exported_alarm_report(start_time: float, timeout: int = 60) -> Optional[Path]:
+    """
+    Busca recursivamente el último Alarm_Report_* descargado después de start_time.
+
+    - Recorre tanto DOWNLOAD_DIR (si existe) como la carpeta estándar
+      C:\\Users\\<usuario>\\Downloads\\Downloadcenter.
+    - Acepta archivos con prefijo 'Alarm_Report_' y extensión .xlsx/.xls.
+    - Espera hasta 'timeout' segundos, revisando cada 1s.
+    """
+    # Construimos la lista de raíces a inspeccionar
+    roots: List[Path] = []
+
+    # 1) Carpeta de descargas configurada en el driver (si existe)
+    if 'DOWNLOAD_DIR' in globals():
+        try:
+            dl_dir = Path(DOWNLOAD_DIR)
+            if dl_dir.exists():
+                roots.append(dl_dir)
+        except Exception:
+            pass
+
+    # 2) Carpeta estándar de HikCentral: Downloads/Downloadcenter
+    if WINDOWS_DOWNLOADCENTER_DIR.exists():
+        roots.append(WINDOWS_DOWNLOADCENTER_DIR)
+
+    if not roots:
+        log_error("[EXPORT] Ninguna carpeta de descarga existe (ni DOWNLOAD_DIR ni Downloadcenter).")
+        return None
+
+    log_info(f"[EXPORT] Buscando Alarm_Report_* en carpetas: {', '.join(str(r) for r in roots)}")
+
+    deadline = time.time() + timeout
+    best_file: Optional[Path] = None
+
+    while time.time() < deadline:
+        candidates: List[Path] = []
+
+        for root in roots:
+            # Recorre recursivamente todas las subcarpetas (Downloadcenter/Alarm_Report_YYYYMMDDHHMMSS, etc.)
+            for path in root.rglob("*"):
+                if not path.is_file():
+                    continue
+
+                name = path.name
+                if not name.startswith(ALARM_REPORT_PREFIX):
+                    continue
+
+                if path.suffix.lower() not in ALARM_REPORT_EXTS:
+                    continue
+
+                mtime = path.stat().st_mtime
+                if mtime < start_time:
+                    continue
+
+                candidates.append(path)
+
+        if candidates:
+            # Tomamos el más reciente
+            best_file = max(candidates, key=lambda p: p.stat().st_mtime)
+            break
+
+        time.sleep(1)
+
+    if best_file is None:
+        # Log detallado para depuración
+        for root in roots:
+            try:
+                files = [p.name for p in root.rglob("*") if p.is_file()]
+                log_info(f"[EXPORT] Archivos vistos en {root}: {files}")
+            except Exception as e:
+                log_warn(f"[EXPORT] No se pudo listar {root}: {e}")
+
+        log_error("[EXPORT] No se encontró ningún Alarm_Report_* descargado dentro del tiempo de espera.")
+        return None
+
+    log_info(f"[EXPORT] Ruta final del archivo exportado: {best_file}")
+    return best_file
 
 
 def esperar_descarga(download_dir: Path, archivos_previos, timeout: int = 120) -> str:
@@ -743,9 +840,6 @@ def click_export_event_and_alarm(
 
     type_export_password_if_needed(driver, timeout=8, timer=timer)
 
-    # Hacer clic en el botón Save del diálogo Export
-    click_export_save_button(driver, timeout=10, timer=timer)
-
     export_dialog_xpath = (
         "//div[contains(@class,'el-dialog__wrapper')]//span[contains(@class,'el-dialog__title') and contains(normalize-space(),'Export')]"
     )
@@ -777,18 +871,28 @@ def click_export_event_and_alarm(
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
 
-    log_info("[EXPORT] Buscando archivo Alarm_Report_* en subcarpetas de Downloadcenter...")
+    export_start_time = time.time()
 
-    archivo = find_latest_alarm_report()
+    # Hacer clic en el botón Save del diálogo Export
+    click_export_save_button(driver, timeout=10, timer=timer)
 
-    log_info(f"[EXPORT] Ruta final del archivo exportado: {archivo}")
+    WebDriverWait(driver, timeout).until(
+        EC.invisibility_of_element_located(
+            (
+                By.XPATH,
+                "//div[contains(@class,'el-dialog__wrapper') and .//span[contains(.,'Export')]]",
+            )
+        )
+    )
 
-    if not archivo:
-        log_error("[ERROR] No se detectó ningún archivo descargado desde Event and Alarm Search.")
+    alarm_report_path = find_exported_alarm_report(start_time=export_start_time, timeout=60)
+
+    if alarm_report_path is None:
+        log_error("[EXPORT] No se detectó ningún archivo descargado desde Event and Alarm Search.")
         take_screenshot(driver, "event_and_alarm_search")
         return None
 
-    return archivo
+    return str(alarm_report_path)
 
 
 def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = None):
@@ -1211,7 +1315,7 @@ def run():
     )
     timer = step_timer
 
-    export_file_path: Path | None = None
+    export_file_path: str | None = None
 
     try:
         driver = crear_driver()
@@ -1267,11 +1371,12 @@ def run():
         print(f"[INFO] Ruta final del archivo exportado: {export_file_path}")
 
         if export_file_path is None:
-            print("[ERROR] No se detectó ningún archivo descargado desde Event and Alarm Search.")
+            log_error("[EXPORT] No se pudo obtener ruta del Alarm_Report, se omite la carga a hik_alarm_evento.")
         else:
-            size_mb = export_file_path.stat().st_size / (1024 * 1024)
+            export_path = Path(export_file_path)
+            size_mb = export_path.stat().st_size / (1024 * 1024)
             print(
-                f"[8] Archivo de Event and Alarm Search descargado: {export_file_path} "
+                f"[8] Archivo de Event and Alarm Search descargado: {export_path} "
                 f"({size_mb:.2f} MB)"
             )
 
@@ -1332,7 +1437,12 @@ def run():
         )
 
         if export_file_path and id_ejecucion and timer:
+            log_info(
+                f"[DB] Iniciando carga de Alarm Report en hik_alarm_evento (id_extraccion={id_ejecucion})."
+            )
             procesar_alarm_report(str(export_file_path), id_ejecucion, timer)
+        elif export_file_path is None:
+            log_error("[DB] Sin archivo Alarm Report, se omite la carga a hik_alarm_evento.")
 
 
 if __name__ == "__main__":
