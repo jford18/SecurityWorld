@@ -219,6 +219,7 @@ export const cerrarFallo = async (
   payload: {
     fecha_resolucion: string;
     hora_resolucion: string;
+    departamento_id?: number | null;
     novedad_detectada?: string | null;
     responsable_verificacion_cierre_id?: number | string | null;
   },
