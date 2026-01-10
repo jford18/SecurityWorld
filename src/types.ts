@@ -69,6 +69,14 @@ export interface FailureHistory {
   acciones: FailureHistoryEntry[];
 }
 
+export interface FailureDepartmentTimelineEntry {
+  departamento_id: number;
+  departamento_nombre: string | null;
+  fecha_inicio: string | null;
+  fecha_fin: string | null;
+  duracion_seg: number | null;
+}
+
 export interface CatalogoDepartamento {
   id: number;
   nombre: string;

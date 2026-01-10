@@ -8,6 +8,7 @@ import {
   TechnicalFailureCatalogs,
   FailureDurationResponse,
   FailureHistory,
+  FailureDepartmentTimelineEntry,
 } from '../types';
 
 type RequestContext = {
@@ -279,6 +280,19 @@ export const getFalloHistorial = async (
   const { data } = await apiClient.get<FailureHistory>(`/fallos/${id}/historial`, {
     headers: buildRoleHeaders(context),
   });
+  return data;
+};
+
+export const getFalloHistorialDepartamentos = async (
+  id: string,
+  context?: RequestContext,
+): Promise<FailureDepartmentTimelineEntry[]> => {
+  const { data } = await apiClient.get<FailureDepartmentTimelineEntry[]>(
+    `/fallos/${id}/historial-departamentos`,
+    {
+      headers: buildRoleHeaders(context),
+    },
+  );
   return data;
 };
 
