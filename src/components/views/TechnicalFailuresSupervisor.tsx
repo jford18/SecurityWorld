@@ -21,6 +21,7 @@ import {
 import { useSession } from '../context/SessionContext';
 import { getAllDepartamentosResponsables } from '../../services/departamentosResponsablesService';
 import TechnicalFailuresHistory from './TechnicalFailuresHistory';
+import { calcularEstado } from './TechnicalFailuresUtils';
 import { FailureHistory, FailureHistoryEntry } from '../../types';
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
@@ -876,6 +877,16 @@ const TechnicalFailuresSupervisor: React.FC = () => {
     }
   };
 
+  const isResolvedFailure = (failure: TechnicalFailure) => {
+    const estadoBase =
+      failure.estado
+      ?? failure.estado_texto
+      ?? calcularEstado(failure).texto
+      ?? '';
+    const estadoNorm = String(estadoBase).trim().toUpperCase();
+    return estadoNorm === 'RESUELTO' || estadoNorm.startsWith('RESUELT');
+  };
+
 
   return (
     <div className="space-y-6">
@@ -886,7 +897,20 @@ const TechnicalFailuresSupervisor: React.FC = () => {
           failures={failures}
           isLoading={isLoading}
           activeRole={session.roleName ?? undefined}
-          handleEdit={handleEdit}
+          renderActions={(failure) => {
+            if (isResolvedFailure(failure)) {
+              return null;
+            }
+
+            return (
+              <button
+                onClick={() => handleEdit(failure)}
+                className="text-blue-600 hover:underline text-sm font-semibold"
+              >
+                Editar
+              </button>
+            );
+          }}
         />
       </div>
 
