@@ -58,6 +58,7 @@ export interface DashboardFallosTecnicosParams {
   mes?: string | null;
   problemaId?: number | null;
   consolaId?: number | null;
+  signal?: AbortSignal;
 }
 
 export const fetchDashboardFallosTecnicosResumen = async (
@@ -89,6 +90,7 @@ export const fetchDashboardFallosTecnicosResumen = async (
     '/dashboard/fallos-tecnicos/resumen',
     {
       params: queryParams,
+      signal: params.signal,
     },
   );
 
