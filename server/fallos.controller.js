@@ -155,6 +155,47 @@ const buildDateTime = (dateValue, timeValue) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+const insertSeguimientoDepartamento = async (
+  client,
+  { falloId, departamentoId, novedadDetectada, usuarioId }
+) => {
+  if (!departamentoId) {
+    return false;
+  }
+
+  const ultimoDepartamentoResult = await client.query(
+    `SELECT departamento_id
+       FROM seguimiento_fallos
+      WHERE fallo_id = $1
+        AND departamento_id IS NOT NULL
+      ORDER BY fecha_creacion DESC
+      LIMIT 1`,
+    [falloId]
+  );
+
+  const ultimoDepartamentoId = ultimoDepartamentoResult.rows[0]?.departamento_id;
+  if (
+    ultimoDepartamentoId &&
+    Number(ultimoDepartamentoId) === Number(departamentoId)
+  ) {
+    return false;
+  }
+
+  await client.query(
+    `INSERT INTO seguimiento_fallos (
+       fallo_id,
+       departamento_id,
+       novedad_detectada,
+       verificacion_supervisor_id,
+       ultimo_usuario_edito_id,
+       fecha_creacion
+     ) VALUES ($1, $2, $3, $4, $4, NOW())`,
+    [falloId, departamentoId, novedadDetectada || null, usuarioId || null]
+  );
+
+  return true;
+};
+
 const formatDurationFromMs = (durationMs) => {
   const totalMinutes = Math.floor(durationMs / 60000);
   const days = Math.floor(totalMinutes / 1440);
@@ -348,29 +389,18 @@ export const guardarCambiosFallo = async (req, res) => {
     console.log("[guardarCambiosFallo] supervisorId:", supervisorId);
     console.log("[guardarCambiosFallo] novedad:", novedad);
 
-    await client.query(
-      `INSERT INTO seguimiento_fallos (
-         fallo_id,
-         verificacion_apertura_id,
-         verificacion_cierre_id,
-         novedad_detectada,
-         fecha_creacion,
-         ultimo_usuario_edito_id,
-         responsable_verificacion_cierre_id,
-         verificacion_supervisor_id
-       ) VALUES ($1, NULL, NULL, $2, NOW(), $3, NULL, $3)`,
-      [
-        id,
-        novedad,
-        supervisorId,
-      ]
-    );
+    const seguimientoInsertado = await insertSeguimientoDepartamento(client, {
+      falloId: id,
+      departamentoId,
+      novedadDetectada: novedad,
+      usuarioId: supervisorId,
+    });
 
     console.log(
       "[guardarCambiosFallo] seguimiento_fallos insertado para fallo_id:",
       id,
-      "con verificacion_supervisor_id:",
-      supervisorId,
+      "resultado:",
+      seguimientoInsertado,
     );
 
     await client.query("COMMIT");
@@ -451,14 +481,20 @@ export const cerrarFalloTecnico = async (req, res) => {
 
     const novedadNormalized = novedad || null;
 
+    const departamentoIdValue = (() => {
+      const parsed = Number(departamentoResponsableId);
+      return Number.isFinite(parsed) ? parsed : null;
+    })();
+
     const updateResult = await client.query(
       `UPDATE fallos_tecnicos
           SET fecha_resolucion = $1,
               hora_resolucion = $2,
+              departamento_id = $3,
               fecha_actualizacion = NOW()
-        WHERE id = $3
+        WHERE id = $4
           AND (estado IS NULL OR estado <> 'CERRADO')`,
-      [fechaResolucion, horaResolucion, id]
+      [fechaResolucion, horaResolucion, departamentoIdValue, id]
     );
 
     if (!updateResult.rowCount) {
@@ -484,6 +520,7 @@ export const cerrarFalloTecnico = async (req, res) => {
     await client.query(
       `INSERT INTO seguimiento_fallos (
          fallo_id,
+         departamento_id,
          verificacion_apertura_id,
          verificacion_cierre_id,
          novedad_detectada,
@@ -491,7 +528,7 @@ export const cerrarFalloTecnico = async (req, res) => {
          ultimo_usuario_edito_id,
          responsable_verificacion_cierre_id,
          verificacion_supervisor_id
-       ) VALUES ($1, NULL, $2, $3, NOW(), $2, $4, NULL)`,
+       ) VALUES ($1, NULL, NULL, $2, $3, NOW(), $2, $4, NULL)`,
       [
         id,
         usuarioCierreId,
@@ -500,13 +537,25 @@ export const cerrarFalloTecnico = async (req, res) => {
       ]
     );
 
+    const seguimientoDepartamentoInsertado = await insertSeguimientoDepartamento(
+      client,
+      {
+        falloId: id,
+        departamentoId: departamentoIdValue,
+        novedadDetectada: novedadNormalized,
+        usuarioId: usuarioCierreId,
+      }
+    );
+
     console.log(
       "[cerrarFalloTecnico] seguimiento_fallos insertado para fallo_id:",
       id,
       "con verificacion_cierre_id:",
       usuarioCierreId,
       "y responsable_verificacion_cierre_id:",
-      responsableVerificacionCierreId
+      responsableVerificacionCierreId,
+      "seguimiento_departamento_insertado:",
+      seguimientoDepartamentoInsertado
     );
 
     await client.query("COMMIT");
@@ -833,6 +882,7 @@ export const createFallo = async (req, res) => {
       `
       INSERT INTO seguimiento_fallos (
           fallo_id,
+          departamento_id,
           verificacion_apertura_id,
           verificacion_cierre_id,
           novedad_detectada,
@@ -840,10 +890,11 @@ export const createFallo = async (req, res) => {
           ultimo_usuario_edito_id,
           responsable_verificacion_cierre_id,
           verificacion_supervisor_id
-      ) VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7)
+      ) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8)
       `,
       [
         falloId, // FALLO_ID
+        departamentoId || null, // DEPARTAMENTO_ID
         verificacionAperturaId, // VERIFICACION_APERTURA_ID (usuario que registra el fallo)
         null, // VERIFICACION_CIERRE_ID (todavía no aplica)
         novedadDetectada || null, // NOVEDAD_DETECTADA
@@ -1104,6 +1155,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
       await client.query(
         `INSERT INTO seguimiento_fallos (
           fallo_id,
+          departamento_id,
           verificacion_apertura_id,
           verificacion_cierre_id,
           novedad_detectada,
@@ -1112,9 +1164,10 @@ export const actualizarFalloSupervisor = async (req, res) => {
           ultimo_usuario_edito_id,
           responsable_verificacion_cierre_id,
           verificacion_supervisor_id
-        ) VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, $6, $7)`,
+        ) VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), $6, $7, $8)`,
         [
           id,
+          departamentoFinalId,
           verificacionAperturaId || null,
           verificacionCierreId || null,
           novedadDetectada || null,
@@ -1125,6 +1178,23 @@ export const actualizarFalloSupervisor = async (req, res) => {
       );
       console.log(
         "[actualizarFalloSupervisor] seguimiento_fallos actualizado/insertado para fallo_id:",
+        id
+      );
+    }
+
+    const seguimientoDepartamentoInsertado = await insertSeguimientoDepartamento(
+      client,
+      {
+        falloId: id,
+        departamentoId: departamentoFinalId,
+        novedadDetectada,
+        usuarioId: usuarioAutenticadoId,
+      }
+    );
+
+    if (seguimientoDepartamentoInsertado) {
+      console.log(
+        "[actualizarFalloSupervisor] seguimiento_fallos departamento insertado para fallo_id:",
         id
       );
     }
@@ -1263,6 +1333,79 @@ export const getHistorialFallo = async (req, res) => {
     console.error("Error al obtener historial del fallo técnico:", error);
     return res.status(500).json({
       mensaje: "Ocurrió un error al obtener el historial del fallo.",
+    });
+  } finally {
+    client.release();
+  }
+};
+
+export const getHistorialDepartamentosFallo = async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+
+  try {
+    const falloResult = await client.query(
+      "SELECT id, fecha_resolucion, hora_resolucion, estado FROM fallos_tecnicos WHERE id = $1",
+      [id]
+    );
+
+    if (!falloResult.rowCount) {
+      return res.status(404).json({ mensaje: "El fallo técnico no existe." });
+    }
+
+    const timelineResult = await client.query(
+      `
+      WITH timeline AS (
+        SELECT
+          sf.departamento_id,
+          dept.nombre AS departamento_nombre,
+          sf.fecha_creacion AS fecha_inicio,
+          LEAD(sf.fecha_creacion) OVER (
+            PARTITION BY sf.fallo_id
+            ORDER BY sf.fecha_creacion
+          ) AS siguiente_fecha
+        FROM seguimiento_fallos sf
+        LEFT JOIN departamentos_responsables dept ON dept.id = sf.departamento_id
+        WHERE sf.fallo_id = $1
+          AND sf.departamento_id IS NOT NULL
+      )
+      SELECT
+        timeline.departamento_id,
+        timeline.departamento_nombre,
+        timeline.fecha_inicio,
+        COALESCE(
+          timeline.siguiente_fecha,
+          CASE
+            WHEN ft.fecha_resolucion IS NOT NULL THEN
+              ft.fecha_resolucion + COALESCE(ft.hora_resolucion, '00:00'::time)
+            ELSE NOW()
+          END
+        ) AS fecha_fin,
+        EXTRACT(
+          EPOCH FROM (
+            COALESCE(
+              timeline.siguiente_fecha,
+              CASE
+                WHEN ft.fecha_resolucion IS NOT NULL THEN
+                  ft.fecha_resolucion + COALESCE(ft.hora_resolucion, '00:00'::time)
+                ELSE NOW()
+              END
+            ) - timeline.fecha_inicio
+          )
+        )::BIGINT AS duracion_seg
+      FROM timeline
+      CROSS JOIN fallos_tecnicos ft
+      WHERE ft.id = $1
+      ORDER BY timeline.fecha_inicio
+      `,
+      [id]
+    );
+
+    return res.json(timelineResult.rows);
+  } catch (error) {
+    console.error("Error al obtener historial por departamento:", error);
+    return res.status(500).json({
+      mensaje: "Ocurrió un error al obtener el historial por departamento.",
     });
   } finally {
     client.release();

@@ -14,6 +14,7 @@ import {
   fetchFallos,
   fetchCatalogos,
   getFalloHistorial,
+  getFalloHistorialDepartamentos,
   deleteFallo,
   guardarCambiosFallo,
   cerrarFallo,
@@ -22,7 +23,11 @@ import { useSession } from '../context/SessionContext';
 import { getAllDepartamentosResponsables } from '../../services/departamentosResponsablesService';
 import TechnicalFailuresHistory from './TechnicalFailuresHistory';
 import { calcularEstado } from './TechnicalFailuresUtils';
-import { FailureHistory, FailureHistoryEntry } from '../../types';
+import {
+  FailureDepartmentTimelineEntry,
+  FailureHistory,
+  FailureHistoryEntry,
+} from '../../types';
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
   departamentos: [],
@@ -118,6 +123,19 @@ const formatFechaHoraDisplay = (
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 };
 
+const formatDurationFromSeconds = (duration?: number | null) => {
+  if (!duration || duration <= 0) {
+    return '00:00:00';
+  }
+  const totalSeconds = Math.floor(duration);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(
+    seconds,
+  ).padStart(2, '0')}`;
+};
+
   const EditFailureModal: React.FC<{
     failure: TechnicalFailure;
     departamentos: CatalogoDepartamento[];
@@ -129,6 +147,8 @@ const formatFechaHoraDisplay = (
   isSaving: boolean;
   currentUserName?: string | null;
   history?: FailureHistory | null;
+  departmentTimeline?: FailureDepartmentTimelineEntry[];
+  departmentTimelineError?: string | null;
   historyError?: string | null;
   isHistoryLoading?: boolean;
   isAdmin?: boolean;
@@ -143,6 +163,8 @@ const formatFechaHoraDisplay = (
   isSaving,
   currentUserName,
   history,
+  departmentTimeline = [],
+  departmentTimelineError,
   historyError,
   isHistoryLoading,
   isAdmin = false,
@@ -597,6 +619,47 @@ const formatFechaHoraDisplay = (
                 {history.duracionTexto || 'Sin información'}
               </div>
             </div>
+            <div className="mt-4">
+              <p className="font-semibold mb-2">Tiempo asignado por departamento</p>
+              {departmentTimelineError && (
+                <p className="text-sm text-red-600">{departmentTimelineError}</p>
+              )}
+              {!departmentTimelineError && departmentTimeline.length === 0 && (
+                <p className="text-sm text-gray-500">Sin información registrada.</p>
+              )}
+              {!departmentTimelineError && departmentTimeline.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 text-xs">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Departamento</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Desde</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Hasta</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Duración</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {departmentTimeline.map((entry, index) => (
+                        <tr key={`${entry.departamento_id}-${entry.fecha_inicio}-${index}`}>
+                          <td className="px-3 py-2 text-gray-700">
+                            {entry.departamento_nombre || 'Sin información'}
+                          </td>
+                          <td className="px-3 py-2 text-gray-700">
+                            {formatFechaHoraDisplay(entry.fecha_inicio || undefined) || '—'}
+                          </td>
+                          <td className="px-3 py-2 text-gray-700">
+                            {formatFechaHoraDisplay(entry.fecha_fin || undefined) || '—'}
+                          </td>
+                          <td className="px-3 py-2 text-gray-700">
+                            {formatDurationFromSeconds(entry.duracion_seg)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
             {Array.isArray(history.acciones) && history.acciones.length > 0 && (
               <div className="mt-3">
                 <p className="font-semibold mb-2">Acciones registradas</p>
@@ -683,6 +746,12 @@ const TechnicalFailuresSupervisor: React.FC = () => {
   const [history, setHistory] = useState<FailureHistory | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [departmentTimeline, setDepartmentTimeline] = useState<
+    FailureDepartmentTimelineEntry[]
+  >([]);
+  const [departmentTimelineError, setDepartmentTimelineError] = useState<string | null>(
+    null,
+  );
 
   const responsables = useMemo(
     () => catalogos.responsablesVerificacion,
@@ -744,9 +813,32 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       setIsHistoryLoading(true);
       setHistory(null);
       setHistoryError(null);
+      setDepartmentTimeline([]);
+      setDepartmentTimelineError(null);
       try {
-        const result = await getFalloHistorial(failureId, roleContext);
-        setHistory(result);
+        const [historyResult, departmentResult] = await Promise.allSettled([
+          getFalloHistorial(failureId, roleContext),
+          getFalloHistorialDepartamentos(failureId, roleContext),
+        ]);
+
+        if (historyResult.status === 'fulfilled') {
+          setHistory(historyResult.value);
+        } else {
+          console.error('Error al cargar el historial del fallo:', historyResult.reason);
+          setHistoryError('No se pudo cargar el historial del fallo.');
+        }
+
+        if (departmentResult.status === 'fulfilled') {
+          setDepartmentTimeline(departmentResult.value);
+        } else {
+          console.error(
+            'Error al cargar el historial por departamento:',
+            departmentResult.reason,
+          );
+          setDepartmentTimelineError(
+            'No se pudo cargar el historial por departamento.',
+          );
+        }
       } catch (error) {
         console.error('Error al cargar el historial del fallo:', error);
         setHistoryError('No se pudo cargar el historial del fallo.');
@@ -979,6 +1071,8 @@ const TechnicalFailuresSupervisor: React.FC = () => {
           isSaving={isSubmitting}
           currentUserName={session.user}
           history={history}
+          departmentTimeline={departmentTimeline}
+          departmentTimelineError={departmentTimelineError}
           historyError={historyError}
           isHistoryLoading={isHistoryLoading}
           isAdmin={isAdmin}
@@ -999,6 +1093,8 @@ const EditTechnicalFailureSupervisorModal: React.FC<{
   isSaving: boolean;
   currentUserName?: string | null;
   history?: FailureHistory | null;
+  departmentTimeline?: FailureDepartmentTimelineEntry[];
+  departmentTimelineError?: string | null;
   historyError?: string | null;
   isHistoryLoading?: boolean;
   isAdmin?: boolean;
@@ -1013,6 +1109,8 @@ const EditTechnicalFailureSupervisorModal: React.FC<{
   isSaving,
   currentUserName,
   history,
+  departmentTimeline,
+  departmentTimelineError,
   historyError,
   isHistoryLoading,
   isAdmin,
@@ -1031,6 +1129,8 @@ const EditTechnicalFailureSupervisorModal: React.FC<{
           isSaving={isSaving}
           currentUserName={currentUserName}
           history={history}
+          departmentTimeline={departmentTimeline}
+          departmentTimelineError={departmentTimelineError}
           historyError={historyError}
           isHistoryLoading={isHistoryLoading}
           isAdmin={isAdmin}
