@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ResponsiveContainer,
   PieChart,
@@ -261,7 +261,9 @@ const TendenciaChart = React.memo(({ data }: { data: TendenciaDatum[] }) => {
 TendenciaChart.displayName = 'TendenciaChart';
 
 const DashboardHome: React.FC = () => {
-  console.count('[DASHBOARD_RENDER]');
+  if (import.meta.env.DEV) {
+    console.count('[DASHBOARD_RENDER]');
+  }
   const { session } = useSession();
   const [dashboard, setDashboard] = useState<DashboardFallosTecnicosResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -271,6 +273,23 @@ const DashboardHome: React.FC = () => {
   const [selectedHaciendaId, setSelectedHaciendaId] = useState('');
   const [selectedMes, setSelectedMes] = useState('');
   const [selectedProblemaId, setSelectedProblemaId] = useState('');
+  const lastFetchKeyRef = useRef<string>('');
+  const didInitFiltersRef = useRef(false);
+
+  const clienteIdsKey = useMemo(() => {
+    if (!Array.isArray(selectedClienteIds) || selectedClienteIds.length === 0) return '';
+    return [...selectedClienteIds].sort((a, b) => a - b).join(',');
+  }, [selectedClienteIds]);
+
+  const filtersKey = useMemo(() => {
+    return [
+      consolaId ?? '',
+      clienteIdsKey,
+      selectedHaciendaId ?? '',
+      selectedMes ?? '',
+      selectedProblemaId ?? '',
+    ].join('|');
+  }, [consolaId, clienteIdsKey, selectedHaciendaId, selectedMes, selectedProblemaId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -279,7 +298,7 @@ const DashboardHome: React.FC = () => {
       const consoleName = session.console ?? localStorage.getItem('selectedConsole');
       if (!consoleName) {
         if (isMounted) {
-          setConsolaId(null);
+          setConsolaId((prev) => (prev === null ? prev : null));
         }
         return;
       }
@@ -287,12 +306,12 @@ const DashboardHome: React.FC = () => {
       try {
         const resolvedId = await resolveConsolaIdByName(consoleName);
         if (isMounted) {
-          setConsolaId(resolvedId);
+          setConsolaId((prev) => (prev === resolvedId ? prev : resolvedId));
         }
       } catch (err) {
         console.error('Error resolviendo consola:', err);
         if (isMounted) {
-          setConsolaId(null);
+          setConsolaId((prev) => (prev === null ? prev : null));
         }
       }
     };
@@ -305,48 +324,50 @@ const DashboardHome: React.FC = () => {
   }, [session.console]);
 
   useEffect(() => {
-    let isMounted = true;
+    if (!consolaId) return;
+
+    if (lastFetchKeyRef.current === filtersKey) return;
+    lastFetchKeyRef.current = filtersKey;
+
+    const controller = new AbortController();
+
     setIsLoading(true);
     setError(null);
 
-    const fetchDashboard = async () => {
-      try {
-        const response = await fetchDashboardFallosTecnicosResumen({
-          clienteIds: selectedClienteIds.length > 0 ? selectedClienteIds : undefined,
-          haciendaId: selectedHaciendaId ? Number(selectedHaciendaId) : null,
-          mes: selectedMes || null,
-          problemaId: selectedProblemaId ? Number(selectedProblemaId) : null,
-          consolaId,
-        });
-
-        if (!isMounted) return;
-        setDashboard(response);
-      } catch (err) {
+    fetchDashboardFallosTecnicosResumen({
+      clienteIds: selectedClienteIds.length > 0 ? selectedClienteIds : undefined,
+      haciendaId: selectedHaciendaId ? Number(selectedHaciendaId) : null,
+      mes: selectedMes || null,
+      problemaId: selectedProblemaId ? Number(selectedProblemaId) : null,
+      consolaId,
+      signal: controller.signal,
+    })
+      .then((response) => setDashboard(response))
+      .catch((err) => {
+        if (err?.name === 'AbortError' || err?.name === 'CanceledError') {
+          return;
+        }
         console.error('Error al cargar dashboard de fallos técnicos:', err);
-        if (isMounted) {
-          setError('No se pudo cargar el dashboard de fallos técnicos.');
-          setDashboard(null);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
+        setError('No se pudo cargar el dashboard de fallos técnicos.');
+        setDashboard(null);
+      })
+      .finally(() => setIsLoading(false));
 
-    fetchDashboard();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [consolaId, selectedClienteIds, selectedHaciendaId, selectedMes, selectedProblemaId]);
+    return () => controller.abort();
+  }, [filtersKey]);
 
   useEffect(() => {
     if (!dashboard?.filtros) return;
 
-    setSelectedClienteIds((prev) =>
-      prev.filter((id) => dashboard.filtros.clientes.some((cliente) => cliente.id === id)),
-    );
+    setSelectedClienteIds((prev) => {
+      const next = prev.filter((id) =>
+        dashboard.filtros.clientes.some((cliente) => cliente.id === id),
+      );
+      if (next.length === prev.length && next.every((id, index) => id === prev[index])) {
+        return prev;
+      }
+      return next;
+    });
 
     if (
       selectedHaciendaId &&
@@ -366,6 +387,13 @@ const DashboardHome: React.FC = () => {
       setSelectedMes('');
     }
   }, [dashboard, selectedHaciendaId, selectedMes, selectedProblemaId]);
+
+  useEffect(() => {
+    if (didInitFiltersRef.current) return;
+    if (!dashboard) return;
+
+    didInitFiltersRef.current = true;
+  }, [dashboard]);
 
   const clientes = dashboard?.filtros?.clientes ?? [];
   const haciendas = dashboard?.filtros?.haciendas ?? [];
