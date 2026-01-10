@@ -27,6 +27,11 @@ export interface Consola {
   fecha_creacion: string;
 }
 
+export type ConsolasResponse = {
+  data: Consola[];
+  total: number;
+};
+
 let cachedConsolas: Consola[] | null = null;
 
 const getAll = async (): Promise<Consola[]> => {
@@ -50,6 +55,31 @@ const getAll = async (): Promise<Consola[]> => {
 };
 
 export const getConsolas = getAll;
+
+export const getConsolasWithTotal = async (): Promise<ConsolasResponse> => {
+  const { data } = await apiClient.get(ENDPOINT);
+  const payload = data;
+
+  const rawData = Array.isArray(payload) ? payload : payload?.data;
+
+  if (!Array.isArray(rawData)) {
+    throw new Error('Formato de respuesta inválido al obtener consolas');
+  }
+
+  const parsed = rawData.map((item: any) => ({
+    id: item.id,
+    nombre: item.nombre,
+    fecha_creacion: item.fecha_creacion ?? '',
+  }));
+
+  const total =
+    typeof payload?.total === 'number' && Number.isFinite(payload.total)
+      ? payload.total
+      : parsed.length;
+
+  cachedConsolas = parsed;
+  return { data: parsed, total };
+};
 
 const normalizeName = (value: string | null | undefined) =>
   (value ?? '')

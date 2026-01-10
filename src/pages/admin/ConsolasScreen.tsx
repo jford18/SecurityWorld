@@ -4,7 +4,7 @@ import {
   ConsolaPayload,
   createConsola,
   deleteConsola,
-  getConsolas,
+  getConsolasWithTotal,
   updateConsola,
 } from '../../services/consolasService';
 
@@ -23,6 +23,7 @@ const secondaryButtonClasses =
 
 const ConsolasScreen: React.FC = () => {
   const [consolas, setConsolas] = useState<Consola[]>([]);
+  const [totalConsolas, setTotalConsolas] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string>('');
@@ -35,7 +36,9 @@ const ConsolasScreen: React.FC = () => {
   const loadConsolas = async () => {
     try {
       setLoading(true);
-      const data = await getConsolas();
+      const response = await getConsolasWithTotal();
+      const data = response?.data ?? [];
+      const total = response?.total ?? 0;
       const lista = Array.isArray(data)
         ? data
         : (data as { data?: Consola[] } | null | undefined)?.data;
@@ -45,10 +48,12 @@ const ConsolasScreen: React.FC = () => {
       }
 
       setConsolas(lista);
+      setTotalConsolas(total);
       setError(null);
     } catch (err) {
       console.error('Error cargando consolas:', err);
       setError((err as Error).message || 'Error al cargar las consolas');
+      setTotalConsolas(0);
     } finally {
       setLoading(false);
     }
@@ -157,6 +162,9 @@ const ConsolasScreen: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
+        <div className="text-sm font-semibold text-[#1C2E4A]">
+          Total de consolas: {totalConsolas}
+        </div>
         {loading ? (
           <p className="text-sm text-gray-500">Cargando consolas...</p>
         ) : error ? (
