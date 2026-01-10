@@ -208,6 +208,10 @@ const formatFechaHoraDisplay = (
   const [editData, setEditData] = useState<TechnicalFailure>(() =>
     normalizeFailure(failure),
   );
+  const [formErrors, setFormErrors] = useState<{
+    departamentoResponsableId?: string;
+    novedadDetectada?: string;
+  }>({});
   const [activeTab, setActiveTab] = useState<
     'general' | 'supervisor' | 'cierre'
   >('general');
@@ -218,11 +222,15 @@ const formatFechaHoraDisplay = (
 
   useEffect(() => {
     setEditData(normalizeFailure(failure));
+    setFormErrors({});
     setActiveTab('general');
   }, [failure, normalizeFailure]);
 
   const updateField = (name: keyof TechnicalFailure, value: string | undefined) => {
     setEditData((prev) => ({ ...prev, [name]: value }));
+    if (name === 'departamentoResponsableId' || name === 'novedadDetectada') {
+      setFormErrors((prev) => ({ ...prev, [name]: undefined }));
+    }
   };
 
   const handleChange = (
@@ -296,6 +304,28 @@ const formatFechaHoraDisplay = (
   };
 
   const handleCloseFallo = () => {
+    if (isReadOnly) return;
+    const errors: {
+      departamentoResponsableId?: string;
+      novedadDetectada?: string;
+    } = {};
+    const departamentoId = toPositiveIntegerOrNull(editData.departamentoResponsableId);
+    const novedad = editData.novedadDetectada?.trim() ?? '';
+
+    if (!departamentoId) {
+      errors.departamentoResponsableId = 'Debe seleccionar el departamento responsable.';
+    }
+
+    if (!novedad) {
+      errors.novedadDetectada = 'Debe ingresar la novedad detectada.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      setActiveTab('supervisor');
+      return;
+    }
+
     onCloseFallo(editData);
   };
 
@@ -453,9 +483,17 @@ const formatFechaHoraDisplay = (
                   departamentoResponsableId: value,
                   deptResponsable: selectedLabel,
                 }));
+                setFormErrors((prev) => ({
+                  ...prev,
+                  departamentoResponsableId: undefined,
+                }));
               }}
               disabled={isReadOnly}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+              className={`w-full rounded-md border px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-500 ${
+                formErrors.departamentoResponsableId
+                  ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                  : 'border-gray-300'
+              }`}
             >
               <option value="">Seleccione...</option>
               {departamentos.map((dep) => (
@@ -464,6 +502,11 @@ const formatFechaHoraDisplay = (
                 </option>
               ))}
             </select>
+            {formErrors.departamentoResponsableId && (
+              <p className="mt-1 text-xs text-red-500">
+                {formErrors.departamentoResponsableId}
+              </p>
+            )}
           </div>
 
           <div>
@@ -475,9 +518,16 @@ const formatFechaHoraDisplay = (
               value={editData.novedadDetectada || ''}
               onChange={handleChange}
               disabled={isReadOnly}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+              className={`w-full rounded-md border px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-500 ${
+                formErrors.novedadDetectada
+                  ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                  : 'border-gray-300'
+              }`}
               rows={4}
             />
+            {formErrors.novedadDetectada && (
+              <p className="mt-1 text-xs text-red-500">{formErrors.novedadDetectada}</p>
+            )}
           </div>
         </div>
       )}
@@ -800,6 +850,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         return;
       }
 
+      const departamentoId = resolveDepartamentoId(updatedFailure);
       const novedad = updatedFailure.novedadDetectada?.trim() || null;
       const responsableVerificacionCierreId =
         updatedFailure.responsable_verificacion_cierre_id ??
@@ -824,6 +875,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         console.log("[Supervisor] Payload cerrar fallo:", {
           fecha_resolucion: resolutionDate,
           hora_resolucion: resolutionTime,
+          departamento_id: departamentoId,
           novedad_detectada: novedad,
           responsable_verificacion_cierre_id: responsableVerificacionCierreId,
         });
@@ -832,6 +884,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
           {
             fecha_resolucion: resolutionDate,
             hora_resolucion: resolutionTime,
+            departamento_id: departamentoId,
             novedad_detectada: novedad,
             responsable_verificacion_cierre_id: responsableVerificacionCierreId,
           },

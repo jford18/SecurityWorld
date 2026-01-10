@@ -393,6 +393,7 @@ export const cerrarFalloTecnico = async (req, res) => {
   const {
     fecha_resolucion: fechaResolucion,
     hora_resolucion: horaResolucion,
+    departamento_id: departamentoResponsableId,
     novedad_detectada: novedadDetectada,
     responsable_verificacion_cierre_id: responsableVerificacionCierreIdRaw,
   } = req.body || {};
@@ -408,6 +409,23 @@ export const cerrarFalloTecnico = async (req, res) => {
   if (!fechaResolucion || !horaResolucion) {
     return res.status(400).json({
       mensaje: "Debe ingresar la fecha y hora de resolución para cerrar el fallo.",
+    });
+  }
+
+  if (!departamentoResponsableId || Number(departamentoResponsableId) <= 0) {
+    return res.status(400).json({
+      mensaje: "Debe seleccionar el departamento responsable.",
+    });
+  }
+
+  const novedad =
+    typeof novedadDetectada === "string"
+      ? novedadDetectada.trim()
+      : "";
+
+  if (!novedad) {
+    return res.status(400).json({
+      mensaje: "Debe ingresar la novedad detectada.",
     });
   }
 
@@ -431,10 +449,7 @@ export const cerrarFalloTecnico = async (req, res) => {
       return res.status(400).json({ mensaje: "Ya está cerrado." });
     }
 
-    const novedad =
-      typeof novedadDetectada === "string"
-        ? novedadDetectada.trim() || null
-        : null;
+    const novedadNormalized = novedad || null;
 
     const updateResult = await client.query(
       `UPDATE fallos_tecnicos
@@ -480,7 +495,7 @@ export const cerrarFalloTecnico = async (req, res) => {
       [
         id,
         usuarioCierreId,
-        novedad,
+        novedadNormalized,
         responsableVerificacionCierreId,
       ]
     );
