@@ -325,6 +325,16 @@ const formatDurationFromSeconds = (duration?: number | null) => {
     onSave(editData);
   };
 
+  const esCierre = Boolean(editData.fechaResolucion && editData.horaResolucion);
+
+  const handlePrimaryAction = () => {
+    if (esCierre) {
+      handleCloseFallo();
+      return;
+    }
+    handleSave();
+  };
+
   const handleCloseFallo = () => {
     if (isReadOnly) return;
     const errors: {
@@ -372,7 +382,7 @@ const formatDurationFromSeconds = (duration?: number | null) => {
           {[
             { id: 'general' as const, label: 'Datos generales' },
             { id: 'supervisor' as const, label: 'Verificación Supervisor' },
-            { id: 'cierre' as const, label: 'Verificación de cierre' },
+            { id: 'cierre' as const, label: 'Conclusión de caso' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -712,20 +722,11 @@ const formatDurationFromSeconds = (duration?: number | null) => {
           </button>
           {!isReadOnly && (
             <button
-              onClick={handleCloseFallo}
-              disabled={isSaving}
-              className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60"
-            >
-              {isSaving ? 'Procesando...' : 'Cerrar fallo'}
-            </button>
-          )}
-          {!isReadOnly && (
-            <button
-              onClick={handleSave}
+              onClick={handlePrimaryAction}
               disabled={isSaving}
               className="px-6 py-2 bg-[#F9C300] text-[#1C2E4A] font-semibold rounded-md hover:bg-yellow-400 transition-colors disabled:opacity-60"
             >
-              {isSaving ? 'Guardando...' : 'Guardar Cambios'}
+              {isSaving ? 'Procesando...' : 'Guardar cambios'}
             </button>
           )}
         </div>
