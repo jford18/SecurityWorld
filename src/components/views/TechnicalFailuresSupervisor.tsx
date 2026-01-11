@@ -23,11 +23,7 @@ import { useSession } from '../context/SessionContext';
 import { getAllDepartamentosResponsables } from '../../services/departamentosResponsablesService';
 import TechnicalFailuresHistory from './TechnicalFailuresHistory';
 import { calcularEstado } from './TechnicalFailuresUtils';
-import {
-  FailureDepartmentTimelineEntry,
-  FailureHistory,
-  FailureHistoryEntry,
-} from '../../types';
+import { FailureDepartmentTimelineEntry, FailureHistory } from '../../types';
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
   departamentos: [],
@@ -646,6 +642,8 @@ const formatDurationFromSeconds = (duration?: number | null) => {
                         <th className="px-3 py-2 text-left font-semibold text-gray-600">Desde</th>
                         <th className="px-3 py-2 text-left font-semibold text-gray-600">Hasta</th>
                         <th className="px-3 py-2 text-left font-semibold text-gray-600">Duración</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Novedad</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Último usuario editó</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -663,6 +661,14 @@ const formatDurationFromSeconds = (duration?: number | null) => {
                           <td className="px-3 py-2 text-gray-700">
                             {formatDurationFromSeconds(entry.duracion_seg)}
                           </td>
+                          <td className="px-3 py-2 text-gray-700">
+                            {entry.novedad_detectada || '—'}
+                          </td>
+                          <td className="px-3 py-2 text-gray-700">
+                            {entry.ultimo_usuario_edito_nombre ??
+                              entry.ultimo_usuario_edito_id ??
+                              '—'}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -670,35 +676,6 @@ const formatDurationFromSeconds = (duration?: number | null) => {
                 </div>
               )}
             </div>
-            {Array.isArray(history.acciones) && history.acciones.length > 0 && (
-              <div className="mt-3">
-                <p className="font-semibold mb-2">Acciones registradas</p>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 text-xs">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Fecha</th>
-                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Verificación apertura</th>
-                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Verificación cierre</th>
-                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Novedad</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {history.acciones.map((accion: FailureHistoryEntry) => (
-                        <tr key={accion.id}>
-                          <td className="px-3 py-2 text-gray-700">
-                            {formatFechaHoraDisplay(accion.fecha_creacion || undefined) || 'Sin información'}
-                          </td>
-                          <td className="px-3 py-2 text-gray-700">{accion.verificacion_apertura || '—'}</td>
-                          <td className="px-3 py-2 text-gray-700">{accion.verificacion_cierre || '—'}</td>
-                          <td className="px-3 py-2 text-gray-700">{accion.novedad_detectada || '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>

@@ -47,15 +47,6 @@ export interface FailureDurationResponse {
   totalMinutos: number;
 }
 
-export interface FailureHistoryEntry {
-  id: number;
-  novedad_detectada?: string | null;
-  fecha_creacion?: string | null;
-  fecha_actualizacion?: string | null;
-  verificacion_apertura?: string | null;
-  verificacion_cierre?: string | null;
-}
-
 export interface FailureHistory {
   departamento_responsable: string | null;
   fecha: string | null;
@@ -66,7 +57,6 @@ export interface FailureHistory {
   estado: string | null;
   duracionTexto: string | null;
   totalMinutos: number | null;
-  acciones: FailureHistoryEntry[];
 }
 
 export interface FailureDepartmentTimelineEntry {
@@ -75,6 +65,9 @@ export interface FailureDepartmentTimelineEntry {
   fecha_inicio: string | null;
   fecha_fin: string | null;
   duracion_seg: number | null;
+  novedad_detectada?: string | null;
+  ultimo_usuario_edito_id?: number | null;
+  ultimo_usuario_edito_nombre?: string | null;
 }
 
 export interface CatalogoDepartamento {

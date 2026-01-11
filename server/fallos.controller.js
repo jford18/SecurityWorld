@@ -1360,12 +1360,17 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
           sf.departamento_id,
           dept.nombre AS departamento_nombre,
           sf.fecha_creacion AS fecha_inicio,
+          sf.novedad_detectada,
+          sf.ultimo_usuario_edito_id,
+          COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario)
+            AS ultimo_usuario_edito_nombre,
           LEAD(sf.fecha_creacion) OVER (
             PARTITION BY sf.fallo_id
             ORDER BY sf.fecha_creacion
           ) AS siguiente_fecha
         FROM seguimiento_fallos sf
         LEFT JOIN departamentos_responsables dept ON dept.id = sf.departamento_id
+        LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = sf.ultimo_usuario_edito_id
         WHERE sf.fallo_id = $1
           AND sf.departamento_id IS NOT NULL
       )
@@ -1373,6 +1378,9 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
         timeline.departamento_id,
         timeline.departamento_nombre,
         timeline.fecha_inicio,
+        timeline.novedad_detectada,
+        timeline.ultimo_usuario_edito_id,
+        timeline.ultimo_usuario_edito_nombre,
         COALESCE(
           timeline.siguiente_fecha,
           CASE
