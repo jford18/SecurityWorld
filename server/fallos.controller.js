@@ -78,8 +78,13 @@ const mapFalloRowToDto = (row) => ({
   departamento_responsable: row.departamento_responsable || undefined,
   departamentoResponsableId: row.departamento_id ?? null,
   consola: row.consola || undefined, // FIX: expose consola name retrieved via the LEFT JOIN so the frontend can display it without additional lookups.
+  consola_id: row.consola_id ?? null,
   sitio_nombre: row.sitio_nombre || undefined,
   sitio: row.sitio || row.sitio_nombre || undefined,
+  cliente_id: row.cliente_id ?? null,
+  cliente_nombre: row.cliente_nombre || null,
+  hacienda_id: row.hacienda_id ?? null,
+  hacienda_nombre: row.hacienda_nombre || null,
   tipo_problema_id: row.tipo_problema_id ?? null,
   tipo_afectacion: row.tipo_afectacion || "",
   tipo_equipo_afectado: row.tipo_equipo_afectado || undefined,
@@ -105,6 +110,59 @@ const mapFalloRowToDto = (row) => ({
   responsable_verificacion_cierre_nombre:
     row.responsable_verificacion_cierre_nombre || null,
 });
+
+const parseOptionalNumberParam = (value) => {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined;
+  }
+
+  return parsed;
+};
+
+const REPORTADO_COLUMNS = ["reportado_al_cliente", "reportado_cliente"];
+
+const resolveReportadoClienteColumn = async (client) => {
+  const { rows } = await client.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'fallos_tecnicos'
+       AND column_name = ANY($1)
+     ORDER BY column_name`,
+    [REPORTADO_COLUMNS]
+  );
+
+  return rows?.[0]?.column_name ?? null;
+};
+
+const normalizeReportadoClienteFilter = (value) => {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const truthy = ["true", "t", "1", "s", "si", "sí", "y", "yes"];
+  const falsy = ["false", "f", "0", "n", "no"];
+
+  if (truthy.includes(normalized)) {
+    return truthy;
+  }
+
+  if (falsy.includes(normalized)) {
+    return falsy;
+  }
+
+  return undefined;
+};
 
 const toNullableUserId = (v) => {
   const n = Number(v);
@@ -273,6 +331,64 @@ export const getFallos = async (req, res) => {
   const client = await pool.connect();
 
   try {
+    const clienteIdRaw = req.query.cliente_id;
+    const reportadoClienteRaw = req.query.reportado_cliente;
+    const consolaIdRaw = req.query.consola_id;
+    const haciendaIdRaw = req.query.hacienda_id;
+
+    const clienteId = parseOptionalNumberParam(clienteIdRaw);
+    const consolaId = parseOptionalNumberParam(consolaIdRaw);
+    const haciendaId = parseOptionalNumberParam(haciendaIdRaw);
+    const reportadoClienteValues = normalizeReportadoClienteFilter(reportadoClienteRaw);
+
+    if (clienteIdRaw && clienteId === undefined) {
+      return res.status(400).json({ message: "El parámetro cliente_id debe ser válido." });
+    }
+
+    if (consolaIdRaw && consolaId === undefined) {
+      return res.status(400).json({ message: "El parámetro consola_id debe ser válido." });
+    }
+
+    if (haciendaIdRaw && haciendaId === undefined) {
+      return res.status(400).json({ message: "El parámetro hacienda_id debe ser válido." });
+    }
+
+    if (reportadoClienteRaw && reportadoClienteValues === undefined) {
+      return res
+        .status(400)
+        .json({ message: "El parámetro reportado_cliente debe ser válido." });
+    }
+
+    const filtros = [];
+    const params = [];
+
+    if (consolaId) {
+      params.push(consolaId);
+      filtros.push(`AND ft.consola_id = $${params.length}`);
+    }
+
+    if (clienteId) {
+      params.push(clienteId);
+      filtros.push(`AND sitio.cliente_id = $${params.length}`);
+    }
+
+    if (haciendaId) {
+      params.push(haciendaId);
+      filtros.push(`AND sitio.hacienda_id = $${params.length}`);
+    }
+
+    if (reportadoClienteValues) {
+      const reportadoColumn = await resolveReportadoClienteColumn(client);
+      if (reportadoColumn) {
+        params.push(reportadoClienteValues);
+        filtros.push(
+          `AND LOWER(CAST(ft.${reportadoColumn} AS TEXT)) = ANY($${params.length})`
+        );
+      }
+    }
+
+    const whereFilters = filtros.length > 0 ? `WHERE 1 = 1 ${filtros.join(" ")}` : "";
+
     const result = await client.query(
       `SELECT
         ft.id,
@@ -292,8 +408,13 @@ export const getFallos = async (req, res) => {
         dept.nombre AS departamento,
         dept.id AS departamento_id,
         consola.nombre AS consola,
+        ft.consola_id,
         COALESCE(sitio.nombre, 'Sin sitio asignado') AS sitio,
         sitio.nombre AS sitio_nombre,
+        sitio.cliente_id AS cliente_id,
+        cliente.nombre AS cliente_nombre,
+        sitio.hacienda_id AS hacienda_id,
+        hacienda.nombre AS hacienda_nombre,
         ft.tipo_problema_id,
         tp.descripcion AS tipo_problema_descripcion,
         tp.descripcion AS problema,
@@ -332,6 +453,8 @@ export const getFallos = async (req, res) => {
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
       LEFT JOIN consolas consola ON consola.id = ft.consola_id
       LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
+      LEFT JOIN clientes cliente ON cliente.id = sitio.cliente_id
+      LEFT JOIN hacienda hacienda ON hacienda.id = sitio.hacienda_id
       LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
       LEFT JOIN (
         SELECT DISTINCT ON (sf.fallo_id)
@@ -343,7 +466,9 @@ export const getFallos = async (req, res) => {
         LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = sf.ultimo_usuario_edito_id
         ORDER BY sf.fallo_id, sf.fecha_creacion DESC
       ) seguimiento_ultimo ON seguimiento_ultimo.fallo_id = ft.id
-      ORDER BY ft.fecha DESC, ft.id DESC`
+      ${whereFilters}
+      ORDER BY ft.fecha DESC, ft.id DESC`,
+      params
     ); // FIX: rewritten query uses LEFT JOINs only with existing lookup tables to avoid failing when optional relations are missing and to provide the consola name.
 
     const fallos = result.rows.map(mapFalloRowToDto);

@@ -24,18 +24,60 @@ const parseClienteIds = (value) => {
   return parsed.length > 0 ? parsed : null;
 };
 
+const REPORTADO_COLUMNS = ["reportado_al_cliente", "reportado_cliente"];
+
+const resolveReportadoClienteColumn = async () => {
+  const { rows } = await pool.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'fallos_tecnicos'
+       AND column_name = ANY($1)
+     ORDER BY column_name`,
+    [REPORTADO_COLUMNS]
+  );
+
+  return rows?.[0]?.column_name ?? null;
+};
+
+const normalizeReportadoClienteFilter = (value) => {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const truthy = ["true", "t", "1", "s", "si", "sí", "y", "yes"];
+  const falsy = ["false", "f", "0", "n", "no"];
+
+  if (truthy.includes(normalized)) {
+    return truthy;
+  }
+
+  if (falsy.includes(normalized)) {
+    return falsy;
+  }
+
+  return undefined;
+};
+
 export const getDashboardFallosTecnicosResumen = async (req, res) => {
   try {
-    const clienteIdsRaw = req.query.CLIENTE_IDS ?? req.query.cliente_ids;
+    const clienteIdsRaw = req.query.CLIENTE_IDS ?? req.query.cliente_ids ?? req.query.cliente_id;
     const haciendaIdRaw = req.query.HACIENDA_ID ?? req.query.hacienda_id;
     const mesRaw = req.query.MES ?? req.query.mes;
     const problemaIdRaw = req.query.PROBLEMA_ID ?? req.query.problema_id;
     const consolaIdRaw = req.query.CONSOLA_ID ?? req.query.consola_id;
+    const reportadoClienteRaw = req.query.REPORTADO_CLIENTE ?? req.query.reportado_cliente;
 
     const clienteIds = parseClienteIds(clienteIdsRaw);
     const haciendaId = toOptionalNumber(haciendaIdRaw);
     const problemaId = toOptionalNumber(problemaIdRaw);
     const consolaId = toOptionalNumber(consolaIdRaw);
+    const reportadoClienteValues = normalizeReportadoClienteFilter(reportadoClienteRaw);
 
     if (haciendaIdRaw && haciendaId === undefined) {
       return res.status(400).json({ message: "El parámetro HACIENDA_ID debe ser válido." });
@@ -47,6 +89,12 @@ export const getDashboardFallosTecnicosResumen = async (req, res) => {
 
     if (consolaIdRaw && consolaId === undefined) {
       return res.status(400).json({ message: "El parámetro CONSOLA_ID debe ser válido." });
+    }
+
+    if (reportadoClienteRaw && reportadoClienteValues === undefined) {
+      return res
+        .status(400)
+        .json({ message: "El parámetro REPORTADO_CLIENTE debe ser válido." });
     }
 
     const mes =
@@ -82,6 +130,16 @@ export const getDashboardFallosTecnicosResumen = async (req, res) => {
     if (mes) {
       params.push(mes);
       filtros.push(`AND TO_CHAR(A.FECHA::DATE, 'YYYY-MM') = $${params.length}`);
+    }
+
+    if (reportadoClienteValues) {
+      const reportadoColumn = await resolveReportadoClienteColumn();
+      if (reportadoColumn) {
+        params.push(reportadoClienteValues);
+        filtros.push(
+          `AND LOWER(CAST(A.${reportadoColumn} AS TEXT)) = ANY($${params.length})`
+        );
+      }
     }
 
     const consolaFilter =
