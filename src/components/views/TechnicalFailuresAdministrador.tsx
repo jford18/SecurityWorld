@@ -67,6 +67,7 @@ const TechnicalFailuresAdministrador: React.FC = () => {
           failures={failures}
           isLoading={isLoading}
           activeRole={session.roleName ?? undefined}
+          withContainer={false}
           renderActions={(failure) => (
             <button
               onClick={() => handleDeleteFailure(failure.id)}

@@ -1043,6 +1043,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
           failures={failures}
           isLoading={isLoading}
           activeRole={session.roleName ?? undefined}
+          withContainer={false}
           renderActions={(failure) => {
             if (isResolvedFailure(failure)) {
               return null;

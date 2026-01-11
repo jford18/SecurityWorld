@@ -71,6 +71,7 @@ const TechnicalFailuresConsultas: React.FC = () => {
           activeRole={session.roleName ?? undefined}
           showActions={false}
           enableExport
+          withContainer={false}
         />
       </div>
     </div>
