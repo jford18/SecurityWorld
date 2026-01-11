@@ -114,7 +114,12 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
           .toString()
           .toLowerCase();
       case 'tipoAfectacion': {
-        const tipoAfectacion = failure.tipoAfectacion || failure.tipo_afectacion || '';
+        const tipoAfectacion =
+          failure.tipo_afectacion_detalle
+          || failure.tipoAfectacionDetalle
+          || failure.tipoAfectacion
+          || failure.tipo_afectacion
+          || '';
         return tipoAfectacion.toString().toLowerCase();
       }
       case 'sitioNombre':
@@ -262,6 +267,11 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   };
 
   const getTipoAfectacionLabel = (failure: TechnicalFailure) => {
+    const detalle = failure.tipo_afectacion_detalle || failure.tipoAfectacionDetalle;
+    if (detalle != null && String(detalle).trim() !== '') {
+      return String(detalle);
+    }
+
     const tipoBase = (failure.tipoAfectacion || failure.tipo_afectacion || '').toString().trim();
     if (!tipoBase) {
       return 'Sin información';
