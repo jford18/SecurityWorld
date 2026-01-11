@@ -74,7 +74,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   });
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const actionsEnabled = showActions && Boolean(handleEdit || renderActions);
-  const columnsCount = actionsEnabled ? 7 : 6;
+  const columnsCount = actionsEnabled ? 9 : 8;
 
   const getFechaFalloTimestamp = (failure: TechnicalFailure) => {
     const horaFallo = failure.hora ?? failure.horaFallo;
@@ -397,6 +397,12 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               >
                 Departamento Responsable{renderSortIndicator('departamentoResponsable')}
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Novedad
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Último usuario que editó
+              </th>
               {actionsEnabled && (
                 <th
                   scope="col"
@@ -482,6 +488,8 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                   ))}
                 </select>
               </th>
+              <th className="px-6 py-2" />
+              <th className="px-6 py-2" />
               {actionsEnabled && <th className="px-6 py-2" />}
             </tr>
           </thead>
@@ -493,8 +501,10 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                 </td>
               </tr>
             ) : (
-              sortedFailures.map((fallo) => (
-                <tr key={fallo.id} className="hover:bg-gray-50">
+              sortedFailures.map((fallo) => {
+                console.log('ROW GRID', fallo);
+                return (
+                  <tr key={fallo.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatFechaHoraFallo(fallo) || 'Sin información'}
                   </td>
@@ -542,6 +552,14 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                       || fallo.deptResponsable
                       || 'Sin información'}
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {fallo.novedadDetectada || fallo.novedad_detectada || 'Sin información'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {fallo.ultimo_usuario_edito_nombre
+                      ?? fallo.ultimo_usuario_edito_id
+                      ?? 'Sin información'}
+                  </td>
                   {actionsEnabled && (
                     <td className="px-6 py-3 text-left whitespace-nowrap">
                       {renderActions ? (
@@ -560,8 +578,9 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                       )}
                     </td>
                   )}
-                </tr>
-              ))
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

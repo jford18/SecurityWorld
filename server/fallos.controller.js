@@ -305,6 +305,9 @@ export const getFallos = async (req, res) => {
           )
           ELSE '0 días pendiente'
         END AS estado_texto,
+        seguimiento_ultimo.novedad_detectada,
+        seguimiento_ultimo.ultimo_usuario_edito_id,
+        seguimiento_ultimo.ultimo_usuario_edito_nombre,
         dept.nombre AS departamento_responsable,
         ft.fecha_creacion,
         ft.fecha_actualizacion
@@ -315,6 +318,16 @@ export const getFallos = async (req, res) => {
       LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
       LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
       LEFT JOIN catalogo_tipo_equipo_afectado tipo_equipo_afectado ON tipo_equipo_afectado.id = ft.tipo_equipo_afectado_id
+      LEFT JOIN (
+        SELECT DISTINCT ON (sf.fallo_id)
+          sf.fallo_id,
+          sf.novedad_detectada,
+          sf.ultimo_usuario_edito_id,
+          COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario) AS ultimo_usuario_edito_nombre
+        FROM seguimiento_fallos sf
+        LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = sf.ultimo_usuario_edito_id
+        ORDER BY sf.fallo_id, sf.fecha_creacion DESC
+      ) seguimiento_ultimo ON seguimiento_ultimo.fallo_id = ft.id
       ORDER BY ft.fecha DESC, ft.id DESC`
     ); // FIX: rewritten query uses LEFT JOINs only with existing lookup tables to avoid failing when optional relations are missing and to provide the consola name.
 
