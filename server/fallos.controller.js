@@ -81,6 +81,8 @@ const mapFalloRowToDto = (row) => ({
   sitio: row.sitio || row.sitio_nombre || undefined,
   tipo_problema_id: row.tipo_problema_id ?? null,
   tipo_afectacion: row.tipo_afectacion || "",
+  tipo_equipo_afectado: row.tipo_equipo_afectado || undefined,
+  tipo_equipo_afectado_id: row.tipo_equipo_afectado_id ?? null,
   tipoProblemaNombre: row.tipo_problema_descripcion || undefined,
   fechaResolucion: formatDate(row.fecha_resolucion) || undefined,
   horaResolucion: row.hora_resolucion || undefined,
@@ -272,7 +274,10 @@ export const getFallos = async (req, res) => {
         ft.id,
         ft.fecha,
         ft.hora,
-        TO_CHAR(ft.fecha::timestamp + ft.hora, 'YYYY-MM-DD HH24:MI') AS fecha_hora_fallo,
+        COALESCE(
+          TO_CHAR(ft.fecha::timestamp + COALESCE(ft.hora, '00:00:00'::time), 'YYYY-MM-DD HH24:MI'),
+          TO_CHAR(ft.fecha_creacion, 'YYYY-MM-DD HH24:MI')
+        ) AS fecha_hora_fallo,
         ft.equipo_afectado,
         ft.descripcion_fallo,
         ft.encoding_device_id,
@@ -287,6 +292,8 @@ export const getFallos = async (req, res) => {
         tp.descripcion AS tipo_problema_descripcion,
         tp.descripcion AS problema,
         ft.tipo_afectacion,
+        ft.tipo_equipo_afectado_id,
+        COALESCE(tipo_equipo_afectado.descripcion, tipo_equipo_afectado.nombre) AS tipo_equipo_afectado,
         ft.fecha_resolucion,
         ft.hora_resolucion,
         ft.estado,
@@ -307,6 +314,7 @@ export const getFallos = async (req, res) => {
       LEFT JOIN consolas consola ON consola.id = ft.consola_id
       LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
       LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
+      LEFT JOIN catalogo_tipo_equipo_afectado tipo_equipo_afectado ON tipo_equipo_afectado.id = ft.tipo_equipo_afectado_id
       ORDER BY ft.fecha DESC, ft.id DESC`
     ); // FIX: rewritten query uses LEFT JOINs only with existing lookup tables to avoid failing when optional relations are missing and to provide the consola name.
 

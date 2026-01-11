@@ -16,6 +16,9 @@ export interface TechnicalFailure {
   sitio?: string;
   tipo_afectacion?: string;
   tipoAfectacion?: string;
+  tipo_equipo_afectado?: string;
+  tipoEquipoAfectado?: string;
+  tipo_equipo_afectado_id?: number | null;
   equipoAfectado?: string;
   horaFallo?: string;
   fechaHoraFallo?: string;

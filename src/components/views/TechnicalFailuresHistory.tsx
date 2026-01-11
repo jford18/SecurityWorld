@@ -71,11 +71,10 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     sitio: '',
     estado: '',
     departamento: '',
-    ultimoUsuarioEditoId: '',
   });
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const actionsEnabled = showActions && Boolean(handleEdit || renderActions);
-  const columnsCount = actionsEnabled ? 9 : 8;
+  const columnsCount = actionsEnabled ? 7 : 6;
 
   const getFechaFalloTimestamp = (failure: TechnicalFailure) => {
     const horaFallo = failure.hora ?? failure.horaFallo;
@@ -136,14 +135,6 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
         )
           .toString()
           .toLowerCase();
-      case 'ultimoUsuarioEdito':
-        return (
-          failure.ultimo_usuario_edito_nombre
-          || failure.ultimo_usuario_edito_id
-          || ''
-        )
-          .toString()
-          .toLowerCase();
       default:
         return '';
     }
@@ -182,13 +173,6 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
 
       if (filters.departamento && !departamentoTexto.includes(filters.departamento.toLowerCase())) {
         return false;
-      }
-
-      if (filters.ultimoUsuarioEditoId) {
-        const editId = item.ultimo_usuario_edito_id;
-        if (String(editId ?? '') !== filters.ultimoUsuarioEditoId) {
-          return false;
-        }
       }
 
       const falloTimestamp = getFechaFalloTimestamp(item);
@@ -260,17 +244,6 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     return Array.from(values).sort();
   }, [failures]);
 
-  const ultimoUsuarioEditoOptions = useMemo(() => {
-    const values = new Map<number, string>();
-    failures.forEach((item) => {
-      const id = item.ultimo_usuario_edito_id;
-      if (!id) return;
-      const label = item.ultimo_usuario_edito_nombre?.trim() || `ID ${id}`;
-      values.set(id, label);
-    });
-    return Array.from(values.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [failures]);
-
   const handleClearFilters = () => {
     setFilters({
       fechaDesde: '',
@@ -280,13 +253,43 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
       sitio: '',
       estado: '',
       departamento: '',
-      ultimoUsuarioEditoId: '',
     });
   };
 
   const renderSortIndicator = (key: string) => {
     if (!sortConfig || sortConfig.key !== key) return null;
     return sortConfig.direction === 'asc' ? ' ▲' : ' ▼';
+  };
+
+  const getTipoAfectacionLabel = (failure: TechnicalFailure) => {
+    const tipoBase = (failure.tipoAfectacion || failure.tipo_afectacion || '').toString().trim();
+    if (!tipoBase) {
+      return 'Sin información';
+    }
+
+    const tipoNormalizado = tipoBase.toUpperCase();
+    if (tipoNormalizado === 'EQUIPO') {
+      const tipoEquipo = (
+        failure.tipo_equipo_afectado
+        || failure.tipoEquipoAfectado
+        || ''
+      )
+        .toString()
+        .trim();
+      return tipoEquipo ? `EQUIPO-${tipoEquipo}` : 'EQUIPO';
+    }
+
+    return tipoNormalizado;
+  };
+
+  const isFailureResolved = (failure: TechnicalFailure) => {
+    const estadoBase =
+      failure.estado
+      ?? failure.estado_texto
+      ?? calcularEstado(failure).texto
+      ?? '';
+    const estadoNorm = String(estadoBase).trim().toUpperCase();
+    return estadoNorm === 'RESUELTO' || estadoNorm.startsWith('RESUELT');
   };
 
   const handleExportToExcel = () => {
@@ -300,21 +303,13 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
           || fallo.tipoProblema
           || fallo.descripcion_fallo
           || 'Sin información',
-      'Tipo de Afectación': fallo.tipo_afectacion || fallo.tipoAfectacion || 'Sin información',
+      'Tipo de Afectación': getTipoAfectacionLabel(fallo),
       Sitio: fallo.sitio || fallo.sitioNombre || fallo.sitio_nombre || 'Sin sitio asignado',
       Estado: calcularEstado(fallo).texto,
       'Departamento Responsable':
         fallo.departamento_responsable
           || fallo.departamentoNombre
           || fallo.deptResponsable
-          || 'Sin información',
-      Novedad:
-        fallo.novedadDetectada
-          || fallo.novedad_detectada
-          || 'Sin información',
-      'Último usuario que editó':
-        fallo.ultimo_usuario_edito_nombre
-          || (fallo.ultimo_usuario_edito_id ? `ID ${fallo.ultimo_usuario_edito_id}` : '')
           || 'Sin información',
     }));
 
@@ -402,18 +397,12 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               >
                 Departamento Responsable{renderSortIndicator('departamentoResponsable')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Novedad
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Último usuario que editó
-              </th>
               {actionsEnabled && (
                 <th
                   scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                 >
-                  Acciones
+                  Acción
                 </th>
               )}
             </tr>
@@ -493,21 +482,6 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                   ))}
                 </select>
               </th>
-              <th className="px-6 py-2" />
-              <th className="px-6 py-2">
-                <select
-                  value={filters.ultimoUsuarioEditoId}
-                  onChange={(e) => handleFilterChange('ultimoUsuarioEditoId', e.target.value)}
-                  className="border rounded px-2 py-1 text-sm w-full"
-                >
-                  <option value="">Todos</option>
-                  {ultimoUsuarioEditoOptions.map(([id, label]) => (
-                    <option key={id} value={String(id)}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </th>
               {actionsEnabled && <th className="px-6 py-2" />}
             </tr>
           </thead>
@@ -532,9 +506,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                       || 'Sin información'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {fallo.tipo_afectacion
-                      || fallo.tipoAfectacion
-                      || 'Sin información'}
+                    {getTipoAfectacionLabel(fallo)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {fallo.sitio
@@ -570,28 +542,20 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                       || fallo.deptResponsable
                       || 'Sin información'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {fallo.novedadDetectada
-                      || fallo.novedad_detectada
-                      || 'Sin información'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {fallo.ultimo_usuario_edito_nombre
-                      || (fallo.ultimo_usuario_edito_id ? `ID ${fallo.ultimo_usuario_edito_id}` : null)
-                      || 'Sin información'}
-                  </td>
                   {actionsEnabled && (
                     <td className="px-6 py-3 text-left whitespace-nowrap">
                       {renderActions ? (
                         renderActions(fallo)
                       ) : (
                         handleEdit && (
-                          <button
-                            onClick={() => handleEdit(fallo)}
-                            className="text-blue-600 hover:underline text-sm font-semibold"
-                          >
-                            Editar
-                          </button>
+                          !isFailureResolved(fallo) && (
+                            <button
+                              onClick={() => handleEdit(fallo)}
+                              className="text-blue-600 hover:underline text-sm font-semibold"
+                            >
+                              Editar
+                            </button>
+                          )
                         )
                       )}
                     </td>
