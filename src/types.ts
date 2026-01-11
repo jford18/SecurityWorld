@@ -48,6 +48,12 @@ export interface TechnicalFailure {
   responsable_verificacion_cierre_id?: number | null;
   responsable_verificacion_cierre_nombre?: string | null;
   departamento_responsable?: string;
+  cliente_id?: number | null;
+  cliente_nombre?: string | null;
+  hacienda_id?: number | null;
+  hacienda_nombre?: string | null;
+  consola_id?: number | null;
+  reportado_cliente?: boolean | string | null;
 }
 
 export interface FailureDurationResponse {

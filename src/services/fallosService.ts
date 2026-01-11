@@ -16,6 +16,15 @@ type RequestContext = {
   roleName?: string | null;
 };
 
+export type FallosFiltersParams = {
+  clienteId?: number | string | null;
+  reportadoCliente?: string | boolean | null;
+  consolaId?: number | string | null;
+  haciendaId?: number | string | null;
+  page?: number;
+  limit?: number;
+};
+
 export interface TechnicalFailurePayload {
   id?: string;
   fecha: string;
@@ -112,8 +121,50 @@ const mapNodo = (item: unknown): CatalogoNodo | null => {
   return { id: parsedId, nombre };
 };
 
-export const getFallos = async (): Promise<TechnicalFailure[]> => {
-  const { data } = await apiClient.get<TechnicalFailure[] | { data?: TechnicalFailure[] }>('/fallos');
+const buildFallosQueryParams = (filters?: FallosFiltersParams) => {
+  if (!filters) {
+    return undefined;
+  }
+
+  const params: Record<string, string | number | boolean> = {};
+
+  if (filters.clienteId !== undefined && filters.clienteId !== null && filters.clienteId !== '') {
+    params.cliente_id = filters.clienteId;
+  }
+
+  if (
+    filters.reportadoCliente !== undefined &&
+    filters.reportadoCliente !== null &&
+    filters.reportadoCliente !== ''
+  ) {
+    params.reportado_cliente = filters.reportadoCliente;
+  }
+
+  if (filters.consolaId !== undefined && filters.consolaId !== null && filters.consolaId !== '') {
+    params.consola_id = filters.consolaId;
+  }
+
+  if (filters.haciendaId !== undefined && filters.haciendaId !== null && filters.haciendaId !== '') {
+    params.hacienda_id = filters.haciendaId;
+  }
+
+  if (typeof filters.page === 'number' && Number.isFinite(filters.page)) {
+    params.page = filters.page;
+  }
+
+  if (typeof filters.limit === 'number' && Number.isFinite(filters.limit)) {
+    params.limit = filters.limit;
+  }
+
+  return Object.keys(params).length > 0 ? params : undefined;
+};
+
+export const getFallos = async (filters?: FallosFiltersParams): Promise<TechnicalFailure[]> => {
+  const params = buildFallosQueryParams(filters);
+  const { data } = await apiClient.get<TechnicalFailure[] | { data?: TechnicalFailure[] }>(
+    '/fallos',
+    { params },
+  );
   return normalizeFallosResponse(data);
 };
 

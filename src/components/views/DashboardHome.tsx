@@ -21,6 +21,7 @@ import {
   DashboardFallosTecnicosResponse,
   fetchDashboardFallosTecnicosResumen,
 } from '../../services/dashboardFallosTecnicosService';
+import FallosFiltersHeader, { FallosHeaderFilters } from './FallosFiltersHeader';
 
 const KPI_LABELS = [
   {
@@ -268,28 +269,27 @@ const DashboardHome: React.FC = () => {
   const [dashboard, setDashboard] = useState<DashboardFallosTecnicosResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [consolaId, setConsolaId] = useState<number | null>(null);
-  const [selectedClienteIds, setSelectedClienteIds] = useState<number[]>([]);
-  const [selectedHaciendaId, setSelectedHaciendaId] = useState('');
+  const [headerFilters, setHeaderFilters] = useState<FallosHeaderFilters>({
+    clienteId: '',
+    reportadoCliente: '',
+    consolaId: '',
+    haciendaId: '',
+  });
   const [selectedMes, setSelectedMes] = useState('');
   const [selectedProblemaId, setSelectedProblemaId] = useState('');
   const lastFetchKeyRef = useRef<string>('');
   const didInitFiltersRef = useRef(false);
 
-  const clienteIdsKey = useMemo(() => {
-    if (!Array.isArray(selectedClienteIds) || selectedClienteIds.length === 0) return '';
-    return [...selectedClienteIds].sort((a, b) => a - b).join(',');
-  }, [selectedClienteIds]);
-
   const filtersKey = useMemo(() => {
     return [
-      consolaId ?? '',
-      clienteIdsKey,
-      selectedHaciendaId ?? '',
+      headerFilters.consolaId ?? '',
+      headerFilters.clienteId ?? '',
+      headerFilters.reportadoCliente ?? '',
+      headerFilters.haciendaId ?? '',
       selectedMes ?? '',
       selectedProblemaId ?? '',
     ].join('|');
-  }, [consolaId, clienteIdsKey, selectedHaciendaId, selectedMes, selectedProblemaId]);
+  }, [headerFilters, selectedMes, selectedProblemaId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -297,22 +297,19 @@ const DashboardHome: React.FC = () => {
     const loadConsola = async () => {
       const consoleName = session.console ?? localStorage.getItem('selectedConsole');
       if (!consoleName) {
-        if (isMounted) {
-          setConsolaId((prev) => (prev === null ? prev : null));
-        }
         return;
       }
 
       try {
         const resolvedId = await resolveConsolaIdByName(consoleName);
-        if (isMounted) {
-          setConsolaId((prev) => (prev === resolvedId ? prev : resolvedId));
+        if (!isMounted) return;
+        if (resolvedId) {
+          setHeaderFilters((prev) =>
+            prev.consolaId ? prev : { ...prev, consolaId: String(resolvedId) },
+          );
         }
       } catch (err) {
         console.error('Error resolviendo consola:', err);
-        if (isMounted) {
-          setConsolaId((prev) => (prev === null ? prev : null));
-        }
       }
     };
 
@@ -324,8 +321,6 @@ const DashboardHome: React.FC = () => {
   }, [session.console]);
 
   useEffect(() => {
-    if (!consolaId) return;
-
     if (lastFetchKeyRef.current === filtersKey) return;
     lastFetchKeyRef.current = filtersKey;
 
@@ -334,12 +329,17 @@ const DashboardHome: React.FC = () => {
     setIsLoading(true);
     setError(null);
 
+    const consolaIdValue = headerFilters.consolaId ? Number(headerFilters.consolaId) : null;
+    const clienteIdValue = headerFilters.clienteId ? Number(headerFilters.clienteId) : null;
+    const haciendaIdValue = headerFilters.haciendaId ? Number(headerFilters.haciendaId) : null;
+
     fetchDashboardFallosTecnicosResumen({
-      clienteIds: selectedClienteIds.length > 0 ? selectedClienteIds : undefined,
-      haciendaId: selectedHaciendaId ? Number(selectedHaciendaId) : null,
+      clienteId: clienteIdValue,
+      reportadoCliente: headerFilters.reportadoCliente || null,
+      haciendaId: haciendaIdValue,
       mes: selectedMes || null,
       problemaId: selectedProblemaId ? Number(selectedProblemaId) : null,
-      consolaId,
+      consolaId: consolaIdValue,
       signal: controller.signal,
     })
       .then((response) => setDashboard(response))
@@ -354,27 +354,29 @@ const DashboardHome: React.FC = () => {
       .finally(() => setIsLoading(false));
 
     return () => controller.abort();
-  }, [filtersKey]);
+  }, [filtersKey, headerFilters]);
 
   useEffect(() => {
     if (!dashboard?.filtros) return;
 
-    setSelectedClienteIds((prev) => {
-      const next = prev.filter((id) =>
-        dashboard.filtros.clientes.some((cliente) => cliente.id === id),
-      );
-      if (next.length === prev.length && next.every((id, index) => id === prev[index])) {
-        return prev;
+    setHeaderFilters((prev) => {
+      const next = { ...prev };
+      if (
+        prev.clienteId &&
+        !dashboard.filtros.clientes.some((cliente) => String(cliente.id) === prev.clienteId)
+      ) {
+        next.clienteId = '';
       }
+
+      if (
+        prev.haciendaId &&
+        !dashboard.filtros.haciendas.some((hacienda) => String(hacienda.id) === prev.haciendaId)
+      ) {
+        next.haciendaId = '';
+      }
+
       return next;
     });
-
-    if (
-      selectedHaciendaId &&
-      !dashboard.filtros.haciendas.some((hacienda) => String(hacienda.id) === selectedHaciendaId)
-    ) {
-      setSelectedHaciendaId('');
-    }
 
     if (
       selectedProblemaId &&
@@ -386,7 +388,7 @@ const DashboardHome: React.FC = () => {
     if (selectedMes && !dashboard.filtros.meses.includes(selectedMes)) {
       setSelectedMes('');
     }
-  }, [dashboard, selectedHaciendaId, selectedMes, selectedProblemaId]);
+  }, [dashboard, selectedMes, selectedProblemaId]);
 
   useEffect(() => {
     if (didInitFiltersRef.current) return;
@@ -395,8 +397,6 @@ const DashboardHome: React.FC = () => {
     didInitFiltersRef.current = true;
   }, [dashboard]);
 
-  const clientes = dashboard?.filtros?.clientes ?? [];
-  const haciendas = dashboard?.filtros?.haciendas ?? [];
   const problemas = dashboard?.filtros?.problemas ?? [];
   const meses = dashboard?.filtros?.meses ?? [];
 
@@ -465,28 +465,21 @@ const DashboardHome: React.FC = () => {
       !dashboard.tabla_clientes.length &&
       !dashboard.tendencia_pendientes_mes.length);
 
-  const handleToggleCliente = useCallback((id: number) => {
-    setSelectedClienteIds((prev) => {
-      if (prev.includes(id)) {
-        return prev.filter((item) => item !== id);
-      }
-      if (prev.length === 0) {
-        return [id];
-      }
-      return [...prev, id];
-    });
-  }, []);
-
-  const handleToggleTodosClientes = useCallback(() => {
-    setSelectedClienteIds([]);
-  }, []);
-
-  const handleHaciendaChange = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
-      setSelectedHaciendaId(event.target.value);
+  const handleHeaderFilterChange = useCallback(
+    (field: keyof FallosHeaderFilters, value: string) => {
+      setHeaderFilters((prev) => ({ ...prev, [field]: value }));
     },
     [],
   );
+
+  const handleClearHeaderFilters = useCallback(() => {
+    setHeaderFilters({
+      clienteId: '',
+      reportadoCliente: '',
+      consolaId: '',
+      haciendaId: '',
+    });
+  }, []);
 
   const handleMesChange = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -511,51 +504,12 @@ const DashboardHome: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[260px_1fr_260px]">
-        <div className="border border-gray-300 bg-white p-4">
-          <div className="mb-4">
-            <label className="block text-xs font-semibold uppercase text-gray-500">Hacienda</label>
-            <select
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
-              value={selectedHaciendaId}
-              onChange={handleHaciendaChange}
-            >
-              <option value="">Todas</option>
-              {haciendas.map((hacienda) => (
-                <option key={hacienda.id} value={hacienda.id}>
-                  {hacienda.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-          <h4 className="text-sm font-semibold text-gray-600">CLIENTE</h4>
-          <div className="mt-2 space-y-2 text-sm text-gray-700">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={selectedClienteIds.length === 0}
-                onChange={handleToggleTodosClientes}
-              />
-              <span>Todos</span>
-            </label>
-            <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
-              {clientes.map((cliente) => (
-                <label key={cliente.id} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedClienteIds.includes(cliente.id)}
-                    onChange={() => handleToggleCliente(cliente.id)}
-                  />
-                  <span>{cliente.nombre}</span>
-                </label>
-              ))}
-              {!clientes.length && (
-                <p className="text-xs text-gray-400">Sin clientes disponibles.</p>
-              )}
-            </div>
-          </div>
-        </div>
-
+      <FallosFiltersHeader
+        filters={headerFilters}
+        onFilterChange={handleHeaderFilterChange}
+        onClear={handleClearHeaderFilters}
+      />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_260px]">
         <div className="flex items-start justify-center border border-gray-300 bg-white px-6 py-4">
           <h2 className="text-center text-xl font-semibold text-[#1C2E4A] md:text-2xl">
             Reporte de fallos técnicos - SW Security World

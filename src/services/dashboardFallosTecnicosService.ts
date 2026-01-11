@@ -54,6 +54,8 @@ export interface DashboardFallosTecnicosResponse {
 
 export interface DashboardFallosTecnicosParams {
   clienteIds?: number[];
+  clienteId?: number | null;
+  reportadoCliente?: string | boolean | null;
   haciendaId?: number | null;
   mes?: string | null;
   problemaId?: number | null;
@@ -68,6 +70,14 @@ export const fetchDashboardFallosTecnicosResumen = async (
 
   if (params.clienteIds && params.clienteIds.length > 0) {
     queryParams.CLIENTE_IDS = params.clienteIds.join(',');
+  }
+
+  if (params.clienteId) {
+    queryParams.cliente_id = String(params.clienteId);
+  }
+
+  if (params.reportadoCliente !== undefined && params.reportadoCliente !== null && params.reportadoCliente !== '') {
+    queryParams.reportado_cliente = String(params.reportadoCliente);
   }
 
   if (params.haciendaId) {
