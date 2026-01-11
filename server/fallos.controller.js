@@ -65,6 +65,7 @@ const mapFalloRowToDto = (row) => ({
   fecha: formatDate(row.fecha) || "",
   hora: row.hora || undefined,
   horaFallo: row.hora || undefined,
+  fecha_hora_fallo: row.fecha_hora_fallo || undefined,
   fechaHoraFallo: row.fecha_hora_fallo || undefined,
   problema: row.problema || row.tipo_problema_descripcion || undefined,
   equipo_afectado: row.equipo_afectado ?? "",
@@ -83,6 +84,7 @@ const mapFalloRowToDto = (row) => ({
   tipo_afectacion: row.tipo_afectacion || "",
   tipo_equipo_afectado: row.tipo_equipo_afectado || undefined,
   tipo_equipo_afectado_id: row.tipo_equipo_afectado_id ?? null,
+  tipo_afectacion_detalle: row.tipo_afectacion_detalle || undefined,
   tipoProblemaNombre: row.tipo_problema_descripcion || undefined,
   fechaResolucion: formatDate(row.fecha_resolucion) || undefined,
   horaResolucion: row.hora_resolucion || undefined,
@@ -93,9 +95,11 @@ const mapFalloRowToDto = (row) => ({
   fecha_actualizacion: row.fecha_actualizacion ? formatDate(row.fecha_actualizacion) : undefined,
   verificacionApertura: row.verificacion_apertura || undefined,
   verificacionCierre: row.verificacion_cierre || undefined,
+  novedad: row.novedad || row.novedad_detectada || undefined,
   novedadDetectada: row.novedad_detectada || undefined,
   ultimo_usuario_edito_id: row.ultimo_usuario_edito_id ?? null,
   ultimo_usuario_edito_nombre: row.ultimo_usuario_edito_nombre || null,
+  ultimo_usuario_edito: row.ultimo_usuario_edito_nombre || undefined,
   responsable_verificacion_cierre_id:
     row.responsable_verificacion_cierre_id ?? null,
   responsable_verificacion_cierre_nombre:
@@ -280,8 +284,10 @@ export const getFallos = async (req, res) => {
         ) AS fecha_hora_fallo,
         ft.equipo_afectado,
         ft.descripcion_fallo,
+        ft.camera_id,
         ft.encoding_device_id,
         ft.ip_speaker_id,
+        ft.alarm_input_id,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
         dept.id AS departamento_id,
@@ -292,8 +298,17 @@ export const getFallos = async (req, res) => {
         tp.descripcion AS tipo_problema_descripcion,
         tp.descripcion AS problema,
         ft.tipo_afectacion,
-        ft.tipo_equipo_afectado_id,
-        COALESCE(tipo_equipo_afectado.descripcion, tipo_equipo_afectado.nombre) AS tipo_equipo_afectado,
+        CASE
+          WHEN ft.tipo_afectacion = 'EQUIPO' THEN
+            CASE
+              WHEN ft.camera_id IS NOT NULL THEN 'EQUIPO-CÁMARA'
+              WHEN ft.encoding_device_id IS NOT NULL THEN 'EQUIPO-GRABADOR'
+              WHEN ft.ip_speaker_id IS NOT NULL THEN 'EQUIPO-IP SPEAKER'
+              WHEN ft.alarm_input_id IS NOT NULL THEN 'EQUIPO-ALARM INPUT'
+              ELSE 'EQUIPO'
+            END
+          ELSE COALESCE(ft.tipo_afectacion, 'SIN INFORMACIÓN')
+        END AS tipo_afectacion_detalle,
         ft.fecha_resolucion,
         ft.hora_resolucion,
         ft.estado,
@@ -305,6 +320,7 @@ export const getFallos = async (req, res) => {
           )
           ELSE '0 días pendiente'
         END AS estado_texto,
+        seguimiento_ultimo.novedad_detectada AS novedad,
         seguimiento_ultimo.novedad_detectada,
         seguimiento_ultimo.ultimo_usuario_edito_id,
         seguimiento_ultimo.ultimo_usuario_edito_nombre,
@@ -317,7 +333,6 @@ export const getFallos = async (req, res) => {
       LEFT JOIN consolas consola ON consola.id = ft.consola_id
       LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
       LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
-      LEFT JOIN catalogo_tipo_equipo_afectado tipo_equipo_afectado ON tipo_equipo_afectado.id = ft.tipo_equipo_afectado_id
       LEFT JOIN (
         SELECT DISTINCT ON (sf.fallo_id)
           sf.fallo_id,

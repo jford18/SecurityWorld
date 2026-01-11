@@ -16,11 +16,14 @@ export interface TechnicalFailure {
   sitio?: string;
   tipo_afectacion?: string;
   tipoAfectacion?: string;
+  tipo_afectacion_detalle?: string;
+  tipoAfectacionDetalle?: string;
   tipo_equipo_afectado?: string;
   tipoEquipoAfectado?: string;
   tipo_equipo_afectado_id?: number | null;
   equipoAfectado?: string;
   horaFallo?: string;
+  fecha_hora_fallo?: string;
   fechaHoraFallo?: string;
   problema?: string;
   fechaResolucion?: string;
@@ -31,6 +34,7 @@ export interface TechnicalFailure {
   verificacionCierre?: string;
   verificacionCierreId?: string;
   novedadDetectada?: string;
+  novedad?: string;
   tipoProblemaNombre?: string;
   tipoProblema?: string;
   departamentoNombre?: string;
@@ -40,6 +44,7 @@ export interface TechnicalFailure {
   fecha_actualizacion?: string | null;
   ultimo_usuario_edito_id?: number | null;
   ultimo_usuario_edito_nombre?: string | null;
+  ultimo_usuario_edito?: string | null;
   responsable_verificacion_cierre_id?: number | null;
   responsable_verificacion_cierre_nombre?: string | null;
   departamento_responsable?: string;
