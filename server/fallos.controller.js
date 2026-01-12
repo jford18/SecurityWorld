@@ -73,6 +73,8 @@ const mapFalloRowToDto = (row) => ({
   encoding_device_id: row.encoding_device_id ?? null,
   encodingDeviceId: row.encoding_device_id ?? null,
   ipSpeakerId: row.ip_speaker_id ?? null,
+  alarm_input_id: row.alarm_input_id ?? null,
+  alarmInputId: row.alarm_input_id ?? null,
   responsable: row.responsable || "",
   deptResponsable: row.departamento || undefined,
   departamento_responsable: row.departamento_responsable || undefined,
@@ -287,6 +289,7 @@ const fetchFalloById = async (client, id) => {
         ft.descripcion_fallo,
         ft.encoding_device_id,
         ft.ip_speaker_id,
+        ft.alarm_input_id,
         COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
         dept.nombre AS departamento,
         dept.id AS departamento_id,
@@ -766,6 +769,8 @@ export const createFallo = async (req, res) => {
     encoding_device_id: encodingDeviceIdSnake,
     ipSpeakerId,
     ip_speaker_id: ipSpeakerIdSnake,
+    alarmInputId,
+    alarm_input_id: alarmInputIdSnake,
   } = req.body || {};
 
   console.log("[createFallo] BODY COMPLETO:", JSON.stringify(req.body, null, 2));
@@ -895,6 +900,25 @@ export const createFallo = async (req, res) => {
       ? parsedIpSpeakerId
       : null;
 
+  const alarmInputIdSource =
+    alarmInputId !== undefined && alarmInputId !== null && alarmInputId !== ""
+      ? alarmInputId
+      : alarmInputIdSnake;
+
+  const parsedAlarmInputId = (() => {
+    const normalized = String(alarmInputIdSource ?? "").trim();
+    if (!normalized) {
+      return null;
+    }
+    const parsed = Number(normalized);
+    return Number.isNaN(parsed) ? null : parsed;
+  })();
+
+  const alarmInputIdValue =
+    tipoAfectacionValue && tipoAfectacionValue.toLowerCase() === "equipo"
+      ? parsedAlarmInputId
+      : null;
+
   const nodoIdentificador =
     nodo === undefined || nodo === null || nodo === ""
       ? nodoId ?? nodoIdSnake
@@ -1004,13 +1028,14 @@ export const createFallo = async (req, res) => {
         camera_id,
         encoding_device_id,
         ip_speaker_id,
+        alarm_input_id,
         tipo_afectacion,
         fecha_resolucion,
         hora_resolucion,
         fecha_creacion,
         fecha_actualizacion
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW()
       ) RETURNING id`,
       [
         fechaFalloValue,
@@ -1025,6 +1050,7 @@ export const createFallo = async (req, res) => {
         cameraIdValue,
         encodingDeviceIdValue,
         ipSpeakerIdValue,
+        alarmInputIdValue,
         tipoAfectacionValue,
         fechaResolucion || null,
         horaResolucion || null, // FIX: exclude estado so the generated column is calculated by PostgreSQL during inserts.
@@ -1107,6 +1133,8 @@ export const actualizarFalloSupervisor = async (req, res) => {
     encoding_device_id: encodingDeviceIdSnake,
     ipSpeakerId,
     ip_speaker_id: ipSpeakerIdSnake,
+    alarmInputId,
+    alarm_input_id: alarmInputIdSnake,
   } = req.body || {};
 
   console.log("[actualizarFalloSupervisor] body:", req.body);
@@ -1236,6 +1264,25 @@ export const actualizarFalloSupervisor = async (req, res) => {
       ? parsedIpSpeakerId
       : null;
 
+  const alarmInputIdSource =
+    alarmInputId !== undefined && alarmInputId !== null && alarmInputId !== ""
+      ? alarmInputId
+      : alarmInputIdSnake;
+
+  const parsedAlarmInputId = (() => {
+    const normalized = String(alarmInputIdSource ?? "").trim();
+    if (!normalized) {
+      return null;
+    }
+    const parsed = Number(normalized);
+    return Number.isNaN(parsed) ? null : parsed;
+  })();
+
+  const alarmInputIdValue =
+    tipoAfectacionFinal && tipoAfectacionFinal.toLowerCase() === "equipo"
+      ? parsedAlarmInputId
+      : null;
+
     if (fechaResolucionValue && !departamentoFinalId) {
       await client.query("ROLLBACK");
       return res.status(400).json({
@@ -1253,8 +1300,9 @@ export const actualizarFalloSupervisor = async (req, res) => {
              hora_resolucion = $5,
              encoding_device_id = $6,
              ip_speaker_id = $7,
+             alarm_input_id = $8,
              fecha_actualizacion = NOW()
-       WHERE id = $8`,
+       WHERE id = $9`,
       [
         fechaFalloValue,
         horaFalloValue,
@@ -1263,6 +1311,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
         horaResolucionValue,
         encodingDeviceIdValue,
         ipSpeakerIdValue,
+        alarmInputIdValue,
         id,
       ]
     );

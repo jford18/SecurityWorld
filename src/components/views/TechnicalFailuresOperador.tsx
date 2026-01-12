@@ -16,6 +16,7 @@ import {
   SitioAsociado,
   getEncodingDevicesBySite,
   getIpSpeakersBySite,
+  getAlarmInputsBySite,
 } from '../../services/fallosService';
 import api from '../../services/api';
 import TechnicalFailuresHistory from './TechnicalFailuresHistory';
@@ -36,6 +37,7 @@ type FailureFormData = {
   sitioId: string;
   encodingDeviceId: string;
   ipSpeakerId: string;
+  alarmInputId: string;
 };
 
 const toLocalDateTimeString = (date: Date) => {
@@ -67,6 +69,7 @@ const buildInitialFormData = (): FailureFormData => ({
   sitioId: '',
   encodingDeviceId: '',
   ipSpeakerId: '',
+  alarmInputId: '',
 });
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
@@ -143,6 +146,7 @@ const TechnicalFailuresOperador: React.FC = () => {
     { id: number; name: string }[]
   >([]);
   const [ipSpeakers, setIpSpeakers] = useState<Array<{ id: number; name: string }>>([]);
+  const [alarmInputs, setAlarmInputs] = useState<Array<{ id: number; name: string }>>([]);
   const [sitiosNodo, setSitiosNodo] = useState<SitioAsociado[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -193,6 +197,9 @@ const TechnicalFailuresOperador: React.FC = () => {
     isEquipoAfectacion &&
     (normalizeText(tipoEquipoAfectadoNombreValue) === normalizeText('Megáfono IP') ||
       normalizeText(tipoEquipoAfectadoNombreValue) === normalizeText('Megafono IP'));
+  const showAlarmInputField =
+    isEquipoAfectacion &&
+    normalizeText(tipoEquipoAfectadoNombreValue) === normalizeText('Alarm input');
   const tipoEquipoAfectadoSel = useMemo(() => {
     const id = formData?.tipoEquipoAfectadoId;
     if (!id) return null;
@@ -234,6 +241,17 @@ const TechnicalFailuresOperador: React.FC = () => {
       })),
     ];
   }, [encodingDevices]);
+
+  const alarmInputItems = useMemo(() => {
+    return [
+      { id: 'empty', nombre: 'Seleccione...', value: '' },
+      ...alarmInputs.map((input) => ({
+        id: String(input.id),
+        nombre: input.name,
+        value: String(input.id),
+      })),
+    ];
+  }, [alarmInputs]);
 
   const selectedSiteName = useMemo(() => {
     const sitioId = String(formData?.sitioId || '');
@@ -576,10 +594,25 @@ const TechnicalFailuresOperador: React.FC = () => {
       } else {
         delete tempErrors.tipoProblemaEquipo;
       }
+
+      const requiresAlarmInput =
+        normalizeText(String(fieldValues.tipoEquipoAfectadoNombre || '')) ===
+        normalizeText('Alarm input');
+
+      if (requiresAlarmInput) {
+        if (!fieldValues.alarmInputId) {
+          tempErrors.alarmInputId = 'El alarm input es obligatorio.';
+        } else {
+          delete tempErrors.alarmInputId;
+        }
+      } else {
+        delete tempErrors.alarmInputId;
+      }
     } else {
       delete tempErrors.tipoEquipoAfectadoId;
       delete tempErrors.camara;
       delete tempErrors.tipoProblemaEquipo;
+      delete tempErrors.alarmInputId;
     }
 
     setErrors({ ...tempErrors });
@@ -596,7 +629,9 @@ const TechnicalFailuresOperador: React.FC = () => {
       newValues.camara = '';
       newValues.tipoProblemaEquipo = '';
       newValues.encodingDeviceId = '';
+      newValues.alarmInputId = '';
       setEncodingDevices([]);
+      setAlarmInputs([]);
       SET_CAMARAS([]);
       SET_CAMERA_ID(null);
       SET_LOADING_CAMARAS(false);
@@ -627,9 +662,11 @@ const TechnicalFailuresOperador: React.FC = () => {
       camara: '',
       tipoProblemaEquipo: '',
       encodingDeviceId: '',
+      alarmInputId: '',
     };
 
     setEncodingDevices([]);
+    setAlarmInputs([]);
     SET_CAMARAS([]);
     SET_CAMERA_ID(null);
     SET_LOADING_CAMARAS(false);
@@ -733,6 +770,7 @@ const TechnicalFailuresOperador: React.FC = () => {
     SET_LOADING_CAMARAS(false);
     setSitiosNodo([]);
     setNodoSitioError(null);
+    setAlarmInputs([]);
   };
 
   const handleTipoProblemaChange = (selected: string) => {
@@ -744,6 +782,8 @@ const TechnicalFailuresOperador: React.FC = () => {
 
     setIpSpeakers([]);
     setFormData((prev) => ({ ...prev, ipSpeakerId: '' }));
+    setAlarmInputs([]);
+    setFormData((prev) => ({ ...prev, alarmInputId: '' }));
     SET_CAMARAS([]);
     SET_CAMERA_ID(null);
     setFormData((prev) => (prev.camara ? { ...prev, camara: '' } : prev));
@@ -881,6 +921,31 @@ const TechnicalFailuresOperador: React.FC = () => {
       });
   }, [selectedSite, showIpSpeakerField]);
 
+  useEffect(() => {
+    const sitioId = formData?.sitioId;
+
+    if (!showAlarmInputField) {
+      setAlarmInputs([]);
+      setFormData((prev) => ({ ...prev, alarmInputId: '' }));
+      return;
+    }
+
+    if (!sitioId) {
+      setAlarmInputs([]);
+      return;
+    }
+
+    setFormData((prev) => ({ ...prev, alarmInputId: '' }));
+    getAlarmInputsBySite(sitioId)
+      .then((data) => {
+        setAlarmInputs(Array.isArray(data) ? data : []);
+      })
+      .catch((error) => {
+        console.error('Error al cargar alarm inputs:', error);
+        setAlarmInputs([]);
+      });
+  }, [formData.sitioId, showAlarmInputField]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -896,6 +961,12 @@ const TechnicalFailuresOperador: React.FC = () => {
     if (SHOW_CAMERA_FIELD && !CAMERA_ID) {
       setErrors((prev) => ({ ...prev, camara: 'La cámara es obligatoria.' }));
       alert('La cámara es obligatoria.');
+      return;
+    }
+
+    if (showAlarmInputField && !formData.alarmInputId) {
+      setErrors((prev) => ({ ...prev, alarmInputId: 'El alarm input es obligatorio.' }));
+      alert('El alarm input es obligatorio.');
       return;
     }
 
@@ -1013,6 +1084,10 @@ const TechnicalFailuresOperador: React.FC = () => {
         showIpSpeakerField && formData.ipSpeakerId
           ? Number(formData.ipSpeakerId)
           : null,
+      alarm_input_id:
+        showAlarmInputField && formData.alarmInputId
+          ? Number(formData.alarmInputId)
+          : null,
       consola: session.console,
       reportadoCliente: formData.reportadoCliente,
       camara: formData.camara,
@@ -1035,6 +1110,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       SET_LOADING_CAMARAS(false);
       setEncodingDevices([]);
       setIpSpeakers([]);
+      setAlarmInputs([]);
       setSitiosNodo([]);
       setNodoSitioError(null);
     } catch (error) {
@@ -1156,6 +1232,23 @@ const TechnicalFailuresOperador: React.FC = () => {
               valueField="value"
               placeholder="Buscar megáfono..."
               disabled={!formData.sitioId || ipSpeakers.length === 0}
+            />
+          </div>
+        )}
+        {showAlarmInputField && (
+          <div className="md:col-span-2">
+            <AutocompleteComboBox
+              label="Alarm input *"
+              items={alarmInputItems}
+              value={formData.alarmInputId}
+              onChange={(val: string) =>
+                setFormData((prev) => ({ ...prev, alarmInputId: val }))
+              }
+              displayField="nombre"
+              valueField="value"
+              placeholder="Buscar alarm input..."
+              disabled={!formData.sitioId}
+              error={errors.alarmInputId}
             />
           </div>
         )}

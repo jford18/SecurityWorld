@@ -11,6 +11,8 @@ export interface TechnicalFailure {
   encoding_device_id?: number | null;
   encodingDeviceId?: number | null;
   ipSpeakerId?: number | null;
+  alarm_input_id?: number | null;
+  alarmInputId?: number | null;
   sitio_nombre?: string;
   sitioNombre?: string;
   sitio?: string;

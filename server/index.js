@@ -37,6 +37,7 @@ import reporteLogeosTurnosRoutes from "./routes/reporteLogeosTurnos.routes.js";
 import tipoServicioRoutes from "./routes/tipoServicio.routes.js";
 import catalogoTipoEquipoAfectadoRoutes from "./routes/catalogoTipoEquipoAfectadoRoutes.js";
 import fallosTecnicosRoutes from "./routes/fallosTecnicosRoutes.js";
+import hikAlarmInputStatusRoutes from "./routes/hikAlarmInputStatus.routes.js";
 import hikEncodingDevicesRoutes from "./routes/hikEncodingDevices.routes.js";
 import hikCamarasRoutes from "./routes/hikCamaras.routes.js";
 import dashboardUptimeCamarasRoutes from "./routes/dashboardUptimeCamaras.routes.js";
@@ -87,6 +88,7 @@ const knownApiPrefixes = [
   "/api/v1/departamentos-responsables",
   "/api/hik",
   "/api/hikcentral",
+  "/api/hik-alarm-input-status",
   "/api/dashboards",
   "/api/dashboard",
 ];
@@ -136,6 +138,7 @@ app.use("/api/v1/catalogo-tipo-problema", catalogoTipoProblemaRoutes);
 app.use("/api/tipo-intrusion", tipoIntrusionRoutes);
 app.use("/api/intrusiones", intrusionesRoutes);
 app.use("/api/fallos-tecnicos", fallosTecnicosRoutes);
+app.use("/api", hikAlarmInputStatusRoutes);
 app.use("/api/usuarios", usuariosRoutes);
 app.use("/api/roles", rolesRoutes);
 app.use("/api/usuario-roles", usuarioRolesRoutes);
