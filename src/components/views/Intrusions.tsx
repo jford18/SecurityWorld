@@ -198,6 +198,7 @@ const Intrusions: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fechaReaccionError, setFechaReaccionError] = useState('');
   const [fechaReaccionFueraError, setFechaReaccionFueraError] = useState('');
+  const [fechaReaccionEnviadaError, setFechaReaccionEnviadaError] = useState('');
   const [disableSave, setDisableSave] = useState(false);
   const [editingIntrusionId, setEditingIntrusionId] = useState<number | null>(null);
   const [hcQueue, setHcQueue] = useState<IntrusionHcQueueRow[]>([]);
@@ -554,9 +555,37 @@ const Intrusions: React.FC = () => {
   };
 
   const handleFechaReaccionEnviadaChange = (value: string | null) => {
+    const nextValue = value ?? '';
+    if (!nextValue) {
+      setFechaReaccionEnviadaError('');
+      setFormData((prev) => ({
+        ...prev,
+        fecha_reaccion_enviada: '',
+      }));
+      return;
+    }
+
+    const fechaEventoDate = new Date(formData.fecha_evento);
+    const fechaReaccionEnviadaDate = new Date(nextValue);
+
+    if (
+      formData.fecha_evento &&
+      !Number.isNaN(fechaEventoDate.getTime()) &&
+      !Number.isNaN(fechaReaccionEnviadaDate.getTime()) &&
+      fechaReaccionEnviadaDate.getTime() < fechaEventoDate.getTime()
+    ) {
+      setFechaReaccionEnviadaError('No puede ser menor a la fecha/hora del evento.');
+      setFormData((prev) => ({
+        ...prev,
+        fecha_reaccion_enviada: prev.fecha_evento,
+      }));
+      return;
+    }
+
+    setFechaReaccionEnviadaError('');
     setFormData((prev) => ({
       ...prev,
-      fecha_reaccion_enviada: value ?? '',
+      fecha_reaccion_enviada: nextValue,
     }));
   };
 
@@ -929,6 +958,59 @@ const Intrusions: React.FC = () => {
 
   useEffect(() => {
     if (!requiereProtocolo) {
+      setFechaReaccionEnviadaError('');
+      return;
+    }
+
+    if (!formData.fecha_evento) {
+      return;
+    }
+
+    if (!formData.fecha_reaccion_enviada) {
+      setFechaReaccionEnviadaError('');
+      setFormData((prev) => {
+        if (prev.fecha_reaccion_enviada === prev.fecha_evento) {
+          return prev;
+        }
+        return {
+          ...prev,
+          fecha_reaccion_enviada: prev.fecha_evento,
+        };
+      });
+      return;
+    }
+
+    const fechaEventoDate = new Date(formData.fecha_evento);
+    const fechaReaccionEnviadaDate = new Date(formData.fecha_reaccion_enviada);
+
+    if (
+      !Number.isNaN(fechaEventoDate.getTime()) &&
+      !Number.isNaN(fechaReaccionEnviadaDate.getTime()) &&
+      fechaReaccionEnviadaDate.getTime() < fechaEventoDate.getTime()
+    ) {
+      setFechaReaccionEnviadaError('No puede ser menor a la fecha/hora del evento.');
+      setFormData((prev) => {
+        if (prev.fecha_reaccion_enviada === prev.fecha_evento) {
+          return prev;
+        }
+        return {
+          ...prev,
+          fecha_reaccion_enviada: prev.fecha_evento,
+        };
+      });
+      return;
+    }
+
+    setFechaReaccionEnviadaError((prevError) => {
+      if (prevError && formData.fecha_reaccion_enviada === formData.fecha_evento) {
+        return prevError;
+      }
+      return '';
+    });
+  }, [formData.fecha_evento, formData.fecha_reaccion_enviada, requiereProtocolo]);
+
+  useEffect(() => {
+    if (!requiereProtocolo) {
       setFechaReaccionFueraError('');
       return;
     }
@@ -975,8 +1057,10 @@ const Intrusions: React.FC = () => {
   ]);
 
   useEffect(() => {
-    setDisableSave(Boolean(fechaReaccionError || fechaReaccionFueraError));
-  }, [fechaReaccionError, fechaReaccionFueraError]);
+    setDisableSave(
+      Boolean(fechaReaccionError || fechaReaccionFueraError || fechaReaccionEnviadaError)
+    );
+  }, [fechaReaccionError, fechaReaccionEnviadaError, fechaReaccionFueraError]);
 
   const isButtonDisabled = isSubmitDisabled || disableSave;
   const hasHcEventSelected = Boolean(formData.hik_alarm_evento_id);
@@ -1000,7 +1084,7 @@ const Intrusions: React.FC = () => {
       return;
     }
 
-    if (fechaReaccionError || fechaReaccionFueraError) {
+    if (fechaReaccionError || fechaReaccionFueraError || fechaReaccionEnviadaError) {
       return;
     }
 
@@ -1050,6 +1134,20 @@ const Intrusions: React.FC = () => {
     }
 
     if (requiereProtocolo) {
+      if (formData.fecha_evento && formData.fecha_reaccion_enviada) {
+        const fechaEventoDate = new Date(formData.fecha_evento);
+        const fechaReaccionEnviadaDate = new Date(formData.fecha_reaccion_enviada);
+
+        if (
+          !Number.isNaN(fechaEventoDate.getTime()) &&
+          !Number.isNaN(fechaReaccionEnviadaDate.getTime()) &&
+          fechaReaccionEnviadaDate.getTime() < fechaEventoDate.getTime()
+        ) {
+          alert('La fecha y hora de reacción enviada no puede ser menor a la fecha del evento.');
+          return;
+        }
+      }
+
       if (!formData.fecha_reaccion) {
         alert(
           'Debe ingresar la fecha y hora de reacción antes de la llegada de la fuerza de reacción.'
@@ -1577,6 +1675,8 @@ const Intrusions: React.FC = () => {
                       label="Fecha y hora de reacción enviada"
                       value={formData.fecha_reaccion_enviada}
                       onChange={handleFechaReaccionEnviadaChange}
+                      min={formData.fecha_evento || undefined}
+                      error={fechaReaccionEnviadaError}
                       max={getDateTimeInputLimit() || undefined}
                     />
                     <DateTimeInput
