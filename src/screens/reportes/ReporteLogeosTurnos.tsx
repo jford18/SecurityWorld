@@ -3,6 +3,7 @@ import { getConsolas } from '@/services/consolasService';
 import {
   LogeoTurnoFilters,
   LogeoTurnoRow,
+  exportReporteLogeosTurnosExcel,
   getReporteLogeosTurnos,
 } from '@/services/reporteLogeosTurnosService';
 
@@ -21,6 +22,15 @@ const formatTime = (value: string) => {
   return value;
 };
 
+const toast = {
+  error: (message: string) => {
+    if (typeof window !== 'undefined') {
+      window.alert(message);
+    }
+    console.error(message);
+  },
+};
+
 const ReporteLogeosTurnos: React.FC = () => {
   const [filters, setFilters] = useState<LogeoTurnoFilters>({ fecha_desde: '', fecha_hasta: '' });
   const [data, setData] = useState<LogeoTurnoRow[]>([]);
@@ -28,6 +38,7 @@ const ReporteLogeosTurnos: React.FC = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [loading, setLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [consolas, setConsolas] = useState<Array<{ id: number; nombre: string }>>([]);
 
@@ -87,6 +98,44 @@ const ReporteLogeosTurnos: React.FC = () => {
   const handleFilterChange = (key: keyof LogeoTurnoFilters, value: string | number | undefined) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
     setPage(0);
+  };
+
+  const handleExport = async () => {
+    if (!filters.fecha_desde || !filters.fecha_hasta) {
+      const message = 'Seleccione el rango de fechas para exportar.';
+      setError(message);
+      toast.error(message);
+      return;
+    }
+
+    if (loading || isExporting) {
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      setError(null);
+
+      const { blob, filename } = await exportReporteLogeosTurnosExcel(filters);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (exportError) {
+      console.error('No se pudo exportar el reporte de logeos por turno', exportError);
+      const message =
+        exportError instanceof Error && exportError.message
+          ? exportError.message
+          : 'No se pudo exportar el reporte.';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -185,6 +234,14 @@ const ReporteLogeosTurnos: React.FC = () => {
           disabled={loading}
         >
           {loading ? 'Cargando...' : 'Buscar'}
+        </button>
+        <button
+          type="button"
+          className="rounded-md border border-yellow-400 px-4 py-2 text-sm font-semibold text-[#1C2E4A] shadow-sm hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={handleExport}
+          disabled={loading || isExporting}
+        >
+          {isExporting ? 'Exportando...' : 'Exportar a Excel'}
         </button>
         {error && <span className="text-sm text-red-600">{error}</span>}
       </div>
