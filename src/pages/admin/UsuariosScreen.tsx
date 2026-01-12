@@ -3,6 +3,7 @@ import AutocompleteComboBox from '@/components/ui/AutocompleteComboBox';
 import {
   createUsuario,
   deleteUsuario,
+  exportUsuariosExcel,
   getUsuarios,
   updateUsuario,
   UsuarioPayload,
@@ -78,6 +79,7 @@ const UsuariosScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<ModalMode>('create');
   const [createForm, setCreateForm] = useState<UsuarioPayload>(initialCreateState);
@@ -126,6 +128,39 @@ const UsuariosScreen: React.FC = () => {
     setErrorMessage('');
     setSuccessMessage('');
     setIsModalOpen(true);
+  };
+
+  const handleExportToExcel = async () => {
+    if (exporting) {
+      return;
+    }
+
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      setExporting(true);
+      const { blob, filename } = await exportUsuariosExcel({
+        id: filterId,
+        usuario: filterUsuario,
+        nombreCompleto: filterNombreCompleto,
+        estado: filterEstado,
+        fechaCreacion: filterFechaCreacion,
+      });
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename || 'USUARIOS.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+      setSuccessMessage('Exportación de usuarios generada correctamente');
+    } catch (error) {
+      setErrorMessage((error as Error).message || 'No se pudo exportar usuarios');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const openEditModal = (usuario: Usuario) => {
@@ -314,9 +349,19 @@ const UsuariosScreen: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-800">Mantenimiento de Usuarios</h1>
           <p className="text-sm text-gray-500">Gestiona las cuentas registradas en el sistema.</p>
         </div>
-        <button type="button" className={primaryButtonClasses} onClick={openCreateModal}>
-          Nuevo Usuario
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={secondaryButtonClasses}
+            onClick={handleExportToExcel}
+            disabled={exporting}
+          >
+            {exporting ? 'Exportando...' : 'Exportar a Excel'}
+          </button>
+          <button type="button" className={primaryButtonClasses} onClick={openCreateModal}>
+            Nuevo Usuario
+          </button>
+        </div>
       </div>
 
       {errorMessage && (
