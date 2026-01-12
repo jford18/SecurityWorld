@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   createProveedor,
   deleteProveedor,
+  exportProveedoresExcel,
   getProveedores,
   updateProveedor,
 } from "@/services/proveedoresService";
@@ -56,6 +57,7 @@ const ProveedoresPage: React.FC = () => {
 
   const [formError, setFormError] = useState<string>("");
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [exporting, setExporting] = useState<boolean>(false);
 
   const fetchProveedores = useCallback(async () => {
     try {
@@ -151,6 +153,34 @@ const ProveedoresPage: React.FC = () => {
     }
   };
 
+  const handleExportToExcel = async () => {
+    if (exporting) {
+      return;
+    }
+
+    try {
+      setExporting(true);
+      const searchTerm = search.trim();
+      const { blob, filename } = await exportProveedoresExcel(
+        searchTerm ? { q: searchTerm } : undefined
+      );
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = filename || "PROVEEDORES.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+      toast.success("Exportación de proveedores generada correctamente");
+    } catch (error) {
+      const message = resolveErrorMessage(error, "No se pudo exportar proveedores");
+      toast.error(message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -158,11 +188,21 @@ const ProveedoresPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-[#1C2E4A]">Mantenimiento de Proveedores</h1>
           <p className="text-sm text-gray-500">Administra los proveedores registrados en el sistema.</p>
         </div>
-        {proveedorId !== null && (
-          <button type="button" className={secondaryButtonClasses} onClick={limpiarFormulario}>
-            Cancelar edición
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={secondaryButtonClasses}
+            onClick={handleExportToExcel}
+            disabled={exporting}
+          >
+            {exporting ? "Exportando..." : "Exportar a Excel"}
           </button>
-        )}
+          {proveedorId !== null && (
+            <button type="button" className={secondaryButtonClasses} onClick={limpiarFormulario}>
+              Cancelar edición
+            </button>
+          )}
+        </div>
       </header>
 
       <section className="bg-white rounded-lg shadow p-6">
