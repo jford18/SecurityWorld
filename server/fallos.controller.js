@@ -1,3 +1,4 @@
+import XLSX from "xlsx";
 import { pool } from "./db.js";
 import {
   nodos,
@@ -15,6 +16,32 @@ const formatDate = (value) => {
     return null;
   }
   return date.toISOString().split("T")[0];
+};
+
+const formatTimestampForFilename = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+
+  return `${year}${month}${day}_${hours}${minutes}`;
+};
+
+const formatDurationSeconds = (value) => {
+  if (value === null || value === undefined) return "";
+  const totalSeconds = Number(value);
+  if (!Number.isFinite(totalSeconds)) return "";
+
+  const safeSeconds = Math.max(0, Math.trunc(totalSeconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+    2,
+    "0"
+  )}:${String(seconds).padStart(2, "0")}`;
 };
 
 const splitDateTimeValue = (value) => {
@@ -483,6 +510,326 @@ export const getFallos = async (req, res) => {
       message: "Error interno del servidor",
       error: error.message,
     }); // FIX: respond with a consistent 500 payload that the frontend can handle gracefully.
+  } finally {
+    client.release();
+  }
+};
+
+export const exportFallosTecnicosConsultasExcel = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const clienteIdRaw = req.query.cliente_id;
+    const reportadoClienteRaw = req.query.reportado_cliente;
+    const consolaIdRaw = req.query.consola_id;
+    const haciendaIdRaw = req.query.hacienda_id;
+    const fechaDesdeRaw = req.query.fecha_desde ?? req.query.fechaDesde;
+    const fechaHastaRaw = req.query.fecha_hasta ?? req.query.fechaHasta;
+    const problemaRaw = req.query.problema;
+    const tipoAfectacionRaw = req.query.tipo_afectacion;
+    const sitioRaw = req.query.sitio;
+    const estadoRaw = req.query.estado;
+    const departamentoRaw = req.query.departamento;
+
+    const clienteId = parseOptionalNumberParam(clienteIdRaw);
+    const consolaId = parseOptionalNumberParam(consolaIdRaw);
+    const haciendaId = parseOptionalNumberParam(haciendaIdRaw);
+    const reportadoClienteValues = normalizeReportadoClienteFilter(reportadoClienteRaw);
+
+    if (clienteIdRaw && clienteId === undefined) {
+      return res.status(400).json({ message: "El parámetro cliente_id debe ser válido." });
+    }
+
+    if (consolaIdRaw && consolaId === undefined) {
+      return res.status(400).json({ message: "El parámetro consola_id debe ser válido." });
+    }
+
+    if (haciendaIdRaw && haciendaId === undefined) {
+      return res.status(400).json({ message: "El parámetro hacienda_id debe ser válido." });
+    }
+
+    if (reportadoClienteRaw && reportadoClienteValues === undefined) {
+      return res
+        .status(400)
+        .json({ message: "El parámetro reportado_cliente debe ser válido." });
+    }
+
+    const normalizedEstado = estadoRaw ? String(estadoRaw).trim().toLowerCase() : "";
+    if (
+      normalizedEstado &&
+      normalizedEstado !== "resuelto" &&
+      normalizedEstado !== "pendiente"
+    ) {
+      return res.status(400).json({ message: "El parámetro estado debe ser válido." });
+    }
+
+    const parseDateFilter = (value) => {
+      if (!value) return null;
+      const parsed = new Date(String(value));
+      if (Number.isNaN(parsed.getTime())) {
+        return undefined;
+      }
+      return String(value);
+    };
+
+    const fechaDesde = parseDateFilter(fechaDesdeRaw);
+    const fechaHasta = parseDateFilter(fechaHastaRaw);
+
+    if (fechaDesdeRaw && fechaDesde === undefined) {
+      return res.status(400).json({ message: "El parámetro fecha_desde debe ser válido." });
+    }
+
+    if (fechaHastaRaw && fechaHasta === undefined) {
+      return res.status(400).json({ message: "El parámetro fecha_hasta debe ser válido." });
+    }
+
+    const sanitizeText = (value) =>
+      value === undefined || value === null || String(value).trim() === ""
+        ? null
+        : String(value).trim();
+
+    const problema = sanitizeText(problemaRaw);
+    const tipoAfectacion = sanitizeText(tipoAfectacionRaw);
+    const sitio = sanitizeText(sitioRaw);
+    const departamento = sanitizeText(departamentoRaw);
+
+    const filtros = [];
+    const params = [];
+
+    if (consolaId) {
+      params.push(consolaId);
+      filtros.push(`AND A.CONSOLA_ID = $${params.length}`);
+    }
+
+    if (clienteId) {
+      params.push(clienteId);
+      filtros.push(`AND sitio.cliente_id = $${params.length}`);
+    }
+
+    if (haciendaId) {
+      params.push(haciendaId);
+      filtros.push(`AND sitio.hacienda_id = $${params.length}`);
+    }
+
+    if (reportadoClienteValues) {
+      const reportadoColumn = await resolveReportadoClienteColumn(client);
+      if (reportadoColumn) {
+        params.push(reportadoClienteValues);
+        filtros.push(
+          `AND LOWER(CAST(A.${reportadoColumn} AS TEXT)) = ANY($${params.length})`
+        );
+      }
+    }
+
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      filtros.push(`AND COALESCE(A.FECHA, A.FECHA_CREACION::date) >= $${params.length}`);
+    }
+
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      filtros.push(`AND COALESCE(A.FECHA, A.FECHA_CREACION::date) <= $${params.length}`);
+    }
+
+    if (problema) {
+      params.push(`%${problema}%`);
+      filtros.push(
+        `AND (TP.DESCRIPCION ILIKE $${params.length} OR A.DESCRIPCION_FALLO ILIKE $${params.length})`
+      );
+    }
+
+    if (tipoAfectacion) {
+      params.push(String(tipoAfectacion).toLowerCase());
+      filtros.push(`AND LOWER(
+        CASE
+          WHEN A.TIPO_AFECTACION = 'EQUIPO' THEN
+            CASE
+              WHEN A.CAMERA_ID IS NOT NULL THEN 'EQUIPO-CÁMARA'
+              WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN 'EQUIPO-GRABADOR'
+              WHEN A.IP_SPEAKER_ID IS NOT NULL THEN 'EQUIPO-IP SPEAKER'
+              WHEN A.ALARM_INPUT_ID IS NOT NULL THEN 'EQUIPO-ALARM INPUT'
+              ELSE 'EQUIPO'
+            END
+          ELSE COALESCE(A.TIPO_AFECTACION, 'SIN INFORMACIÓN')
+        END
+      ) = $${params.length}`);
+    }
+
+    if (sitio) {
+      params.push(`%${sitio}%`);
+      filtros.push(`AND sitio.nombre ILIKE $${params.length}`);
+    }
+
+    if (departamento) {
+      params.push(`%${departamento}%`);
+      filtros.push(`AND dept_actual.nombre ILIKE $${params.length}`);
+    }
+
+    if (normalizedEstado === "resuelto") {
+      filtros.push(
+        "AND (A.FECHA_RESOLUCION IS NOT NULL OR UPPER(COALESCE(A.ESTADO, '')) = 'RESUELTO')"
+      );
+    }
+
+    if (normalizedEstado === "pendiente") {
+      filtros.push(
+        "AND (A.FECHA_RESOLUCION IS NULL AND UPPER(COALESCE(A.ESTADO, '')) <> 'RESUELTO')"
+      );
+    }
+
+    const whereFilters = filtros.length > 0 ? `WHERE 1 = 1 ${filtros.join(" ")}` : "WHERE 1 = 1";
+
+    const query = `
+      WITH MOVS AS (
+          SELECT
+              A.ID AS FALLO_ID,
+              A.FECHA_CREACION AS FECHA_EVENTO,
+              NULL::UUID AS SEGUIMIENTO_ID,
+              A.DEPARTAMENTO_ID AS DEPARTAMENTO_ID,
+              NULL::TEXT AS NOVEDAD_DETECTADA,
+              A.RESPONSABLE_ID AS ULTIMO_USUARIO_EDITO_ID,
+              NULL::INTEGER AS VERIFICACION_APERTURA_ID,
+              NULL::INTEGER AS VERIFICACION_CIERRE_ID,
+              NULL::INTEGER AS RESPONSABLE_VERIFICACION_CIERRE_ID,
+              NULL::INTEGER AS VERIFICACION_SUPERVISOR_ID,
+              NULL::INTEGER AS VERIFICACION_CIERRE_ID_USUARIO,
+              NULL::TIMESTAMP AS FECHA_ACTUALIZACION_SEGUIMIENTO
+          FROM FALLOS_TECNICOS A
+
+          UNION ALL
+
+          SELECT
+              B.FALLO_ID AS FALLO_ID,
+              B.FECHA_CREACION AS FECHA_EVENTO,
+              B.ID AS SEGUIMIENTO_ID,
+              B.DEPARTAMENTO_ID AS DEPARTAMENTO_ID,
+              B.NOVEDAD_DETECTADA AS NOVEDAD_DETECTADA,
+              B.ULTIMO_USUARIO_EDITO_ID AS ULTIMO_USUARIO_EDITO_ID,
+              B.VERIFICACION_APERTURA_ID AS VERIFICACION_APERTURA_ID,
+              B.VERIFICACION_CIERRE_ID AS VERIFICACION_CIERRE_ID,
+              B.RESPONSABLE_VERIFICACION_CIERRE_ID AS RESPONSABLE_VERIFICACION_CIERRE_ID,
+              B.VERIFICACION_SUPERVISOR_ID AS VERIFICACION_SUPERVISOR_ID,
+              B.VERIFICACION_CIERRE_ID AS VERIFICACION_CIERRE_ID_USUARIO,
+              B.FECHA_ACTUALIZACION AS FECHA_ACTUALIZACION_SEGUIMIENTO
+          FROM SEGUIMIENTO_FALLOS B
+      ),
+      BASE AS (
+          SELECT
+              A.ID AS ID_FALLO,
+              ROW_NUMBER() OVER (
+                  PARTITION BY A.ID
+                  ORDER BY B.FECHA_EVENTO, CASE WHEN B.SEGUIMIENTO_ID IS NULL THEN 0 ELSE 1 END
+              ) - 1 AS NUM_EVENTO,
+              B.FECHA_EVENTO AS FECHA_EVENTO,
+              EXTRACT(EPOCH FROM (
+                  B.FECHA_EVENTO - COALESCE(
+                      LAG(B.FECHA_EVENTO) OVER (
+                          PARTITION BY A.ID
+                          ORDER BY B.FECHA_EVENTO, CASE WHEN B.SEGUIMIENTO_ID IS NULL THEN 0 ELSE 1 END
+                      ),
+                      A.FECHA_CREACION
+                  )
+              ))::INT AS DURACION_DESDE_ULTIMA_MODIFICACION_SEG,
+              EXTRACT(EPOCH FROM (
+                  COALESCE(
+                      CASE
+                          WHEN A.FECHA_RESOLUCION IS NOT NULL AND A.HORA_RESOLUCION IS NOT NULL THEN (A.FECHA_RESOLUCION::TIMESTAMP + A.HORA_RESOLUCION)
+                          WHEN A.FECHA_RESOLUCION IS NOT NULL THEN (A.FECHA_RESOLUCION::TIMESTAMP)
+                          ELSE NOW()::TIMESTAMP
+                      END,
+                      NOW()::TIMESTAMP
+                  ) - (A.FECHA_CREACION::TIMESTAMP)
+              ))::INT AS DURACION_TOTAL_FALLO_SEG,
+
+              -- CAMPOS DEL EVENTO / SEGUIMIENTO
+              B.SEGUIMIENTO_ID AS ID_SEGUIMIENTO,
+              B.DEPARTAMENTO_ID AS DEPARTAMENTO_ID_EVENTO,
+              C.NOMBRE AS DEPARTAMENTO_NOMBRE_EVENTO,
+              B.NOVEDAD_DETECTADA AS NOVEDAD_DETECTADA,
+              B.ULTIMO_USUARIO_EDITO_ID AS ULTIMO_USUARIO_EDITO_ID,
+              D.USUARIO AS ULTIMO_USUARIO_EDITO_USUARIO,
+              D.NOMBRE_COMPLETO AS ULTIMO_USUARIO_EDITO_NOMBRE_COMPLETO,
+              B.VERIFICACION_APERTURA_ID AS VERIFICACION_APERTURA_ID,
+              B.VERIFICACION_CIERRE_ID AS VERIFICACION_CIERRE_ID,
+              B.RESPONSABLE_VERIFICACION_CIERRE_ID AS RESPONSABLE_VERIFICACION_CIERRE_ID,
+              B.VERIFICACION_SUPERVISOR_ID AS VERIFICACION_SUPERVISOR_ID,
+              B.VERIFICACION_CIERRE_ID_USUARIO AS VERIFICACION_CIERRE_ID_USUARIO,
+              B.FECHA_ACTUALIZACION_SEGUIMIENTO AS FECHA_ACTUALIZACION_SEGUIMIENTO,
+
+              -- TODOS LOS CAMPOS DE FALLOS_TECNICOS (repetidos por fila)
+              A.FECHA,
+              A.EQUIPO_AFECTADO,
+              A.DESCRIPCION_FALLO,
+              A.RESPONSABLE_ID,
+              A.DEPARTAMENTO_ID AS DEPARTAMENTO_ID_ACTUAL,
+              dept_actual.NOMBRE AS DEPARTAMENTO_NOMBRE_ACTUAL,
+              A.TIPO_PROBLEMA_ID,
+              A.CONSOLA_ID,
+              A.FECHA_RESOLUCION,
+              A.HORA_RESOLUCION,
+              A.ESTADO,
+              A.FECHA_CREACION,
+              A.FECHA_ACTUALIZACION,
+              A.SITIO_ID,
+              A.HORA,
+              A.TIPO_AFECTACION,
+              A.CAMERA_ID,
+              A.ENCODING_DEVICE_ID,
+              A.IP_SPEAKER_ID,
+              A.ALARM_INPUT_ID
+
+          FROM FALLOS_TECNICOS A
+          JOIN MOVS B ON (B.FALLO_ID = A.ID)
+          LEFT JOIN DEPARTAMENTOS_RESPONSABLES C ON (C.ID = B.DEPARTAMENTO_ID)
+          LEFT JOIN USUARIOS D ON (D.ID = B.ULTIMO_USUARIO_EDITO_ID)
+          LEFT JOIN DEPARTAMENTOS_RESPONSABLES dept_actual ON (dept_actual.ID = A.DEPARTAMENTO_ID)
+          LEFT JOIN CATALOGO_TIPO_PROBLEMA TP ON (TP.ID = A.TIPO_PROBLEMA_ID)
+          LEFT JOIN SITIOS sitio ON (sitio.ID = A.SITIO_ID)
+          LEFT JOIN CLIENTES cliente ON (cliente.ID = sitio.CLIENTE_ID)
+          LEFT JOIN HACIENDA hacienda ON (hacienda.ID = sitio.HACIENDA_ID)
+          ${whereFilters}
+      )
+      SELECT *
+      FROM BASE
+      ORDER BY ID_FALLO, NUM_EVENTO;
+    `;
+
+    const result = await client.query(query, params);
+
+    const rows = result.rows.map((row) => ({
+      ...row,
+      duracion_desde_ultima_modificacion_hhmmss: formatDurationSeconds(
+        row.duracion_desde_ultima_modificacion_seg
+      ),
+      duracion_total_fallo_hhmmss: formatDurationSeconds(row.duracion_total_fallo_seg),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Fallos");
+
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+    const timestamp = formatTimestampForFilename();
+    const filename = `fallos_tecnicos_detallado_${timestamp}.xlsx`;
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename=\"${filename}\"`);
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+    res.removeHeader("ETag");
+
+    return res.status(200).send(buffer);
+  } catch (error) {
+    console.error("Error al exportar fallos técnicos:", error);
+    return res.status(500).json({
+      message: "No se pudo exportar fallos técnicos",
+      detail: error?.message,
+    });
   } finally {
     client.release();
   }

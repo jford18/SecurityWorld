@@ -25,6 +25,20 @@ export type FallosFiltersParams = {
   limit?: number;
 };
 
+export type FallosExportFilters = {
+  clienteId?: number | string | null;
+  reportadoCliente?: string | boolean | null;
+  consolaId?: number | string | null;
+  haciendaId?: number | string | null;
+  fechaDesde?: string | null;
+  fechaHasta?: string | null;
+  problema?: string | null;
+  tipoAfectacion?: string | null;
+  sitio?: string | null;
+  estado?: string | null;
+  departamento?: string | null;
+};
+
 export interface TechnicalFailurePayload {
   id?: string;
   fecha: string;
@@ -88,6 +102,14 @@ const normalizeArrayResponse = <T>(payload: unknown): T[] => {
 
   return [];
 };
+
+type FallosExportFile = {
+  blob: Blob;
+  filename: string;
+};
+
+const EXCEL_MIME_TYPE =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 const normalizeFallosResponse = (payload: unknown): TechnicalFailure[] => {
   if (Array.isArray(payload)) {
@@ -161,6 +183,93 @@ const buildFallosQueryParams = (filters?: FallosFiltersParams) => {
   return Object.keys(params).length > 0 ? params : undefined;
 };
 
+const buildFallosExportQueryParams = (
+  filters?: FallosExportFilters,
+): Record<string, string | number | boolean> | undefined => {
+  if (!filters) {
+    return undefined;
+  }
+
+  const params: Record<string, string | number | boolean> = {};
+
+  if (filters.clienteId !== undefined && filters.clienteId !== null && filters.clienteId !== '') {
+    params.cliente_id = filters.clienteId;
+  }
+
+  if (
+    filters.reportadoCliente !== undefined &&
+    filters.reportadoCliente !== null &&
+    filters.reportadoCliente !== ''
+  ) {
+    params.reportado_cliente = filters.reportadoCliente;
+  }
+
+  if (filters.consolaId !== undefined && filters.consolaId !== null && filters.consolaId !== '') {
+    params.consola_id = filters.consolaId;
+  }
+
+  if (filters.haciendaId !== undefined && filters.haciendaId !== null && filters.haciendaId !== '') {
+    params.hacienda_id = filters.haciendaId;
+  }
+
+  if (filters.fechaDesde) {
+    params.fecha_desde = filters.fechaDesde;
+  }
+
+  if (filters.fechaHasta) {
+    params.fecha_hasta = filters.fechaHasta;
+  }
+
+  if (filters.problema) {
+    params.problema = filters.problema;
+  }
+
+  if (filters.tipoAfectacion) {
+    params.tipo_afectacion = filters.tipoAfectacion;
+  }
+
+  if (filters.sitio) {
+    params.sitio = filters.sitio;
+  }
+
+  if (filters.estado) {
+    params.estado = filters.estado;
+  }
+
+  if (filters.departamento) {
+    params.departamento = filters.departamento;
+  }
+
+  return Object.keys(params).length > 0 ? params : undefined;
+};
+
+const parseContentDispositionFilename = (contentDisposition?: string): string | null => {
+  if (!contentDisposition) return null;
+
+  const filenameMatch =
+    contentDisposition.match(/filename\*=UTF-8''([^;]+)/i) ||
+    contentDisposition.match(/filename="?([^\";]+)"?/i);
+
+  if (!filenameMatch?.[1]) return null;
+
+  const decoded = decodeURIComponent(filenameMatch[1]);
+  return decoded.replace(/[/\\]/g, '').trim();
+};
+
+const resolveExportErrorMessage = async (
+  payload: Blob,
+  fallback: string,
+): Promise<string> => {
+  try {
+    const text = await payload.text();
+    if (!text) return fallback;
+    const parsed = JSON.parse(text) as { mensaje?: string; message?: string };
+    return parsed?.mensaje || parsed?.message || text || fallback;
+  } catch (error) {
+    return fallback;
+  }
+};
+
 export const getFallos = async (filters?: FallosFiltersParams): Promise<TechnicalFailure[]> => {
   const params = buildFallosQueryParams(filters);
   const { data } = await apiClient.get<TechnicalFailure[] | { data?: TechnicalFailure[] }>(
@@ -171,6 +280,42 @@ export const getFallos = async (filters?: FallosFiltersParams): Promise<Technica
 };
 
 export const fetchFallos = getFallos;
+
+export const exportFallosTecnicosConsultasExcel = async (
+  filters?: FallosExportFilters,
+): Promise<FallosExportFile> => {
+  const params = buildFallosExportQueryParams(filters);
+  const response = await apiClient.get<Blob>('/fallos-tecnicos-consultas/export-excel', {
+    params,
+    responseType: 'blob',
+    headers: {
+      Accept: EXCEL_MIME_TYPE,
+      'Cache-Control': 'no-cache',
+      Pragma: 'no-cache',
+    },
+  });
+
+  const contentType = String(response.headers?.['content-type'] || '');
+  const blob = response.data;
+
+  if (!contentType.includes('spreadsheetml.sheet')) {
+    const message = await resolveExportErrorMessage(
+      blob,
+      'No se pudo exportar fallos técnicos',
+    );
+    throw new Error(message);
+  }
+
+  if (!blob || blob.size === 0) {
+    throw new Error('Export inválido: archivo vacío');
+  }
+
+  const filename =
+    parseContentDispositionFilename(response.headers?.['content-disposition']) ||
+    `fallos_tecnicos_detallado_${Date.now()}.xlsx`;
+
+  return { blob, filename };
+};
 
 export const getEncodingDevicesBySite = async (siteName: string) => {
   const res = await api.get('/hik/encoding-devices', { params: { siteName } });

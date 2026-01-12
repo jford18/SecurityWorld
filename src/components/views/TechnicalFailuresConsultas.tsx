@@ -127,6 +127,7 @@ const TechnicalFailuresConsultas: React.FC = () => {
           activeRole={session.roleName ?? undefined}
           showActions={false}
           enableExport
+          exportFilters={filters}
           withContainer={false}
         />
       </div>
