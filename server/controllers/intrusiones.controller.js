@@ -831,6 +831,7 @@ export const createIntrusion = async (req, res) => {
     body.medio_comunicacion_id ??
     body.MEDIO_COMUNICACION_ID ??
     body.medioComunicacionId ??
+    body.medio_comunicacion?.medio_comunicacion_id ??
     null;
   const rawConclusionEventoId = body.conclusion_evento_id ?? body.CONCLUSION_EVENTO_ID;
   const rawSustraccionMaterial = body.sustraccion_material ?? body.SUSTRACCION_MATERIAL;
@@ -840,7 +841,8 @@ export const createIntrusion = async (req, res) => {
   const rawDescripcion = body.descripcion ?? body.DESCRIPCION ?? null;
   const rawOrigen = body.origen ?? body.ORIGEN ?? "MANUAL";
   const rawHikAlarmEventoId = body.hik_alarm_evento_id ?? body.HIK_ALARM_EVENTO_ID ?? null;
-  const rawCompletado = body.completado ?? body.COMPLETADO ?? false;
+  const rawCompletado =
+    body.completado ?? body.COMPLETADO ?? body.medio_comunicacion?.completado ?? false;
   const rawNecesitaProtocolo = body.necesita_protocolo ?? body.NECESITA_PROTOCOLO;
 
   let metadata;
@@ -864,8 +866,10 @@ export const createIntrusion = async (req, res) => {
     medio_comunicacion_id:
       body.medio_comunicacion_id ??
       body.MEDIO_COMUNICACION_ID ??
-      body.medioComunicacionId,
-    completado: body.completado ?? body.COMPLETADO,
+      body.medioComunicacionId ??
+      body.medio_comunicacion?.medio_comunicacion_id,
+    completado:
+      body.completado ?? body.COMPLETADO ?? body.medio_comunicacion?.completado,
   });
 
   const fechaEventoValue = rawFechaEvento ? parseFechaValue(rawFechaEvento) : new Date();
@@ -905,18 +909,17 @@ export const createIntrusion = async (req, res) => {
       ? false
       : Boolean(rawNoLlegoAlerta)
     : false;
-  const completadoValue = metadata.hasCompletado ? Boolean(rawCompletado) : false;
+  const completadoValue = Boolean(rawCompletado);
   const necesitaProtocoloValue = metadata.hasNecesitaProtocolo
     ? Boolean(rawNecesitaProtocolo)
     : false;
 
   if (
     completadoValue &&
-    (medioComValue === null || Number.isNaN(medioComValue))
+    (medioComValue === null || medioComValue === undefined || medioComValue === 0 || Number.isNaN(medioComValue))
   ) {
     return res.status(400).json({
-      message:
-        "El medio de comunicación es obligatorio para completar la intrusión.",
+      message: "Debe seleccionar el medio de comunicación para completar.",
       details: { field: "medio_comunicacion_id" },
     });
   }
