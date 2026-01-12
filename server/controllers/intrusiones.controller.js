@@ -1,4 +1,4 @@
-import XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { pool } from "../db.js";
 
 const mapIntrusionRow = (row) => {
@@ -225,7 +225,10 @@ const formatExcelTimestamp = (date = new Date()) => {
   return `${year}${month}${day}_${hours}${minutes}${seconds}`;
 };
 
-export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
+export const buildIntrusionesFilterConfig = async (
+  queryParams = {},
+  { intrusionesAlias = "i", sitiosAlias = "s" } = {}
+) => {
   let metadata;
   try {
     metadata = await getIntrusionesMetadata();
@@ -255,6 +258,10 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
 
   const filters = [];
   const values = [];
+  const intrusionesRef = intrusionesAlias;
+  const sitiosRef = sitiosAlias;
+  const intrusionesColumn = (column) => `${intrusionesRef}.${column.toUpperCase()}`;
+  const sitiosColumn = (column) => `${sitiosRef}.${column.toUpperCase()}`;
 
   const parsedFechaDesde = normalizeDateParam(fechaDesde);
   if (fechaDesde !== undefined && fechaDesde !== "" && !parsedFechaDesde) {
@@ -264,7 +271,7 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
   }
   if (parsedFechaDesde) {
     values.push(parsedFechaDesde);
-    filters.push(`i.fecha_evento >= $${values.length}`);
+    filters.push(`${intrusionesColumn("fecha_evento")} >= $${values.length}`);
   }
 
   const parsedFechaHasta = normalizeDateParam(fechaHasta);
@@ -275,7 +282,7 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
   }
   if (parsedFechaHasta) {
     values.push(parsedFechaHasta);
-    filters.push(`i.fecha_evento <= $${values.length}`);
+    filters.push(`${intrusionesColumn("fecha_evento")} <= $${values.length}`);
   }
 
   if (sitioId !== undefined && sitioId !== "") {
@@ -286,7 +293,7 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
       };
     }
     values.push(parsedSitioId);
-    filters.push(`i.sitio_id = $${values.length}`);
+    filters.push(`${intrusionesColumn("sitio_id")} = $${values.length}`);
   }
 
   if (clienteId !== undefined && clienteId !== "") {
@@ -297,7 +304,7 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
       };
     }
     values.push(parsedClienteId);
-    filters.push(`s.cliente_id = $${values.length}`);
+    filters.push(`${sitiosColumn("cliente_id")} = $${values.length}`);
   }
 
   if (haciendaId !== undefined && haciendaId !== "") {
@@ -308,7 +315,7 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
       };
     }
     values.push(parsedHaciendaId);
-    filters.push(`s.hacienda_id = $${values.length}`);
+    filters.push(`${sitiosColumn("hacienda_id")} = $${values.length}`);
   }
 
   if (metadata.hasTipoIntrusionId && tipoIntrusionId !== undefined && tipoIntrusionId !== "") {
@@ -319,7 +326,7 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
       };
     }
     values.push(parsedTipo);
-    filters.push(`i.tipo_intrusion_id = $${values.length}`);
+    filters.push(`${intrusionesColumn("tipo_intrusion_id")} = $${values.length}`);
   } else if (metadata.hasTipoText && (tipoIntrusionId || tipoIntrusion)) {
     const tipoValue =
       typeof tipoIntrusionId === "string" && tipoIntrusionId.trim()
@@ -328,14 +335,14 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
 
     if (typeof tipoValue === "string" && tipoValue.trim()) {
       values.push(`%${tipoValue.trim()}%`);
-      filters.push(`i.tipo ILIKE $${values.length}`);
+      filters.push(`${intrusionesColumn("tipo")} ILIKE $${values.length}`);
     }
   }
 
   const parsedLlegoAlerta = normalizeBooleanParam(llegoAlerta);
   if (parsedLlegoAlerta !== undefined) {
     values.push(parsedLlegoAlerta);
-    filters.push(`i.llego_alerta = $${values.length}`);
+    filters.push(`${intrusionesColumn("llego_alerta")} = $${values.length}`);
   }
 
   if (metadata.personaColumn && personalId !== undefined && personalId !== "") {
@@ -346,12 +353,13 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
       };
     }
     values.push(parsedPersonal);
-    filters.push(`i.${metadata.personaColumn} = $${values.length}`);
+    filters.push(`${intrusionesRef}.${metadata.personaColumn.toUpperCase()} = $${values.length}`);
   }
 
   return {
     metadata,
     values,
+    filters,
     whereClause: filters.length ? `WHERE ${filters.join(" AND ")}` : "",
   };
 };
@@ -1731,43 +1739,151 @@ ORDER BY TOTAL DESC; /* A: PUBLIC.INTRUSIONES, B: PUBLIC.CATALOGO_TIPO_INTRUSION
 };
 
 export const exportConsolidadoIntrusiones = async (req, res) => {
-  const queryConfig = await prepareConsolidadoQuery(req.query, {
-    includePagination: false,
+  const filterConfig = await buildIntrusionesFilterConfig(req.query, {
+    intrusionesAlias: "A",
+    sitiosAlias: "C",
   });
 
-  if (queryConfig?.error) {
-    const { status, message } = queryConfig.error;
+  if (filterConfig?.error) {
+    const { status, message } = filterConfig.error;
     return res.status(status).json({ mensaje: message });
   }
 
-  const { query, values } = queryConfig;
+  const { values, filters, metadata } = filterConfig;
+  const whereClause = filters.length
+    ? `WHERE 1=1\n  AND ${filters.join("\n  AND ")}`
+    : "WHERE 1=1";
+
+  const personaColumn = metadata.personaColumn
+    ? `A.${metadata.personaColumn.toUpperCase()} AS PERSONA_ID`
+    : "NULL AS PERSONA_ID";
+  const origenColumn = metadata.hasOrigen ? "A.ORIGEN" : "NULL AS ORIGEN";
+  const hikColumn = metadata.hasHikAlarmEventoId
+    ? "A.HIK_ALARM_EVENTO_ID"
+    : "NULL AS HIK_ALARM_EVENTO_ID";
+  const noLlegoAlertaColumn = metadata.hasNoLlegoAlerta
+    ? "A.NO_LLEGO_ALERTA"
+    : "CASE WHEN A.LLEGO_ALERTA IS NULL THEN NULL ELSE NOT A.LLEGO_ALERTA END AS NO_LLEGO_ALERTA";
+  const completadoColumn = metadata.hasCompletado
+    ? "A.COMPLETADO"
+    : "NULL AS COMPLETADO";
+  const fechaCompletadoColumn = metadata.hasFechaCompletado
+    ? "A.FECHA_COMPLETADO"
+    : "NULL AS FECHA_COMPLETADO";
+  const necesitaProtocoloColumn = metadata.hasNecesitaProtocolo
+    ? "A.NECESITA_PROTOCOLO"
+    : "NULL AS NECESITA_PROTOCOLO";
+  const fechaReaccionEnviadaColumn = metadata.hasFechaReaccionEnviada
+    ? "A.FECHA_REACCION_ENVIADA"
+    : "NULL AS FECHA_REACCION_ENVIADA";
+  const fechaLlegadaFuerzaReaccionColumn = metadata.hasFechaLlegadaFuerzaReaccion
+    ? "A.FECHA_LLEGADA_FUERZA_REACCION"
+    : "A.FECHA_REACCION_FUERA AS FECHA_LLEGADA_FUERZA_REACCION";
+
+  const query = `SELECT
+    A.ID,
+    A.UBICACION,
+    A.TIPO,
+    A.ESTADO,
+    A.DESCRIPCION,
+    A.FECHA_EVENTO,
+    A.FECHA_REACCION,
+    A.MEDIO_COMUNICACION_ID,
+    A.LLEGO_ALERTA,
+    A.FECHA_REACCION_FUERA,
+    A.CONCLUSION_EVENTO_ID,
+    A.SUSTRACCION_MATERIAL,
+    A.FUERZA_REACCION_ID,
+    A.SITIO_ID,
+    ${personaColumn},
+    ${origenColumn},
+    ${hikColumn},
+    ${noLlegoAlertaColumn},
+    ${completadoColumn},
+    ${fechaCompletadoColumn},
+    A.MEDIO_COMUNICACION,
+    ${necesitaProtocoloColumn},
+    ${fechaReaccionEnviadaColumn},
+    ${fechaLlegadaFuerzaReaccionColumn},
+    A.CONCLUSION_EVENTO,
+    B.DESCRIPCION AS MEDIO_COMUNICACION_DESCRIPCION
+FROM PUBLIC.INTRUSIONES A
+LEFT JOIN PUBLIC.CATALOGO_MEDIO_COMUNICACION B ON (B.ID = A.MEDIO_COMUNICACION_ID)
+LEFT JOIN PUBLIC.SITIOS C ON (C.ID = A.SITIO_ID)
+${whereClause}
+ORDER BY A.FECHA_EVENTO DESC;`;
 
   try {
     const result = await pool.query(query, values);
-    const data = result.rows.map(mapConsolidadoRow);
+    const rows = result.rows ?? [];
 
-    const worksheetData = [
-      [
-        "Fecha y hora de intrusión",
-        "Sitio",
-        "Tipo intrusión",
-        "Llegó alerta",
-        "Personal identificado (Cargo – Persona)",
-      ],
-      ...data.map((row) => [
-        formatConsolidadoDateTime(row.fechaHoraIntrusion) || "Sin información",
-        row.sitio || "Sin información",
-        row.tipoIntrusion || "Sin información",
-        row.llegoAlerta ? "Sí" : "No",
-        row.personalIdentificado?.trim() || "N/A",
-      ]),
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Consolidado");
+
+    worksheet.columns = [
+      { header: "ID", key: "id" },
+      { header: "UBICACION", key: "ubicacion" },
+      { header: "TIPO", key: "tipo" },
+      { header: "ESTADO", key: "estado" },
+      { header: "DESCRIPCION", key: "descripcion" },
+      { header: "FECHA_EVENTO", key: "fecha_evento" },
+      { header: "FECHA_REACCION", key: "fecha_reaccion" },
+      { header: "MEDIO_COMUNICACION_ID", key: "medio_comunicacion_id" },
+      { header: "LLEGO_ALERTA", key: "llego_alerta" },
+      { header: "FECHA_REACCION_FUERA", key: "fecha_reaccion_fuera" },
+      { header: "CONCLUSION_EVENTO_ID", key: "conclusion_evento_id" },
+      { header: "SUSTRACCION_MATERIAL", key: "sustraccion_material" },
+      { header: "FUERZA_REACCION_ID", key: "fuerza_reaccion_id" },
+      { header: "SITIO_ID", key: "sitio_id" },
+      { header: "PERSONA_ID", key: "persona_id" },
+      { header: "ORIGEN", key: "origen" },
+      { header: "HIK_ALARM_EVENTO_ID", key: "hik_alarm_evento_id" },
+      { header: "NO_LLEGO_ALERTA", key: "no_llego_alerta" },
+      { header: "COMPLETADO", key: "completado" },
+      { header: "FECHA_COMPLETADO", key: "fecha_completado" },
+      { header: "MEDIO_COMUNICACION", key: "medio_comunicacion" },
+      { header: "NECESITA_PROTOCOLO", key: "necesita_protocolo" },
+      { header: "FECHA_REACCION_ENVIADA", key: "fecha_reaccion_enviada" },
+      { header: "FECHA_LLEGADA_FUERZA_REACCION", key: "fecha_llegada_fuerza_reaccion" },
+      { header: "CONCLUSION_EVENTO", key: "conclusion_evento" },
+      {
+        header: "MEDIO_COMUNICACION_DESCRIPCION",
+        key: "medio_comunicacion_descripcion",
+      },
     ];
 
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Consolidado");
+    worksheet.addRows(
+      rows.map((row) => ({
+        id: row?.id ?? null,
+        ubicacion: row?.ubicacion ?? null,
+        tipo: row?.tipo ?? null,
+        estado: row?.estado ?? null,
+        descripcion: row?.descripcion ?? null,
+        fecha_evento: row?.fecha_evento ?? null,
+        fecha_reaccion: row?.fecha_reaccion ?? null,
+        medio_comunicacion_id: row?.medio_comunicacion_id ?? null,
+        llego_alerta: row?.llego_alerta ?? null,
+        fecha_reaccion_fuera: row?.fecha_reaccion_fuera ?? null,
+        conclusion_evento_id: row?.conclusion_evento_id ?? null,
+        sustraccion_material: row?.sustraccion_material ?? null,
+        fuerza_reaccion_id: row?.fuerza_reaccion_id ?? null,
+        sitio_id: row?.sitio_id ?? null,
+        persona_id: row?.persona_id ?? null,
+        origen: row?.origen ?? null,
+        hik_alarm_evento_id: row?.hik_alarm_evento_id ?? null,
+        no_llego_alerta: row?.no_llego_alerta ?? null,
+        completado: row?.completado ?? null,
+        fecha_completado: row?.fecha_completado ?? null,
+        medio_comunicacion: row?.medio_comunicacion ?? null,
+        necesita_protocolo: row?.necesita_protocolo ?? null,
+        fecha_reaccion_enviada: row?.fecha_reaccion_enviada ?? null,
+        fecha_llegada_fuerza_reaccion: row?.fecha_llegada_fuerza_reaccion ?? null,
+        conclusion_evento: row?.conclusion_evento ?? null,
+        medio_comunicacion_descripcion: row?.medio_comunicacion_descripcion ?? null,
+      }))
+    );
 
-    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+    const buffer = await workbook.xlsx.writeBuffer();
     const timestamp = formatExcelTimestamp();
 
     res.setHeader(
@@ -1787,7 +1903,7 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
     res.setHeader("Surrogate-Control", "no-store");
     res.removeHeader("ETag");
 
-    return res.status(200).send(buffer);
+    return res.status(200).send(Buffer.from(buffer));
   } catch (error) {
     console.error("Error al exportar el consolidado de intrusiones:", error);
     return res
