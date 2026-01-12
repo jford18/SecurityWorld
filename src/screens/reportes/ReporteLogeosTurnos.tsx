@@ -254,13 +254,16 @@ const ReporteLogeosTurnos: React.FC = () => {
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Hora</th>
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Turno</th>
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Usuario</th>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">
+                Nombre completo
+              </th>
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Consola</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {data.length === 0 ? (
               <tr>
-                <td className="px-4 py-3 text-center text-sm text-gray-500" colSpan={5}>
+                <td className="px-4 py-3 text-center text-sm text-gray-500" colSpan={6}>
                   {loading ? 'Cargando...' : 'Sin resultados para los filtros seleccionados'}
                 </td>
               </tr>
@@ -271,6 +274,9 @@ const ReporteLogeosTurnos: React.FC = () => {
                   <td className="px-4 py-3 text-sm text-gray-800">{formatTime(row.hora_logeo)}</td>
                   <td className="px-4 py-3 text-sm font-semibold text-gray-900">{row.turno}</td>
                   <td className="px-4 py-3 text-sm text-gray-800">{row.usuario ?? 'Sin usuario'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-800">
+                    {row.nombre_completo ?? 'Sin nombre completo'}
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-800">{row.consola ?? 'SIN CONSOLA'}</td>
                 </tr>
               ))

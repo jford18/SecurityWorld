@@ -37,6 +37,7 @@ export interface LogeoTurnoRow {
   hora_logeo: string;
   turno: string;
   usuario: string | null;
+  nombre_completo: string | null;
   consola: string | null;
 }
 
