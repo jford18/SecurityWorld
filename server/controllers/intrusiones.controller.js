@@ -1771,7 +1771,10 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
     A.SUSTRACCION_MATERIAL,
     A.FUERZA_REACCION_ID,
     A.SITIO_ID,
+    B.NOMBRE AS SITIO_NOMBRE,
+    B.DESCRIPCION AS SITIO_DESCRIPCION,
     A.PERSONA_ID,
+    (C.NOMBRE || ' ' || C.APELLIDO) AS PERSONA_NOMBRE_COMPLETO,
     A.ORIGEN,
     A.HIK_ALARM_EVENTO_ID,
     A.NO_LLEGO_ALERTA,
@@ -1782,9 +1785,11 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
     A.FECHA_REACCION_ENVIADA,
     A.FECHA_LLEGADA_FUERZA_REACCION,
     A.CONCLUSION_EVENTO,
-    B.DESCRIPCION AS MEDIO_COMUNICACION_DESCRIPCION
+    D.DESCRIPCION AS MEDIO_COMUNICACION_DESCRIPCION
 FROM PUBLIC.INTRUSIONES A
-LEFT JOIN PUBLIC.CATALOGO_MEDIO_COMUNICACION B ON (B.ID = A.MEDIO_COMUNICACION_ID)
+LEFT JOIN PUBLIC.SITIOS B ON (B.ID = A.SITIO_ID)
+LEFT JOIN PUBLIC.PERSONA C ON (C.ID = A.PERSONA_ID)
+LEFT JOIN PUBLIC.CATALOGO_MEDIO_COMUNICACION D ON (D.ID = A.MEDIO_COMUNICACION_ID)
 WHERE 1=1${filterClause}
 ORDER BY A.FECHA_EVENTO DESC;`;
 
@@ -1807,7 +1812,10 @@ ORDER BY A.FECHA_EVENTO DESC;`;
         "SUSTRACCION_MATERIAL",
         "FUERZA_REACCION_ID",
         "SITIO_ID",
+        "SITIO_NOMBRE",
+        "SITIO_DESCRIPCION",
         "PERSONA_ID",
+        "PERSONA_NOMBRE_COMPLETO",
         "ORIGEN",
         "HIK_ALARM_EVENTO_ID",
         "NO_LLEGO_ALERTA",
@@ -1843,7 +1851,10 @@ ORDER BY A.FECHA_EVENTO DESC;`;
           : "No",
         row?.fuerza_reaccion_id ?? "",
         row?.sitio_id ?? "",
+        row?.sitio_nombre ?? "",
+        row?.sitio_descripcion ?? "",
         row?.persona_id ?? "",
+        row?.persona_nombre_completo ?? "",
         row?.origen ?? "",
         row?.hik_alarm_evento_id ?? "",
         row?.no_llego_alerta === null || row?.no_llego_alerta === undefined
