@@ -168,8 +168,8 @@ const formatDateTimeForDisplay = (value?: string | null) => {
   });
 };
 
-const buildInitialFormData = (): IntrusionFormData => ({
-  origen: 'MANUAL',
+const buildInitialFormData = (origen: 'HC' | 'MANUAL' = 'HC'): IntrusionFormData => ({
+  origen,
   hik_alarm_evento_id: null,
   trigger_event_hc: null,
   fecha_evento: getInitialDateTimeValue(),
@@ -190,7 +190,7 @@ const buildInitialFormData = (): IntrusionFormData => ({
 });
 
 const Intrusions: React.FC = () => {
-  const [formData, setFormData] = useState<IntrusionFormData>(buildInitialFormData());
+  const [formData, setFormData] = useState<IntrusionFormData>(buildInitialFormData('HC'));
   const [intrusions, setIntrusions] = useState<Intrusion[]>([]);
   const [mediosComunicacion, setMediosComunicacion] = useState<MedioComunicacionDTO[]>([]);
   const [tiposIntrusion, setTiposIntrusion] = useState<TipoIntrusionCatalogItem[]>([]);
@@ -213,6 +213,7 @@ const Intrusions: React.FC = () => {
   const [rowsPerPageHC] = useState(20);
   const [totalHC, setTotalHC] = useState(0);
   const [hcSeleccionado, setHcSeleccionado] = useState<IntrusionHcQueueRow | null>(null);
+  const [registroManual, setRegistroManual] = useState(false);
   const { session } = useSession();
   const [consolaIdSeleccionada, setConsolaIdSeleccionada] = useState<number | null>(null);
   const [sitios, setSitios] = useState<Sitio[]>([]);
@@ -226,6 +227,32 @@ const Intrusions: React.FC = () => {
     'fechaHoraIntrusion'
   );
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+  const isHcMode = !registroManual;
+
+  const normalizeText = (value?: string | null) =>
+    (value ?? '').toString().trim().toLowerCase();
+
+  const findSitioForHcEvent = useCallback(
+    (row: IntrusionHcQueueRow | null) => {
+      if (!row) return null;
+      const region = normalizeText(row.region);
+      const name = normalizeText(row.name);
+      if (!region && !name) return null;
+
+      return (
+        sitios.find((sitio) => {
+          const sitioNombre = normalizeText(sitio.nombre);
+          const sitioDescripcion = normalizeText(sitio.descripcion);
+          return (
+            (region && (sitioNombre === region || sitioDescripcion === region)) ||
+            (name && (sitioNombre === name || sitioDescripcion === name))
+          );
+        }) ?? null
+      );
+    },
+    [sitios]
+  );
 
   const tiposIntrusionConFallback = useMemo(() => {
     const hasNoDefinidoOption = tiposIntrusion.some(
@@ -266,7 +293,7 @@ const Intrusions: React.FC = () => {
     setFormData((prev) => (prev.sitioId ? { ...prev, sitioId: '' } : prev));
   };
 
-  const handleChangeSitio = async (value: number | null) => {
+  const handleChangeSitio = useCallback(async (value: number | null) => {
     setSitioId(value);
     setClienteId(null);
     setClienteNombre('');
@@ -317,7 +344,7 @@ const Intrusions: React.FC = () => {
     } catch (err) {
       console.error('Error al obtener datos del sitio:', err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -351,18 +378,22 @@ const Intrusions: React.FC = () => {
     setPageHC(0);
   }, [consolaIdSeleccionada]);
 
+  const fetchEncoladosHc = useCallback(async () => {
+    return fetchIntrusionesEncoladasHc({
+      search: hcSearch || undefined,
+      page: pageHC,
+      rowsPerPage: rowsPerPageHC,
+      consolaId: consolaIdSeleccionada ?? undefined,
+    });
+  }, [consolaIdSeleccionada, hcSearch, pageHC, rowsPerPageHC]);
+
   useEffect(() => {
     let isMounted = true;
 
     const loadEncoladosHc = async () => {
       setHcLoading(true);
       try {
-        const response = await fetchIntrusionesEncoladasHc({
-          search: hcSearch || undefined,
-          page: pageHC,
-          rowsPerPage: rowsPerPageHC,
-          consolaId: consolaIdSeleccionada ?? undefined,
-        });
+        const response = await fetchEncoladosHc();
         if (!isMounted) return;
         setHcQueue(response.data || []);
         setTotalHC(response.total || 0);
@@ -380,7 +411,7 @@ const Intrusions: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [consolaIdSeleccionada, hcSearch, pageHC, rowsPerPageHC]);
+  }, [fetchEncoladosHc]);
 
   useEffect(() => {
     let isMounted = true;
@@ -672,6 +703,42 @@ const Intrusions: React.FC = () => {
   );
 
   useEffect(() => {
+    if (!hcSeleccionado || registroManual) {
+      return;
+    }
+
+    const sitioMatch = findSitioForHcEvent(hcSeleccionado);
+    const sitioIdValue = sitioMatch?.id ?? null;
+
+    setFormData((prev) => ({
+      ...prev,
+      origen: 'HC',
+      hik_alarm_evento_id:
+        hcSeleccionado?.hik_alarm_evento_id !== undefined &&
+        hcSeleccionado?.hik_alarm_evento_id !== null
+          ? String(hcSeleccionado.hik_alarm_evento_id)
+          : null,
+      trigger_event_hc: hcSeleccionado?.trigger_event ?? null,
+      fecha_evento:
+        formatLocalDateTimeInput(hcSeleccionado?.fecha_evento_hc || '') || prev.fecha_evento,
+      no_llego_alerta: false,
+      sitioId: sitioIdValue ? String(sitioIdValue) : '',
+    }));
+
+    setSitioId(sitioIdValue);
+    if (sitioIdValue) {
+      void handleChangeSitio(sitioIdValue);
+    } else {
+      resetClientePersonaSelection();
+    }
+  }, [
+    findSitioForHcEvent,
+    handleChangeSitio,
+    hcSeleccionado,
+    registroManual,
+  ]);
+
+  useEffect(() => {
     if (!hcSeleccionado) return;
 
     const hcCategory = (hcSeleccionado.alarm_category || '').trim().toLowerCase();
@@ -697,6 +764,30 @@ const Intrusions: React.FC = () => {
     hcSeleccionado,
     tiposIntrusionConFallback,
   ]);
+
+  useEffect(() => {
+    if (registroManual) {
+      setHcSeleccionado(null);
+      setFormData(buildInitialFormData('MANUAL'));
+      setTipoIntrusionId('');
+      setTipoDescripcion('');
+      setRequiereProtocolo(false);
+      setEditingIntrusionId(null);
+      resetClientePersonaSelection();
+      return;
+    }
+
+    if (!hcSeleccionado) {
+      setFormData(buildInitialFormData('HC'));
+      setTipoIntrusionId('');
+      setTipoDescripcion('');
+      setRequiereProtocolo(false);
+      setEditingIntrusionId(null);
+      resetClientePersonaSelection();
+      return;
+    }
+
+  }, [hcSeleccionado, registroManual]);
 
   const handleTipoIntrusionChange = (
     event: React.ChangeEvent<HTMLSelectElement>
@@ -774,20 +865,10 @@ const Intrusions: React.FC = () => {
 
   const handleAbrirEncolado = (row: IntrusionHcQueueRow) => {
     console.log('[ENCOLADOS HC] ABRIR -> NUEVA INTRUSION', row);
+    setRegistroManual(false);
     setHcSeleccionado(row);
 
     setEditingIntrusionId(null);
-    setFormData((prev) => ({
-      ...prev,
-      origen: 'HC',
-      hik_alarm_evento_id:
-        row?.hik_alarm_evento_id !== undefined && row?.hik_alarm_evento_id !== null
-          ? String(row.hik_alarm_evento_id)
-          : null,
-      trigger_event_hc: row?.trigger_event ?? null,
-      fecha_evento: formatLocalDateTimeInput(row?.fecha_evento_hc || '') || prev.fecha_evento,
-      no_llego_alerta: false,
-    }));
 
     document
       .getElementById('nueva-intrusion-form')
@@ -816,6 +897,17 @@ const Intrusions: React.FC = () => {
 
   const totalPagesHC = Math.ceil(totalHC / rowsPerPageHC);
 
+  const filteredHcQueue = useMemo(() => {
+    return hcQueue.filter((row) => {
+      const status = normalizeText(row.status);
+      const category = normalizeText(row.alarm_category);
+      const hasVerdadera = status.includes('verdadera') || category.includes('verdadera');
+      if (hasVerdadera) return false;
+      const hasEvento = status.includes('evento') || category.includes('evento');
+      return hasEvento;
+    });
+  }, [hcQueue, normalizeText]);
+
   const intrusionesTableData = useMemo<IntrusionConsolidadoRow[]>(
     () =>
       intrusions.map((intrusion) => ({
@@ -823,7 +915,11 @@ const Intrusions: React.FC = () => {
         fechaHoraIntrusion: intrusion.fecha_evento ?? null,
         sitio: intrusion.sitio_nombre || intrusion.ubicacion || '',
         tipoIntrusion: intrusion.tipo ?? '',
-        llegoAlerta: !(intrusion.no_llego_alerta ?? false),
+        llegoAlerta:
+          String(intrusion.origen || '').toUpperCase() === 'HC' ||
+          intrusion.hik_alarm_evento_id != null
+            ? true
+            : !(intrusion.no_llego_alerta ?? false),
         personalIdentificado: intrusion.personal_identificado?.trim() || '',
       })),
     [intrusions]
@@ -904,12 +1000,15 @@ const Intrusions: React.FC = () => {
       !tipoValue ||
       isSubmitting;
 
+    const requiresHcSelection = isHcMode && !hcSeleccionado?.hik_alarm_evento_id;
+
     if (!requiereProtocolo) {
-      return baseDisabled;
+      return baseDisabled || requiresHcSelection;
     }
 
     return (
       baseDisabled ||
+      requiresHcSelection ||
       !formData.fecha_reaccion ||
       !formData.fecha_reaccion_fuera ||
       !formData.conclusion_evento_id ||
@@ -922,6 +1021,8 @@ const Intrusions: React.FC = () => {
     formData.fecha_reaccion_fuera,
     formData.fuerza_reaccion_id,
     formData.sitioId,
+    hcSeleccionado?.hik_alarm_evento_id,
+    isHcMode,
     isSubmitting,
     requiereProtocolo,
     tipoDescripcion,
@@ -1068,7 +1169,7 @@ const Intrusions: React.FC = () => {
   }, [fechaReaccionError, fechaReaccionEnviadaError, fechaReaccionFueraError]);
 
   const isButtonDisabled = isSubmitDisabled || disableSave;
-  const hasHcEventSelected = Boolean(formData.hik_alarm_evento_id);
+  const hasHcEventSelected = Boolean(hcSeleccionado?.hik_alarm_evento_id);
 
   const triggerEventForDisplay = useMemo(() => {
     const candidate = hcSeleccionado?.trigger_event ?? formData.trigger_event_hc;
@@ -1082,6 +1183,11 @@ const Intrusions: React.FC = () => {
     event.preventDefault();
 
     setError(null);
+
+    if (isHcMode && !hcSeleccionado?.hik_alarm_evento_id) {
+      setError('Debe seleccionar un evento encolado de HikCentral.');
+      return;
+    }
 
     const completionMissing = validateCompletionBeforeSubmit();
     if (completionMissing.length) {
@@ -1247,11 +1353,15 @@ const Intrusions: React.FC = () => {
 
     setIsSubmitting(true);
 
+    const origenValue = registroManual ? 'MANUAL' : 'HC';
+    const hikAlarmEventoIdValue =
+      !registroManual && hcSeleccionado?.hik_alarm_evento_id
+        ? Number(hcSeleccionado.hik_alarm_evento_id)
+        : null;
+
     const payload: IntrusionPayload = {
-      origen: formData.origen,
-      hik_alarm_evento_id: formData.hik_alarm_evento_id
-        ? Number(formData.hik_alarm_evento_id)
-        : null,
+      origen: origenValue,
+      hik_alarm_evento_id: hikAlarmEventoIdValue,
       fecha_evento: fechaEventoDb ?? formData.fecha_evento,
       fecha_reaccion: fechaReaccionDb,
       fecha_reaccion_enviada:
@@ -1266,7 +1376,7 @@ const Intrusions: React.FC = () => {
       estado: formData.estado || '',
       descripcion: formData.descripcion?.trim() || '',
       no_llego_alerta:
-        formData.origen === 'HC' || formData.hik_alarm_evento_id ? false : formData.no_llego_alerta,
+        origenValue === 'HC' || hikAlarmEventoIdValue ? false : formData.no_llego_alerta,
       medio_comunicacion_id: medioComunicacionValue,
       conclusion_evento_id: necesitaProtocolo ? conclusionEventoValue : null,
       sustraccion_material: necesitaProtocolo ? formData.sustraccion_material : false,
@@ -1295,11 +1405,22 @@ const Intrusions: React.FC = () => {
           : [enriched, ...prev]
       );
       resetClientePersonaSelection();
-      setFormData(buildInitialFormData());
+      setFormData(buildInitialFormData(registroManual ? 'MANUAL' : 'HC'));
       setTipoIntrusionId('');
       setTipoDescripcion('');
       setRequiereProtocolo(false);
       setEditingIntrusionId(null);
+
+      if (!registroManual && hcSeleccionado?.hik_alarm_evento_id) {
+        setHcSeleccionado(null);
+        try {
+          const refreshed = await fetchEncoladosHc();
+          setHcQueue(refreshed.data || []);
+          setTotalHC(refreshed.total || 0);
+        } catch (refreshError) {
+          console.error('Error al refrescar encolados HC:', refreshError);
+        }
+      }
     } catch (err) {
       console.error('Error al registrar intrusión:', err);
       const backendMessage = err instanceof Error && err.message ? err.message : null;
@@ -1334,7 +1455,7 @@ const Intrusions: React.FC = () => {
             className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
           />
         </div>
-        <div className="overflow-x-auto">
+        <div className="h-[360px] overflow-y-auto overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -1370,14 +1491,14 @@ const Intrusions: React.FC = () => {
                     Cargando eventos de HC...
                   </td>
                 </tr>
-              ) : hcQueue.length === 0 ? (
+              ) : filteredHcQueue.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-4 py-3 text-center text-gray-500">
                     No hay eventos encolados.
                   </td>
                 </tr>
               ) : (
-                hcQueue.map((row) => {
+                filteredHcQueue.map((row) => {
                   const categoriaRaw =
                     row?.alarm_category ??
                     (row as Record<string, unknown>)?.alarmCategory ??
@@ -1480,6 +1601,7 @@ const Intrusions: React.FC = () => {
                   onChange={handleFechaEventoChange}
                   required
                   max={getDateTimeInputLimit() || undefined}
+                  disabled={isHcMode}
                 />
                 <DateTimeInput
                   id="fecha_reaccion"
@@ -1523,6 +1645,7 @@ const Intrusions: React.FC = () => {
                         value={tipoIntrusionId === '' ? '' : String(tipoIntrusionId)}
                         onChange={handleTipoIntrusionChange}
                         className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        disabled={isHcMode}
                       >
                         <option value="">Seleccione...</option>
                         {tiposIntrusionConFallback.map((tipoIntrusion) => (
@@ -1757,16 +1880,14 @@ const Intrusions: React.FC = () => {
           <div className="flex items-center gap-3">
             <input
               type="checkbox"
-              id="completado"
-              name="completado"
-              checked={formData.completado}
-              onChange={(event) =>
-                setFormData((prev) => ({ ...prev, completado: event.target.checked }))
-              }
+              id="registro_manual"
+              name="registro_manual"
+              checked={registroManual}
+              onChange={(event) => setRegistroManual(event.target.checked)}
               className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
             />
-            <label htmlFor="completado" className="text-sm font-medium text-gray-700">
-              Marcar como completado
+            <label htmlFor="registro_manual" className="text-sm font-medium text-gray-700">
+              Registro manual
             </label>
           </div>
 

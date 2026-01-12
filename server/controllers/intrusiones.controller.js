@@ -489,6 +489,7 @@ const prepareConsolidadoQuery = async (
 
 let intrusionesColumnCache = null;
 let sitiosColumnCache = null;
+let hikAlarmEventoColumnCache = null;
 
 const truthyValues = ["1", "t", "true", "TRUE", "si", "sí", "yes", "y", "S", "s"];
 
@@ -588,6 +589,61 @@ const getSitiosMetadata = async () => {
   return sitiosColumnCache;
 };
 
+const getHikAlarmEventoMetadata = async () => {
+  if (hikAlarmEventoColumnCache) {
+    return hikAlarmEventoColumnCache;
+  }
+
+  const columnsResult = await pool.query(
+    `SELECT column_name
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'hik_alarm_evento'`
+  );
+
+  const columnNames = new Set(columnsResult.rows.map((row) => row.column_name));
+  hikAlarmEventoColumnCache = {
+    hasProcesado: columnNames.has("procesado"),
+    hasProcesadoHc: columnNames.has("procesado_hc"),
+    hasProcesadoEvento: columnNames.has("procesado_evento"),
+  };
+
+  return hikAlarmEventoColumnCache;
+};
+
+const markHikAlarmEventoProcesado = async (hikAlarmEventoId) => {
+  if (!hikAlarmEventoId || !Number.isInteger(Number(hikAlarmEventoId))) {
+    return false;
+  }
+
+  let metadata;
+  try {
+    metadata = await getHikAlarmEventoMetadata();
+  } catch (error) {
+    console.error("No se pudo obtener metadata de hik_alarm_evento:", error);
+    return false;
+  }
+
+  const columnName = metadata.hasProcesado
+    ? "procesado"
+    : metadata.hasProcesadoHc
+    ? "procesado_hc"
+    : metadata.hasProcesadoEvento
+    ? "procesado_evento"
+    : null;
+
+  if (!columnName) {
+    return false;
+  }
+
+  await pool.query(
+    `UPDATE public.hik_alarm_evento SET ${columnName} = TRUE WHERE id = $1`,
+    [Number(hikAlarmEventoId)]
+  );
+
+  return true;
+};
+
 export const listIntrusiones = async (_req, res) => {
   let metadata;
   try {
@@ -679,6 +735,12 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
   const joinParts = [
     "LEFT JOIN public.hik_alarm_evento B ON (B.ID = A.HIK_ALARM_EVENTO_ID)",
   ];
+  const alarmCategoryField = "COALESCE(B.ALARM_CATEGORY, A.ALARM_CATEGORY)";
+  const statusField = "COALESCE(A.STATUS, '')";
+
+  whereParts.push(`${statusField} ILIKE '%EVENTO%'`);
+  whereParts.push(`${statusField} NOT ILIKE '%VERDADERA%'`);
+  whereParts.push(`${alarmCategoryField} NOT ILIKE '%VERDADERA%'`);
 
   if (consolaId > 0) {
     filterValues.push(consolaId);
@@ -693,7 +755,7 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
     filterValues.push(`%${search.trim()}%`);
     const placeholder = `$${filterValues.length}`;
     whereParts.push(
-      `(A.REGION ILIKE ${placeholder} OR A.NAME ILIKE ${placeholder} OR A.TRIGGER_EVENT ILIKE ${placeholder} OR A.STATUS ILIKE ${placeholder} OR COALESCE(B.ALARM_CATEGORY, A.ALARM_CATEGORY) ILIKE ${placeholder})`
+      `(A.REGION ILIKE ${placeholder} OR A.NAME ILIKE ${placeholder} OR A.TRIGGER_EVENT ILIKE ${placeholder} OR A.STATUS ILIKE ${placeholder} OR ${alarmCategoryField} ILIKE ${placeholder})`
     );
   }
 
@@ -735,7 +797,7 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
             B.ALARM_ACKNOWLEDGMENT_TIME
          ${fromClause}
          ${whereClause}
-         ORDER BY CASE WHEN NULLIF(TRIM(COALESCE(B.ALARM_CATEGORY, A.ALARM_CATEGORY)), '') IS NULL THEN 1 ELSE 0 END ASC, A.FECHA_EVENTO_HC DESC
+         ORDER BY A.FECHA_EVENTO_HC DESC NULLS LAST
          ${paginationClause}`;
 
     console.log('================= [ENCOLADOS HC] SQL DATA =================');
@@ -1194,6 +1256,14 @@ export const createIntrusion = async (req, res) => {
     console.log("[INTRUSIONES][CREATE][FINAL_PAYLOAD]", payload);
 
     const result = await pool.query(insertSql, values);
+
+    if (hikAlarmEventoValue) {
+      try {
+        await markHikAlarmEventoProcesado(hikAlarmEventoValue);
+      } catch (markError) {
+        console.error("No se pudo marcar el evento HC como procesado:", markError);
+      }
+    }
 
     const created = result.rows[0];
     return res.status(201).json(mapIntrusionRow(created));
