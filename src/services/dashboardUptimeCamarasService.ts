@@ -44,6 +44,8 @@ export const fetchDashboardUptimeCamaras = async (
     queryParams.hacienda_id = String(params.haciendaId);
   }
 
+  queryParams.all = 'true';
+
   const { data } = await api.get<DashboardUptimeResponse>('/dashboards/uptime-camaras', {
     params: queryParams,
   });
