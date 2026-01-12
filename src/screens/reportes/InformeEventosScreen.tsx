@@ -223,20 +223,8 @@ const InformeEventosScreen: React.FC = () => {
             return new Set();
           }
 
-          const next = new Set<string>();
           const validTipoKeys = new Set(treeData.map((item) => item.key));
-
-          treeData.forEach((item, index) => {
-            if (prev.has(item.key) || (prev.size === 0 && index === 0)) {
-              next.add(item.key);
-            }
-          });
-
-          Array.from(prev)
-            .filter((key) => validTipoKeys.has(key))
-            .forEach((key) => next.add(key));
-
-          return next;
+          return new Set(Array.from(prev).filter((key) => validTipoKeys.has(key)));
         });
 
         setExpandedHaciendas((prev) => {
@@ -244,26 +232,14 @@ const InformeEventosScreen: React.FC = () => {
             return new Set();
           }
 
-          const next = new Set<string>();
           const validHaciendaKeys = new Set<string>();
-
-          treeData.forEach((tipo, tipoIndex) => {
-            tipo.haciendas.forEach((hacienda, haciendaIndex) => {
+          treeData.forEach((tipo) => {
+            tipo.haciendas.forEach((hacienda) => {
               validHaciendaKeys.add(hacienda.key);
-              if (
-                prev.has(hacienda.key) ||
-                (prev.size === 0 && tipoIndex === 0 && haciendaIndex === 0)
-              ) {
-                next.add(hacienda.key);
-              }
             });
           });
 
-          Array.from(prev)
-            .filter((key) => validHaciendaKeys.has(key))
-            .forEach((key) => next.add(key));
-
-          return next;
+          return new Set(Array.from(prev).filter((key) => validHaciendaKeys.has(key)));
         });
       } catch (err) {
         console.error('Error al cargar el informe mensual de eventos:', err);
