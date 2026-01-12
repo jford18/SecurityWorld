@@ -1,3 +1,4 @@
+import XLSX from "xlsx";
 import { pool } from "../db.js";
 
 const mapIntrusionRow = (row) => {
@@ -138,6 +139,26 @@ const normalizeBooleanParam = (value) => {
   return Boolean(value);
 };
 
+const formatTimestamp = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+
+  return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+};
+
+const formatDateValue = (value) => {
+  if (!value) return "";
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toISOString().replace("T", " ").replace("Z", "");
+};
+
 const validateCompletionRequirements = (config) => {
   const {
     completado,
@@ -196,7 +217,10 @@ const mapConsolidadoRow = (row) => {
   };
 };
 
-export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
+export const buildIntrusionesFilterConfig = async (
+  queryParams = {},
+  { intrusionesAlias = "i", sitiosAlias = "s", useSitioSubquery = false } = {}
+) => {
   let metadata;
   try {
     metadata = await getIntrusionesMetadata();
@@ -235,7 +259,7 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
   }
   if (parsedFechaDesde) {
     values.push(parsedFechaDesde);
-    filters.push(`i.fecha_evento >= $${values.length}`);
+    filters.push(`${intrusionesAlias}.fecha_evento >= $${values.length}`);
   }
 
   const parsedFechaHasta = normalizeDateParam(fechaHasta);
@@ -246,7 +270,7 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
   }
   if (parsedFechaHasta) {
     values.push(parsedFechaHasta);
-    filters.push(`i.fecha_evento <= $${values.length}`);
+    filters.push(`${intrusionesAlias}.fecha_evento <= $${values.length}`);
   }
 
   if (sitioId !== undefined && sitioId !== "") {
@@ -257,7 +281,7 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
       };
     }
     values.push(parsedSitioId);
-    filters.push(`i.sitio_id = $${values.length}`);
+    filters.push(`${intrusionesAlias}.sitio_id = $${values.length}`);
   }
 
   if (clienteId !== undefined && clienteId !== "") {
@@ -268,7 +292,15 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
       };
     }
     values.push(parsedClienteId);
-    filters.push(`s.cliente_id = $${values.length}`);
+    if (useSitioSubquery) {
+      filters.push(
+        `${intrusionesAlias}.sitio_id IN (SELECT id FROM public.sitios WHERE cliente_id = $${
+          values.length
+        })`
+      );
+    } else {
+      filters.push(`${sitiosAlias}.cliente_id = $${values.length}`);
+    }
   }
 
   if (haciendaId !== undefined && haciendaId !== "") {
@@ -279,7 +311,15 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
       };
     }
     values.push(parsedHaciendaId);
-    filters.push(`s.hacienda_id = $${values.length}`);
+    if (useSitioSubquery) {
+      filters.push(
+        `${intrusionesAlias}.sitio_id IN (SELECT id FROM public.sitios WHERE hacienda_id = $${
+          values.length
+        })`
+      );
+    } else {
+      filters.push(`${sitiosAlias}.hacienda_id = $${values.length}`);
+    }
   }
 
   if (metadata.hasTipoIntrusionId && tipoIntrusionId !== undefined && tipoIntrusionId !== "") {
@@ -290,7 +330,7 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
       };
     }
     values.push(parsedTipo);
-    filters.push(`i.tipo_intrusion_id = $${values.length}`);
+    filters.push(`${intrusionesAlias}.tipo_intrusion_id = $${values.length}`);
   } else if (metadata.hasTipoText && (tipoIntrusionId || tipoIntrusion)) {
     const tipoValue =
       typeof tipoIntrusionId === "string" && tipoIntrusionId.trim()
@@ -299,14 +339,14 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
 
     if (typeof tipoValue === "string" && tipoValue.trim()) {
       values.push(`%${tipoValue.trim()}%`);
-      filters.push(`i.tipo ILIKE $${values.length}`);
+      filters.push(`${intrusionesAlias}.tipo ILIKE $${values.length}`);
     }
   }
 
   const parsedLlegoAlerta = normalizeBooleanParam(llegoAlerta);
   if (parsedLlegoAlerta !== undefined) {
     values.push(parsedLlegoAlerta);
-    filters.push(`i.llego_alerta = $${values.length}`);
+    filters.push(`${intrusionesAlias}.llego_alerta = $${values.length}`);
   }
 
   if (metadata.personaColumn && personalId !== undefined && personalId !== "") {
@@ -317,12 +357,13 @@ export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
       };
     }
     values.push(parsedPersonal);
-    filters.push(`i.${metadata.personaColumn} = $${values.length}`);
+    filters.push(`${intrusionesAlias}.${metadata.personaColumn} = $${values.length}`);
   }
 
   return {
     metadata,
     values,
+    filters,
     whereClause: filters.length ? `WHERE ${filters.join(" AND ")}` : "",
   };
 };
@@ -1702,26 +1743,158 @@ ORDER BY TOTAL DESC; /* A: PUBLIC.INTRUSIONES, B: PUBLIC.CATALOGO_TIPO_INTRUSION
 };
 
 export const exportConsolidadoIntrusiones = async (req, res) => {
-  const queryConfig = await prepareConsolidadoQuery(req.query, {
-    includePagination: false,
+  const filterConfig = await buildIntrusionesFilterConfig(req.query, {
+    intrusionesAlias: "A",
+    useSitioSubquery: true,
   });
 
-  if (queryConfig?.error) {
-    const { status, message } = queryConfig.error;
+  if (filterConfig?.error) {
+    const { status, message } = filterConfig.error;
     return res.status(status).json({ mensaje: message });
   }
 
-  const { query, values } = queryConfig;
+  const { filters, values } = filterConfig;
+  const filterClause = filters.length ? `\n  AND ${filters.join("\n  AND ")}` : "";
+
+  const query = `SELECT
+    A.ID,
+    A.UBICACION,
+    A.TIPO,
+    A.ESTADO,
+    A.DESCRIPCION,
+    A.FECHA_EVENTO,
+    A.FECHA_REACCION,
+    A.MEDIO_COMUNICACION_ID,
+    A.LLEGO_ALERTA,
+    A.FECHA_REACCION_FUERA,
+    A.CONCLUSION_EVENTO_ID,
+    A.SUSTRACCION_MATERIAL,
+    A.FUERZA_REACCION_ID,
+    A.SITIO_ID,
+    A.PERSONA_ID,
+    A.ORIGEN,
+    A.HIK_ALARM_EVENTO_ID,
+    A.NO_LLEGO_ALERTA,
+    A.COMPLETADO,
+    A.FECHA_COMPLETADO,
+    A.MEDIO_COMUNICACION,
+    A.NECESITA_PROTOCOLO,
+    A.FECHA_REACCION_ENVIADA,
+    A.FECHA_LLEGADA_FUERZA_REACCION,
+    A.CONCLUSION_EVENTO,
+    B.DESCRIPCION AS MEDIO_COMUNICACION_DESCRIPCION
+FROM PUBLIC.INTRUSIONES A
+LEFT JOIN PUBLIC.CATALOGO_MEDIO_COMUNICACION B ON (B.ID = A.MEDIO_COMUNICACION_ID)
+WHERE 1=1${filterClause}
+ORDER BY A.FECHA_EVENTO DESC;`;
 
   try {
     const result = await pool.query(query, values);
-    const data = result.rows.map(mapConsolidadoRow);
-    const totalRecords = result.rows[0]?.total_count ?? data.length;
 
-    return res.json({
-      data,
-      total: Number(totalRecords) || data.length,
-    });
+    const worksheetData = [
+      [
+        "ID",
+        "UBICACION",
+        "TIPO",
+        "ESTADO",
+        "DESCRIPCION",
+        "FECHA_EVENTO",
+        "FECHA_REACCION",
+        "MEDIO_COMUNICACION_ID",
+        "LLEGO_ALERTA",
+        "FECHA_REACCION_FUERA",
+        "CONCLUSION_EVENTO_ID",
+        "SUSTRACCION_MATERIAL",
+        "FUERZA_REACCION_ID",
+        "SITIO_ID",
+        "PERSONA_ID",
+        "ORIGEN",
+        "HIK_ALARM_EVENTO_ID",
+        "NO_LLEGO_ALERTA",
+        "COMPLETADO",
+        "FECHA_COMPLETADO",
+        "MEDIO_COMUNICACION",
+        "NECESITA_PROTOCOLO",
+        "FECHA_REACCION_ENVIADA",
+        "FECHA_LLEGADA_FUERZA_REACCION",
+        "CONCLUSION_EVENTO",
+        "MEDIO_COMUNICACION_DESCRIPCION",
+      ],
+      ...result.rows.map((row) => [
+        row?.id ?? "",
+        row?.ubicacion ?? "",
+        row?.tipo ?? "",
+        row?.estado ?? "",
+        row?.descripcion ?? "",
+        formatDateValue(row?.fecha_evento),
+        formatDateValue(row?.fecha_reaccion),
+        row?.medio_comunicacion_id ?? "",
+        row?.llego_alerta === null || row?.llego_alerta === undefined
+          ? ""
+          : row.llego_alerta
+          ? "Sí"
+          : "No",
+        formatDateValue(row?.fecha_reaccion_fuera),
+        row?.conclusion_evento_id ?? "",
+        row?.sustraccion_material === null || row?.sustraccion_material === undefined
+          ? ""
+          : row.sustraccion_material
+          ? "Sí"
+          : "No",
+        row?.fuerza_reaccion_id ?? "",
+        row?.sitio_id ?? "",
+        row?.persona_id ?? "",
+        row?.origen ?? "",
+        row?.hik_alarm_evento_id ?? "",
+        row?.no_llego_alerta === null || row?.no_llego_alerta === undefined
+          ? ""
+          : row.no_llego_alerta
+          ? "Sí"
+          : "No",
+        row?.completado === null || row?.completado === undefined
+          ? ""
+          : row.completado
+          ? "Sí"
+          : "No",
+        formatDateValue(row?.fecha_completado),
+        row?.medio_comunicacion ?? "",
+        row?.necesita_protocolo === null || row?.necesita_protocolo === undefined
+          ? ""
+          : row.necesita_protocolo
+          ? "Sí"
+          : "No",
+        formatDateValue(row?.fecha_reaccion_enviada),
+        formatDateValue(row?.fecha_llegada_fuerza_reaccion),
+        row?.conclusion_evento ?? "",
+        row?.medio_comunicacion_descripcion ?? "",
+      ]),
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Consolidado");
+
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+    const timestamp = formatTimestamp();
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="CONSOLIDADO_INTRUSIONES_${timestamp}.xlsx"`
+    );
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+    res.removeHeader("ETag");
+
+    return res.status(200).send(buffer);
   } catch (error) {
     console.error("Error al exportar el consolidado de intrusiones:", error);
     return res
