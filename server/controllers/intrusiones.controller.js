@@ -831,9 +831,7 @@ export const createIntrusion = async (req, res) => {
     body.medio_comunicacion_id ??
     body.MEDIO_COMUNICACION_ID ??
     body.medioComunicacionId ??
-    body.medioComunicacion ??
-    body.medio_comunicacion ??
-    body.MEDIO_COMUNICACION;
+    null;
   const rawConclusionEventoId = body.conclusion_evento_id ?? body.CONCLUSION_EVENTO_ID;
   const rawSustraccionMaterial = body.sustraccion_material ?? body.SUSTRACCION_MATERIAL;
   const rawFuerzaReaccionId = body.fuerza_reaccion_id ?? body.FUERZA_REACCION_ID;
@@ -867,7 +865,6 @@ export const createIntrusion = async (req, res) => {
       body.medio_comunicacion_id ??
       body.MEDIO_COMUNICACION_ID ??
       body.medioComunicacionId,
-    medio_comunicacion: body.medio_comunicacion ?? body.MEDIO_COMUNICACION,
     completado: body.completado ?? body.COMPLETADO,
   });
 
@@ -880,7 +877,9 @@ export const createIntrusion = async (req, res) => {
     ? parseFechaValue(rawFechaLlegadaFuerzaReaccion)
     : null;
   const medioComValue =
-    rawMedioComunicacionId === null || rawMedioComunicacionId === undefined || rawMedioComunicacionId === ""
+    rawMedioComunicacionId === null ||
+    rawMedioComunicacionId === undefined ||
+    rawMedioComunicacionId === ""
       ? null
       : Number(rawMedioComunicacionId);
   const conclusionEventoValue = parseIntegerOrNull(rawConclusionEventoId);
@@ -910,6 +909,17 @@ export const createIntrusion = async (req, res) => {
   const necesitaProtocoloValue = metadata.hasNecesitaProtocolo
     ? Boolean(rawNecesitaProtocolo)
     : false;
+
+  if (
+    completadoValue &&
+    (medioComValue === null || Number.isNaN(medioComValue))
+  ) {
+    return res.status(400).json({
+      message:
+        "El medio de comunicación es obligatorio para completar la intrusión.",
+      details: { field: "medio_comunicacion_id" },
+    });
+  }
 
   const missingFields = [];
 
@@ -1321,13 +1331,19 @@ export const updateIntrusion = async (req, res) => {
       .json({ mensaje: "La fecha de llegada de la fuerza de reacción debe ser posterior a la fecha de reacción." });
   }
 
-  const medioValue =
+  const rawMedioComunicacionId =
     body.medio_comunicacion_id !== undefined
-      ? body.medio_comunicacion_id === null || body.medio_comunicacion_id === ""
+      ? body.medio_comunicacion_id
+      : body.medioComunicacionId !== undefined
+      ? body.medioComunicacionId
+      : undefined;
+  const medioValue =
+    rawMedioComunicacionId !== undefined
+      ? rawMedioComunicacionId === null || rawMedioComunicacionId === ""
         ? null
-        : Number(body.medio_comunicacion_id)
+        : Number(rawMedioComunicacionId)
       : currentRow?.medio_comunicacion_id ?? null;
-  if (body.medio_comunicacion_id !== undefined) {
+  if (rawMedioComunicacionId !== undefined) {
     pushUpdate("medio_comunicacion_id", medioValue);
   }
 
@@ -1415,6 +1431,17 @@ export const updateIntrusion = async (req, res) => {
 
   if (metadata.hasNecesitaProtocolo && body.necesita_protocolo !== undefined) {
     pushUpdate("necesita_protocolo", necesitaProtocoloValue);
+  }
+
+  if (
+    completadoValue &&
+    (medioValue === null || Number.isNaN(medioValue))
+  ) {
+    return res.status(400).json({
+      message:
+        "El medio de comunicación es obligatorio para completar la intrusión.",
+      details: { field: "medio_comunicacion_id" },
+    });
   }
 
   const missingCompletion = validateCompletionRequirements({
