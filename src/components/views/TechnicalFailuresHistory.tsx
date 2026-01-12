@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { TechnicalFailure } from '../../types';
 import { calcularEstado } from './TechnicalFailuresUtils';
+import { FallosExportFilters, exportFallosTecnicosConsultasExcel } from '../../services/fallosService';
 
 const formatFechaHoraFallo = (failure: TechnicalFailure) => {
   if (failure.fechaHoraFallo) {
@@ -49,6 +49,7 @@ interface TechnicalFailuresHistoryProps {
   handleEdit?: (failure: TechnicalFailure) => void;
   showActions?: boolean;
   enableExport?: boolean;
+  exportFilters?: FallosExportFilters;
   renderActions?: (failure: TechnicalFailure) => React.ReactNode;
   withContainer?: boolean;
 }
@@ -60,6 +61,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   handleEdit,
   showActions = true,
   enableExport = false,
+  exportFilters,
   renderActions,
   withContainer = true,
 }) => {
@@ -73,6 +75,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     departamento: '',
   });
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const actionsEnabled = showActions && Boolean(handleEdit || renderActions);
   const columnsCount = actionsEnabled ? 9 : 8;
 
@@ -302,40 +305,37 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     return estadoNorm === 'RESUELTO' || estadoNorm.startsWith('RESUELT');
   };
 
-  const handleExportToExcel = () => {
-    if (isLoading || sortedFailures.length === 0) return;
+  const handleExportToExcel = async () => {
+    if (isLoading || isExporting || sortedFailures.length === 0) return;
 
-    const formattedRows = sortedFailures.map((fallo) => ({
-      'Fecha y Hora de Fallo': formatFechaHoraFallo(fallo) || 'Sin información',
-      Problema:
-        fallo.problema
-          || fallo.tipoProblemaNombre
-          || fallo.tipoProblema
-          || fallo.descripcion_fallo
-          || 'Sin información',
-      'Tipo de Afectación': getTipoAfectacionLabel(fallo),
-      Sitio: fallo.sitio || fallo.sitioNombre || fallo.sitio_nombre || 'Sin sitio asignado',
-      Estado: calcularEstado(fallo).texto,
-      'Departamento Responsable':
-        fallo.departamento_responsable
-          || fallo.departamentoNombre
-          || fallo.deptResponsable
-          || 'Sin información',
-    }));
+    setIsExporting(true);
 
-    const worksheet = XLSX.utils.json_to_sheet(formattedRows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Consultas');
+    try {
+      const { blob, filename } = await exportFallosTecnicosConsultasExcel({
+        ...exportFilters,
+        fechaDesde: filters.fechaDesde,
+        fechaHasta: filters.fechaHasta,
+        problema: filters.problema,
+        tipoAfectacion: filters.tipoAfectacion,
+        sitio: filters.sitio,
+        estado: filters.estado,
+        departamento: filters.departamento,
+      });
 
-    const now = new Date();
-    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
-      now.getDate()
-    ).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(
-      now.getMinutes()
-    ).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-
-    const filename = `consultas_fallos_tecnicos_${timestamp}.xlsx`;
-    XLSX.writeFile(workbook, filename);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error al exportar fallos técnicos:', error);
+      alert('No se pudo exportar el Excel de fallos técnicos.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const content = (
@@ -355,14 +355,14 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
             <button
               type="button"
               onClick={handleExportToExcel}
-              disabled={isLoading || sortedFailures.length === 0}
+              disabled={isLoading || isExporting || sortedFailures.length === 0}
               className={`px-4 py-2 text-sm font-semibold text-white rounded-md ${
-                isLoading || sortedFailures.length === 0
+                isLoading || isExporting || sortedFailures.length === 0
                   ? 'bg-blue-300 cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700'
               }`}
             >
-              Exportar a Excel
+              {isExporting ? 'Exportando...' : 'Exportar a Excel'}
             </button>
           )}
         </div>
