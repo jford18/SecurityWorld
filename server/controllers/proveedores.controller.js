@@ -1,5 +1,7 @@
+import XLSX from "xlsx";
 import {
   deleteProveedorById,
+  exportProveedores,
   findAllProveedores,
   findProveedorById,
   insertProveedor,
@@ -43,6 +45,26 @@ const normalizeBoolean = (value, fallback = true) => {
 const parsePositiveInteger = (value) => {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const formatTimestamp = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+
+  return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+};
+
+const formatDateValue = (value) => {
+  if (!value) return "";
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toISOString().replace("T", " ").replace("Z", "");
 };
 
 export const getProveedores = async (req, res) => {
@@ -211,10 +233,63 @@ export const deleteProveedor = async (req, res) => {
   }
 };
 
+export const exportProveedoresExcel = async (req, res) => {
+  try {
+    const rawSearch = sanitizeText(req?.query?.q ?? req?.query?.search ?? "");
+    const proveedores = await exportProveedores(rawSearch);
+
+    const worksheetData = [
+      ["ID", "NOMBRE", "IDENTIFICACION", "TELEFONO", "DIRECCION", "ACTIVO", "FECHA_CREACION"],
+      ...proveedores.map((row) => [
+        row?.id ?? "",
+        row?.nombre ?? "",
+        row?.identificacion ?? "",
+        row?.telefono ?? "",
+        row?.direccion ?? "",
+        row?.activo === null || row?.activo === undefined ? "" : row.activo ? "Sí" : "No",
+        formatDateValue(row?.fecha_creacion),
+      ]),
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Proveedores");
+
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+    const timestamp = formatTimestamp();
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="PROVEEDORES_${timestamp}.xlsx"`
+    );
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+    res.removeHeader("ETag");
+
+    return res.status(200).send(buffer);
+  } catch (error) {
+    console.error("Error al exportar proveedores:", error);
+    return res.status(500).json({
+      message: "No se pudo exportar proveedores",
+      detail: error?.message,
+    });
+  }
+};
+
 export default {
   getProveedores,
   getProveedorById,
   createProveedor,
   updateProveedor,
   deleteProveedor,
+  exportProveedoresExcel,
 };

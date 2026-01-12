@@ -1,8 +1,15 @@
 import pool from "../db.js";
 
 const BASE_SELECT = `
-  SELECT id, nombre, identificacion, direccion, telefono, activo, fecha_creacion
-    FROM public.proveedores
+  SELECT
+    A.id,
+    A.nombre,
+    A.identificacion,
+    A.direccion,
+    A.telefono,
+    A.activo,
+    A.fecha_creacion
+  FROM public.proveedores A
 `;
 
 export const findAllProveedores = async (searchTerm) => {
@@ -10,27 +17,63 @@ export const findAllProveedores = async (searchTerm) => {
     const term = `%${searchTerm.trim()}%`;
     const result = await pool.query(
       `${BASE_SELECT}
-       WHERE nombre ILIKE $1
-          OR identificacion ILIKE $1
-          OR telefono ILIKE $1
-          OR direccion ILIKE $1
-       ORDER BY id`,
+       WHERE A.nombre ILIKE $1
+          OR A.identificacion ILIKE $1
+          OR A.telefono ILIKE $1
+          OR A.direccion ILIKE $1
+       ORDER BY A.id`,
       [term]
     );
     return result.rows ?? [];
   }
 
-  const result = await pool.query(`${BASE_SELECT} ORDER BY id`);
+  const result = await pool.query(`${BASE_SELECT} ORDER BY A.id`);
   return result.rows ?? [];
 };
 
 export const findProveedorById = async (id) => {
   const result = await pool.query(
     `${BASE_SELECT}
-     WHERE id = $1`,
+     WHERE A.id = $1`,
     [id]
   );
   return result.rows?.[0] ?? null;
+};
+
+export const exportProveedores = async (searchTerm) => {
+  const filters = [];
+  const values = [];
+
+  if (searchTerm && searchTerm.trim().length > 0) {
+    const term = `%${searchTerm.trim()}%`;
+    values.push(term);
+    filters.push(
+      `(A.NOMBRE ILIKE $${values.length}
+        OR A.IDENTIFICACION ILIKE $${values.length}
+        OR A.TELEFONO ILIKE $${values.length}
+        OR A.DIRECCION ILIKE $${values.length})`
+    );
+  }
+
+  const filterClause = filters.length ? `\n  AND ${filters.join("\n  AND ")}` : "";
+
+  const result = await pool.query(
+    `SELECT
+    A.ID,
+    A.NOMBRE,
+    A.IDENTIFICACION,
+    A.TELEFONO,
+    A.DIRECCION,
+    A.ACTIVO,
+    A.FECHA_CREACION
+FROM PUBLIC.PROVEEDORES A
+WHERE 1=1${filterClause}
+ORDER BY A.FECHA_CREACION DESC;
+-- Comentario: PUBLIC.PROVEEDORES A tabla principal; filtros = los del UI; export sin LIMIT/OFFSET.`,
+    values
+  );
+
+  return result.rows ?? [];
 };
 
 export const insertProveedor = async (data) => {
@@ -109,6 +152,7 @@ export const deleteProveedorById = async (id) => {
 export default {
   findAllProveedores,
   findProveedorById,
+  exportProveedores,
   insertProveedor,
   updateProveedorById,
   deleteProveedorById,

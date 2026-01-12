@@ -2,6 +2,7 @@ import express from "express";
 import {
   createProveedor,
   deleteProveedor,
+  exportProveedoresExcel,
   getProveedorById,
   getProveedores,
   updateProveedor,
@@ -10,6 +11,7 @@ import {
 const router = express.Router();
 
 router.get("/", getProveedores);
+router.get("/export", exportProveedoresExcel);
 router.get("/:id", getProveedorById);
 router.post("/", createProveedor);
 router.put("/:id", updateProveedor);
