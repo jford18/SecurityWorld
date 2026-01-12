@@ -1,4 +1,26 @@
+import XLSX from "xlsx";
 import pool from "../db.js";
+import { exportUsuarios } from "../services/usuarios.service.js";
+
+const formatTimestamp = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+
+  return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+};
+
+const formatDateValue = (value) => {
+  if (!value) return "";
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toISOString().replace("T", " ").replace("Z", "");
+};
 
 // NEW: Controlador para obtener la lista de usuarios.
 export const getUsuarios = async (_req, res) => {
@@ -137,5 +159,60 @@ export const deleteUsuario = async (req, res) => {
   } catch (error) {
     console.error("Error al eliminar usuario", error); // FIX: Registro de error para auditoría.
     return res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+export const exportUsuariosExcel = async (req, res) => {
+  try {
+    const usuarios = await exportUsuarios({
+      id: req?.query?.id,
+      usuario: req?.query?.usuario,
+      nombreCompleto: req?.query?.nombreCompleto,
+      estado: req?.query?.estado,
+      fechaCreacion: req?.query?.fechaCreacion,
+    });
+
+    const worksheetData = [
+      ["ID", "USUARIO", "NOMBRE", "ACTIVO", "FECHA_CREACION"],
+      ...usuarios.map((row) => [
+        row?.id ?? "",
+        row?.nombre_usuario ?? "",
+        row?.nombre_completo ?? "",
+        row?.activo === null || row?.activo === undefined ? "" : row.activo ? "Sí" : "No",
+        formatDateValue(row?.fecha_creacion),
+      ]),
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Usuarios");
+
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+    const timestamp = formatTimestamp();
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=\"USUARIOS_${timestamp}.xlsx\"`
+    );
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+    res.removeHeader("ETag");
+
+    return res.status(200).send(buffer);
+  } catch (error) {
+    console.error("Error al exportar usuarios:", error);
+    return res.status(500).json({
+      message: "No se pudo exportar usuarios",
+      detail: error?.message,
+    });
   }
 };
