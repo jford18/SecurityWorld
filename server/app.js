@@ -9,6 +9,7 @@ import departamentosResponsablesRoutes from "./routes/departamentosResponsables.
 import catalogoTipoProblemaRoutes from "./routes/catalogoTipoProblema.routes.js";
 import conclusionEventoRoutes from "./routes/conclusionEvento.routes.js";
 import fallosTecnicosRoutes from "./routes/fallosTecnicosRoutes.js";
+import hikAlarmInputStatusRoutes from "./routes/hikAlarmInputStatus.routes.js";
 import proveedoresRoutes from "./routes/proveedores.routes.js";
 
 const app = express();
@@ -30,6 +31,7 @@ app.use("/api/clientes", clientesRoutes);
 app.use("/api/proveedores", proveedoresRoutes);
 app.use("/api/fallos", fallosRoutes);
 app.use("/api/fallos-tecnicos", fallosTecnicosRoutes);
+app.use("/api", hikAlarmInputStatusRoutes);
 app.use("/api/asignar-cliente-sitio", asignarClienteSitioRoutes);
 app.use("/api", tipoAreaRoutes);
 app.use("/api/v1/catalogo-tipo-problema", catalogoTipoProblemaRoutes);

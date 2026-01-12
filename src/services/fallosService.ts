@@ -62,6 +62,8 @@ export interface TechnicalFailurePayload {
   tipo_equipo_afectado_id?: number | string | null;
   encodingDeviceId?: number | string | null;
   ipSpeakerId?: number | string | null;
+  alarm_input_id?: number | string | null;
+  alarmInputId?: number | string | null;
 }
 
 export type SitioAsociado = {
@@ -178,6 +180,11 @@ export const getEncodingDevicesBySite = async (siteName: string) => {
 export const getIpSpeakersBySite = async (siteName: string) => {
   const res = await api.get('/hik/ip-speakers', { params: { siteName } });
   return res.data as Array<{ id: number; name: string }>;
+};
+
+export const getAlarmInputsBySite = async (sitioId: string | number) => {
+  const res = await api.get('/hik-alarm-input-status', { params: { sitioId } });
+  return res.data as Array<{ id: number; name: string; area: string }>;
 };
 
 const buildRoleHeaders = (context?: RequestContext) => {
