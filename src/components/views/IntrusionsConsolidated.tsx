@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import {
   fetchIntrusionesConsolidado,
   exportIntrusionesConsolidado,
@@ -7,10 +6,7 @@ import {
   IntrusionConsolidadoResponse,
 } from '../../services/intrusionesService';
 import { IntrusionConsolidadoRow } from '../../types';
-import {
-  formatIntrusionDateTime,
-  intrusionesColumns,
-} from '@/components/intrusiones/intrusionesColumns';
+import { intrusionesColumns } from '@/components/intrusiones/intrusionesColumns';
 import IntrusionesFilters from '@/components/intrusiones/IntrusionesFilters';
 
 const IntrusionsConsolidated: React.FC = () => {
@@ -137,35 +133,15 @@ const IntrusionsConsolidated: React.FC = () => {
     setError(null);
 
     try {
-      const { data: exportData } = await exportIntrusionesConsolidado(filters);
-      if (!exportData.length) {
-        return;
-      }
-
-      const rowsToExport = sortRows(exportData);
-
-      const formattedRows = rowsToExport.map((row) => ({
-        'Fecha y hora de intrusión':
-          formatIntrusionDateTime(row.fechaHoraIntrusion) || 'Sin información',
-        Sitio: row.sitio || 'Sin información',
-        'Tipo intrusión': row.tipoIntrusion || 'Sin información',
-        'Llegó alerta': row.llegoAlerta ? 'Sí' : 'No',
-        'Personal identificado (Cargo – Persona)': row.personalIdentificado?.trim() || 'N/A',
-      }));
-
-    const worksheet = XLSX.utils.json_to_sheet(formattedRows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Consolidado');
-
-    const now = new Date();
-    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
-      now.getDate()
-    ).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(
-      now.getMinutes()
-    ).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-
-      const filename = `consolidado_intrusiones_${timestamp}.xlsx`;
-      XLSX.writeFile(workbook, filename);
+      const { blob, filename } = await exportIntrusionesConsolidado(filters);
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
     } catch (exportError) {
       console.error('Error al exportar el consolidado de intrusiones:', exportError);
       setError('No se pudo exportar el consolidado de intrusiones.');

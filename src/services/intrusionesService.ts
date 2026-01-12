@@ -241,9 +241,9 @@ export interface IntrusionConsolidadoResponse {
   pageSize: number;
 }
 
-export interface IntrusionConsolidadoExportResponse {
-  data: IntrusionConsolidadoRow[];
-  total: number;
+export interface IntrusionConsolidadoExportFile {
+  blob: Blob;
+  filename: string;
 }
 
 export interface EventoPorHaciendaSitioRow {
@@ -363,7 +363,62 @@ export const fetchIntrusionesConsolidado = async (
 
 export const exportIntrusionesConsolidado = async (
   params: IntrusionConsolidadoFilters
-): Promise<IntrusionConsolidadoExportResponse> => {
+): Promise<IntrusionConsolidadoExportFile> => {
+  const EXCEL_MIME_TYPE =
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+  const parseContentDispositionFilename = (headerValue: unknown) => {
+    if (!headerValue || typeof headerValue !== 'string') {
+      return null;
+    }
+
+    const utf8Match = headerValue.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match?.[1]) {
+      try {
+        return decodeURIComponent(utf8Match[1]);
+      } catch (error) {
+        return utf8Match[1];
+      }
+    }
+
+    const asciiMatch = headerValue.match(/filename="?([^";]+)"?/i);
+    return asciiMatch?.[1] ?? null;
+  };
+
+  const extractMessageFromText = (text: string | null) => {
+    if (!text || typeof text !== 'string') {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(text) as { message?: string; error?: string; detail?: string };
+      const message = parsed?.message ?? parsed?.error;
+      const detail = parsed?.detail;
+
+      if (message && detail) {
+        return `${message}. Detalle: ${detail}`;
+      }
+
+      return message ?? detail ?? null;
+    } catch (error) {
+      return text.trim() || (error instanceof Error ? error.message : null);
+    }
+  };
+
+  const extractErrorFromBlob = async (blob: Blob | null) => {
+    if (!blob) return null;
+
+    try {
+      const text = await blob.text();
+      return extractMessageFromText(text);
+    } catch (error) {
+      return error instanceof Error ? error.message : null;
+    }
+  };
+
+  const normalizeHeaderValue = (value: unknown) =>
+    typeof value === 'string' ? value.toLowerCase() : '';
+
   const searchParams = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
@@ -383,22 +438,58 @@ export const exportIntrusionesConsolidado = async (
   });
 
   const query = searchParams.toString();
-  const { data } = await apiClient.get<IntrusionConsolidadoExportResponse>(
-    `/intrusiones/consolidado/export${query ? `?${query}` : ''}`
-  );
+  try {
+    const response = await apiClient.get(
+      `/intrusiones/consolidado/export${query ? `?${query}` : ''}`,
+      {
+        responseType: 'blob',
+        headers: {
+          Accept: EXCEL_MIME_TYPE,
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+      }
+    );
 
-  const payload = data as Partial<IntrusionConsolidadoExportResponse> & {
-    data?: unknown;
-  };
+    const contentType = normalizeHeaderValue(response.headers?.['content-type']);
 
-  const parsedData = Array.isArray(payload.data)
-    ? (payload.data as IntrusionConsolidadoRow[])
-    : [];
+    if (!contentType.includes('spreadsheetml.sheet')) {
+      const backendError = await extractErrorFromBlob(response.data as Blob);
+      throw new Error(backendError || 'No se pudo exportar el consolidado de intrusiones.');
+    }
 
-  return {
-    data: parsedData,
-    total: payload.total ?? parsedData.length,
-  };
+    const filename =
+      parseContentDispositionFilename(response.headers?.['content-disposition']) ||
+      `consolidado_intrusiones_${Date.now()}.xlsx`;
+
+    const blob = new Blob([response.data], {
+      type: contentType || EXCEL_MIME_TYPE,
+    });
+
+    if (!blob || blob.size === 0) {
+      throw new Error('Export inválido: archivo vacío');
+    }
+
+    return { blob, filename };
+  } catch (error) {
+    if (error && typeof error === 'object' && 'response' in error) {
+      const response = (error as { response?: { data?: unknown } }).response;
+      const data = response?.data;
+
+      if (data instanceof Blob) {
+        const parsedMessage = await extractErrorFromBlob(data);
+        if (parsedMessage) {
+          throw new Error(parsedMessage);
+        }
+      }
+    }
+
+    if (error instanceof Error && error.message) {
+      throw error;
+    }
+
+    throw new Error('No se pudo exportar el consolidado de intrusiones.');
+  }
 };
 
 export const getEventosPorHaciendaSitio = async (

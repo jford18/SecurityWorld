@@ -1,3 +1,4 @@
+import XLSX from "xlsx";
 import { pool } from "../db.js";
 
 const mapIntrusionRow = (row) => {
@@ -194,6 +195,34 @@ const mapConsolidadoRow = (row) => {
     llegoAlerta: Boolean(row?.llego_alerta),
     personalIdentificado,
   };
+};
+
+const formatConsolidadoDateTime = (value) => {
+  if (!value) return "";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value).replace("T", " ").replace("Z", "");
+  }
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const hours = String(parsed.getHours()).padStart(2, "0");
+  const minutes = String(parsed.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+};
+
+const formatExcelTimestamp = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+
+  return `${year}${month}${day}_${hours}${minutes}${seconds}`;
 };
 
 export const buildIntrusionesFilterConfig = async (queryParams = {}) => {
@@ -1716,12 +1745,49 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
   try {
     const result = await pool.query(query, values);
     const data = result.rows.map(mapConsolidadoRow);
-    const totalRecords = result.rows[0]?.total_count ?? data.length;
 
-    return res.json({
-      data,
-      total: Number(totalRecords) || data.length,
-    });
+    const worksheetData = [
+      [
+        "Fecha y hora de intrusión",
+        "Sitio",
+        "Tipo intrusión",
+        "Llegó alerta",
+        "Personal identificado (Cargo – Persona)",
+      ],
+      ...data.map((row) => [
+        formatConsolidadoDateTime(row.fechaHoraIntrusion) || "Sin información",
+        row.sitio || "Sin información",
+        row.tipoIntrusion || "Sin información",
+        row.llegoAlerta ? "Sí" : "No",
+        row.personalIdentificado?.trim() || "N/A",
+      ]),
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Consolidado");
+
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+    const timestamp = formatExcelTimestamp();
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="consolidado_intrusiones_${timestamp}.xlsx"`
+    );
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+    res.removeHeader("ETag");
+
+    return res.status(200).send(buffer);
   } catch (error) {
     console.error("Error al exportar el consolidado de intrusiones:", error);
     return res
