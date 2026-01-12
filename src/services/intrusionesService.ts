@@ -32,16 +32,23 @@ const normalizeFechaValue = (value: unknown): string | null => {
   }
 
   if (typeof value === 'string') {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
   }
 
   if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? null : value.toISOString();
+    if (Number.isNaN(value.getTime())) return null;
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    const hours = String(value.getHours()).padStart(2, '0');
+    const minutes = String(value.getMinutes()).padStart(2, '0');
+    const seconds = String(value.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
   }
 
-  const asDate = new Date(value as string);
-  return Number.isNaN(asDate.getTime()) ? null : asDate.toISOString();
+  const asString = String(value).trim();
+  return asString ? asString : null;
 };
 
 const normalizeIntrusion = (payload: unknown): Intrusion | null => {

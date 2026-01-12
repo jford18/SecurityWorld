@@ -1,4 +1,5 @@
 import React from 'react';
+import { toDatetimeLocalValue } from '@/utils/datetime';
 
 export type DateTimeParts = {
   date?: string;
@@ -11,17 +12,8 @@ export const buildDateTimeLocalValue = (date?: string, time?: string) => {
   return `${date}T${sanitizedTime}`;
 };
 
-export const normalizeDateTimeLocalString = (value?: string | Date | null) => {
-  if (!value) return '';
-
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return '';
-  }
-
-  const withOffset = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
-  return withOffset.toISOString().slice(0, 16);
-};
+export const normalizeDateTimeLocalString = (value?: string | Date | null) =>
+  toDatetimeLocalValue(value);
 
 export const splitDateTimeLocalValue = (value?: string | Date | null): DateTimeParts => {
   const normalizedValue = normalizeDateTimeLocalString(value);
@@ -83,8 +75,10 @@ const DateTimeInput: React.FC<DateTimeInputProps> = ({
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = event.target.value || null;
     const parsedDate = newValue ? new Date(newValue) : null;
-    const isoString = parsedDate && !Number.isNaN(parsedDate.getTime()) ? toIsoString(newValue) : null;
-    onChange(newValue, { isoString, dateValue: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null });
+    onChange(newValue, {
+      isoString: null,
+      dateValue: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null,
+    });
   };
 
   return (
