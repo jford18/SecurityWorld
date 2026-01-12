@@ -811,6 +811,9 @@ export const openIntrusionDesdeHc = async (req, res) => {
 
 export const createIntrusion = async (req, res) => {
   const body = req.body || {};
+  const medio_comunicacion_id =
+    body.medio_comunicacion_id ?? body.medio_comunicacion?.medio_comunicacion_id ?? null;
+  const completado = body.completado ?? body.medio_comunicacion?.completado ?? false;
   const rawUbicacion =
     body.ubicacion ?? body.UBICACION ?? body.sitio_nombre ?? body.SITIO_NOMBRE ?? null;
   const rawTipoText = body.tipo ?? body.TIPO ?? null;
@@ -828,7 +831,7 @@ export const createIntrusion = async (req, res) => {
   const rawNoLlegoAlerta =
     body.no_llego_alerta ?? body.NO_LLEGO_ALERTA ?? body.llego_alerta ?? body.LLEGO_ALERTA;
   const rawMedioComunicacionId =
-    body.medio_comunicacion_id ??
+    medio_comunicacion_id ??
     body.MEDIO_COMUNICACION_ID ??
     body.medioComunicacionId ??
     body.medio_comunicacion?.medio_comunicacion_id ??
@@ -841,8 +844,7 @@ export const createIntrusion = async (req, res) => {
   const rawDescripcion = body.descripcion ?? body.DESCRIPCION ?? null;
   const rawOrigen = body.origen ?? body.ORIGEN ?? "MANUAL";
   const rawHikAlarmEventoId = body.hik_alarm_evento_id ?? body.HIK_ALARM_EVENTO_ID ?? null;
-  const rawCompletado =
-    body.completado ?? body.COMPLETADO ?? body.medio_comunicacion?.completado ?? false;
+  const rawCompletado = completado ?? body.COMPLETADO ?? false;
   const rawNecesitaProtocolo = body.necesita_protocolo ?? body.NECESITA_PROTOCOLO;
 
   let metadata;
@@ -861,15 +863,16 @@ export const createIntrusion = async (req, res) => {
     persona_id: rawPersonaId,
     origen: rawOrigen,
     hik_alarm_evento_id: rawHikAlarmEventoId,
+    medio_comunicacion_id: medio_comunicacion_id ? Number(medio_comunicacion_id) : null,
+    completado: completado,
   });
   console.log("[INTRUSIONES][CREATE] medio_comunicacion:", {
     medio_comunicacion_id:
-      body.medio_comunicacion_id ??
+      medio_comunicacion_id ??
       body.MEDIO_COMUNICACION_ID ??
       body.medioComunicacionId ??
       body.medio_comunicacion?.medio_comunicacion_id,
-    completado:
-      body.completado ?? body.COMPLETADO ?? body.medio_comunicacion?.completado,
+    completado: completado ?? body.COMPLETADO,
   });
 
   const fechaEventoValue = rawFechaEvento ? parseFechaValue(rawFechaEvento) : new Date();
