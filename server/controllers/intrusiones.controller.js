@@ -827,7 +827,13 @@ export const createIntrusion = async (req, res) => {
     null;
   const rawNoLlegoAlerta =
     body.no_llego_alerta ?? body.NO_LLEGO_ALERTA ?? body.llego_alerta ?? body.LLEGO_ALERTA;
-  const rawMedioComunicacionId = body.medio_comunicacion_id ?? body.MEDIO_COMUNICACION_ID;
+  const rawMedioComunicacionId =
+    body.medio_comunicacion_id ??
+    body.MEDIO_COMUNICACION_ID ??
+    body.medioComunicacionId ??
+    body.medioComunicacion ??
+    body.medio_comunicacion ??
+    body.MEDIO_COMUNICACION;
   const rawConclusionEventoId = body.conclusion_evento_id ?? body.CONCLUSION_EVENTO_ID;
   const rawSustraccionMaterial = body.sustraccion_material ?? body.SUSTRACCION_MATERIAL;
   const rawFuerzaReaccionId = body.fuerza_reaccion_id ?? body.FUERZA_REACCION_ID;
@@ -855,6 +861,14 @@ export const createIntrusion = async (req, res) => {
     persona_id: rawPersonaId,
     origen: rawOrigen,
     hik_alarm_evento_id: rawHikAlarmEventoId,
+  });
+  console.log("[INTRUSIONES][CREATE] medio_comunicacion:", {
+    medio_comunicacion_id:
+      body.medio_comunicacion_id ??
+      body.MEDIO_COMUNICACION_ID ??
+      body.medioComunicacionId,
+    medio_comunicacion: body.medio_comunicacion ?? body.MEDIO_COMUNICACION,
+    completado: body.completado ?? body.COMPLETADO,
   });
 
   const fechaEventoValue = rawFechaEvento ? parseFechaValue(rawFechaEvento) : new Date();

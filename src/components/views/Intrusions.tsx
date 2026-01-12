@@ -1497,7 +1497,7 @@ const Intrusions: React.FC = () => {
                   >
                     <option value="">Seleccione...</option>
                     {mediosComunicacion.map((medio) => (
-                      <option key={medio.id} value={medio.id}>
+                      <option key={medio.id} value={String(medio.id)}>
                         {medio.descripcion}
                       </option>
                     ))}
