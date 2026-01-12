@@ -1,6 +1,48 @@
 import XLSX from "xlsx";
 import { pool } from "../db.js";
 
+const LOCAL_DATETIME_REGEX = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::(\d{2}))?/;
+
+const formatDateTimeString = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    const hours = String(value.getHours()).padStart(2, "0");
+    const minutes = String(value.getMinutes()).padStart(2, "0");
+    const seconds = String(value.getSeconds()).padStart(2, "0");
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const match = raw.match(LOCAL_DATETIME_REGEX);
+  if (!match) return null;
+  const [, datePart, timePart, secondsPart] = match;
+  const seconds = secondsPart ?? "00";
+  return `${datePart} ${timePart}:${seconds}`;
+};
+
+const parseFechaValue = (value) => {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  return formatDateTimeString(value);
+};
+
+const parseFechaForComparison = (value) => {
+  const normalized = formatDateTimeString(value);
+  if (!normalized) return null;
+  const [datePart, timePart] = normalized.split(" ");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute, second] = timePart.split(":").map(Number);
+  const candidate = new Date(year, month - 1, day, hour, minute, second, 0);
+  return Number.isNaN(candidate.getTime()) ? null : candidate;
+};
+
 const mapIntrusionRow = (row) => {
   const hikAlarmEventoIdRaw =
     row?.hik_alarm_evento_id === undefined
@@ -20,7 +62,7 @@ const mapIntrusionRow = (row) => {
 
   const completado = Boolean(row?.completado);
   const fechaCompletado = row?.fecha_completado
-    ? new Date(row.fecha_completado).toISOString()
+    ? formatDateTimeString(row.fecha_completado)
     : null;
   const medioId =
     row?.medio_comunicacion_id === null || row?.medio_comunicacion_id === undefined
@@ -68,15 +110,15 @@ const mapIntrusionRow = (row) => {
     tipo: row?.tipo ?? "",
     estado: row?.estado ?? "",
     descripcion: row?.descripcion ?? "",
-    fecha_evento: row?.fecha_evento ? new Date(row.fecha_evento).toISOString() : null,
-    fecha_reaccion: row?.fecha_reaccion ? new Date(row.fecha_reaccion).toISOString() : null,
+    fecha_evento: row?.fecha_evento ? formatDateTimeString(row.fecha_evento) : null,
+    fecha_reaccion: row?.fecha_reaccion ? formatDateTimeString(row.fecha_reaccion) : null,
     fecha_reaccion_enviada: row?.fecha_reaccion_enviada
-      ? new Date(row.fecha_reaccion_enviada).toISOString()
+      ? formatDateTimeString(row.fecha_reaccion_enviada)
       : null,
     fecha_llegada_fuerza_reaccion: row?.fecha_llegada_fuerza_reaccion
-      ? new Date(row.fecha_llegada_fuerza_reaccion).toISOString()
+      ? formatDateTimeString(row.fecha_llegada_fuerza_reaccion)
       : row?.fecha_reaccion_fuera
-      ? new Date(row.fecha_reaccion_fuera).toISOString()
+      ? formatDateTimeString(row.fecha_reaccion_fuera)
       : null,
     no_llego_alerta: noLlegoAlerta,
     completado,
@@ -98,18 +140,6 @@ const mapIntrusionRow = (row) => {
   };
 };
 
-const parseFechaValue = (value) => {
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? null : value;
-  }
-
-  if (value == null || value === "") {
-    return null;
-  }
-
-  const candidate = new Date(value);
-  return Number.isNaN(candidate.getTime()) ? null : candidate;
-};
 
 const parseIntegerOrNull = (value) => {
   if (value === null || value === undefined || value === "") {
@@ -875,7 +905,9 @@ export const createIntrusion = async (req, res) => {
     completado: completado ?? body.COMPLETADO,
   });
 
-  const fechaEventoValue = rawFechaEvento ? parseFechaValue(rawFechaEvento) : new Date();
+  const fechaEventoValue = rawFechaEvento
+    ? parseFechaValue(rawFechaEvento)
+    : formatDateTimeString(new Date());
   const fechaReaccionValue = rawFechaReaccion ? parseFechaValue(rawFechaReaccion) : null;
   const fechaReaccionEnviadaValue = rawFechaReaccionEnviada
     ? parseFechaValue(rawFechaReaccionEnviada)
@@ -883,6 +915,10 @@ export const createIntrusion = async (req, res) => {
   const fechaLlegadaFuerzaReaccionValue = rawFechaLlegadaFuerzaReaccion
     ? parseFechaValue(rawFechaLlegadaFuerzaReaccion)
     : null;
+  const fechaEventoCompare = parseFechaForComparison(fechaEventoValue);
+  const fechaReaccionCompare = parseFechaForComparison(fechaReaccionValue);
+  const fechaReaccionEnviadaCompare = parseFechaForComparison(fechaReaccionEnviadaValue);
+  const fechaLlegadaCompare = parseFechaForComparison(fechaLlegadaFuerzaReaccionValue);
   const medioComValue =
     rawMedioComunicacionId === null ||
     rawMedioComunicacionId === undefined ||
@@ -980,9 +1016,9 @@ export const createIntrusion = async (req, res) => {
   }
 
   if (
-    fechaReaccionValue &&
-    fechaEventoValue &&
-    fechaReaccionValue.getTime() <= fechaEventoValue.getTime()
+    fechaReaccionCompare &&
+    fechaEventoCompare &&
+    fechaReaccionCompare.getTime() <= fechaEventoCompare.getTime()
   ) {
     return res.status(400).json({
       message: "La fecha y hora de reacción debe ser mayor que la fecha y hora de intrusión.",
@@ -991,9 +1027,9 @@ export const createIntrusion = async (req, res) => {
   }
 
   if (
-    fechaLlegadaFuerzaReaccionValue &&
-    fechaReaccionValue &&
-    fechaLlegadaFuerzaReaccionValue.getTime() <= fechaReaccionValue.getTime()
+    fechaLlegadaCompare &&
+    fechaReaccionCompare &&
+    fechaLlegadaCompare.getTime() <= fechaReaccionCompare.getTime()
   ) {
     return res.status(400).json({
       message: "La fecha de llegada de la fuerza de reacción debe ser posterior a la fecha de reacción.",
@@ -1145,12 +1181,19 @@ export const createIntrusion = async (req, res) => {
        ) AS fuerza_reaccion_descripcion`,
     ].filter(Boolean);
 
-    const result = await pool.query(
-      `INSERT INTO public.intrusiones (${columns.join(", ")})
+    const insertSql = `INSERT INTO public.intrusiones (${columns.join(", ")})
        VALUES (${placeholders.join(", ")})
-       RETURNING ${returningColumns.join(", ")}`,
-      values
-    );
+       RETURNING ${returningColumns.join(", ")}`;
+    const payload = columns.reduce((acc, column, index) => {
+      acc[column] = values[index];
+      return acc;
+    }, {});
+
+    console.log("[INTRUSIONES][CREATE][SQL]", insertSql);
+    console.log("[INTRUSIONES][CREATE][PARAMS]", values);
+    console.log("[INTRUSIONES][CREATE][FINAL_PAYLOAD]", payload);
+
+    const result = await pool.query(insertSql, values);
 
     const created = result.rows[0];
     return res.status(201).json(mapIntrusionRow(created));
@@ -1319,18 +1362,22 @@ export const updateIntrusion = async (req, res) => {
     pushUpdate("fecha_reaccion_fuera", fechaLlegadaValue);
   }
 
+  const fechaEventoCompare = parseFechaForComparison(fechaEventoValue);
+  const fechaReaccionCompare = parseFechaForComparison(fechaReaccionValue);
+  const fechaLlegadaCompare = parseFechaForComparison(fechaLlegadaValue);
+
   if (
-    fechaReaccionValue &&
-    fechaEventoValue &&
-    fechaReaccionValue.getTime() <= fechaEventoValue.getTime()
+    fechaReaccionCompare &&
+    fechaEventoCompare &&
+    fechaReaccionCompare.getTime() <= fechaEventoCompare.getTime()
   ) {
     return res.status(400).json({ mensaje: "La fecha y hora de reacción debe ser mayor que la fecha y hora de intrusión." });
   }
 
   if (
-    fechaLlegadaValue &&
-    fechaReaccionValue &&
-    fechaLlegadaValue.getTime() <= fechaReaccionValue.getTime()
+    fechaLlegadaCompare &&
+    fechaReaccionCompare &&
+    fechaLlegadaCompare.getTime() <= fechaReaccionCompare.getTime()
   ) {
     return res
       .status(400)

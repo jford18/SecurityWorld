@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import DateTimeInput, { toIsoString } from '../ui/DateTimeInput';
+import DateTimeInput from '../ui/DateTimeInput';
 import { intrusionsData as mockIntrusions } from '../../data/mockData';
 import { Intrusion, IntrusionConsolidadoRow, IntrusionHcQueueRow } from '../../types';
 import {
@@ -24,7 +24,11 @@ import { useSession } from '../context/SessionContext';
 import { getAll as getFuerzasReaccion } from '../../services/fuerzaReaccion.service';
 import { getPersonasByCliente } from '../../services/clientePersona.service';
 import { intrusionesColumns } from '@/components/intrusiones/intrusionesColumns';
-import { formatLocalDateTimeInput, parseDbTimestampToLocal } from '@/utils/datetime';
+import {
+  formatLocalDateTimeInput,
+  fromDatetimeLocalValueToDb,
+  parseDbTimestampToLocal,
+} from '@/utils/datetime';
 
 const toBoolean = (value: unknown, defaultValue = false): boolean => {
   if (typeof value === 'boolean') {
@@ -1211,13 +1215,14 @@ const Intrusions: React.FC = () => {
         ? null
         : fuerzaReaccionId;
 
-    const fechaEventoIso = toIsoString(formData.fecha_evento);
-    const fechaReaccionIso = toIsoString(formData.fecha_reaccion);
-    const fechaReaccionEnviadaIso = toIsoString(formData.fecha_reaccion_enviada);
-    const fechaLlegadaIso =
-      toIsoString(formData.fecha_llegada_fuerza_reaccion || formData.fecha_reaccion_fuera) ||
-      formData.fecha_llegada_fuerza_reaccion ||
-      formData.fecha_reaccion_fuera;
+    const fechaEventoDb = fromDatetimeLocalValueToDb(formData.fecha_evento);
+    const fechaReaccionDb = fromDatetimeLocalValueToDb(formData.fecha_reaccion);
+    const fechaReaccionEnviadaDb = fromDatetimeLocalValueToDb(
+      formData.fecha_reaccion_enviada
+    );
+    const fechaLlegadaDb = fromDatetimeLocalValueToDb(
+      formData.fecha_llegada_fuerza_reaccion || formData.fecha_reaccion_fuera
+    );
 
     const ubicacionValue = sitioSeleccionado?.nombre?.trim() || '';
     const necesitaProtocolo = requiereProtocolo || formData.necesita_protocolo;
@@ -1229,7 +1234,7 @@ const Intrusions: React.FC = () => {
       if (!personaId) missing.push('persona_id');
       if (necesitaProtocolo) {
         if (!formData.fecha_reaccion_enviada) missing.push('fecha_reaccion_enviada');
-        if (!fechaLlegadaIso) missing.push('fecha_llegada_fuerza_reaccion');
+        if (!fechaLlegadaDb) missing.push('fecha_llegada_fuerza_reaccion');
         if (!conclusionEventoValue) missing.push('conclusion_evento_id');
         if (formData.sustraccion_material === undefined) missing.push('sustraccion_material');
       }
@@ -1247,15 +1252,15 @@ const Intrusions: React.FC = () => {
       hik_alarm_evento_id: formData.hik_alarm_evento_id
         ? Number(formData.hik_alarm_evento_id)
         : null,
-      fecha_evento: fechaEventoIso || formData.fecha_evento,
-      fecha_reaccion: fechaReaccionIso || null,
-      fecha_reaccion_enviada: necesitaProtocolo && formData.fecha_reaccion_enviada
-        ? fechaReaccionEnviadaIso || formData.fecha_reaccion_enviada
-        : null,
-      fecha_llegada_fuerza_reaccion:
-        necesitaProtocolo && fechaLlegadaIso ? fechaLlegadaIso : null,
+      fecha_evento: fechaEventoDb ?? formData.fecha_evento,
+      fecha_reaccion: fechaReaccionDb,
+      fecha_reaccion_enviada:
+        necesitaProtocolo && formData.fecha_reaccion_enviada
+          ? fechaReaccionEnviadaDb ?? formData.fecha_reaccion_enviada
+          : null,
+      fecha_llegada_fuerza_reaccion: necesitaProtocolo ? fechaLlegadaDb : null,
       fecha_reaccion_fuera:
-        necesitaProtocolo && formData.fecha_reaccion_fuera ? fechaLlegadaIso : null,
+        necesitaProtocolo && formData.fecha_reaccion_fuera ? fechaLlegadaDb : null,
       ubicacion: ubicacionValue,
       tipo: tipoValue,
       estado: formData.estado || '',
