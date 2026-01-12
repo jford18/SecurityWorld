@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Search, X } from 'lucide-react';
 import { getUsuarios } from '../../services/usuariosService';
 import usuarioRolesService from '../../services/usuarioRolesService';
 
@@ -48,6 +49,8 @@ const AsignacionRolesScreen: React.FC = () => {
   const [asignaciones, setAsignaciones] = useState<Record<number, Set<number>>>({});
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -116,6 +119,31 @@ const AsignacionRolesScreen: React.FC = () => {
     const primerRol = rolesUsuario ? Array.from(rolesUsuario)[0] ?? null : null;
     setSelectedRoleId(primerRol ?? null);
   }, [asignaciones, selectedUserId]);
+
+  const normalizeText = (value: string) =>
+    (value || '')
+      .toString()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+  const filteredUsers = useMemo(() => {
+    const query = normalizeText(searchTerm);
+    if (!query) {
+      return usuarios;
+    }
+
+    return usuarios.filter((usuario) => {
+      const haystack = `${usuario.nombre_usuario ?? ''} ${usuario.nombre_completo ?? ''}`;
+      return normalizeText(haystack).includes(query);
+    });
+  }, [searchTerm, usuarios]);
+
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    searchInputRef.current?.focus();
+  };
 
   const setSavingFlag = (usuarioId: number, rolId: number, value: boolean) => {
     setSavingMap((prev) => ({ ...prev, [`${usuarioId}-${rolId}`]: value }));
@@ -241,9 +269,39 @@ const AsignacionRolesScreen: React.FC = () => {
             <h2 className="text-lg font-semibold text-[#1C2E4A]">Usuarios</h2>
             {loading && <span className="text-sm text-gray-500">Cargando...</span>}
           </div>
+          <div className="mb-4">
+            <label className="relative block">
+              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400">
+                <Search className="h-4 w-4" />
+              </span>
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Buscar usuario…"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    handleClearSearch();
+                  }
+                }}
+                className="w-full rounded-md border border-gray-200 bg-white py-2 pl-10 pr-10 text-sm text-gray-700 shadow-sm focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+              />
+              {searchTerm ? (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  aria-label="Limpiar búsqueda"
+                  className="absolute inset-y-0 right-2 flex items-center text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : null}
+            </label>
+          </div>
           <div className="flex-1 overflow-y-auto pr-2 max-h-[calc(100vh-260px)]">
             <ul className="space-y-2">
-              {usuarios.map((usuario) => {
+              {filteredUsers.map((usuario) => {
                 const isActive = usuario.id === selectedUserId;
                 return (
                   <li key={usuario.id}>
@@ -272,6 +330,9 @@ const AsignacionRolesScreen: React.FC = () => {
               })}
               {usuarios.length === 0 && !loading && (
                 <li className="text-sm text-gray-500">No hay usuarios disponibles.</li>
+              )}
+              {usuarios.length > 0 && filteredUsers.length === 0 && !loading && (
+                <li className="text-sm text-gray-500">Sin resultados</li>
               )}
             </ul>
           </div>
