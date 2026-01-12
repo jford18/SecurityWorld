@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { intrusionesColumns } from '@/components/intrusiones/intrusionesColumns';
 import { Intrusion, IntrusionConsolidadoRow } from '@/types';
 import { deleteIntrusion, fetchIntrusiones } from '@/services/intrusionesService';
+import { parseDbTimestampToLocal } from '@/utils/datetime';
 
 const IntrusionsAdministrador: React.FC = () => {
   const [intrusions, setIntrusions] = useState<Intrusion[]>([]);
@@ -80,8 +81,8 @@ const IntrusionsAdministrador: React.FC = () => {
 
     return [...intrusionesTableData].sort((a, b) => {
       if (sortField === 'fechaHoraIntrusion') {
-        const aDate = a.fechaHoraIntrusion ? new Date(a.fechaHoraIntrusion).getTime() : 0;
-        const bDate = b.fechaHoraIntrusion ? new Date(b.fechaHoraIntrusion).getTime() : 0;
+        const aDate = parseDbTimestampToLocal(a.fechaHoraIntrusion)?.getTime() ?? 0;
+        const bDate = parseDbTimestampToLocal(b.fechaHoraIntrusion)?.getTime() ?? 0;
         return (aDate - bDate) * directionMultiplier;
       }
 

@@ -6,11 +6,9 @@ import {
   IntrusionConsolidadoResponse,
 } from '../../services/intrusionesService';
 import { IntrusionConsolidadoRow } from '../../types';
-import {
-  formatIntrusionDateTime,
-  intrusionesColumns,
-} from '@/components/intrusiones/intrusionesColumns';
+import { intrusionesColumns } from '@/components/intrusiones/intrusionesColumns';
 import IntrusionesFilters from '@/components/intrusiones/IntrusionesFilters';
+import { parseDbTimestampToLocal } from '@/utils/datetime';
 
 const IntrusionsConsolidated: React.FC = () => {
   const [filters, setFilters] = useState<IntrusionConsolidadoFilters>({ haciendaId: '' });
@@ -100,8 +98,8 @@ const IntrusionsConsolidated: React.FC = () => {
 
       return [...rows].sort((a, b) => {
         if (sortField === 'fechaHoraIntrusion') {
-          const aTime = a.fechaHoraIntrusion ? new Date(a.fechaHoraIntrusion).getTime() : 0;
-          const bTime = b.fechaHoraIntrusion ? new Date(b.fechaHoraIntrusion).getTime() : 0;
+          const aTime = parseDbTimestampToLocal(a.fechaHoraIntrusion)?.getTime() ?? 0;
+          const bTime = parseDbTimestampToLocal(b.fechaHoraIntrusion)?.getTime() ?? 0;
           return (aTime - bTime) * multiplier;
         }
 

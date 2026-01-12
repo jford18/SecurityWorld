@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import DateTimeInput, { normalizeDateTimeLocalString, toIsoString } from '../ui/DateTimeInput';
+import DateTimeInput, { toIsoString } from '../ui/DateTimeInput';
 import { intrusionsData as mockIntrusions } from '../../data/mockData';
 import { Intrusion, IntrusionConsolidadoRow, IntrusionHcQueueRow } from '../../types';
 import {
@@ -24,6 +24,7 @@ import { useSession } from '../context/SessionContext';
 import { getAll as getFuerzasReaccion } from '../../services/fuerzaReaccion.service';
 import { getPersonasByCliente } from '../../services/clientePersona.service';
 import { intrusionesColumns } from '@/components/intrusiones/intrusionesColumns';
+import { formatLocalDateTimeInput, parseDbTimestampToLocal } from '@/utils/datetime';
 
 const toBoolean = (value: unknown, defaultValue = false): boolean => {
   if (typeof value === 'boolean') {
@@ -140,10 +141,10 @@ type PersonaOption = {
 const getInitialDateTimeValue = () => {
   const now = new Date();
   now.setSeconds(0, 0);
-  return normalizeDateTimeLocalString(now.toISOString());
+  return formatLocalDateTimeInput(now);
 };
 
-const getDateTimeInputLimit = () => normalizeDateTimeLocalString(new Date().toISOString());
+const getDateTimeInputLimit = () => formatLocalDateTimeInput(new Date());
 
 const formatDateTimeForDisplay = (value?: string | null) => {
   if (!value) return '—';
@@ -729,20 +730,20 @@ const Intrusions: React.FC = () => {
         ? String(intrusion.hik_alarm_evento_id)
         : null,
       trigger_event_hc: null,
-      fecha_evento: normalizeDateTimeLocalString(intrusion.fecha_evento),
+      fecha_evento: formatLocalDateTimeInput(intrusion.fecha_evento),
       fecha_reaccion: intrusion.fecha_reaccion
-        ? normalizeDateTimeLocalString(intrusion.fecha_reaccion)
+        ? formatLocalDateTimeInput(intrusion.fecha_reaccion)
         : '',
       fecha_reaccion_enviada: intrusion.fecha_reaccion_enviada
-        ? normalizeDateTimeLocalString(intrusion.fecha_reaccion_enviada)
+        ? formatLocalDateTimeInput(intrusion.fecha_reaccion_enviada)
         : '',
       fecha_reaccion_fuera: intrusion.fecha_reaccion_fuera
-        ? normalizeDateTimeLocalString(intrusion.fecha_reaccion_fuera)
+        ? formatLocalDateTimeInput(intrusion.fecha_reaccion_fuera)
         : '',
       fecha_llegada_fuerza_reaccion: intrusion.fecha_llegada_fuerza_reaccion
-        ? normalizeDateTimeLocalString(intrusion.fecha_llegada_fuerza_reaccion)
+        ? formatLocalDateTimeInput(intrusion.fecha_llegada_fuerza_reaccion)
         : intrusion.fecha_reaccion_fuera
-        ? normalizeDateTimeLocalString(intrusion.fecha_reaccion_fuera)
+        ? formatLocalDateTimeInput(intrusion.fecha_reaccion_fuera)
         : '',
       sitioId: intrusion.sitio_id ? String(intrusion.sitio_id) : '',
       estado: intrusion.estado ?? '',
@@ -780,7 +781,7 @@ const Intrusions: React.FC = () => {
           ? String(row.hik_alarm_evento_id)
           : null,
       trigger_event_hc: row?.trigger_event ?? null,
-      fecha_evento: normalizeDateTimeLocalString(row?.fecha_evento_hc || '') || prev.fecha_evento,
+      fecha_evento: formatLocalDateTimeInput(row?.fecha_evento_hc || '') || prev.fecha_evento,
       no_llego_alerta: false,
     }));
 
@@ -842,8 +843,8 @@ const Intrusions: React.FC = () => {
 
     return [...intrusionesTableData].sort((a, b) => {
       if (sortField === 'fechaHoraIntrusion') {
-        const aDate = a.fechaHoraIntrusion ? new Date(a.fechaHoraIntrusion).getTime() : 0;
-        const bDate = b.fechaHoraIntrusion ? new Date(b.fechaHoraIntrusion).getTime() : 0;
+        const aDate = parseDbTimestampToLocal(a.fechaHoraIntrusion)?.getTime() ?? 0;
+        const bDate = parseDbTimestampToLocal(b.fechaHoraIntrusion)?.getTime() ?? 0;
         return (aDate - bDate) * directionMultiplier;
       }
 
