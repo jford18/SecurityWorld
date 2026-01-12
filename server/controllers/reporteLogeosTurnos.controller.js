@@ -117,7 +117,7 @@ export const getReporteLogeosTurnos = async (req, res) => {
     const baseFrom =
       "FROM LOG_USUARIO_LOGIN A LEFT JOIN USUARIOS B ON (B.ID = A.USUARIO_ID) LEFT JOIN CONSOLAS C ON (C.ID = A.CONSOLA_ID)";
 
-    const selectQuery = `SELECT\n  A.ID AS ID_LOG,\n  A.FECHA_LOGEO::DATE AS FECHA_LOGEO,\n  A.FECHA_LOGEO::TIME AS HORA_LOGEO,\n  CASE\n    WHEN (A.FECHA_LOGEO::TIME >= TIME '07:00:00' AND A.FECHA_LOGEO::TIME < TIME '19:00:00') THEN 'DIURNO'\n    ELSE 'NOCTURNO'\n  END AS TURNO,\n  B.NOMBRE_USUARIO AS USUARIO,\n  COALESCE(C.NOMBRE, 'SIN CONSOLA') AS CONSOLA\n${baseFrom}\n${whereClause}\nORDER BY A.FECHA_LOGEO DESC\nLIMIT $${parameterIndex} OFFSET $${parameterIndex + 1}`;
+    const selectQuery = `SELECT\n  A.ID AS ID_LOG,\n  A.FECHA_LOGEO::DATE AS FECHA_LOGEO,\n  A.FECHA_LOGEO::TIME AS HORA_LOGEO,\n  CASE\n    WHEN (A.FECHA_LOGEO::TIME >= TIME '07:00:00' AND A.FECHA_LOGEO::TIME < TIME '19:00:00') THEN 'DIURNO'\n    ELSE 'NOCTURNO'\n  END AS TURNO,\n  B.NOMBRE_USUARIO AS USUARIO,\n  B.NOMBRE_COMPLETO AS NOMBRE_COMPLETO,\n  COALESCE(C.NOMBRE, 'SIN CONSOLA') AS CONSOLA\n${baseFrom}\n${whereClause}\nORDER BY A.FECHA_LOGEO DESC\nLIMIT $${parameterIndex} OFFSET $${parameterIndex + 1}`;
 
     const countQuery = `SELECT COUNT(1) AS total\n${baseFrom}\n${whereClause}`;
 
@@ -147,18 +147,19 @@ export const exportReporteLogeosTurnosExcel = async (req, res) => {
     const baseFrom =
       "FROM LOG_USUARIO_LOGIN A LEFT JOIN USUARIOS B ON (B.ID = A.USUARIO_ID) LEFT JOIN CONSOLAS C ON (C.ID = A.CONSOLA_ID)";
 
-    const selectQuery = `SELECT\n  A.ID AS ID_LOG,\n  A.FECHA_LOGEO::DATE AS FECHA_LOGEO,\n  A.FECHA_LOGEO::TIME AS HORA_LOGEO,\n  CASE\n    WHEN (A.FECHA_LOGEO::TIME >= TIME '07:00:00' AND A.FECHA_LOGEO::TIME < TIME '19:00:00') THEN 'DIURNO'\n    ELSE 'NOCTURNO'\n  END AS TURNO,\n  B.NOMBRE_USUARIO AS USUARIO,\n  COALESCE(C.NOMBRE, 'SIN CONSOLA') AS CONSOLA\n${baseFrom}\n${whereClause}\nORDER BY A.FECHA_LOGEO DESC`;
+    const selectQuery = `SELECT\n  A.ID AS ID_LOG,\n  A.FECHA_LOGEO::DATE AS FECHA_LOGEO,\n  A.FECHA_LOGEO::TIME AS HORA_LOGEO,\n  CASE\n    WHEN (A.FECHA_LOGEO::TIME >= TIME '07:00:00' AND A.FECHA_LOGEO::TIME < TIME '19:00:00') THEN 'DIURNO'\n    ELSE 'NOCTURNO'\n  END AS TURNO,\n  B.NOMBRE_USUARIO AS USUARIO,\n  B.NOMBRE_COMPLETO AS NOMBRE_COMPLETO,\n  COALESCE(C.NOMBRE, 'SIN CONSOLA') AS CONSOLA\n${baseFrom}\n${whereClause}\nORDER BY A.FECHA_LOGEO DESC`;
 
     const { rows } = await pool.query(selectQuery, values);
 
     const worksheetData = [
-      ["ID_LOG", "FECHA_LOGEO", "HORA_LOGEO", "TURNO", "USUARIO", "CONSOLA"],
+      ["ID_LOG", "FECHA_LOGEO", "HORA_LOGEO", "TURNO", "USUARIO", "NOMBRE_COMPLETO", "CONSOLA"],
       ...rows.map((row) => [
         row?.id_log ?? "",
         formatDateValue(row?.fecha_logeo),
         formatTimeValue(row?.hora_logeo),
         row?.turno ?? "",
         row?.usuario ?? "",
+        row?.nombre_completo ?? "",
         row?.consola ?? "",
       ]),
     ];
