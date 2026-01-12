@@ -6,12 +6,28 @@ import {
   fetchDashboardUptimeCamaras,
 } from '@/services/dashboardUptimeCamarasService';
 import { getHaciendasActivas, type HaciendaResumen } from '@/services/haciendas.service';
+import * as XLSX from 'xlsx';
 
 const numberFormatter = new Intl.NumberFormat('es-EC', { maximumFractionDigits: 2 });
 
 const formatDateInput = (date: Date) => date.toISOString().slice(0, 10);
 
 const formatNumber = (value: number) => numberFormatter.format(value || 0);
+
+const formatDateValue = (value: string) => {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toISOString().slice(0, 10);
+};
+
+const formatTimestamp = (date = new Date()) => {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(
+    date.getMinutes(),
+  )}`;
+};
 
 const combineDateTime = (date: string, time: string) => {
   if (!date) return 0;
@@ -29,7 +45,6 @@ type SortKey =
   | 'fecha_recuperacion'
   | 'hora_recuperacion'
   | 'tiempo_offline_h'
-  | 'n_camaras'
   | 'hacienda';
 
 type SortDirection = 'asc' | 'desc';
@@ -55,11 +70,10 @@ const DashboardUptimeCamaras: React.FC = () => {
     uptime_pct: 0,
   });
 
-  const [detalle, setDetalle] = useState<UptimeDetalleRow[]>([]);
+  const [allRows, setAllRows] = useState<UptimeDetalleRow[]>([]);
+  const [visibleRows, setVisibleRows] = useState<UptimeDetalleRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>({
     key: 'fecha_fallo',
     direction: 'desc',
@@ -77,8 +91,7 @@ const DashboardUptimeCamaras: React.FC = () => {
       setError(null);
       const data = await fetchDashboardUptimeCamaras(filters);
       setKpis(data.kpis);
-      setDetalle(data.detalle ?? []);
-      setPage(0);
+      setAllRows(data.detalle ?? []);
     } catch (err) {
       console.error('[DashboardUptimeCamaras] Error al cargar datos', err);
       const message =
@@ -87,7 +100,7 @@ const DashboardUptimeCamaras: React.FC = () => {
           : 'No se pudo cargar la información de uptime de cámaras';
       setError(message);
       setKpis({ dias: 0, camaras: 0, t_disponible_h: 0, t_caido_h: 0, uptime_pct: 0 });
-      setDetalle([]);
+      setAllRows([]);
     } finally {
       setLoading(false);
     }
@@ -119,18 +132,17 @@ const DashboardUptimeCamaras: React.FC = () => {
     return sortConfig.direction === 'asc' ? '▲' : '▼';
   };
 
-  const sortedDetalle = useMemo(() => {
-    if (!sortConfig) return detalle;
+  const sortedRows = useMemo(() => {
+    if (!sortConfig) return allRows;
     const direction = sortConfig.direction === 'asc' ? 1 : -1;
 
-    return [...detalle].sort((a, b) => {
+    return [...allRows].sort((a, b) => {
       let aValue: number | string = '';
       let bValue: number | string = '';
 
       switch (sortConfig.key) {
         case 'mes':
         case 'tiempo_offline_h':
-        case 'n_camaras':
           aValue = Number((a as Record<string, unknown>)[sortConfig.key]) || 0;
           bValue = Number((b as Record<string, unknown>)[sortConfig.key]) || 0;
           break;
@@ -156,26 +168,34 @@ const DashboardUptimeCamaras: React.FC = () => {
 
       return String(aValue).localeCompare(String(bValue), 'es') * direction;
     });
-  }, [detalle, sortConfig]);
-
-  const totalPages = useMemo(
-    () => (rowsPerPage > 0 ? Math.ceil(sortedDetalle.length / rowsPerPage) : 0),
-    [rowsPerPage, sortedDetalle.length],
-  );
+  }, [allRows, sortConfig]);
 
   useEffect(() => {
-    if (page > 0 && page >= totalPages) {
-      setPage(totalPages - 1);
-    }
-  }, [page, totalPages]);
-
-  const paginatedRows = useMemo(() => {
-    const start = page * rowsPerPage;
-    return sortedDetalle.slice(start, start + rowsPerPage);
-  }, [page, rowsPerPage, sortedDetalle]);
+    setVisibleRows(sortedRows);
+  }, [sortedRows]);
 
   const uptimeDisponible = formatNumber(kpis.t_disponible_h);
   const uptimeCaido = formatNumber(kpis.t_caido_h);
+
+  const handleExport = () => {
+    const rowsToExport = visibleRows.map((row) => ({
+      MES: row.mes,
+      ID: row.id,
+      'SITIO AFECTADO': row.sitio_afectado_final,
+      'FECHA FALLO': formatDateValue(row.fecha_fallo),
+      'HORA FALLO': row.hora_fallo,
+      'FECHA RECUPERACION': formatDateValue(row.fecha_recuperacion),
+      'HORA RECUPERACION': row.hora_recuperacion,
+      'TIEMPO OFFLINE H': row.tiempo_offline_h,
+      HACIENDA: row.hacienda,
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rowsToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Uptime');
+    const filename = `uptime_camaras_${formatTimestamp()}.xlsx`;
+    XLSX.writeFile(workbook, filename);
+  };
 
   return (
     <div className="space-y-6">
@@ -262,102 +282,69 @@ const DashboardUptimeCamaras: React.FC = () => {
       <section className="bg-white rounded-lg shadow p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h2 className="text-lg font-semibold text-[#1C2E4A]">Detalle de caídas</h2>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <label className="flex items-center gap-2">
-              <span>Filas por página:</span>
-              <select
-                value={rowsPerPage}
-                onChange={(e) => {
-                  setRowsPerPage(Number(e.target.value));
-                  setPage(0);
-                }}
-                className="rounded-md border border-gray-300 px-2 py-1 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
-              >
-                {[10, 20, 50, 100].map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <span>
-              Página {totalPages === 0 ? 0 : page + 1} de {totalPages || 0}
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPage((prev) => Math.max(prev - 1, 0))}
-                disabled={page === 0}
-                className="rounded-md border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 disabled:opacity-50"
-              >
-                Anterior
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage((prev) => (prev + 1 < totalPages ? prev + 1 : prev))}
-                disabled={page + 1 >= totalPages}
-                className="rounded-md border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 disabled:opacity-50"
-              >
-                Siguiente
-              </button>
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={handleExport}
+            className="inline-flex items-center justify-center rounded-md bg-[#1C2E4A] px-4 py-2 text-sm font-semibold text-white hover:bg-[#243b55] transition-colors"
+          >
+            Exportar a Excel
+          </button>
         </div>
 
         <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                {[
-                  ['mes', 'MES'],
-                  ['id', 'ID'],
-                  ['sitio_afectado_final', 'SITIO_AFECTADO_FINAL'],
-                  ['fecha_fallo', 'FECHA_FALLO'],
-                  ['hora_fallo', 'HORA_FALLO'],
-                  ['fecha_recuperacion', 'FECHA_RECUPERACION'],
-                  ['hora_recuperacion', 'HORA_RECUPERACION'],
-                  ['tiempo_offline_h', 'TIEMPO_OFFLINE_H'],
-                  ['n_camaras', 'N_CAMARAS'],
-                  ['hacienda', 'HACIENDA'],
-                ].map(([key, label]) => (
-                  <th
-                    key={key}
-                    scope="col"
-                    className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 cursor-pointer"
-                    onClick={() => handleSort(key as SortKey)}
-                  >
-                    <span className="flex items-center gap-1">
-                      {label}
-                      <span className="text-[10px] text-gray-400">{renderSortIcon(key as SortKey)}</span>
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {paginatedRows.length === 0 && (
+          <div className="max-h-[70vh] overflow-y-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
                 <tr>
-                  <td colSpan={10} className="px-4 py-6 text-center text-sm text-gray-500">
-                    {loading ? 'Cargando datos...' : 'No hay registros para mostrar'}
-                  </td>
+                  {[
+                    ['mes', 'MES'],
+                    ['id', 'ID'],
+                    ['sitio_afectado_final', 'SITIO AFECTADO'],
+                    ['fecha_fallo', 'FECHA FALLO'],
+                    ['hora_fallo', 'HORA FALLO'],
+                    ['fecha_recuperacion', 'FECHA RECUPERACION'],
+                    ['hora_recuperacion', 'HORA RECUPERACION'],
+                    ['tiempo_offline_h', 'TIEMPO OFFLINE H'],
+                    ['hacienda', 'HACIENDA'],
+                  ].map(([key, label]) => (
+                    <th
+                      key={key}
+                      scope="col"
+                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 cursor-pointer"
+                      onClick={() => handleSort(key as SortKey)}
+                    >
+                      <span className="flex items-center gap-1">
+                        {label}
+                        <span className="text-[10px] text-gray-400">{renderSortIcon(key as SortKey)}</span>
+                      </span>
+                    </th>
+                  ))}
                 </tr>
-              )}
-              {paginatedRows.map((row) => (
-                <tr key={`${row.id}-${row.mes}`} className="hover:bg-gray-50">
-                  <td className="px-4 py-2 text-sm text-gray-700">{row.mes}</td>
-                  <td className="px-4 py-2 text-sm text-gray-700">{row.id}</td>
-                  <td className="px-4 py-2 text-sm text-gray-700">{row.sitio_afectado_final}</td>
-                  <td className="px-4 py-2 text-sm text-gray-700">{row.fecha_fallo}</td>
-                  <td className="px-4 py-2 text-sm text-gray-700">{row.hora_fallo}</td>
-                  <td className="px-4 py-2 text-sm text-gray-700">{row.fecha_recuperacion}</td>
-                  <td className="px-4 py-2 text-sm text-gray-700">{row.hora_recuperacion}</td>
-                  <td className="px-4 py-2 text-sm text-gray-700">{formatNumber(row.tiempo_offline_h)}</td>
-                  <td className="px-4 py-2 text-sm text-gray-700">{row.n_camaras}</td>
-                  <td className="px-4 py-2 text-sm text-gray-700">{row.hacienda}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {visibleRows.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-6 text-center text-sm text-gray-500">
+                      {loading ? 'Cargando datos...' : 'No hay registros para mostrar'}
+                    </td>
+                  </tr>
+                )}
+                {visibleRows.map((row) => (
+                  <tr key={`${row.id}-${row.fecha_fallo}-${row.hora_fallo}`} className="hover:bg-gray-50">
+                    <td className="px-4 py-2 text-sm text-gray-700">{row.mes}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{row.id}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{row.sitio_afectado_final}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{formatDateValue(row.fecha_fallo)}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{row.hora_fallo}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{formatDateValue(row.fecha_recuperacion)}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{row.hora_recuperacion}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{formatNumber(row.tiempo_offline_h)}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{row.hacienda}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
     </div>
