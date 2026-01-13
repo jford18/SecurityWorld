@@ -1046,6 +1046,13 @@ const Intrusions: React.FC = () => {
       return;
     }
 
+    const minuteKeyLocal = (date: Date) =>
+      date.getFullYear() * 100000000 +
+      (date.getMonth() + 1) * 1000000 +
+      date.getDate() * 10000 +
+      date.getHours() * 100 +
+      date.getMinutes();
+
     const intrusion = new Date(formData.fecha_evento);
     const reaccion = new Date(formData.fecha_reaccion);
 
@@ -1055,7 +1062,7 @@ const Intrusions: React.FC = () => {
     if (
       !Number.isNaN(intrusionTime) &&
       !Number.isNaN(reaccionTime) &&
-      reaccionTime >= intrusionTime
+      minuteKeyLocal(reaccion) >= minuteKeyLocal(intrusion)
     ) {
       setFechaReaccionError('');
       return;
@@ -1238,15 +1245,26 @@ const Intrusions: React.FC = () => {
         !Number.isNaN(fechaEventoDate.getTime()) &&
         !Number.isNaN(fechaReaccionDate.getTime())
       ) {
-        const normalizarMinuto = (date: Date) => {
-          const normalized = new Date(date);
-          normalized.setSeconds(0, 0);
-          return normalized;
-        };
-        const fechaEventoMinuto = normalizarMinuto(fechaEventoDate);
-        const fechaReaccionMinuto = normalizarMinuto(fechaReaccionDate);
+        const minuteKeyLocal = (date: Date) =>
+          date.getFullYear() * 100000000 +
+          (date.getMonth() + 1) * 1000000 +
+          date.getDate() * 10000 +
+          date.getHours() * 100 +
+          date.getMinutes();
 
-        if (fechaReaccionMinuto.getTime() < fechaEventoMinuto.getTime()) {
+        const eventoKey = minuteKeyLocal(fechaEventoDate);
+        const reaccionKey = minuteKeyLocal(fechaReaccionDate);
+
+        console.log('[INTRUSIONES][VALIDACION_FECHAS]', {
+          fechaEvento: fechaEventoDate,
+          fechaReaccion: fechaReaccionDate,
+          eventoISO: fechaEventoDate.toISOString(),
+          reaccionISO: fechaReaccionDate.toISOString(),
+          eventoKey,
+          reaccionKey,
+        });
+
+        if (reaccionKey < eventoKey) {
           setError(
             'No se pudo registrar la intrusión. La fecha y hora de reacción debe ser mayor o igual que la fecha y hora de intrusión.'
           );
