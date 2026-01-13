@@ -1077,15 +1077,28 @@ export const createIntrusion = async (req, res) => {
     });
   }
 
-  if (
-    fechaReaccionCompare &&
-    fechaEventoCompare &&
-    fechaReaccionCompare.getTime() <= fechaEventoCompare.getTime()
-  ) {
-    return res.status(400).json({
-      message: "La fecha y hora de reacción debe ser mayor que la fecha y hora de intrusión.",
-      details: { field: "fecha_reaccion" },
-    });
+  if (rawFechaEvento && rawFechaReaccion) {
+    const fe = new Date(rawFechaEvento);
+    const fr = new Date(rawFechaReaccion);
+
+    if (!Number.isNaN(fe.getTime()) && !Number.isNaN(fr.getTime())) {
+      if (fr.getTime() < fe.getTime()) {
+        console.log("[INTRUSIONES][BACK_VALIDACION_FECHAS]", {
+          fecha_evento: rawFechaEvento,
+          fecha_reaccion: rawFechaReaccion,
+          fe_iso: fe.toISOString(),
+          fr_iso: fr.toISOString(),
+          fe_time: fe.getTime(),
+          fr_time: fr.getTime(),
+          deltaMs: fr.getTime() - fe.getTime(),
+        });
+        return res.status(400).json({
+          message:
+            "La fecha y hora de reacción debe ser mayor o igual que la fecha y hora de intrusión.",
+          details: { field: "fecha_reaccion" },
+        });
+      }
+    }
   }
 
   if (
@@ -1436,12 +1449,27 @@ export const updateIntrusion = async (req, res) => {
   const fechaReaccionCompare = parseFechaForComparison(fechaReaccionValue);
   const fechaLlegadaCompare = parseFechaForComparison(fechaLlegadaValue);
 
-  if (
-    fechaReaccionCompare &&
-    fechaEventoCompare &&
-    fechaReaccionCompare.getTime() <= fechaEventoCompare.getTime()
-  ) {
-    return res.status(400).json({ mensaje: "La fecha y hora de reacción debe ser mayor que la fecha y hora de intrusión." });
+  if (body.fecha_evento && body.fecha_reaccion) {
+    const fe = new Date(body.fecha_evento);
+    const fr = new Date(body.fecha_reaccion);
+
+    if (!Number.isNaN(fe.getTime()) && !Number.isNaN(fr.getTime())) {
+      if (fr.getTime() < fe.getTime()) {
+        console.log("[INTRUSIONES][BACK_VALIDACION_FECHAS]", {
+          fecha_evento: body.fecha_evento,
+          fecha_reaccion: body.fecha_reaccion,
+          fe_iso: fe.toISOString(),
+          fr_iso: fr.toISOString(),
+          fe_time: fe.getTime(),
+          fr_time: fr.getTime(),
+          deltaMs: fr.getTime() - fe.getTime(),
+        });
+        return res.status(400).json({
+          mensaje:
+            "La fecha y hora de reacción debe ser mayor o igual que la fecha y hora de intrusión.",
+        });
+      }
+    }
   }
 
   if (
