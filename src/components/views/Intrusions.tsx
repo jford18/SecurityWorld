@@ -1238,6 +1238,13 @@ const Intrusions: React.FC = () => {
         !Number.isNaN(fechaEventoDate.getTime()) &&
         !Number.isNaN(fechaReaccionDate.getTime())
       ) {
+        if (fechaReaccionDate.getTime() < fechaEventoDate.getTime()) {
+          setError(
+            'No se pudo registrar la intrusión. La fecha y hora de reacción debe ser mayor o igual que la fecha y hora de intrusión.'
+          );
+          return;
+        }
+
         const diffMs = fechaReaccionDate.getTime() - fechaEventoDate.getTime();
         const diffMinutes = diffMs / (1000 * 60);
 
