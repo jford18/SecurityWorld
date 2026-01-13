@@ -231,6 +231,10 @@ const Intrusions: React.FC = () => {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const isHcMode = !registroManual;
+  const setErrorFechaReaccion = (msg: string) => {
+    console.warn('[INTRUSIONES][ERROR_ORIGEN_FECHA_REACCION]', msg);
+    setError(msg);
+  };
 
   const normalizeText = (value?: string | null) =>
     (value ?? '').toString().trim().toLowerCase();
@@ -1238,34 +1242,55 @@ const Intrusions: React.FC = () => {
       null;
 
     if (formData.fecha_evento && formData.fecha_reaccion) {
+      const fechaEventoRaw = formData.fecha_evento;
+      const fechaReaccionRaw = formData.fecha_reaccion;
       const fechaEventoDate = new Date(formData.fecha_evento);
       const fechaReaccionDate = new Date(formData.fecha_reaccion);
+
+      const minuteKeyLocal = (date: Date) =>
+        date.getFullYear() * 100000000 +
+        (date.getMonth() + 1) * 1000000 +
+        date.getDate() * 10000 +
+        date.getHours() * 100 +
+        date.getMinutes();
+
+      const eventoKey = Number.isNaN(fechaEventoDate.getTime())
+        ? Number.NaN
+        : minuteKeyLocal(fechaEventoDate);
+      const reaccionKey = Number.isNaN(fechaReaccionDate.getTime())
+        ? Number.NaN
+        : minuteKeyLocal(fechaReaccionDate);
+
+      const safeIso = (d: Date) =>
+        Number.isNaN(d.getTime()) ? 'INVALID_DATE' : d.toISOString();
+
+      console.log('[INTRUSIONES][VALIDACION_FECHAS]', {
+        fechaEventoRaw,
+        fechaReaccionRaw,
+        fechaEventoDate,
+        fechaReaccionDate,
+        eventoISO: safeIso(fechaEventoDate),
+        reaccionISO: safeIso(fechaReaccionDate),
+        eventoTime: fechaEventoDate.getTime(),
+        reaccionTime: fechaReaccionDate.getTime(),
+        deltaMs: fechaReaccionDate.getTime() - fechaEventoDate.getTime(),
+        deltaMin: (fechaReaccionDate.getTime() - fechaEventoDate.getTime()) / 60000,
+        eventoKey,
+        reaccionKey,
+      });
 
       if (
         !Number.isNaN(fechaEventoDate.getTime()) &&
         !Number.isNaN(fechaReaccionDate.getTime())
       ) {
-        const minuteKeyLocal = (date: Date) =>
-          date.getFullYear() * 100000000 +
-          (date.getMonth() + 1) * 1000000 +
-          date.getDate() * 10000 +
-          date.getHours() * 100 +
-          date.getMinutes();
-
-        const eventoKey = minuteKeyLocal(fechaEventoDate);
-        const reaccionKey = minuteKeyLocal(fechaReaccionDate);
-
-        console.log('[INTRUSIONES][VALIDACION_FECHAS]', {
-          fechaEvento: fechaEventoDate,
-          fechaReaccion: fechaReaccionDate,
-          eventoISO: fechaEventoDate.toISOString(),
-          reaccionISO: fechaReaccionDate.toISOString(),
-          eventoKey,
-          reaccionKey,
-        });
 
         if (reaccionKey < eventoKey) {
-          setError(
+          console.warn('[INTRUSIONES][VALIDACION_FECHAS][BLOQUEADO]', {
+            eventoKey,
+            reaccionKey,
+          });
+
+          setErrorFechaReaccion(
             'No se pudo registrar la intrusión. La fecha y hora de reacción debe ser mayor o igual que la fecha y hora de intrusión.'
           );
           return;
