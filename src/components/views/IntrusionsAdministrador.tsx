@@ -58,7 +58,7 @@ const IntrusionsAdministrador: React.FC = () => {
         sitio: intrusion.sitio_nombre || intrusion.ubicacion || '',
         tipoIntrusion: intrusion.tipo ?? '',
         llegoAlerta: intrusion.llego_alerta ?? false,
-        personalIdentificado: intrusion.personal_identificado?.trim() || '',
+        personalIdentificado: intrusion.cargo_persona ?? '',
       })),
     [intrusions],
   );

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DateTimeInput from '../ui/DateTimeInput';
 import { intrusionsData as mockIntrusions } from '../../data/mockData';
 import { Intrusion, IntrusionConsolidadoRow, IntrusionHcQueueRow } from '../../types';
@@ -346,33 +346,35 @@ const Intrusions: React.FC = () => {
     }
   }, []);
 
+  const isMountedRef = useRef(true);
+
   useEffect(() => {
-    let isMounted = true;
-
-    const loadIntrusiones = async () => {
-      try {
-        const data = await fetchIntrusiones();
-        if (!isMounted) return;
-        setIntrusions(data);
-        setError(null);
-      } catch (err) {
-        console.error('Error al cargar intrusiones:', err);
-        if (!isMounted) return;
-        setIntrusions(mockIntrusions);
-        setError('No se pudo cargar el historial de intrusiones.');
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadIntrusiones();
-
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
     };
   }, []);
+
+  const loadIntrusiones = useCallback(async () => {
+    try {
+      const data = await fetchIntrusiones();
+      if (!isMountedRef.current) return;
+      setIntrusions(data);
+      setError(null);
+    } catch (err) {
+      console.error('Error al cargar intrusiones:', err);
+      if (!isMountedRef.current) return;
+      setIntrusions(mockIntrusions);
+      setError('No se pudo cargar el historial de intrusiones.');
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [mockIntrusions, fetchIntrusiones]);
+
+  useEffect(() => {
+    loadIntrusiones();
+  }, [loadIntrusiones]);
 
   useEffect(() => {
     setPageHC(0);
@@ -920,7 +922,7 @@ const Intrusions: React.FC = () => {
           intrusion.hik_alarm_evento_id != null
             ? true
             : !(intrusion.no_llego_alerta ?? false),
-        personalIdentificado: intrusion.personal_identificado?.trim() || '',
+        personalIdentificado: intrusion.cargo_persona ?? '',
       })),
     [intrusions]
   );
@@ -1390,20 +1392,13 @@ const Intrusions: React.FC = () => {
 
     try {
       console.log('[INTRUSIONES][UI] payload:', payload);
-      const saved = editingIntrusionId
-        ? await updateIntrusion(editingIntrusionId, payload)
-        : await createIntrusion(payload);
+      if (editingIntrusionId) {
+        await updateIntrusion(editingIntrusionId, payload);
+      } else {
+        await createIntrusion(payload);
+      }
 
-      const enriched =
-        saved.sitio_nombre || !sitioSeleccionado
-          ? saved
-          : { ...saved, sitio_nombre: sitioSeleccionado.nombre };
-
-      setIntrusions((prev) =>
-        editingIntrusionId
-          ? prev.map((item) => (item.id === enriched.id ? enriched : item))
-          : [enriched, ...prev]
-      );
+      await loadIntrusiones();
       resetClientePersonaSelection();
       setFormData(buildInitialFormData(registroManual ? 'MANUAL' : 'HC'));
       setTipoIntrusionId('');

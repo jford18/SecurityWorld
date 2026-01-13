@@ -575,9 +575,7 @@ export const getDashboardEventosAutorizados = async (
   }
 };
 
-export const createIntrusion = async (
-  payload: IntrusionPayload
-): Promise<Intrusion> => {
+export const createIntrusion = async (payload: any) => {
   try {
     const payloadToSend: IntrusionPayload = { ...payload };
     const hasHikAlarmEventoId =
@@ -588,13 +586,10 @@ export const createIntrusion = async (
       payloadToSend.origen = payloadToSend.origen ?? 'HC';
     }
 
-    const { data } = await apiClient.post<Intrusion>('/intrusiones', payloadToSend);
-    console.log('POST intrusiones response =>', data);
-    const normalized = normalizeIntrusion(data);
-    if (!normalized) {
-      throw new Error('Respuesta inesperada al crear la intrusión.');
-    }
-    return normalized;
+    const res = await apiClient.post('/intrusiones', payloadToSend);
+    console.log('[INTRUSIONES][CREATE][RESPONSE]', res.data);
+    const row = res.data?.data ?? res.data;
+    return row ?? null;
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: unknown; status?: number } };
     console.log('[INTRUSIONES][SERVICE] error:', axiosError?.response?.status, axiosError?.response?.data);
