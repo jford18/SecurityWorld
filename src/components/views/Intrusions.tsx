@@ -1238,7 +1238,15 @@ const Intrusions: React.FC = () => {
         !Number.isNaN(fechaEventoDate.getTime()) &&
         !Number.isNaN(fechaReaccionDate.getTime())
       ) {
-        if (fechaReaccionDate.getTime() < fechaEventoDate.getTime()) {
+        const normalizarMinuto = (date: Date) => {
+          const normalized = new Date(date);
+          normalized.setSeconds(0, 0);
+          return normalized;
+        };
+        const fechaEventoMinuto = normalizarMinuto(fechaEventoDate);
+        const fechaReaccionMinuto = normalizarMinuto(fechaReaccionDate);
+
+        if (fechaReaccionMinuto.getTime() < fechaEventoMinuto.getTime()) {
           setError(
             'No se pudo registrar la intrusión. La fecha y hora de reacción debe ser mayor o igual que la fecha y hora de intrusión.'
           );
