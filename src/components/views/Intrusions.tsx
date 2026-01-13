@@ -1041,23 +1041,31 @@ const Intrusions: React.FC = () => {
   }, [formData.no_llego_alerta, noLlegoDisabled]);
 
   useEffect(() => {
-    if (formData.fecha_evento && formData.fecha_reaccion) {
-      const intrusion = new Date(formData.fecha_evento);
-      const reaccion = new Date(formData.fecha_reaccion);
+    if (!formData.fecha_evento || !formData.fecha_reaccion) {
+      setFechaReaccionError('');
+      return;
+    }
 
-      const intrusionTime = intrusion.getTime();
-      const reaccionTime = reaccion.getTime();
+    const intrusion = new Date(formData.fecha_evento);
+    const reaccion = new Date(formData.fecha_reaccion);
 
-      if (
-        !Number.isNaN(intrusionTime) &&
-        !Number.isNaN(reaccionTime) &&
-        reaccionTime < intrusionTime
-      ) {
-        setFechaReaccionError(
-          'La fecha y hora de reacción debe ser mayor o igual a la fecha y hora de intrusión.'
-        );
-        return;
-      }
+    const intrusionTime = intrusion.getTime();
+    const reaccionTime = reaccion.getTime();
+
+    if (
+      !Number.isNaN(intrusionTime) &&
+      !Number.isNaN(reaccionTime) &&
+      reaccionTime >= intrusionTime
+    ) {
+      setFechaReaccionError('');
+      return;
+    }
+
+    if (!Number.isNaN(intrusionTime) && !Number.isNaN(reaccionTime)) {
+      setFechaReaccionError(
+        'La fecha y hora de reacción debe ser mayor o igual a la fecha y hora de intrusión.'
+      );
+      return;
     }
 
     setFechaReaccionError('');
