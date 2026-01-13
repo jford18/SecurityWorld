@@ -1455,7 +1455,7 @@ const Intrusions: React.FC = () => {
             className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
           />
         </div>
-        <div className="h-[360px] overflow-y-auto overflow-x-auto">
+        <div className="h-[360px] min-h-[360px] overflow-y-auto overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -1681,7 +1681,8 @@ const Intrusions: React.FC = () => {
                         parsedValue !== null && !Number.isNaN(parsedValue) ? parsedValue : null
                       );
                     }}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    disabled={isHcMode}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Seleccione...</option>
                     {sitios.map((sitio) => (

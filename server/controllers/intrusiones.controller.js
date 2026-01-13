@@ -738,7 +738,7 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
   const alarmCategoryField = "COALESCE(B.ALARM_CATEGORY, A.ALARM_CATEGORY)";
   const statusField = "COALESCE(A.STATUS, '')";
 
-  whereParts.push(`${statusField} ILIKE '%EVENTO%'`);
+  whereParts.push(`(${statusField} ILIKE '%EVENTO%' OR ${alarmCategoryField} ILIKE '%EVENTO%')`);
   whereParts.push(`${statusField} NOT ILIKE '%VERDADERA%'`);
   whereParts.push(`${alarmCategoryField} NOT ILIKE '%VERDADERA%'`);
 
@@ -1537,8 +1537,14 @@ export const updateIntrusion = async (req, res) => {
     : false;
   if (metadata.hasNoLlegoAlerta) {
     pushUpdate("no_llego_alerta", noLlegoValue);
-  } else if (body.llego_alerta !== undefined) {
-    pushUpdate("llego_alerta", typeof body.llego_alerta === "boolean" ? body.llego_alerta : false);
+  } else {
+    const llegoAlertaValue =
+      hikValue || origenValue === "HC" || currentRow?.origen === "HC"
+        ? true
+        : body.llego_alerta !== undefined
+        ? Boolean(body.llego_alerta)
+        : Boolean(currentRow?.llego_alerta);
+    pushUpdate("llego_alerta", llegoAlertaValue);
   }
 
   const completadoValue = metadata.hasCompletado
