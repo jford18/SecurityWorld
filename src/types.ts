@@ -181,6 +181,7 @@ export interface Intrusion {
   fuerza_reaccion_descripcion?: string | null;
   persona_id?: number | null;
   personal_identificado?: string | null;
+  cargo_persona?: string | null;
 }
 
 export interface IntrusionHcQueueRow {

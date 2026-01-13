@@ -77,6 +77,7 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     fuerza_reaccion_descripcion?: unknown;
     persona_id?: unknown;
     personal_identificado?: unknown;
+    cargo_persona?: unknown;
   };
 
   const id = Number(base.id);
@@ -192,6 +193,8 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
       base.personal_identificado == null
         ? null
         : String(base.personal_identificado),
+    cargo_persona:
+      base.cargo_persona == null ? null : String(base.cargo_persona),
   };
 };
 
@@ -586,6 +589,7 @@ export const createIntrusion = async (
     }
 
     const { data } = await apiClient.post<Intrusion>('/intrusiones', payloadToSend);
+    console.log('POST intrusiones response =>', data);
     const normalized = normalizeIntrusion(data);
     if (!normalized) {
       throw new Error('Respuesta inesperada al crear la intrusión.');

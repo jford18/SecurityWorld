@@ -94,6 +94,8 @@ const mapIntrusionRow = (row) => {
   const personaNombre = row?.persona_nombre ? String(row.persona_nombre).trim() : "";
   const cargoDescripcion = row?.cargo_descripcion
     ? String(row.cargo_descripcion).trim()
+    : row?.cargo_persona
+    ? String(row.cargo_persona).trim()
     : "";
   const personalIdentificado = cargoDescripcion && personaNombre
     ? `${cargoDescripcion} - ${personaNombre}`
@@ -137,6 +139,7 @@ const mapIntrusionRow = (row) => {
     fuerza_reaccion_descripcion: row?.fuerza_reaccion_descripcion ?? null,
     persona_id: personaId === null || Number.isNaN(personaId) ? null : personaId,
     personal_identificado: personalIdentificado,
+    cargo_persona: cargoDescripcion || null,
   };
 };
 
@@ -1211,41 +1214,63 @@ export const createIntrusion = async (req, res) => {
 
     const placeholders = columns.map((_, index) => `$${index + 1}`);
 
-    const returningColumns = [
-      "id",
-      "ubicacion",
-      "sitio_id",
-      "tipo",
-      "estado",
-      "descripcion",
-      "fecha_evento",
-      "fecha_reaccion",
-      metadata.hasFechaLlegadaFuerzaReaccion ? "fecha_llegada_fuerza_reaccion" : "fecha_reaccion_fuera",
-      metadata.hasNoLlegoAlerta ? "no_llego_alerta" : "llego_alerta",
-      metadata.hasFechaReaccionEnviada ? "fecha_reaccion_enviada" : null,
-      metadata.hasCompletado ? "completado" : null,
-      metadata.hasFechaCompletado ? "fecha_completado" : null,
-      metadata.hasNecesitaProtocolo ? "necesita_protocolo" : null,
-      metadata.hasOrigen ? "origen" : null,
-      metadata.hasHikAlarmEventoId ? "hik_alarm_evento_id" : null,
-      "medio_comunicacion_id",
-      "conclusion_evento_id",
-      "sustraccion_material",
-      "fuerza_reaccion_id",
+    const selectColumns = [
+      "i.id",
+      "i.descripcion",
+      "i.ubicacion",
+      "i.estado",
+      "i.sitio_id",
+      "i.tipo",
+      "i.fecha_evento",
+      "i.fecha_reaccion",
+      metadata.hasFechaLlegadaFuerzaReaccion
+        ? "i.fecha_llegada_fuerza_reaccion"
+        : "i.fecha_reaccion_fuera",
+      metadata.hasNoLlegoAlerta ? "i.no_llego_alerta" : "i.llego_alerta",
+      metadata.hasFechaReaccionEnviada ? "i.fecha_reaccion_enviada" : null,
+      metadata.hasCompletado ? "i.completado" : null,
+      metadata.hasFechaCompletado ? "i.fecha_completado" : null,
+      metadata.hasNecesitaProtocolo ? "i.necesita_protocolo" : null,
+      metadata.hasOrigen ? "i.origen" : null,
+      metadata.hasHikAlarmEventoId ? "i.hik_alarm_evento_id" : null,
+      "i.medio_comunicacion_id",
+      "i.conclusion_evento_id",
+      "i.sustraccion_material",
+      "i.fuerza_reaccion_id",
+      metadata.personaColumn ? `i.${metadata.personaColumn} AS persona_id` : null,
       metadata.personaColumn
-        ? `${metadata.personaColumn} AS persona_id`
+        ? "CONCAT_WS(' ', p.nombre, p.apellido) AS persona_nombre"
         : null,
-      "(SELECT nombre FROM public.sitios WHERE id = sitio_id) AS sitio_nombre",
-      `(
-        SELECT descripcion
-          FROM public."catalogo_fuerza_reaccion"
-         WHERE id = fuerza_reaccion_id
-       ) AS fuerza_reaccion_descripcion`,
+      metadata.personaColumn ? "c.descripcion AS cargo_descripcion" : null,
+      "s.nombre AS sitio_nombre",
+      "m.descripcion AS medio_comunicacion_descripcion",
+      "ce.descripcion AS conclusion_evento_descripcion",
+      "fr.descripcion AS fuerza_reaccion_descripcion",
     ].filter(Boolean);
 
-    const insertSql = `INSERT INTO public.intrusiones (${columns.join(", ")})
+    const joins = [
+      "LEFT JOIN public.sitios AS s ON s.id = i.sitio_id",
+      "LEFT JOIN public.catalogo_medio_comunicacion AS m ON m.id = i.medio_comunicacion_id",
+      "LEFT JOIN public.catalogo_conclusion_evento AS ce ON ce.id = i.conclusion_evento_id",
+      'LEFT JOIN public."catalogo_fuerza_reaccion" AS fr ON fr.id = i.fuerza_reaccion_id',
+    ];
+
+    if (metadata.personaColumn) {
+      joins.push(
+        `LEFT JOIN public.persona AS p ON p.id = i.${metadata.personaColumn}`,
+        "LEFT JOIN public.catalogo_cargo AS c ON c.id = p.cargo_id"
+      );
+    }
+
+    const insertSql = `WITH ins AS (
+       INSERT INTO public.intrusiones (${columns.join(", ")})
        VALUES (${placeholders.join(", ")})
-       RETURNING ${returningColumns.join(", ")}`;
+       RETURNING id
+     )
+     SELECT ${selectColumns.join(", ")}
+       FROM public.intrusiones AS i
+       JOIN ins ON ins.id = i.id
+       ${joins.join("\n       ")}`;
     const payload = columns.reduce((acc, column, index) => {
       acc[column] = values[index];
       return acc;
