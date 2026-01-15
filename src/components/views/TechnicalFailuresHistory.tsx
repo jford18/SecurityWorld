@@ -77,7 +77,8 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const actionsEnabled = showActions && Boolean(handleEdit || renderActions);
-  const columnsCount = actionsEnabled ? 9 : 8;
+  const showEquipoColumn = filters.tipoAfectacion.trim().toLowerCase().startsWith('equipo');
+  const columnsCount = (actionsEnabled ? 9 : 8) + (showEquipoColumn ? 1 : 0);
 
   const getFechaFalloTimestamp = (failure: TechnicalFailure) => {
     const horaFallo = failure.hora ?? failure.horaFallo;
@@ -389,6 +390,11 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               >
                 Tipo de Afectación{renderSortIndicator('tipoAfectacion')}
               </th>
+              {showEquipoColumn && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Nombre del equipo
+                </th>
+              )}
               <th
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                 onClick={() => handleSort('sitioNombre')}
@@ -464,6 +470,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                   ))}
                 </select>
               </th>
+              {showEquipoColumn && <th className="px-6 py-2" />}
               <th className="px-6 py-2">
                 <input
                   type="text"
@@ -528,6 +535,11 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {getTipoAfectacionLabel(fallo)}
                   </td>
+                  {showEquipoColumn && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {fallo.nombre_equipo || fallo.nombreEquipo || 'Sin información'}
+                    </td>
+                  )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {fallo.sitio
                       || fallo.sitioNombre
