@@ -3,6 +3,8 @@ export interface TechnicalFailure {
   fecha: string;
   hora?: string;
   equipo_afectado: string;
+  nombre_equipo?: string;
+  nombreEquipo?: string;
   descripcion_fallo: string;
   responsable: string;
   // Campos nuevos (solo supervisor)
