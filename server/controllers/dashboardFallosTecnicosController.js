@@ -188,8 +188,11 @@ WITH BASE AS (
         END AS DIAS_SOLUCION,
         COALESCE(B.DESCRIPCION, 'Sin problema') AS TIPO_PROBLEMA,
         COALESCE(A.TIPO_AFECTACION, '') AS TIPO_AFECTACION,
+        C.ID AS DEPARTAMENTO_ID,
         COALESCE(C.NOMBRE, 'Sin departamento') AS DEPARTAMENTO,
         D.ID AS SITIO_ID,
+        COALESCE(D.NOMBRE, 'Sin sitio') AS SITIO,
+        E.ID AS HACIENDA_ID,
         COALESCE(E.NOMBRE, 'Sin hacienda') AS HACIENDA,
         F.ID AS CLIENTE_ID,
         COALESCE(F.NOMBRE, 'Sin cliente') AS CLIENTE
@@ -235,6 +238,31 @@ TABLA_DEPARTAMENTO AS (
         AVG(CASE WHEN A.ES_RESUELTO = 1 THEN A.DIAS_SOLUCION ELSE NULL END) AS T_PROM_SOLUCION_DIAS
     FROM BASE A
     GROUP BY A.DEPARTAMENTO
+),
+TABLA_DEPARTAMENTO_ARBOL AS (
+    SELECT
+        A.DEPARTAMENTO_ID,
+        A.DEPARTAMENTO,
+        A.CLIENTE_ID,
+        A.CLIENTE,
+        A.HACIENDA_ID,
+        A.HACIENDA,
+        A.SITIO_ID,
+        A.SITIO,
+        COUNT(1) FILTER (WHERE A.ES_PENDIENTE = 1) AS FALLOS_PENDIENTES,
+        COUNT(1) FILTER (WHERE A.ES_RESUELTO = 1) AS FALLOS_RESUELTOS,
+        SUM(CASE WHEN A.ES_RESUELTO = 1 THEN A.DIAS_SOLUCION ELSE 0 END) AS SUM_DIAS_SOLUCION,
+        COUNT(1) FILTER (WHERE A.ES_RESUELTO = 1) AS COUNT_RESUELTOS
+    FROM BASE A
+    GROUP BY
+        A.DEPARTAMENTO_ID,
+        A.DEPARTAMENTO,
+        A.CLIENTE_ID,
+        A.CLIENTE,
+        A.HACIENDA_ID,
+        A.HACIENDA,
+        A.SITIO_ID,
+        A.SITIO
 ),
 TENDENCIA_MES AS (
     SELECT
@@ -309,6 +337,33 @@ SELECT
                 '[]'::JSON
             )
             FROM TABLA_DEPARTAMENTO TD
+        ),
+        'tabla_departamentos_arbol', (
+            SELECT COALESCE(
+                JSON_AGG(
+                    JSON_BUILD_OBJECT(
+                        'departamento_id', TDA.DEPARTAMENTO_ID,
+                        'departamento_nombre', TDA.DEPARTAMENTO,
+                        'cliente_id', TDA.CLIENTE_ID,
+                        'cliente_nombre', TDA.CLIENTE,
+                        'hacienda_id', TDA.HACIENDA_ID,
+                        'hacienda_nombre', TDA.HACIENDA,
+                        'sitio_id', TDA.SITIO_ID,
+                        'sitio_nombre', TDA.SITIO,
+                        'fallos_pendientes', TDA.FALLOS_PENDIENTES,
+                        'fallos_resueltos', TDA.FALLOS_RESUELTOS,
+                        'sum_dias_solucion', TDA.SUM_DIAS_SOLUCION,
+                        'count_resueltos', TDA.COUNT_RESUELTOS
+                    )
+                    ORDER BY
+                        TDA.DEPARTAMENTO ASC,
+                        TDA.CLIENTE ASC,
+                        TDA.HACIENDA ASC,
+                        TDA.SITIO ASC
+                ),
+                '[]'::JSON
+            )
+            FROM TABLA_DEPARTAMENTO_ARBOL TDA
         ),
         'tendencia_pendientes_mes', (
             SELECT COALESCE(

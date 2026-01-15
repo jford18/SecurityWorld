@@ -26,6 +26,21 @@ export interface TablaDepartamentosRow {
   porc_resueltos: number;
 }
 
+export interface TablaDepartamentosArbolRow {
+  departamento_id: number | null;
+  departamento_nombre: string;
+  cliente_id: number | null;
+  cliente_nombre: string;
+  hacienda_id: number | null;
+  hacienda_nombre: string;
+  sitio_id: number | null;
+  sitio_nombre: string;
+  fallos_pendientes: number;
+  fallos_resueltos: number;
+  sum_dias_solucion: number;
+  count_resueltos: number;
+}
+
 export interface TendenciaPendientesRow {
   mes: string;
   num_fallos: number;
@@ -49,6 +64,7 @@ export interface DashboardFallosTecnicosResponse {
   pendientes_por_departamento: PendientesPorDepartamento[];
   pendientes_por_problema_hacienda: PendientesPorProblemaHacienda[];
   tabla_departamentos: TablaDepartamentosRow[];
+  tabla_departamentos_arbol: TablaDepartamentosArbolRow[];
   tendencia_pendientes_mes: TendenciaPendientesRow[];
   filtros: DashboardFallosTecnicosFiltersData;
 }
