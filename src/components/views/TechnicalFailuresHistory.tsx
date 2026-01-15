@@ -306,6 +306,27 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     return estadoNorm === 'RESUELTO' || estadoNorm.startsWith('RESUELT');
   };
 
+  const getNombreEquipo = (failure: TechnicalFailure) => {
+    const record = failure as TechnicalFailure & {
+      NOMBRE_EQUIPO?: string;
+      nombre_equipo?: string;
+      nombreEquipo?: string;
+      EQUIPO_AFECTADO?: string;
+      equipo_afectado?: string;
+      equipoAfectado?: string;
+    };
+    const nombre =
+      record.NOMBRE_EQUIPO
+      ?? record.nombre_equipo
+      ?? record.nombreEquipo
+      ?? record.EQUIPO_AFECTADO
+      ?? record.equipo_afectado
+      ?? record.equipoAfectado
+      ?? '';
+    const trimmed = nombre.trim();
+    return trimmed !== '' ? trimmed : 'Sin información';
+  };
+
   const handleExportToExcel = async () => {
     if (isLoading || isExporting || sortedFailures.length === 0) return;
 
@@ -518,10 +539,8 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                 </td>
               </tr>
             ) : (
-              sortedFailures.map((fallo) => {
-                console.log('ROW GRID', fallo);
-                return (
-                  <tr key={fallo.id} className="hover:bg-gray-50">
+              sortedFailures.map((fallo) => (
+                <tr key={fallo.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatFechaHoraFallo(fallo) || 'Sin información'}
                   </td>
@@ -537,7 +556,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                   </td>
                   {showEquipoColumn && (
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {fallo.nombre_equipo || fallo.nombreEquipo || 'Sin información'}
+                      {getNombreEquipo(fallo)}
                     </td>
                   )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -600,9 +619,8 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                       )}
                     </td>
                   )}
-                  </tr>
-                );
-              })
+                </tr>
+              ))
             )}
           </tbody>
         </table>

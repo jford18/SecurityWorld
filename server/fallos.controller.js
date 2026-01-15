@@ -463,15 +463,17 @@ export const getFallos = async (req, res) => {
           ELSE COALESCE(ft.tipo_afectacion, 'SIN INFORMACIÓN')
         END AS tipo_afectacion_detalle,
         CASE
-          WHEN ft.tipo_afectacion = 'EQUIPO' THEN COALESCE(
-            CASE
-              WHEN ft.camera_id IS NOT NULL THEN (camera.camera_name || ' - ' || camera.ip_address)
-              WHEN ft.encoding_device_id IS NOT NULL THEN encoding_device.name
-              WHEN ft.alarm_input_id IS NOT NULL THEN alarm_input.name
-              ELSE NULL
-            END,
-            ft.equipo_afectado,
-            ''
+          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN COALESCE(
+            NULLIF(TRIM(
+              CASE
+                WHEN ft.camera_id IS NOT NULL THEN (camera.camera_name || ' - ' || camera.ip_address)
+                WHEN ft.encoding_device_id IS NOT NULL THEN encoding_device.name
+                WHEN ft.ip_speaker_id IS NOT NULL THEN ip_speaker.name
+                WHEN ft.alarm_input_id IS NOT NULL THEN alarm_input.name
+                ELSE NULL
+              END
+            ), ''),
+            NULLIF(TRIM(ft.equipo_afectado), '')
           )
           ELSE NULL
         END AS nombre_equipo,
@@ -503,6 +505,7 @@ export const getFallos = async (req, res) => {
       LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
       LEFT JOIN hik_camera_resource_status camera ON camera.id = ft.camera_id
       LEFT JOIN hik_encoding_device_status encoding_device ON encoding_device.id = ft.encoding_device_id
+      LEFT JOIN hik_ip_speaker_status ip_speaker ON ip_speaker.id = ft.ip_speaker_id
       LEFT JOIN hik_alarm_input_status alarm_input ON alarm_input.id = ft.alarm_input_id
       LEFT JOIN (
         SELECT DISTINCT ON (sf.fallo_id)
