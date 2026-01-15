@@ -456,14 +456,24 @@ const DashboardHome: React.FC = () => {
     [dashboard],
   );
 
-  const totalTablaFallos = useMemo(() => {
+  const totalsTablaClientes = useMemo(() => {
     return (dashboard?.tabla_clientes ?? []).reduce(
-      (acc, row) => acc + Number(row.num_fallos ?? 0),
-      0,
+      (acc, row) => {
+        return {
+          pendientes: acc.pendientes + Number(row.fallos_pendientes ?? 0),
+          resueltos: acc.resueltos + Number(row.fallos_resueltos ?? 0),
+        };
+      },
+      { pendientes: 0, resueltos: 0 },
     );
   }, [dashboard]);
 
-  const totalPctFallos = totalTablaFallos > 0 ? 100 : 0;
+  const totalPctResueltos =
+    totalsTablaClientes.pendientes + totalsTablaClientes.resueltos > 0
+      ? (totalsTablaClientes.resueltos /
+          (totalsTablaClientes.pendientes + totalsTablaClientes.resueltos)) *
+        100
+      : 0;
 
   const isEmpty =
     !dashboard ||
@@ -629,9 +639,10 @@ const DashboardHome: React.FC = () => {
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-3 py-2 text-left">Cliente</th>
+                  <th className="px-3 py-2 text-right">Fallos pendientes</th>
+                  <th className="px-3 py-2 text-right">Fallos resueltos</th>
+                  <th className="px-3 py-2 text-right">% Fallos resueltos</th>
                   <th className="px-3 py-2 text-right">T.prom solución (días)</th>
-                  <th className="px-3 py-2 text-right">N° fallos</th>
-                  <th className="px-3 py-2 text-right">%Fallos</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -639,14 +650,19 @@ const DashboardHome: React.FC = () => {
                   <tr key={row.cliente}>
                     <td className="px-3 py-2 text-left">{row.cliente}</td>
                     <td className="px-3 py-2 text-right">
+                      {formatInteger(Number(row.fallos_pendientes ?? 0))}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {formatInteger(Number(row.fallos_resueltos ?? 0))}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {Number(row.porc_resueltos ?? 0).toFixed(2)} %
+                    </td>
+                    <td className="px-3 py-2 text-right">
                       {row.t_prom_solucion_dias !== null &&
                       row.t_prom_solucion_dias !== undefined
-                        ? formatDecimal(Number(row.t_prom_solucion_dias), 2)
+                        ? Number(row.t_prom_solucion_dias).toFixed(2)
                         : '-'}
-                    </td>
-                    <td className="px-3 py-2 text-right">{formatInteger(row.num_fallos)}</td>
-                    <td className="px-3 py-2 text-right">
-                      {formatPercent(Number(row.pct_fallos))}
                     </td>
                   </tr>
                 ))}
@@ -655,10 +671,17 @@ const DashboardHome: React.FC = () => {
                 <tr>
                   <td className="px-3 py-2 text-left">Total</td>
                   <td className="px-3 py-2 text-right">
-                    {formatDecimal(Number(kpis.t_prom_solucion_dias ?? 0), 2)}
+                    {formatInteger(totalsTablaClientes.pendientes)}
                   </td>
-                  <td className="px-3 py-2 text-right">{formatInteger(totalTablaFallos)}</td>
-                  <td className="px-3 py-2 text-right">{formatPercent(totalPctFallos)}</td>
+                  <td className="px-3 py-2 text-right">
+                    {formatInteger(totalsTablaClientes.resueltos)}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {totalPctResueltos.toFixed(2)} %
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {Number(kpis.t_prom_solucion_dias ?? 0).toFixed(2)}
+                  </td>
                 </tr>
               </tfoot>
             </table>

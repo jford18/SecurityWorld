@@ -230,8 +230,9 @@ PEND_PROBLEMA_HACIENDA AS (
 TABLA_CLIENTE AS (
     SELECT
         A.CLIENTE,
-        AVG(CASE WHEN A.ES_RESUELTO = 1 THEN A.DIAS_SOLUCION ELSE NULL END) AS T_PROM_SOLUCION_DIAS,
-        COUNT(1) FILTER (WHERE A.ES_PENDIENTE = 1) AS NUM_FALLOS
+        COUNT(1) FILTER (WHERE A.ES_PENDIENTE = 1) AS FALLOS_PENDIENTES,
+        COUNT(1) FILTER (WHERE A.ES_RESUELTO = 1) AS FALLOS_RESUELTOS,
+        AVG(CASE WHEN A.ES_RESUELTO = 1 THEN A.DIAS_SOLUCION ELSE NULL END) AS T_PROM_SOLUCION_DIAS
     FROM BASE A
     GROUP BY A.CLIENTE
 ),
@@ -293,16 +294,21 @@ SELECT
                 JSON_AGG(
                     JSON_BUILD_OBJECT(
                         'cliente', TC.CLIENTE,
-                        't_prom_solucion_dias', TC.T_PROM_SOLUCION_DIAS,
-                        'num_fallos', TC.NUM_FALLOS,
-                        'pct_fallos', CASE WHEN K.TOTAL_PENDIENTES > 0 THEN (TC.NUM_FALLOS::DECIMAL / K.TOTAL_PENDIENTES) * 100 ELSE 0 END
+                        'fallos_pendientes', TC.FALLOS_PENDIENTES,
+                        'fallos_resueltos', TC.FALLOS_RESUELTOS,
+                        'porc_resueltos',
+                        CASE
+                            WHEN (TC.FALLOS_PENDIENTES + TC.FALLOS_RESUELTOS) > 0
+                            THEN (TC.FALLOS_RESUELTOS::DECIMAL / (TC.FALLOS_PENDIENTES + TC.FALLOS_RESUELTOS)) * 100
+                            ELSE 0
+                        END,
+                        't_prom_solucion_dias', TC.T_PROM_SOLUCION_DIAS
                     )
-                    ORDER BY TC.NUM_FALLOS DESC, TC.CLIENTE ASC
+                    ORDER BY TC.FALLOS_PENDIENTES DESC, TC.FALLOS_RESUELTOS DESC, TC.CLIENTE ASC
                 ),
                 '[]'::JSON
             )
             FROM TABLA_CLIENTE TC
-            CROSS JOIN KPI K
         ),
         'tendencia_pendientes_mes', (
             SELECT COALESCE(
