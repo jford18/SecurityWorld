@@ -18,8 +18,8 @@ export interface PendientesPorProblemaHacienda {
   total: number;
 }
 
-export interface TablaClientesRow {
-  cliente: string;
+export interface TablaDepartamentosRow {
+  departamento: string;
   t_prom_solucion_dias: number | null;
   fallos_pendientes: number;
   fallos_resueltos: number;
@@ -48,7 +48,7 @@ export interface DashboardFallosTecnicosResponse {
   kpis: DashboardFallosTecnicosKpis;
   pendientes_por_departamento: PendientesPorDepartamento[];
   pendientes_por_problema_hacienda: PendientesPorProblemaHacienda[];
-  tabla_clientes: TablaClientesRow[];
+  tabla_departamentos: TablaDepartamentosRow[];
   tendencia_pendientes_mes: TendenciaPendientesRow[];
   filtros: DashboardFallosTecnicosFiltersData;
 }
