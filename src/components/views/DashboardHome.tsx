@@ -22,7 +22,7 @@ import {
   TablaDepartamentosArbolRow,
   fetchDashboardFallosTecnicosResumen,
 } from '../../services/dashboardFallosTecnicosService';
-import FallosFiltersHeader, { FallosHeaderFilters } from './FallosFiltersHeader';
+import DashboardFiltersHeader, { DashboardHeaderFilters } from './DashboardFiltersHeader';
 
 const KPI_LABELS = [
   {
@@ -297,15 +297,16 @@ const DashboardHome: React.FC = () => {
   const [dashboard, setDashboard] = useState<DashboardFallosTecnicosResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [headerFilters, setHeaderFilters] = useState<FallosHeaderFilters>({
+  const [headerFilters, setHeaderFilters] = useState<DashboardHeaderFilters>({
     clienteId: '',
     reportadoCliente: '',
     consolaId: '',
     haciendaId: '',
+    tipoProblemaId: '',
+    tipoAfectacion: '',
   });
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
-  const [selectedProblemaId, setSelectedProblemaId] = useState('');
   const [dateRangeError, setDateRangeError] = useState<string | null>(null);
   const lastFetchKeyRef = useRef<string>('');
   const didInitFiltersRef = useRef(false);
@@ -316,11 +317,12 @@ const DashboardHome: React.FC = () => {
       headerFilters.clienteId ?? '',
       headerFilters.reportadoCliente ?? '',
       headerFilters.haciendaId ?? '',
+      headerFilters.tipoProblemaId ?? '',
+      headerFilters.tipoAfectacion ?? '',
       fechaDesde ?? '',
       fechaHasta ?? '',
-      selectedProblemaId ?? '',
     ].join('|');
-  }, [fechaDesde, fechaHasta, headerFilters, selectedProblemaId]);
+  }, [fechaDesde, fechaHasta, headerFilters]);
 
   useEffect(() => {
     let isMounted = true;
@@ -378,7 +380,10 @@ const DashboardHome: React.FC = () => {
       haciendaId: haciendaIdValue,
       fechaDesde: fechaDesde || null,
       fechaHasta: fechaHasta || null,
-      problemaId: selectedProblemaId ? Number(selectedProblemaId) : null,
+      tipoProblemaId: headerFilters.tipoProblemaId
+        ? Number(headerFilters.tipoProblemaId)
+        : null,
+      tipoAfectacion: headerFilters.tipoAfectacion || null,
       consolaId: consolaIdValue,
       signal: controller.signal,
     })
@@ -394,7 +399,7 @@ const DashboardHome: React.FC = () => {
       .finally(() => setIsLoading(false));
 
     return () => controller.abort();
-  }, [fechaDesde, fechaHasta, filtersKey, headerFilters, selectedProblemaId]);
+  }, [fechaDesde, fechaHasta, filtersKey, headerFilters]);
 
   useEffect(() => {
     if (!dashboard?.filtros) return;
@@ -415,17 +420,18 @@ const DashboardHome: React.FC = () => {
         next.haciendaId = '';
       }
 
+      if (
+        prev.tipoProblemaId &&
+        !dashboard.filtros.problemas.some(
+          (problema) => String(problema.id) === prev.tipoProblemaId,
+        )
+      ) {
+        next.tipoProblemaId = '';
+      }
+
       return next;
     });
-
-    if (
-      selectedProblemaId &&
-      !dashboard.filtros.problemas.some((problema) => String(problema.id) === selectedProblemaId)
-    ) {
-      setSelectedProblemaId('');
-    }
-
-  }, [dashboard, selectedProblemaId]);
+  }, [dashboard]);
 
   useEffect(() => {
     if (didInitFiltersRef.current) return;
@@ -742,7 +748,7 @@ const DashboardHome: React.FC = () => {
       !dashboard.tendencia_pendientes_mes.length);
 
   const handleHeaderFilterChange = useCallback(
-    (field: keyof FallosHeaderFilters, value: string) => {
+    (field: keyof DashboardHeaderFilters, value: string) => {
       setHeaderFilters((prev) => ({ ...prev, [field]: value }));
     },
     [],
@@ -754,18 +760,12 @@ const DashboardHome: React.FC = () => {
       reportadoCliente: '',
       consolaId: '',
       haciendaId: '',
+      tipoProblemaId: '',
+      tipoAfectacion: '',
     });
     setFechaDesde('');
     setFechaHasta('');
-    setSelectedProblemaId('');
   }, []);
-
-  const handleProblemaChange = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
-      setSelectedProblemaId(event.target.value);
-    },
-    [],
-  );
 
   const kpis = dashboard?.kpis ?? {
     fallos_reportados: 0,
@@ -776,10 +776,11 @@ const DashboardHome: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <FallosFiltersHeader
+      <DashboardFiltersHeader
         filters={headerFilters}
         onFilterChange={handleHeaderFilterChange}
         onClear={handleClearHeaderFilters}
+        problemas={problemas}
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_260px]">
         <div className="flex items-start justify-center border border-gray-300 bg-white px-6 py-4">
@@ -815,23 +816,6 @@ const DashboardHome: React.FC = () => {
                   />
                 </label>
               </div>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold uppercase text-gray-500">
-                Problema
-              </label>
-              <select
-                className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                value={selectedProblemaId}
-                onChange={handleProblemaChange}
-              >
-                <option value="">Todas</option>
-                {problemas.map((problema) => (
-                  <option key={problema.id} value={problema.id}>
-                    {problema.nombre}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
         </div>

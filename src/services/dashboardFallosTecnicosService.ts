@@ -77,6 +77,8 @@ export interface DashboardFallosTecnicosParams {
   mes?: string | null;
   fechaDesde?: string | null;
   fechaHasta?: string | null;
+  tipoProblemaId?: number | null;
+  tipoAfectacion?: string | null;
   problemaId?: number | null;
   consolaId?: number | null;
   signal?: AbortSignal;
@@ -113,6 +115,14 @@ export const fetchDashboardFallosTecnicosResumen = async (
 
   if (params.fechaHasta !== undefined && params.fechaHasta !== null) {
     queryParams.fecha_hasta = params.fechaHasta;
+  }
+
+  if (params.tipoProblemaId) {
+    queryParams.tipo_problema_id = String(params.tipoProblemaId);
+  }
+
+  if (params.tipoAfectacion) {
+    queryParams.tipo_afectacion = params.tipoAfectacion;
   }
 
   if (params.problemaId) {

@@ -71,15 +71,24 @@ export const getDashboardFallosTecnicosResumen = async (req, res) => {
     const mesRaw = req.query.MES ?? req.query.mes;
     const fechaDesdeRaw = req.query.FECHA_DESDE ?? req.query.fecha_desde;
     const fechaHastaRaw = req.query.FECHA_HASTA ?? req.query.fecha_hasta;
-    const problemaIdRaw = req.query.PROBLEMA_ID ?? req.query.problema_id;
+    const problemaIdRaw =
+      req.query.TIPO_PROBLEMA_ID ??
+      req.query.tipo_problema_id ??
+      req.query.PROBLEMA_ID ??
+      req.query.problema_id;
     const consolaIdRaw = req.query.CONSOLA_ID ?? req.query.consola_id;
     const reportadoClienteRaw = req.query.REPORTADO_CLIENTE ?? req.query.reportado_cliente;
+    const tipoAfectacionRaw = req.query.TIPO_AFECTACION ?? req.query.tipo_afectacion;
 
     const clienteIds = parseClienteIds(clienteIdsRaw);
     const haciendaId = toOptionalNumber(haciendaIdRaw);
     const problemaId = toOptionalNumber(problemaIdRaw);
     const consolaId = toOptionalNumber(consolaIdRaw);
     const reportadoClienteValues = normalizeReportadoClienteFilter(reportadoClienteRaw);
+    const tipoAfectacion =
+      tipoAfectacionRaw && String(tipoAfectacionRaw).trim().length > 0
+        ? String(tipoAfectacionRaw).trim()
+        : null;
 
     if (haciendaIdRaw && haciendaId === undefined) {
       return res.status(400).json({ message: "El parámetro HACIENDA_ID debe ser válido." });
@@ -134,7 +143,12 @@ export const getDashboardFallosTecnicosResumen = async (req, res) => {
 
     if (problemaId) {
       params.push(problemaId);
-      filtros.push(`AND B.ID = $${params.length}`);
+      filtros.push(`AND A.TIPO_PROBLEMA_ID = $${params.length}`);
+    }
+
+    if (tipoAfectacion) {
+      params.push(tipoAfectacion);
+      filtros.push(`AND A.TIPO_AFECTACION = $${params.length}`);
     }
 
     if (mes) {
