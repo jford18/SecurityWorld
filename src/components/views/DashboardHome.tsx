@@ -19,6 +19,7 @@ import { useSession } from '../context/SessionContext';
 import { resolveConsolaIdByName } from '../../services/consolasService';
 import {
   DashboardFallosTecnicosResponse,
+  TablaDepartamentosArbolRow,
   fetchDashboardFallosTecnicosResumen,
 } from '../../services/dashboardFallosTecnicosService';
 import FallosFiltersHeader, { FallosHeaderFilters } from './FallosFiltersHeader';
@@ -106,6 +107,33 @@ type TendenciaDatum = {
   num_fallos: number;
   pct_tg: number;
 };
+
+type DepartamentosArbolTipo = 'DEPARTAMENTO' | 'CLIENTE' | 'HACIENDA' | 'SITIO';
+
+type DepartamentosArbolNode = {
+  key: string;
+  tipo: DepartamentosArbolTipo;
+  nombre: string;
+  pendientes: number;
+  resueltos: number;
+  sumDiasSolucion: number;
+  countResueltos: number;
+  children: DepartamentosArbolNode[];
+};
+
+type DepartamentosArbolRow = {
+  key: string;
+  tipo: DepartamentosArbolTipo;
+  nombre: string;
+  pendientes: number;
+  resueltos: number;
+  pctResueltos: number;
+  tprom: number | null;
+  level: number;
+  hasChildren: boolean;
+};
+
+const INDENT_SIZE = 16;
 
 const DonutChart = React.memo(({ data }: { data: DonutDatum[] }) => {
   if (!data.length) {
@@ -456,30 +484,261 @@ const DashboardHome: React.FC = () => {
     [dashboard],
   );
 
-  const totalsTablaDepartamentos = useMemo(() => {
-    return (dashboard?.tabla_departamentos ?? []).reduce(
-      (acc, row) => {
+  const departamentosArbol = useMemo<DepartamentosArbolNode[]>(() => {
+    const rows: TablaDepartamentosArbolRow[] = dashboard?.tabla_departamentos_arbol ?? [];
+
+    if (!rows.length) {
+      return [];
+    }
+
+    const nodes = new Map<string, DepartamentosArbolNode>();
+    const roots: DepartamentosArbolNode[] = [];
+
+    const makeKey = (
+      tipo: DepartamentosArbolTipo,
+      id: number | null,
+      parentKey: string | null,
+      nombre: string,
+    ) => `${tipo}:${parentKey ?? 'root'}:${id ?? 'null'}:${nombre}`;
+
+    const getNode = (
+      key: string,
+      create: () => DepartamentosArbolNode,
+      parent: DepartamentosArbolNode | null,
+    ) => {
+      const existing = nodes.get(key);
+      if (existing) {
+        return existing;
+      }
+      const node = create();
+      nodes.set(key, node);
+      if (parent) {
+        parent.children.push(node);
+      } else {
+        roots.push(node);
+      }
+      return node;
+    };
+
+    rows.forEach((row) => {
+      const departamentoNombre = row.departamento_nombre?.trim() || 'Sin departamento';
+      const clienteNombre = row.cliente_nombre?.trim() || 'Sin cliente';
+      const haciendaNombre = row.hacienda_nombre?.trim() || 'Sin hacienda';
+      const sitioNombre = row.sitio_nombre?.trim() || 'Sin sitio';
+
+      const departamentoKey = makeKey(
+        'DEPARTAMENTO',
+        row.departamento_id,
+        null,
+        departamentoNombre,
+      );
+      const departamentoNode = getNode(
+        departamentoKey,
+        () => ({
+          key: departamentoKey,
+          tipo: 'DEPARTAMENTO',
+          nombre: departamentoNombre,
+          pendientes: 0,
+          resueltos: 0,
+          sumDiasSolucion: 0,
+          countResueltos: 0,
+          children: [],
+        }),
+        null,
+      );
+
+      const clienteKey = makeKey(
+        'CLIENTE',
+        row.cliente_id,
+        departamentoKey,
+        clienteNombre,
+      );
+      const clienteNode = getNode(
+        clienteKey,
+        () => ({
+          key: clienteKey,
+          tipo: 'CLIENTE',
+          nombre: clienteNombre,
+          pendientes: 0,
+          resueltos: 0,
+          sumDiasSolucion: 0,
+          countResueltos: 0,
+          children: [],
+        }),
+        departamentoNode,
+      );
+
+      const haciendaKey = makeKey(
+        'HACIENDA',
+        row.hacienda_id,
+        clienteKey,
+        haciendaNombre,
+      );
+      const haciendaNode = getNode(
+        haciendaKey,
+        () => ({
+          key: haciendaKey,
+          tipo: 'HACIENDA',
+          nombre: haciendaNombre,
+          pendientes: 0,
+          resueltos: 0,
+          sumDiasSolucion: 0,
+          countResueltos: 0,
+          children: [],
+        }),
+        clienteNode,
+      );
+
+      const sitioKey = makeKey('SITIO', row.sitio_id, haciendaKey, sitioNombre);
+      const sitioNode = getNode(
+        sitioKey,
+        () => ({
+          key: sitioKey,
+          tipo: 'SITIO',
+          nombre: sitioNombre,
+          pendientes: 0,
+          resueltos: 0,
+          sumDiasSolucion: 0,
+          countResueltos: 0,
+          children: [],
+        }),
+        haciendaNode,
+      );
+
+      sitioNode.pendientes = Number(row.fallos_pendientes ?? 0);
+      sitioNode.resueltos = Number(row.fallos_resueltos ?? 0);
+      sitioNode.sumDiasSolucion = Number(row.sum_dias_solucion ?? 0);
+      sitioNode.countResueltos = Number(row.count_resueltos ?? 0);
+    });
+
+    const aggregateNode = (node: DepartamentosArbolNode) => {
+      if (!node.children.length) {
         return {
-          pendientes: acc.pendientes + Number(row.fallos_pendientes ?? 0),
-          resueltos: acc.resueltos + Number(row.fallos_resueltos ?? 0),
+          pendientes: node.pendientes,
+          resueltos: node.resueltos,
+          sumDiasSolucion: node.sumDiasSolucion,
+          countResueltos: node.countResueltos,
         };
-      },
-      { pendientes: 0, resueltos: 0 },
-    );
+      }
+
+      const totals = node.children.reduce(
+        (acc, child) => {
+          const childTotals = aggregateNode(child);
+          return {
+            pendientes: acc.pendientes + childTotals.pendientes,
+            resueltos: acc.resueltos + childTotals.resueltos,
+            sumDiasSolucion: acc.sumDiasSolucion + childTotals.sumDiasSolucion,
+            countResueltos: acc.countResueltos + childTotals.countResueltos,
+          };
+        },
+        { pendientes: 0, resueltos: 0, sumDiasSolucion: 0, countResueltos: 0 },
+      );
+
+      node.pendientes = totals.pendientes;
+      node.resueltos = totals.resueltos;
+      node.sumDiasSolucion = totals.sumDiasSolucion;
+      node.countResueltos = totals.countResueltos;
+
+      return totals;
+    };
+
+    roots.forEach((root) => aggregateNode(root));
+
+    const sortNodes = (node: DepartamentosArbolNode) => {
+      node.children.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+      node.children.forEach((child) => sortNodes(child));
+    };
+
+    roots.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+    roots.forEach((root) => sortNodes(root));
+
+    return roots;
   }, [dashboard]);
 
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setExpandedNodes(new Set());
+  }, [dashboard?.tabla_departamentos_arbol]);
+
+  const handleToggleNode = useCallback((key: string) => {
+    setExpandedNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
+
+  const departamentosArbolRows = useMemo<DepartamentosArbolRow[]>(() => {
+    const rows: DepartamentosArbolRow[] = [];
+
+    const walk = (node: DepartamentosArbolNode, level: number) => {
+      const total = node.pendientes + node.resueltos;
+      const pctResueltos = total > 0 ? (node.resueltos / total) * 100 : 0;
+      const tprom =
+        node.countResueltos > 0 ? node.sumDiasSolucion / node.countResueltos : null;
+      const hasChildren = node.children.length > 0;
+
+      rows.push({
+        key: node.key,
+        tipo: node.tipo,
+        nombre: node.nombre,
+        pendientes: node.pendientes,
+        resueltos: node.resueltos,
+        pctResueltos,
+        tprom,
+        level,
+        hasChildren,
+      });
+
+      if (hasChildren && expandedNodes.has(node.key)) {
+        node.children.forEach((child) => walk(child, level + 1));
+      }
+    };
+
+    departamentosArbol.forEach((node) => walk(node, 0));
+
+    return rows;
+  }, [departamentosArbol, expandedNodes]);
+
+  const totalsTablaDepartamentosArbol = useMemo(() => {
+    return departamentosArbol.reduce(
+      (acc, node) => {
+        return {
+          pendientes: acc.pendientes + node.pendientes,
+          resueltos: acc.resueltos + node.resueltos,
+          sumDiasSolucion: acc.sumDiasSolucion + node.sumDiasSolucion,
+          countResueltos: acc.countResueltos + node.countResueltos,
+        };
+      },
+      { pendientes: 0, resueltos: 0, sumDiasSolucion: 0, countResueltos: 0 },
+    );
+  }, [departamentosArbol]);
+
   const totalPctResueltos =
-    totalsTablaDepartamentos.pendientes + totalsTablaDepartamentos.resueltos > 0
-      ? (totalsTablaDepartamentos.resueltos /
-          (totalsTablaDepartamentos.pendientes + totalsTablaDepartamentos.resueltos)) *
+    totalsTablaDepartamentosArbol.pendientes + totalsTablaDepartamentosArbol.resueltos > 0
+      ? (totalsTablaDepartamentosArbol.resueltos /
+          (totalsTablaDepartamentosArbol.pendientes +
+            totalsTablaDepartamentosArbol.resueltos)) *
         100
       : 0;
+
+  const totalTpromArbol =
+    totalsTablaDepartamentosArbol.countResueltos > 0
+      ? totalsTablaDepartamentosArbol.sumDiasSolucion /
+        totalsTablaDepartamentosArbol.countResueltos
+      : null;
 
   const isEmpty =
     !dashboard ||
     (!dashboard.pendientes_por_departamento.length &&
       !dashboard.pendientes_por_problema_hacienda.length &&
       !dashboard.tabla_departamentos.length &&
+      !dashboard.tabla_departamentos_arbol.length &&
       !dashboard.tendencia_pendientes_mes.length);
 
   const handleHeaderFilterChange = useCallback(
@@ -638,7 +897,7 @@ const DashboardHome: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200 text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
-                  <th className="px-3 py-2 text-left">Departamento</th>
+                  <th className="px-3 py-2 text-left">Nombre</th>
                   <th className="px-3 py-2 text-right">Fallos pendientes</th>
                   <th className="px-3 py-2 text-right">Fallos resueltos</th>
                   <th className="px-3 py-2 text-right">% Fallos resueltos</th>
@@ -646,41 +905,70 @@ const DashboardHome: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {(dashboard?.tabla_departamentos ?? []).map((row) => (
-                  <tr key={row.departamento}>
-                    <td className="px-3 py-2 text-left">{row.departamento}</td>
-                    <td className="px-3 py-2 text-right">
-                      {formatInteger(Number(row.fallos_pendientes ?? 0))}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {formatInteger(Number(row.fallos_resueltos ?? 0))}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {Number(row.porc_resueltos ?? 0).toFixed(2)} %
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {row.t_prom_solucion_dias !== null &&
-                      row.t_prom_solucion_dias !== undefined
-                        ? Number(row.t_prom_solucion_dias).toFixed(2)
-                        : '-'}
-                    </td>
-                  </tr>
-                ))}
+                {departamentosArbolRows.map((row) => {
+                  const arrow = row.hasChildren
+                    ? expandedNodes.has(row.key)
+                      ? '▾'
+                      : '▸'
+                    : '';
+                  return (
+                    <tr key={row.key}>
+                      <td className="px-3 py-2 text-left">
+                        <div
+                          className="flex items-center"
+                          style={{ paddingLeft: row.level * INDENT_SIZE }}
+                        >
+                          {row.hasChildren ? (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleNode(row.key)}
+                              className="mr-2 inline-flex h-5 w-5 items-center justify-center text-gray-600 hover:text-gray-900"
+                              aria-label={`${
+                                expandedNodes.has(row.key) ? 'Colapsar' : 'Expandir'
+                              } ${row.nombre}`}
+                            >
+                              {arrow}
+                            </button>
+                          ) : (
+                            <span className="mr-2 inline-flex h-5 w-5 items-center justify-center text-gray-300">
+                              ▸
+                            </span>
+                          )}
+                          <span>{row.nombre}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {formatInteger(Number(row.pendientes ?? 0))}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {formatInteger(Number(row.resueltos ?? 0))}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {Number(row.pctResueltos ?? 0).toFixed(2)} %
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {row.tprom !== null && row.tprom !== undefined
+                          ? Number(row.tprom).toFixed(2)
+                          : '-'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
               <tfoot className="bg-gray-50 font-semibold text-gray-600">
                 <tr>
                   <td className="px-3 py-2 text-left">Total</td>
                   <td className="px-3 py-2 text-right">
-                    {formatInteger(totalsTablaDepartamentos.pendientes)}
+                    {formatInteger(totalsTablaDepartamentosArbol.pendientes)}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {formatInteger(totalsTablaDepartamentos.resueltos)}
+                    {formatInteger(totalsTablaDepartamentosArbol.resueltos)}
                   </td>
                   <td className="px-3 py-2 text-right">
                     {totalPctResueltos.toFixed(2)} %
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {Number(kpis.t_prom_solucion_dias ?? 0).toFixed(2)}
+                    {totalTpromArbol !== null ? Number(totalTpromArbol).toFixed(2) : '-'}
                   </td>
                 </tr>
               </tfoot>
