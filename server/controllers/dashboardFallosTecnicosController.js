@@ -69,6 +69,8 @@ export const getDashboardFallosTecnicosResumen = async (req, res) => {
     const clienteIdsRaw = req.query.CLIENTE_IDS ?? req.query.cliente_ids ?? req.query.cliente_id;
     const haciendaIdRaw = req.query.HACIENDA_ID ?? req.query.hacienda_id;
     const mesRaw = req.query.MES ?? req.query.mes;
+    const fechaDesdeRaw = req.query.FECHA_DESDE ?? req.query.fecha_desde;
+    const fechaHastaRaw = req.query.FECHA_HASTA ?? req.query.fecha_hasta;
     const problemaIdRaw = req.query.PROBLEMA_ID ?? req.query.problema_id;
     const consolaIdRaw = req.query.CONSOLA_ID ?? req.query.consola_id;
     const reportadoClienteRaw = req.query.REPORTADO_CLIENTE ?? req.query.reportado_cliente;
@@ -101,6 +103,14 @@ export const getDashboardFallosTecnicosResumen = async (req, res) => {
       mesRaw && typeof mesRaw === "string" && mesRaw.trim().length > 0
         ? mesRaw.trim()
         : null;
+    const fechaDesde =
+      fechaDesdeRaw && typeof fechaDesdeRaw === "string" && fechaDesdeRaw.trim().length > 0
+        ? fechaDesdeRaw.trim()
+        : null;
+    const fechaHasta =
+      fechaHastaRaw && typeof fechaHastaRaw === "string" && fechaHastaRaw.trim().length > 0
+        ? fechaHastaRaw.trim()
+        : null;
 
     const params = [];
     const filtros = [];
@@ -130,6 +140,16 @@ export const getDashboardFallosTecnicosResumen = async (req, res) => {
     if (mes) {
       params.push(mes);
       filtros.push(`AND TO_CHAR(A.FECHA::DATE, 'YYYY-MM') = $${params.length}`);
+    }
+
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      filtros.push(`AND A.FECHA::DATE >= $${params.length}`);
+    }
+
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      filtros.push(`AND A.FECHA::DATE <= $${params.length}`);
     }
 
     if (reportadoClienteValues) {

@@ -275,8 +275,10 @@ const DashboardHome: React.FC = () => {
     consolaId: '',
     haciendaId: '',
   });
-  const [selectedMes, setSelectedMes] = useState('');
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
   const [selectedProblemaId, setSelectedProblemaId] = useState('');
+  const [dateRangeError, setDateRangeError] = useState<string | null>(null);
   const lastFetchKeyRef = useRef<string>('');
   const didInitFiltersRef = useRef(false);
 
@@ -286,10 +288,11 @@ const DashboardHome: React.FC = () => {
       headerFilters.clienteId ?? '',
       headerFilters.reportadoCliente ?? '',
       headerFilters.haciendaId ?? '',
-      selectedMes ?? '',
+      fechaDesde ?? '',
+      fechaHasta ?? '',
       selectedProblemaId ?? '',
     ].join('|');
-  }, [headerFilters, selectedMes, selectedProblemaId]);
+  }, [fechaDesde, fechaHasta, headerFilters, selectedProblemaId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -322,6 +325,14 @@ const DashboardHome: React.FC = () => {
 
   useEffect(() => {
     if (lastFetchKeyRef.current === filtersKey) return;
+
+    if (fechaDesde && fechaHasta && fechaDesde > fechaHasta) {
+      setDateRangeError('La fecha "DESDE" no puede ser mayor que la fecha "HASTA".');
+      setIsLoading(false);
+      return;
+    }
+
+    setDateRangeError(null);
     lastFetchKeyRef.current = filtersKey;
 
     const controller = new AbortController();
@@ -337,7 +348,8 @@ const DashboardHome: React.FC = () => {
       clienteId: clienteIdValue,
       reportadoCliente: headerFilters.reportadoCliente || null,
       haciendaId: haciendaIdValue,
-      mes: selectedMes || null,
+      fechaDesde: fechaDesde || null,
+      fechaHasta: fechaHasta || null,
       problemaId: selectedProblemaId ? Number(selectedProblemaId) : null,
       consolaId: consolaIdValue,
       signal: controller.signal,
@@ -354,7 +366,7 @@ const DashboardHome: React.FC = () => {
       .finally(() => setIsLoading(false));
 
     return () => controller.abort();
-  }, [filtersKey, headerFilters]);
+  }, [fechaDesde, fechaHasta, filtersKey, headerFilters, selectedProblemaId]);
 
   useEffect(() => {
     if (!dashboard?.filtros) return;
@@ -385,10 +397,7 @@ const DashboardHome: React.FC = () => {
       setSelectedProblemaId('');
     }
 
-    if (selectedMes && !dashboard.filtros.meses.includes(selectedMes)) {
-      setSelectedMes('');
-    }
-  }, [dashboard, selectedMes, selectedProblemaId]);
+  }, [dashboard, selectedProblemaId]);
 
   useEffect(() => {
     if (didInitFiltersRef.current) return;
@@ -398,8 +407,6 @@ const DashboardHome: React.FC = () => {
   }, [dashboard]);
 
   const problemas = dashboard?.filtros?.problemas ?? [];
-  const meses = dashboard?.filtros?.meses ?? [];
-
   const donutData = useMemo(
     () =>
       (dashboard?.pendientes_por_departamento ?? []).map((item) => ({
@@ -479,14 +486,10 @@ const DashboardHome: React.FC = () => {
       consolaId: '',
       haciendaId: '',
     });
+    setFechaDesde('');
+    setFechaHasta('');
+    setSelectedProblemaId('');
   }, []);
-
-  const handleMesChange = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
-      setSelectedMes(event.target.value);
-    },
-    [],
-  );
 
   const handleProblemaChange = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -519,19 +522,30 @@ const DashboardHome: React.FC = () => {
         <div className="border border-gray-300 bg-white p-4">
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold uppercase text-gray-500">Mes</label>
-              <select
-                className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                value={selectedMes}
-                onChange={handleMesChange}
-              >
-                <option value="">Todos</option>
-                {meses.map((mes) => (
-                  <option key={mes} value={mes}>
-                    {formatMonthLabel(mes)}
-                  </option>
-                ))}
-              </select>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="text-sm text-gray-700">
+                  <span className="block text-xs font-semibold uppercase text-gray-500">
+                    Desde
+                  </span>
+                  <input
+                    type="date"
+                    className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                    value={fechaDesde}
+                    onChange={(event) => setFechaDesde(event.target.value)}
+                  />
+                </label>
+                <label className="text-sm text-gray-700">
+                  <span className="block text-xs font-semibold uppercase text-gray-500">
+                    Hasta
+                  </span>
+                  <input
+                    type="date"
+                    className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                    value={fechaHasta}
+                    onChange={(event) => setFechaHasta(event.target.value)}
+                  />
+                </label>
+              </div>
             </div>
             <div>
               <label className="block text-xs font-semibold uppercase text-gray-500">
@@ -554,6 +568,11 @@ const DashboardHome: React.FC = () => {
         </div>
       </div>
 
+      {dateRangeError && (
+        <div className="rounded border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-700">
+          {dateRangeError}
+        </div>
+      )}
       {isLoading && <p className="text-sm text-gray-500">Cargando dashboard...</p>}
       {error && <p className="text-sm text-red-500">{error}</p>}
       {!isLoading && !error && isEmpty && (
