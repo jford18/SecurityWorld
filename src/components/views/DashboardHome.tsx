@@ -456,8 +456,8 @@ const DashboardHome: React.FC = () => {
     [dashboard],
   );
 
-  const totalsTablaClientes = useMemo(() => {
-    return (dashboard?.tabla_clientes ?? []).reduce(
+  const totalsTablaDepartamentos = useMemo(() => {
+    return (dashboard?.tabla_departamentos ?? []).reduce(
       (acc, row) => {
         return {
           pendientes: acc.pendientes + Number(row.fallos_pendientes ?? 0),
@@ -469,9 +469,9 @@ const DashboardHome: React.FC = () => {
   }, [dashboard]);
 
   const totalPctResueltos =
-    totalsTablaClientes.pendientes + totalsTablaClientes.resueltos > 0
-      ? (totalsTablaClientes.resueltos /
-          (totalsTablaClientes.pendientes + totalsTablaClientes.resueltos)) *
+    totalsTablaDepartamentos.pendientes + totalsTablaDepartamentos.resueltos > 0
+      ? (totalsTablaDepartamentos.resueltos /
+          (totalsTablaDepartamentos.pendientes + totalsTablaDepartamentos.resueltos)) *
         100
       : 0;
 
@@ -479,7 +479,7 @@ const DashboardHome: React.FC = () => {
     !dashboard ||
     (!dashboard.pendientes_por_departamento.length &&
       !dashboard.pendientes_por_problema_hacienda.length &&
-      !dashboard.tabla_clientes.length &&
+      !dashboard.tabla_departamentos.length &&
       !dashboard.tendencia_pendientes_mes.length);
 
   const handleHeaderFilterChange = useCallback(
@@ -633,12 +633,12 @@ const DashboardHome: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <div className="border border-gray-300 bg-white p-4" style={CHART_CARD_STYLE}>
-          <h4 className="text-sm font-semibold text-gray-600">Fallos pendientes por Cliente</h4>
+          <h4 className="text-sm font-semibold text-gray-600">Fallos por Departamento</h4>
           <div className="mt-3 overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
-                  <th className="px-3 py-2 text-left">Cliente</th>
+                  <th className="px-3 py-2 text-left">Departamento</th>
                   <th className="px-3 py-2 text-right">Fallos pendientes</th>
                   <th className="px-3 py-2 text-right">Fallos resueltos</th>
                   <th className="px-3 py-2 text-right">% Fallos resueltos</th>
@@ -646,9 +646,9 @@ const DashboardHome: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {(dashboard?.tabla_clientes ?? []).map((row) => (
-                  <tr key={row.cliente}>
-                    <td className="px-3 py-2 text-left">{row.cliente}</td>
+                {(dashboard?.tabla_departamentos ?? []).map((row) => (
+                  <tr key={row.departamento}>
+                    <td className="px-3 py-2 text-left">{row.departamento}</td>
                     <td className="px-3 py-2 text-right">
                       {formatInteger(Number(row.fallos_pendientes ?? 0))}
                     </td>
@@ -671,10 +671,10 @@ const DashboardHome: React.FC = () => {
                 <tr>
                   <td className="px-3 py-2 text-left">Total</td>
                   <td className="px-3 py-2 text-right">
-                    {formatInteger(totalsTablaClientes.pendientes)}
+                    {formatInteger(totalsTablaDepartamentos.pendientes)}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {formatInteger(totalsTablaClientes.resueltos)}
+                    {formatInteger(totalsTablaDepartamentos.resueltos)}
                   </td>
                   <td className="px-3 py-2 text-right">
                     {totalPctResueltos.toFixed(2)} %

@@ -227,14 +227,14 @@ PEND_PROBLEMA_HACIENDA AS (
     WHERE A.ES_PENDIENTE = 1
     GROUP BY (COALESCE(A.TIPO_AFECTACION, '') || ' ' || COALESCE(A.TIPO_PROBLEMA, '')), A.HACIENDA
 ),
-TABLA_CLIENTE AS (
+TABLA_DEPARTAMENTO AS (
     SELECT
-        A.CLIENTE,
+        A.DEPARTAMENTO,
         COUNT(1) FILTER (WHERE A.ES_PENDIENTE = 1) AS FALLOS_PENDIENTES,
         COUNT(1) FILTER (WHERE A.ES_RESUELTO = 1) AS FALLOS_RESUELTOS,
         AVG(CASE WHEN A.ES_RESUELTO = 1 THEN A.DIAS_SOLUCION ELSE NULL END) AS T_PROM_SOLUCION_DIAS
     FROM BASE A
-    GROUP BY A.CLIENTE
+    GROUP BY A.DEPARTAMENTO
 ),
 TENDENCIA_MES AS (
     SELECT
@@ -289,26 +289,26 @@ SELECT
         ) FROM KPI K),
         'pendientes_por_departamento', (SELECT COALESCE(JSON_AGG(P), '[]'::JSON) FROM PEND_DEPARTAMENTO P),
         'pendientes_por_problema_hacienda', (SELECT COALESCE(JSON_AGG(PH), '[]'::JSON) FROM PEND_PROBLEMA_HACIENDA PH),
-        'tabla_clientes', (
+        'tabla_departamentos', (
             SELECT COALESCE(
                 JSON_AGG(
                     JSON_BUILD_OBJECT(
-                        'cliente', TC.CLIENTE,
-                        'fallos_pendientes', TC.FALLOS_PENDIENTES,
-                        'fallos_resueltos', TC.FALLOS_RESUELTOS,
+                        'departamento', TD.DEPARTAMENTO,
+                        'fallos_pendientes', TD.FALLOS_PENDIENTES,
+                        'fallos_resueltos', TD.FALLOS_RESUELTOS,
                         'porc_resueltos',
                         CASE
-                            WHEN (TC.FALLOS_PENDIENTES + TC.FALLOS_RESUELTOS) > 0
-                            THEN (TC.FALLOS_RESUELTOS::DECIMAL / (TC.FALLOS_PENDIENTES + TC.FALLOS_RESUELTOS)) * 100
+                            WHEN (TD.FALLOS_PENDIENTES + TD.FALLOS_RESUELTOS) > 0
+                            THEN (TD.FALLOS_RESUELTOS::DECIMAL / (TD.FALLOS_PENDIENTES + TD.FALLOS_RESUELTOS)) * 100
                             ELSE 0
                         END,
-                        't_prom_solucion_dias', TC.T_PROM_SOLUCION_DIAS
+                        't_prom_solucion_dias', TD.T_PROM_SOLUCION_DIAS
                     )
-                    ORDER BY TC.FALLOS_PENDIENTES DESC, TC.FALLOS_RESUELTOS DESC, TC.CLIENTE ASC
+                    ORDER BY TD.FALLOS_PENDIENTES DESC, TD.FALLOS_RESUELTOS DESC, TD.DEPARTAMENTO ASC
                 ),
                 '[]'::JSON
             )
-            FROM TABLA_CLIENTE TC
+            FROM TABLA_DEPARTAMENTO TD
         ),
         'tendencia_pendientes_mes', (
             SELECT COALESCE(
