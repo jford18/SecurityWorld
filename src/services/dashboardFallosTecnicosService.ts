@@ -21,8 +21,9 @@ export interface PendientesPorProblemaHacienda {
 export interface TablaClientesRow {
   cliente: string;
   t_prom_solucion_dias: number | null;
-  num_fallos: number;
-  pct_fallos: number;
+  fallos_pendientes: number;
+  fallos_resueltos: number;
+  porc_resueltos: number;
 }
 
 export interface TendenciaPendientesRow {
