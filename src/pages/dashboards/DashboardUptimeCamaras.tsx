@@ -30,10 +30,10 @@ const formatTimestamp = (date = new Date()) => {
 };
 
 const combineDateTime = (date: string, time: string) => {
-  if (!date) return 0;
+  if (!date) return null;
   const sanitizedTime = time || '00:00:00';
   const timestamp = new Date(`${date}T${sanitizedTime}Z`).getTime();
-  return Number.isNaN(timestamp) ? 0 : timestamp;
+  return Number.isNaN(timestamp) ? null : timestamp;
 };
 
 type SortKey =
@@ -70,8 +70,7 @@ const DashboardUptimeCamaras: React.FC = () => {
     uptime_pct: 0,
   });
 
-  const [allRows, setAllRows] = useState<UptimeDetalleRow[]>([]);
-  const [visibleRows, setVisibleRows] = useState<UptimeDetalleRow[]>([]);
+  const [allRows, setAllRows] = useState<Array<UptimeDetalleRow & { rowKey: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>({
@@ -91,7 +90,11 @@ const DashboardUptimeCamaras: React.FC = () => {
       setError(null);
       const data = await fetchDashboardUptimeCamaras(filters);
       setKpis(data.kpis);
-      setAllRows(data.detalle ?? []);
+      const rowsWithKeys = (data.detalle ?? []).map((row) => ({
+        ...row,
+        rowKey: crypto.randomUUID(),
+      }));
+      setAllRows(rowsWithKeys);
     } catch (err) {
       console.error('[DashboardUptimeCamaras] Error al cargar datos', err);
       const message =
@@ -136,30 +139,12 @@ const DashboardUptimeCamaras: React.FC = () => {
     if (!sortConfig) return allRows;
     const direction = sortConfig.direction === 'asc' ? 1 : -1;
 
-    return [...allRows].sort((a, b) => {
-      let aValue: number | string = '';
-      let bValue: number | string = '';
-
-      switch (sortConfig.key) {
-        case 'mes':
-        case 'tiempo_offline_h':
-          aValue = Number((a as Record<string, unknown>)[sortConfig.key]) || 0;
-          bValue = Number((b as Record<string, unknown>)[sortConfig.key]) || 0;
-          break;
-        case 'fecha_fallo':
-        case 'hora_fallo':
-          aValue = combineDateTime(a.fecha_fallo, a.hora_fallo);
-          bValue = combineDateTime(b.fecha_fallo, b.hora_fallo);
-          break;
-        case 'fecha_recuperacion':
-        case 'hora_recuperacion':
-          aValue = combineDateTime(a.fecha_recuperacion, a.hora_recuperacion);
-          bValue = combineDateTime(b.fecha_recuperacion, b.hora_recuperacion);
-          break;
-        default:
-          aValue = String((a as Record<string, unknown>)[sortConfig.key] ?? '').toLowerCase();
-          bValue = String((b as Record<string, unknown>)[sortConfig.key] ?? '').toLowerCase();
-      }
+    const compareValues = (aValue: number | string | null, bValue: number | string | null) => {
+      const aMissing = aValue === null || aValue === undefined || aValue === '';
+      const bMissing = bValue === null || bValue === undefined || bValue === '';
+      if (aMissing && bMissing) return 0;
+      if (aMissing) return 1;
+      if (bMissing) return -1;
 
       if (typeof aValue === 'number' && typeof bValue === 'number') {
         if (aValue === bValue) return 0;
@@ -167,18 +152,52 @@ const DashboardUptimeCamaras: React.FC = () => {
       }
 
       return String(aValue).localeCompare(String(bValue), 'es') * direction;
+    };
+
+    return [...allRows].sort((a, b) => {
+      switch (sortConfig.key) {
+        case 'mes':
+        case 'tiempo_offline_h':
+          return compareValues(
+            (() => {
+              const value = (a as Record<string, unknown>)[sortConfig.key];
+              if (value === null || value === undefined || value === '') return null;
+              const parsed = Number(value);
+              return Number.isNaN(parsed) ? null : parsed;
+            })(),
+            (() => {
+              const value = (b as Record<string, unknown>)[sortConfig.key];
+              if (value === null || value === undefined || value === '') return null;
+              const parsed = Number(value);
+              return Number.isNaN(parsed) ? null : parsed;
+            })(),
+          );
+        case 'fecha_fallo':
+        case 'hora_fallo':
+          return compareValues(
+            combineDateTime(a.fecha_fallo, a.hora_fallo),
+            combineDateTime(b.fecha_fallo, b.hora_fallo),
+          );
+        case 'fecha_recuperacion':
+        case 'hora_recuperacion':
+          return compareValues(
+            combineDateTime(a.fecha_recuperacion, a.hora_recuperacion),
+            combineDateTime(b.fecha_recuperacion, b.hora_recuperacion),
+          );
+        default:
+          return compareValues(
+            String((a as Record<string, unknown>)[sortConfig.key] ?? '').toLowerCase(),
+            String((b as Record<string, unknown>)[sortConfig.key] ?? '').toLowerCase(),
+          );
+      }
     });
   }, [allRows, sortConfig]);
-
-  useEffect(() => {
-    setVisibleRows(sortedRows);
-  }, [sortedRows]);
 
   const uptimeDisponible = formatNumber(kpis.t_disponible_h);
   const uptimeCaido = formatNumber(kpis.t_caido_h);
 
   const handleExport = () => {
-    const rowsToExport = visibleRows.map((row) => ({
+    const rowsToExport = sortedRows.map((row) => ({
       MES: row.mes,
       ID: row.id,
       'SITIO AFECTADO': row.sitio_afectado_final,
@@ -322,15 +341,15 @@ const DashboardUptimeCamaras: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
-                {visibleRows.length === 0 && (
+                {sortedRows.length === 0 && (
                   <tr>
                     <td colSpan={9} className="px-4 py-6 text-center text-sm text-gray-500">
                       {loading ? 'Cargando datos...' : 'No hay registros para mostrar'}
                     </td>
                   </tr>
                 )}
-                {visibleRows.map((row) => (
-                  <tr key={`${row.id}-${row.fecha_fallo}-${row.hora_fallo}`} className="hover:bg-gray-50">
+                {sortedRows.map((row) => (
+                  <tr key={row.rowKey} className="hover:bg-gray-50">
                     <td className="px-4 py-2 text-sm text-gray-700">{row.mes}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.id}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.sitio_afectado_final}</td>
