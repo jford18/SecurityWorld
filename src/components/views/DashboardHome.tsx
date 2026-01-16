@@ -105,7 +105,7 @@ type TendenciaDatum = {
   mes: string;
   mes_label: string;
   num_fallos: number;
-  pct_tg: number;
+  t_prom_solucion_dias: number;
 };
 
 type DepartamentosArbolTipo = 'DEPARTAMENTO' | 'CLIENTE' | 'HACIENDA' | 'SITIO';
@@ -250,12 +250,15 @@ const TendenciaChart = React.memo(({ data }: { data: TendenciaDatum[] }) => {
           <YAxis
             yAxisId="right"
             orientation="right"
-            tickFormatter={(value) => formatPercent(Number(value))}
+            tickFormatter={(value) => formatDecimal(Number(value))}
           />
           <Tooltip
-            formatter={(value: number, name: string) =>
-              name === '%TG' ? formatPercent(Number(value)) : formatInteger(Number(value))
-            }
+            formatter={(value: number, name: string) => {
+              if (name === 'T. prom solución (días)') {
+                return formatDecimal(Number(value));
+              }
+              return formatInteger(Number(value));
+            }}
           />
           <Legend />
           <Bar
@@ -274,8 +277,8 @@ const TendenciaChart = React.memo(({ data }: { data: TendenciaDatum[] }) => {
           <Line
             yAxisId="right"
             type="monotone"
-            dataKey="pct_tg"
-            name="%TG"
+            dataKey="t_prom_solucion_dias"
+            name="T. prom solución (días)"
             stroke="#4C6FFF"
             strokeWidth={2}
             dot={{ r: 3 }}
@@ -962,7 +965,7 @@ const DashboardHome: React.FC = () => {
 
         <div className="border border-gray-300 bg-white p-4" style={CHART_CARD_STYLE}>
           <h4 className="text-sm font-semibold text-gray-600">
-            %TG Recuento de ID y N° fallos por Mes y Estatus final
+            T. prom solución (días) y N° fallos por mes y estatus final
           </h4>
           <p className="text-xs text-gray-500">Estatus final: PENDIENTE</p>
           <TendenciaChart data={tendenciaData} />

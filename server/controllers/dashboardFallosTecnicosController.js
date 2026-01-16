@@ -281,7 +281,11 @@ TABLA_DEPARTAMENTO_ARBOL AS (
 TENDENCIA_MES AS (
     SELECT
         TO_CHAR(A.FECHA::DATE, 'YYYY-MM') AS MES,
-        COUNT(1) FILTER (WHERE A.ES_PENDIENTE = 1) AS NUM_FALLOS
+        COUNT(1) FILTER (WHERE A.ES_PENDIENTE = 1) AS NUM_FALLOS,
+        COALESCE(
+            AVG(CASE WHEN A.ES_RESUELTO = 1 THEN A.DIAS_SOLUCION ELSE NULL END),
+            0
+        ) AS T_PROM_SOLUCION_DIAS
     FROM BASE A
     GROUP BY TO_CHAR(A.FECHA::DATE, 'YYYY-MM')
 ),
@@ -385,14 +389,13 @@ SELECT
                     JSON_BUILD_OBJECT(
                         'mes', TM.MES,
                         'num_fallos', TM.NUM_FALLOS,
-                        'pct_tg', CASE WHEN K.TOTAL_PENDIENTES > 0 THEN (TM.NUM_FALLOS::DECIMAL / K.TOTAL_PENDIENTES) * 100 ELSE 0 END
+                        't_prom_solucion_dias', TM.T_PROM_SOLUCION_DIAS
                     )
                     ORDER BY TM.MES
                 ),
                 '[]'::JSON
             )
             FROM TENDENCIA_MES TM
-            CROSS JOIN KPI K
         ),
         'filtros', JSON_BUILD_OBJECT(
             'clientes', (SELECT COALESCE(JSON_AGG(C ORDER BY C.NOMBRE), '[]'::JSON) FROM CLIENTES C),
