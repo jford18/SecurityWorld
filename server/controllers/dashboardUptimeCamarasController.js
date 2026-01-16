@@ -127,6 +127,7 @@ OFFLINE AS (
 AGR AS (
     SELECT
         EXTRACT(MONTH FROM A.OFFLINE_START_AT)::INT AS MES,
+        A.DEVICE_CODE,
         A.SITE_NAME,
         DATE_TRUNC('minute', A.OFFLINE_START_AT) AS INICIO,
         DATE_TRUNC('minute', A.OFFLINE_END_AT) AS FIN,
@@ -135,14 +136,23 @@ AGR AS (
     FROM OFFLINE A
     GROUP BY
         EXTRACT(MONTH FROM A.OFFLINE_START_AT)::INT,
+        A.DEVICE_CODE,
         A.SITE_NAME,
         DATE_TRUNC('minute', A.OFFLINE_START_AT),
         DATE_TRUNC('minute', A.OFFLINE_END_AT)
 )
 SELECT
     A.MES,
-    ('CAM-' || TO_CHAR(A.INICIO, 'YYYYMMDDHH24MI') || '-' || REGEXP_REPLACE(A.SITE_NAME, '\\s+', '', 'g')) AS ID,
-    COALESCE(B.DESCRIPCION, A.SITE_NAME) AS SITIO_AFECTADO_FINAL,
+    (
+        'CAM-'
+        || TO_CHAR(A.INICIO, 'YYYYMMDDHH24MI')
+        || '-'
+        || REGEXP_REPLACE(A.SITE_NAME, '\\s+', '', 'g')
+        || '-'
+        || COALESCE(A.DEVICE_CODE, 'NA')
+    ) AS ID,
+    COALESCE(B.NAME, B.CAMERA_NAME, B.DEVICE_NAME, 'SIN NOMBRE') AS CAMARA,
+    COALESCE(S.DESCRIPCION, A.SITE_NAME) AS SITIO_AFECTADO_FINAL,
     A.INICIO::DATE AS FECHA_FALLO,
     A.INICIO::TIME AS HORA_FALLO,
     A.FIN::DATE AS FECHA_RECUPERACION,
@@ -151,10 +161,11 @@ SELECT
     A.N_CAMARAS,
     COALESCE(D.NOMBRE, 'SIN HACIENDA') AS HACIENDA
 FROM AGR A
-LEFT JOIN PUBLIC.SITIOS B ON (B.NOMBRE = A.SITE_NAME)
-LEFT JOIN PUBLIC.HACIENDA D ON (D.ID = B.HACIENDA_ID)
-JOIN PARAMS C ON (1 = 1)
-WHERE (C.HACIENDA_ID IS NULL OR D.ID = C.HACIENDA_ID)
+LEFT JOIN PUBLIC.SITIOS S ON (S.NOMBRE = A.SITE_NAME)
+LEFT JOIN PUBLIC.HACIENDA D ON (D.ID = S.HACIENDA_ID)
+LEFT JOIN PUBLIC.HIK_CAMERA_RESOURCE_STATUS B ON (B.DEVICE_CODE = A.DEVICE_CODE)
+JOIN PARAMS P ON (1 = 1)
+WHERE (P.HACIENDA_ID IS NULL OR D.ID = P.HACIENDA_ID)
 ORDER BY A.INICIO DESC;
 `;
 
@@ -178,9 +189,17 @@ export const getDashboardUptimeCamaras = async (req, res) => {
     const fromTs = `${from} 00:00:00`;
     const toTs = `${to} 23:59:59`;
 
+    const kpiParams = [fromTs, toTs, parsedHaciendaId];
+    const detalleParams = [fromTs, toTs, parsedHaciendaId];
+
+    console.log("[UPTIME-CAMARAS] SQL =>", KPI_QUERY);
+    console.log("[UPTIME-CAMARAS] PARAMS =>", kpiParams);
+    console.log("[UPTIME-CAMARAS] SQL =>", DETAIL_QUERY);
+    console.log("[UPTIME-CAMARAS] PARAMS =>", detalleParams);
+
     const [kpiResult, detalleResult] = await Promise.all([
-      pool.query(KPI_QUERY, [fromTs, toTs, parsedHaciendaId]),
-      pool.query(DETAIL_QUERY, [fromTs, toTs, parsedHaciendaId]),
+      pool.query(KPI_QUERY, kpiParams),
+      pool.query(DETAIL_QUERY, detalleParams),
     ]);
 
     const kpis = kpiResult.rows[0] ?? {
