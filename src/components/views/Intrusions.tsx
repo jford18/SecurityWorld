@@ -714,9 +714,12 @@ const Intrusions: React.FC = () => {
 
     const sitioMatch = findSitioForHcEvent(hcSeleccionado);
     const sitioIdValue = sitioMatch?.id ?? null;
+    const fechaEventoValue =
+      formatLocalDateTimeInput(hcSeleccionado?.fecha_evento_hc || '') ||
+      getInitialDateTimeValue();
 
-    setFormData((prev) => ({
-      ...prev,
+    setFormData({
+      ...buildInitialFormData('HC'),
       origen: 'HC',
       hik_alarm_evento_id:
         hcSeleccionado?.hik_alarm_evento_id !== undefined &&
@@ -724,11 +727,10 @@ const Intrusions: React.FC = () => {
           ? String(hcSeleccionado.hik_alarm_evento_id)
           : null,
       trigger_event_hc: hcSeleccionado?.trigger_event ?? null,
-      fecha_evento:
-        formatLocalDateTimeInput(hcSeleccionado?.fecha_evento_hc || '') || prev.fecha_evento,
+      fecha_evento: fechaEventoValue,
       no_llego_alerta: false,
       sitioId: sitioIdValue ? String(sitioIdValue) : '',
-    }));
+    });
 
     setSitioId(sitioIdValue);
     if (sitioIdValue) {
@@ -908,7 +910,7 @@ const Intrusions: React.FC = () => {
       const category = normalizeText(row.alarm_category);
       const hasVerdadera = status.includes('verdadera') || category.includes('verdadera');
       if (hasVerdadera) return false;
-      const hasEvento = status.includes('evento') || category.includes('evento');
+      const hasEvento = category.includes('evento') || status.includes('evento');
       return hasEvento;
     });
   }, [hcQueue, normalizeText]);
@@ -1742,6 +1744,7 @@ const Intrusions: React.FC = () => {
                       );
                     }}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    disabled={isHcMode}
                   >
                     <option value="">Seleccione...</option>
                     {sitios.map((sitio) => (
