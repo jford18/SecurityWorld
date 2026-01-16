@@ -44,7 +44,7 @@ export interface TablaDepartamentosArbolRow {
 export interface TendenciaPendientesRow {
   mes: string;
   num_fallos: number;
-  pct_tg: number;
+  t_prom_solucion_dias: number;
 }
 
 export interface FiltroItem {
