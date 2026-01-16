@@ -43,7 +43,8 @@ export interface TablaDepartamentosArbolRow {
 
 export interface TendenciaPendientesRow {
   mes: string;
-  num_fallos: number;
+  fallos_pendientes: number;
+  fallos_resueltos: number;
   t_prom_solucion_dias: number;
 }
 

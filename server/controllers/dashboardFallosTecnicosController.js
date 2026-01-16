@@ -281,7 +281,8 @@ TABLA_DEPARTAMENTO_ARBOL AS (
 TENDENCIA_MES AS (
     SELECT
         TO_CHAR(A.FECHA::DATE, 'YYYY-MM') AS MES,
-        COUNT(1) FILTER (WHERE A.ES_PENDIENTE = 1) AS NUM_FALLOS,
+        COUNT(1) FILTER (WHERE A.ES_PENDIENTE = 1) AS FALLOS_PENDIENTES,
+        COUNT(1) FILTER (WHERE A.ES_RESUELTO = 1) AS FALLOS_RESUELTOS,
         COALESCE(
             AVG(CASE WHEN A.ES_RESUELTO = 1 THEN A.DIAS_SOLUCION ELSE NULL END),
             0
@@ -388,7 +389,8 @@ SELECT
                 JSON_AGG(
                     JSON_BUILD_OBJECT(
                         'mes', TM.MES,
-                        'num_fallos', TM.NUM_FALLOS,
+                        'fallos_pendientes', TM.FALLOS_PENDIENTES,
+                        'fallos_resueltos', TM.FALLOS_RESUELTOS,
                         't_prom_solucion_dias', TM.T_PROM_SOLUCION_DIAS
                     )
                     ORDER BY TM.MES
