@@ -16,6 +16,7 @@ import TechnicalFailures from './components/views/TechnicalFailures';
 import Intrusions from './components/views/Intrusions';
 import AlertsReportByShift from './components/views/AlertsReportByShift';
 import DashboardUptimeCamaras from './pages/dashboards/DashboardUptimeCamaras';
+import UptimeCamarasManual from './pages/fallos/operador/UptimeCamarasManual';
 import Sitios from './components/views/Sitios';
 import AsignacionNodosSitios from './components/views/AsignacionNodosSitios';
 import ConsolasScreen from './pages/admin/ConsolasScreen';
@@ -110,6 +111,10 @@ const routeConfig: RouteDefinition[] = [
   { path: '/dashboard', element: <DashboardHome /> },
   { path: '/fallos', element: <TechnicalFailures /> },
   { path: '/fallos/operador', element: <TechnicalFailuresOperador /> },
+  {
+    path: '/fallos/operador/uptime-camaras-manual',
+    element: <UptimeCamarasManual />,
+  },
   {
     path: '/fallos/supervisor',
     element: <TechnicalFailuresSupervisor />,
