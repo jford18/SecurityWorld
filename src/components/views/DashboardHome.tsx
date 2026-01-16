@@ -104,7 +104,8 @@ type StackedDatum = Record<string, number | string> & {
 type TendenciaDatum = {
   mes: string;
   mes_label: string;
-  num_fallos: number;
+  fallos_pendientes: number;
+  fallos_resueltos: number;
   t_prom_solucion_dias: number;
 };
 
@@ -253,27 +254,51 @@ const TendenciaChart = React.memo(({ data }: { data: TendenciaDatum[] }) => {
             tickFormatter={(value) => formatDecimal(Number(value))}
           />
           <Tooltip
-            formatter={(value: number, name: string) => {
-              if (name === 'T. prom solución (días)') {
-                return formatDecimal(Number(value));
+            content={({ active, payload, label }) => {
+              if (!active || !payload || payload.length === 0) {
+                return null;
               }
-              return formatInteger(Number(value));
+
+              const pendientes = payload.find((item) => item.dataKey === 'fallos_pendientes');
+              const resueltos = payload.find((item) => item.dataKey === 'fallos_resueltos');
+              const tprom = payload.find((item) => item.dataKey === 't_prom_solucion_dias');
+
+              return (
+                <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-700 shadow">
+                  <p className="font-semibold">{label}</p>
+                  <p>
+                    Pendientes:{' '}
+                    {formatInteger(Number(pendientes?.value ?? 0))}
+                  </p>
+                  <p>
+                    Resueltos:{' '}
+                    {formatInteger(Number(resueltos?.value ?? 0))}
+                  </p>
+                  <p>
+                    T. prom solución (días):{' '}
+                    {formatDecimal(Number(tprom?.value ?? 0))}
+                  </p>
+                </div>
+              );
             }}
           />
           <Legend />
           <Bar
             yAxisId="left"
-            dataKey="num_fallos"
-            name="N° fallos"
+            dataKey="fallos_pendientes"
+            name="Pendientes"
+            stackId="fallos"
             fill="#E15759"
             isAnimationActive={false}
-          >
-            <LabelList
-              dataKey="num_fallos"
-              position="top"
-              formatter={(value: number) => (value ? formatInteger(Number(value)) : '')}
-            />
-          </Bar>
+          />
+          <Bar
+            yAxisId="left"
+            dataKey="fallos_resueltos"
+            name="Resueltos"
+            stackId="fallos"
+            fill="#4C6FFF"
+            isAnimationActive={false}
+          />
           <Line
             yAxisId="right"
             type="monotone"
@@ -965,9 +990,8 @@ const DashboardHome: React.FC = () => {
 
         <div className="border border-gray-300 bg-white p-4" style={CHART_CARD_STYLE}>
           <h4 className="text-sm font-semibold text-gray-600">
-            T. prom solución (días) y N° fallos por mes y estatus final
+            T. prom solución (días) y fallos por mes
           </h4>
-          <p className="text-xs text-gray-500">Estatus final: PENDIENTE</p>
           <TendenciaChart data={tendenciaData} />
         </div>
       </div>
