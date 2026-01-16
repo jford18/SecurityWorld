@@ -36,9 +36,38 @@ const combineDateTime = (date: string, time: string) => {
   return Number.isNaN(timestamp) ? null : timestamp;
 };
 
+const getCameraName = (row: UptimeDetalleRow) => {
+  const record = row as Record<string, unknown>;
+  const candidates = [
+    'camera_name',
+    'nombre_camara',
+    'cameraName',
+    'camara_nombre',
+    'nombre',
+    'name',
+    'camara',
+    'NOMBRE_CAMARA',
+    'NOMBRE',
+    'CAMARA',
+  ];
+
+  for (const key of candidates) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+    if (value != null && value !== '') {
+      return String(value);
+    }
+  }
+
+  return 'SIN NOMBRE';
+};
+
 type SortKey =
   | 'mes'
   | 'id'
+  | 'camara_nombre'
   | 'sitio_afectado_final'
   | 'fecha_fallo'
   | 'hora_fallo'
@@ -172,6 +201,8 @@ const DashboardUptimeCamaras: React.FC = () => {
               return Number.isNaN(parsed) ? null : parsed;
             })(),
           );
+        case 'camara_nombre':
+          return compareValues(getCameraName(a).toLowerCase(), getCameraName(b).toLowerCase());
         case 'fecha_fallo':
         case 'hora_fallo':
           return compareValues(
@@ -200,6 +231,7 @@ const DashboardUptimeCamaras: React.FC = () => {
     const rowsToExport = sortedRows.map((row) => ({
       MES: row.mes,
       ID: row.id,
+      CAMARA: getCameraName(row),
       'SITIO AFECTADO': row.sitio_afectado_final,
       'FECHA FALLO': formatDateValue(row.fecha_fallo),
       'HORA FALLO': row.hora_fallo,
@@ -318,6 +350,7 @@ const DashboardUptimeCamaras: React.FC = () => {
                   {[
                     ['mes', 'MES'],
                     ['id', 'ID'],
+                    ['camara_nombre', 'CAMARA'],
                     ['sitio_afectado_final', 'SITIO AFECTADO'],
                     ['fecha_fallo', 'FECHA FALLO'],
                     ['hora_fallo', 'HORA FALLO'],
@@ -343,7 +376,7 @@ const DashboardUptimeCamaras: React.FC = () => {
               <tbody className="divide-y divide-gray-200 bg-white">
                 {sortedRows.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-6 text-center text-sm text-gray-500">
+                    <td colSpan={10} className="px-4 py-6 text-center text-sm text-gray-500">
                       {loading ? 'Cargando datos...' : 'No hay registros para mostrar'}
                     </td>
                   </tr>
@@ -352,6 +385,7 @@ const DashboardUptimeCamaras: React.FC = () => {
                   <tr key={row.rowKey} className="hover:bg-gray-50">
                     <td className="px-4 py-2 text-sm text-gray-700">{row.mes}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.id}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{getCameraName(row)}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.sitio_afectado_final}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{formatDateValue(row.fecha_fallo)}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.hora_fallo}</td>
