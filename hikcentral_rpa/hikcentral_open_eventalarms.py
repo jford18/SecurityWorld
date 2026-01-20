@@ -63,7 +63,11 @@ class PerformanceRecorder:
     ):
         num_paso, descripcion = self._parse_step_label(label)
         if num_paso is None:
-            return
+            return {
+                "filas_extraidas": total_preparados,
+                "insertados": total_insertados,
+                "omitidos_duplicado": total_omitidos,
+            }
 
         self._update_cpu_max(cpu_percent)
         self.steps.append(
@@ -193,13 +197,13 @@ def take_screenshot(driver, label: str) -> Path:
     return screenshot_path
 
 
-def find_latest_alarm_report() -> Path | None:
+def find_latest_alarm_report(download_dir: Path) -> Path | None:
     """
-    Busca recursivamente en DOWNLOAD_DIR la última hoja de cálculo de Event & Alarm Search.
+    Busca recursivamente en download_dir la última hoja de cálculo de Event & Alarm Search.
     HikCentral crea una carpeta 'Alarm_Report_YYYYMMDDHHMMSS' y dentro un archivo
     'Alarm_Report_YYYYMMDDHHMMSS.xlsx'.
     """
-    base_dir = get_downloadcenter_root()
+    base_dir = download_dir
     candidates: list[Path] = []
 
     for folder in base_dir.glob("Alarm_Report_*"):
@@ -868,7 +872,12 @@ def click_search_button(driver, timeout=30, timer: StepTimer | None = None):
 
 
 def click_export_event_and_alarm(
-    driver, password, timeout=30, timer: StepTimer | None = None
+    driver,
+    password,
+    download_dir: Path,
+    host_label: str,
+    timeout=30,
+    timer: StepTimer | None = None,
 ):
     """
     Abre el panel 'Export' en Event and Alarm Search, introduce password si se solicita
@@ -933,9 +942,13 @@ def click_export_event_and_alarm(
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
 
-    log_info("[EXPORT] Buscando archivo Alarm_Report_* en subcarpetas de Downloadcenter...")
+    log_info("[EXPORT] Esperando archivo Alarm_Report_* en carpeta de descargas...")
 
-    archivo = find_latest_alarm_report()
+    archivo = esperar_descarga_y_renombrar_host(
+        download_dir=download_dir,
+        host_label=host_label,
+        timeout=timeout,
+    )
 
     log_info(f"[EXPORT] Ruta final del archivo exportado: {archivo}")
 
@@ -1110,12 +1123,59 @@ def esperar_descarga_y_renombrar(
     raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
 
 
-def insertar_alarm_evento_from_excel(excel_path: Path) -> None:
+def esperar_descarga_y_renombrar_host(
+    download_dir: Path,
+    host_label: str,
+    timeout: int = 180,
+) -> Path:
+    """
+    Espera la finalización de una descarga en download_dir y renombra el archivo
+    con sufijo del host.
+    """
+    download_dir.mkdir(parents=True, exist_ok=True)
+    existentes = {f.name for f in download_dir.glob("*") if f.is_file()}
+    fin = time.time() + timeout
+    ultimo_archivo: Path | None = None
+    host_suffix = host_label.replace(".", "_")
+
+    while time.time() < fin:
+        archivos = [f for f in download_dir.glob("*") if f.is_file()]
+        nuevos = [f for f in archivos if f.name not in existentes]
+
+        if nuevos:
+            ultimo_archivo = max(nuevos, key=lambda f: f.stat().st_mtime)
+
+            if ultimo_archivo.suffix == ".crdownload":
+                time.sleep(1)
+                continue
+
+            size1 = ultimo_archivo.stat().st_size
+            time.sleep(1)
+            size2 = ultimo_archivo.stat().st_size
+            if size1 == size2 and size2 > 0:
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                nuevo_nombre = f"Alarm_Report_{timestamp}_{host_suffix}{ultimo_archivo.suffix}"
+                destino = download_dir / nuevo_nombre
+                ultimo_archivo = ultimo_archivo.rename(destino)
+                print(f"[INFO] Archivo descargado y renombrado a: {ultimo_archivo}")
+                if step_timer:
+                    step_timer.mark("[9] Descarga detectada")
+                return ultimo_archivo
+
+        time.sleep(1)
+
+    raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
+
+
+def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
     log_info = globals().get("log_info", print)
     log_error = globals().get("log_error", print)
 
     conn = get_pg_connection()
     id_extraccion = None
+    total_preparados = 0
+    total_insertados = 0
+    total_omitidos = 0
     try:
         archivo_nombre = os.path.basename(excel_path)
         id_extraccion = crear_registro_extraccion(conn, archivo_nombre)
@@ -1356,6 +1416,11 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> None:
         raise
     finally:
         conn.close()
+    return {
+        "filas_extraidas": total_preparados,
+        "insertados": total_insertados,
+        "omitidos_duplicado": total_omitidos,
+    }
 
 
 def procesar_alarm_report(file_path: str, timer: StepTimer) -> None:
@@ -1499,7 +1564,11 @@ def procesar_alarm_report(file_path: str, timer: StepTimer) -> None:
                     (total_preparados, total_insertados, total_omitidos, id_extraccion),
                 )
             conn.commit()
-            return
+            return {
+                "filas_extraidas": total_preparados,
+                "insertados": total_insertados,
+                "omitidos_duplicado": total_omitidos,
+            }
 
         total_preparados = len(registros)
         total_insertados = 0
@@ -1564,6 +1633,12 @@ def procesar_alarm_report(file_path: str, timer: StepTimer) -> None:
         if timer:
             timer.mark(step_name)
 
+        return {
+            "filas_extraidas": total_preparados,
+            "insertados": total_insertados,
+            "omitidos_duplicado": total_omitidos,
+        }
+
     except Exception as exc:
         logger_error(f"[DB] Error al procesar Alarm Report: {exc}")
         try:
@@ -1588,15 +1663,15 @@ def procesar_alarm_report(file_path: str, timer: StepTimer) -> None:
         conn.close()
 
 
-def crear_driver() -> webdriver.Chrome:
+def crear_driver(download_dir: Path) -> webdriver.Chrome:
     """Configura y devuelve un driver de Chrome listo para descargar archivos."""
 
-    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    download_dir.mkdir(parents=True, exist_ok=True)
 
     chrome_options = Options()
 
     prefs = {
-        "download.default_directory": str(DOWNLOAD_DIR),
+        "download.default_directory": str(download_dir),
         "download.prompt_for_download": False,
         "download.directory_upgrade": True,
         "safebrowsing.enabled": False,
@@ -1620,12 +1695,12 @@ def crear_driver() -> webdriver.Chrome:
         "Page.setDownloadBehavior",
         {
             "behavior": "allow",
-            "downloadPath": str(DOWNLOAD_DIR),
+            "downloadPath": str(download_dir),
         },
     )
 
     driver.maximize_window()
-    print(f"[DEBUG] DOWNLOAD_DIR = {DOWNLOAD_DIR}")
+    print(f"[DEBUG] DOWNLOAD_DIR = {download_dir}")
     return driver
 
 
@@ -1663,9 +1738,10 @@ def cerrar_sesion(driver, wait: WebDriverWait):
         print("[WARN] No se pudo cerrar sesión limpiamente.")
 
 
-def run(cli_host: str | None = None):
+def run_for_host(host: str) -> dict:
     global step_timer, performance_recorder
 
+    print(f"[INFO] === Iniciando extracción para host {host} ===")
     performance_recorder = PerformanceRecorder(time.perf_counter())
 
     baseline_cpu = psutil.cpu_percent(interval=1)
@@ -1686,14 +1762,18 @@ def run(cli_host: str | None = None):
     timer = step_timer
 
     export_file_path: Path | None = None
+    resultados_carga = {
+        "filas_extraidas": 0,
+        "insertados": 0,
+        "omitidos_duplicado": 0,
+    }
+    host_dir = DOWNLOAD_DIR / host.replace(".", "_")
 
     try:
-        host, reason = resolve_hik_host(cli_host)
-        print(f"[INFO] Host seleccionado: {host} (motivo: {reason})")
         global URL
         URL = f"http://{host}/#/"
 
-        driver = crear_driver()
+        driver = crear_driver(download_dir=host_dir)
         wait = WebDriverWait(driver, 30)
 
         print("[1] Abriendo URL de login...")
@@ -1738,21 +1818,28 @@ def run(cli_host: str | None = None):
         click_trigger_alarm_button(driver, timeout=30, timer=timer)
         click_search_button(driver, timeout=40, timer=timer)
 
-        limpiar_descargas(DOWNLOAD_DIR)
+        limpiar_descargas(host_dir)
         export_file_path = click_export_event_and_alarm(
-            driver, password=HIK_PASSWORD, timeout=30, timer=timer
+            driver,
+            password=HIK_PASSWORD,
+            download_dir=host_dir,
+            host_label=host,
+            timeout=30,
+            timer=timer,
         )
 
         print(f"[INFO] Ruta final del archivo exportado: {export_file_path}")
 
         if export_file_path is None:
-            print("[ERROR] No se detectó ningún archivo descargado desde Event and Alarm Search.")
-        else:
-            size_mb = export_file_path.stat().st_size / (1024 * 1024)
-            print(
-                f"[8] Archivo de Event and Alarm Search descargado: {export_file_path} "
-                f"({size_mb:.2f} MB)"
+            raise RuntimeError(
+                "No se detectó ningún archivo descargado desde Event and Alarm Search."
             )
+
+        size_mb = export_file_path.stat().st_size / (1024 * 1024)
+        print(
+            f"[8] Archivo de Event and Alarm Search descargado: {export_file_path} "
+            f"({size_mb:.2f} MB)"
+        )
 
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         screenshot_path = LOG_DIR / f"event_and_alarm_search_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
@@ -1764,6 +1851,22 @@ def run(cli_host: str | None = None):
         print("[OK] Flujo Event and Alarm Search + Export completado.")
         if timer:
             timer.mark("[10] FIN_OK")
+
+        resultados_carga = insertar_alarm_evento_from_excel(export_file_path)
+
+        print(
+            "[INFO] === Fin host "
+            f"{host} | extraídas: {resultados_carga['filas_extraidas']} | "
+            f"insertados: {resultados_carga['insertados']} | "
+            f"duplicados: {resultados_carga['omitidos_duplicado']} ==="
+        )
+
+        return {
+            "host": host,
+            "ok": True,
+            "archivo": str(export_file_path),
+            **resultados_carga,
+        }
 
     except Exception as e:
         print(f"[ERROR] Ocurrió un problema en el flujo Event and Alarm: {e}")
@@ -1802,7 +1905,7 @@ def run(cli_host: str | None = None):
             time.perf_counter() - performance_recorder.start_time if performance_recorder else 0.0
         )
 
-        id_ejecucion = registrar_ejecucion_y_pasos(
+        registrar_ejecucion_y_pasos(
             opcion="Event and Alarm",
             duracion_total_seg=duracion_total_seg,
             cpu_final=final_cpu,
@@ -1810,20 +1913,59 @@ def run(cli_host: str | None = None):
             recorder=performance_recorder,
         )
 
-        if id_ejecucion:
-            alarm_file = find_last_alarm_report_file()
-            if alarm_file is None:
-                print("[ERROR] No se encontró archivo Alarm_Report para cargar en hik_alarm_evento.")
-            else:
-                try:
-                    insertar_alarm_evento_from_excel(alarm_file)
-                except Exception as e:
-                    print(f"[ERROR] Falló la carga a hik_alarm_evento: {e}")
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Automatiza Event and Alarm Search en HikCentral.")
     parser.add_argument("--host", type=str, help="Host/IP de HikCentral (ej: 172.16.9.11)")
     args = parser.parse_args()
 
-    run(cli_host=args.host)
+    if args.host:
+        print(
+            f"[WARN] Parámetro --host ({args.host}) ignorado. "
+            "La ejecución procesa todos los hosts por defecto."
+        )
+
+    resultados = []
+    for host in DEFAULT_HOSTS:
+        if not host_is_up(host):
+            print(f"[WARN] Host no responde: {host}. Se omite.")
+            resultados.append(
+                {
+                    "host": host,
+                    "ok": False,
+                    "error": "Host no responde",
+                    "archivo": None,
+                    "filas_extraidas": 0,
+                    "insertados": 0,
+                    "omitidos_duplicado": 0,
+                }
+            )
+            continue
+
+        try:
+            res = run_for_host(host)
+            resultados.append(res)
+        except Exception as ex:
+            print(f"[ERROR] Falló host {host}: {ex}")
+            resultados.append({"host": host, "ok": False, "error": str(ex)})
+
+    print("[INFO] === Resumen final por host ===")
+    for res in resultados:
+        if res.get("ok"):
+            print(
+                "[INFO] Host "
+                f"{res.get('host')} | ok | archivo: {res.get('archivo')} | "
+                f"extraídas: {res.get('filas_extraidas')} | "
+                f"insertados: {res.get('insertados')} | "
+                f"duplicados: {res.get('omitidos_duplicado')}"
+            )
+        else:
+            print(
+                "[INFO] Host "
+                f"{res.get('host')} | ERROR | "
+                f"motivo: {res.get('error', 'desconocido')}"
+            )
+
+    if any(res.get("ok") for res in resultados):
+        raise SystemExit(0)
+    raise SystemExit(1)
