@@ -36,6 +36,7 @@ import TipoAreaForm from './pages/administracion/TipoAreaForm';
 import DepartamentosResponsablesPage from './pages/administracion/DepartamentosResponsablesPage';
 import MedioComunicacionScreen from './pages/administracion/MedioComunicacionScreen';
 import CargoScreen from './pages/administracion/CargoScreen';
+import MaterialSustraidoScreen from './pages/administracion/MaterialSustraidoScreen';
 import PersonaScreen from './pages/administracion/PersonaScreen';
 import ConclusionEventoScreen from './pages/administracion/ConclusionEventoScreen';
 import FuerzaReaccionScreen from './pages/administracion/FuerzaReaccionScreen';
@@ -163,6 +164,7 @@ const routeConfig: RouteDefinition[] = [
     element: <FuerzaReaccionScreen />,
   },
   { path: '/administracion/cargo', element: <CargoScreen /> },
+  { path: '/administracion/material-sustraido', element: <MaterialSustraidoScreen /> },
   { path: '/administracion/persona', element: <PersonaScreen /> },
   { path: '/administracion/medio-comunicacion', element: <MedioComunicacionScreen /> },
   { path: '/administracion/conclusion-evento', element: <ConclusionEventoScreen /> },
