@@ -137,6 +137,7 @@ type IntrusionFormData = {
   medio_comunicacion_id: string;
   conclusion_evento_id: string;
   material_sustraido_id: string;
+  sustraccion_material: boolean;
   fuerza_reaccion_id: string;
   completado: boolean;
   necesita_protocolo: boolean;
@@ -191,6 +192,7 @@ const buildInitialFormData = (origen: 'HC' | 'MANUAL' = 'HC'): IntrusionFormData
   medio_comunicacion_id: '',
   conclusion_evento_id: '',
   material_sustraido_id: '',
+  sustraccion_material: false,
   fuerza_reaccion_id: '',
   completado: false,
   necesita_protocolo: false,
@@ -698,6 +700,7 @@ const Intrusions: React.FC = () => {
       fecha_llegada_fuerza_reaccion: '',
       conclusion_evento_id: '',
       material_sustraido_id: '',
+      sustraccion_material: false,
       fuerza_reaccion_id: '',
       necesita_protocolo: false,
     }));
@@ -900,6 +903,7 @@ const Intrusions: React.FC = () => {
       material_sustraido_id: intrusion.material_sustraido_id
         ? String(intrusion.material_sustraido_id)
         : '',
+      sustraccion_material: intrusion.material_sustraido_id != null,
       fuerza_reaccion_id: intrusion.fuerza_reaccion_id
         ? String(intrusion.fuerza_reaccion_id)
         : '',
@@ -931,6 +935,17 @@ const Intrusions: React.FC = () => {
     setFormData((prev) => ({
       ...prev,
       material_sustraido_id: value,
+    }));
+  };
+
+  const handleSustraccionMaterialChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { checked } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      sustraccion_material: checked,
+      material_sustraido_id: checked ? prev.material_sustraido_id : '',
     }));
   };
 
@@ -1087,6 +1102,20 @@ const Intrusions: React.FC = () => {
       setFormData((prev) => ({ ...prev, no_llego_alerta: false }));
     }
   }, [formData.no_llego_alerta, noLlegoDisabled]);
+
+  useEffect(() => {
+    if (requiereProtocolo) {
+      return;
+    }
+
+    if (formData.sustraccion_material || formData.material_sustraido_id) {
+      setFormData((prev) => ({
+        ...prev,
+        sustraccion_material: false,
+        material_sustraido_id: '',
+      }));
+    }
+  }, [formData.material_sustraido_id, formData.sustraccion_material, requiereProtocolo]);
 
   useEffect(() => {
     if (!formData.fecha_evento || !formData.fecha_reaccion) {
@@ -1496,7 +1525,8 @@ const Intrusions: React.FC = () => {
         origenValue === 'HC' || hikAlarmEventoIdValue ? false : formData.no_llego_alerta,
       medio_comunicacion_id: medioComunicacionValue,
       conclusion_evento_id: necesitaProtocolo ? conclusionEventoValue : null,
-      material_sustraido_id: necesitaProtocolo ? materialSustraidoValue : null,
+      material_sustraido_id:
+        necesitaProtocolo && formData.sustraccion_material ? materialSustraidoValue : null,
       sitio_id: sitioIdNumber,
       fuerza_reaccion_id:
         necesitaProtocolo && fuerzaReaccionValue !== null ? fuerzaReaccionValue : null,
@@ -1928,28 +1958,46 @@ const Intrusions: React.FC = () => {
                       error={fechaReaccionFueraError}
                       max={getDateTimeInputLimit() || undefined}
                     />
-                    <div className="space-y-1">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        id="sustraccion_material"
+                        name="sustraccion_material"
+                        checked={formData.sustraccion_material}
+                        onChange={handleSustraccionMaterialChange}
+                        className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
+                      />
                       <label
-                        htmlFor="material_sustraido_id"
-                        className="block text-sm font-medium text-gray-700"
+                        htmlFor="sustraccion_material"
+                        className="text-sm font-medium text-gray-700"
                       >
-                        Material sustraído
+                        Sustracción de material
                       </label>
-                      <select
-                        id="material_sustraido_id"
-                        name="material_sustraido_id"
-                        value={formData.material_sustraido_id}
-                        onChange={handleMaterialSustraidoChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      >
-                        <option value="">Seleccione...</option>
-                        {materialesSustraidos.map((material) => (
-                          <option key={material.id} value={material.id}>
-                            {material.descripcion}
-                          </option>
-                        ))}
-                      </select>
                     </div>
+                    {formData.sustraccion_material && (
+                      <div className="space-y-1">
+                        <label
+                          htmlFor="material_sustraido_id"
+                          className="block text-sm font-medium text-gray-700"
+                        >
+                          Material sustraído
+                        </label>
+                        <select
+                          id="material_sustraido_id"
+                          name="material_sustraido_id"
+                          value={formData.material_sustraido_id}
+                          onChange={handleMaterialSustraidoChange}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        >
+                          <option value="">Seleccione...</option>
+                          {materialesSustraidos.map((material) => (
+                            <option key={material.id} value={material.id}>
+                              {material.descripcion}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-4">
                     <div>
