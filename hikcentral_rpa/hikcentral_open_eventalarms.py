@@ -2,6 +2,7 @@ import os
 import time
 import traceback
 from datetime import datetime
+import hashlib
 from pathlib import Path
 
 import pandas as pd
@@ -1063,89 +1064,209 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> None:
         id_extraccion = crear_registro_extraccion(conn, archivo_nombre)
 
         log_info(f"[INFO] Leyendo Alarm Report desde: {excel_path}")
-        df = pd.read_excel(excel_path)
-        df = df.where(pd.notnull(df), None)
+        raw = pd.read_excel(
+            excel_path,
+            sheet_name="Alarm and Event Log",
+            header=None,
+            dtype=str,
+        )
 
-        trigger_time_col = "Triggering Time (Client)"
-        if trigger_time_col in df.columns:
-            df["triggering_time_client"] = pd.to_datetime(df[trigger_time_col], errors="coerce")
-        else:
-            df["triggering_time_client"] = pd.NaT
+        header_row = None
+        for idx in range(len(raw)):
+            value = raw.iloc[idx, 0]
+            if str(value).strip() == "Mark":
+                header_row = idx
+                break
 
-        ack_time_col = "Alarm Acknowledgment Time"
-        if ack_time_col in df.columns:
-            df["alarm_acknowledgment_time"] = pd.to_datetime(df[ack_time_col], errors="coerce")
-        else:
-            df["alarm_acknowledgment_time"] = pd.NaT
+        if header_row is None:
+            raise ValueError(
+                "[EVENT] No se encontró fila de cabecera (columna 0 == 'Mark') en Alarm_Report."
+            )
 
-        df = df.where(pd.notnull(df), None)
+        headers = [str(h).strip() for h in raw.iloc[header_row].tolist()]
+        df = raw.iloc[header_row + 1 :].copy()
+        df.columns = headers
 
-        now = datetime.now()
+        df = df.dropna(how="all")
+        df = df[df["Mark"].notna()].copy()
+
+        log_info(f"[EVENT] header_row detectado: {header_row}")
+        log_info(f"[EVENT] Columnas encontradas en Alarm_Report: {list(df.columns)}")
+
+        column_map = {
+            "Mark": "mark",
+            "Name": "name",
+            "Trigger Alarm": "trigger_alarm",
+            "Priority": "priority",
+            "Triggering Time (Client)": "triggering_time_client",
+            "Source": "source",
+            "Region": "region",
+            "Trigger Event": "trigger_event",
+            "Description": "description",
+            "Status": "status",
+            "Alarm Acknowledgment Time": "alarm_acknowledgment_time",
+            "Alarm Category": "alarm_category",
+            "Remarks": "remarks",
+            "More": "more",
+        }
+
+        missing_cols = [col for col in column_map.keys() if col not in df.columns]
+        if missing_cols:
+            raise ValueError(
+                f"[EVENT] Faltan columnas esperadas en Alarm_Report: {missing_cols}"
+            )
+
+        df = df[list(column_map.keys())].rename(columns=column_map)
+
+        string_columns = [
+            "mark",
+            "name",
+            "trigger_alarm",
+            "priority",
+            "source",
+            "region",
+            "trigger_event",
+            "description",
+            "status",
+            "alarm_category",
+            "remarks",
+            "more",
+        ]
+        for col in string_columns:
+            if col not in df.columns:
+                continue
+            df[col] = df[col].astype("string")
+            df[col] = df[col].str.strip()
+            df[col] = df[col].where(df[col].notna(), None)
+
+        df["triggering_time_client"] = pd.to_datetime(
+            df["triggering_time_client"], errors="coerce"
+        )
+        df["alarm_acknowledgment_time"] = pd.to_datetime(
+            df["alarm_acknowledgment_time"], errors="coerce"
+        )
+
+        required_data_cols = [
+            "name",
+            "triggering_time_client",
+            "source",
+            "region",
+            "trigger_event",
+        ]
+        for col in required_data_cols:
+            if col not in df.columns:
+                raise ValueError(f"[EVENT] Falta columna requerida: {col}")
+
+        if df[required_data_cols].dropna(how="all").empty:
+            raise ValueError(
+                "[EVENT] Las columnas requeridas no contienen datos. Se aborta la carga."
+            )
+
+        def build_event_key(row) -> str:
+            def normalize_value(value) -> str:
+                if pd.isna(value):
+                    return ""
+                if isinstance(value, pd.Timestamp):
+                    return value.to_pydatetime().replace(tzinfo=None).isoformat()
+                return str(value).strip()
+
+            parts = [
+                normalize_value(row.get("name")),
+                normalize_value(row.get("triggering_time_client")),
+                normalize_value(row.get("source")),
+                normalize_value(row.get("region")),
+                normalize_value(row.get("trigger_event")),
+                normalize_value(row.get("priority")),
+                normalize_value(row.get("status")),
+            ]
+            raw_key = "|".join(parts)
+            return hashlib.md5(raw_key.encode("utf-8")).hexdigest()
+
+        total_original = len(df)
+        df["event_key"] = df.apply(build_event_key, axis=1)
+        df = df.drop_duplicates(subset=["event_key"]).copy()
+
+        df["id_extraccion"] = id_extraccion
+
+        preview_records = df.head(2).to_dict(orient="records")
+        log_info(f"[EVENT] Filas extraídas: {len(df)}")
+        log_info(f"[EVENT] Preview registros mapeados: {preview_records}")
+
         rows = []
         for _, row in df.iterrows():
             triggering_time = normalize_ts(row.get("triggering_time_client"))
             ack_time = normalize_ts(row.get("alarm_acknowledgment_time"))
-            periodo = calcular_periodo(row.get(trigger_time_col))
             rows.append(
-                (
-                    id_extraccion,
-                    row.get("Mark"),
-                    row.get("Name"),
-                    row.get("Trigger Alarm"),
-                    row.get("Priority"),
-                    triggering_time,
-                    row.get("Source"),
-                    row.get("Region"),
-                    row.get("Trigger Event"),
-                    row.get("Description"),
-                    row.get("Status"),
-                    ack_time,
-                    row.get("Alarm Category"),
-                    row.get("Remarks"),
-                    row.get("More"),
-                    row.get("Event Key"),
-                    periodo,
-                    now,
-                )
+                {
+                    "id_extraccion": id_extraccion,
+                    "mark": row.get("mark"),
+                    "name": row.get("name"),
+                    "trigger_alarm": row.get("trigger_alarm"),
+                    "priority": row.get("priority"),
+                    "triggering_time_client": triggering_time,
+                    "source": row.get("source"),
+                    "region": row.get("region"),
+                    "trigger_event": row.get("trigger_event"),
+                    "description": row.get("description"),
+                    "status": row.get("status"),
+                    "alarm_acknowledgment_time": ack_time,
+                    "alarm_category": row.get("alarm_category"),
+                    "remarks": row.get("remarks"),
+                    "more": row.get("more"),
+                    "event_key": row.get("event_key"),
+                }
             )
 
-        total_filas = len(df)
+        total_filas = total_original
         total_nuevos = len(rows)
         total_duplicados = total_filas - total_nuevos
 
         if not rows:
             log_info("[INFO] No hay filas para insertar en hik_alarm_evento.")
         else:
-            with conn.cursor() as cur:
-                cur.executemany(
-                    """
-                    INSERT INTO public.hik_alarm_evento (
-                        id_extraccion,
-                        mark,
-                        name,
-                        trigger_alarm,
-                        priority,
-                        triggering_time_client,
-                        source,
-                        region,
-                        trigger_event,
-                        description,
-                        status,
-                        alarm_acknowledgment_time,
-                        alarm_category,
-                        remarks,
-                        more,
-                        event_key,
-                        periodo,
-                        fecha_creacion
-                    )
-                    VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s
-                    )
-                    """,
-                    rows,
+            sql = """
+                INSERT INTO public.hik_alarm_evento (
+                    ID_EXTRACCION,
+                    MARK,
+                    NAME,
+                    TRIGGER_ALARM,
+                    PRIORITY,
+                    TRIGGERING_TIME_CLIENT,
+                    SOURCE,
+                    REGION,
+                    TRIGGER_EVENT,
+                    DESCRIPTION,
+                    STATUS,
+                    ALARM_ACKNOWLEDGMENT_TIME,
+                    ALARM_CATEGORY,
+                    REMARKS,
+                    MORE,
+                    EVENT_KEY,
+                    PERIODO,
+                    FECHA_CREACION
                 )
+                SELECT
+                    %(id_extraccion)s AS ID_EXTRACCION,
+                    %(mark)s AS MARK,
+                    %(name)s AS NAME,
+                    %(trigger_alarm)s AS TRIGGER_ALARM,
+                    %(priority)s AS PRIORITY,
+                    %(triggering_time_client)s AS TRIGGERING_TIME_CLIENT,
+                    %(source)s AS SOURCE,
+                    %(region)s AS REGION,
+                    %(trigger_event)s AS TRIGGER_EVENT,
+                    %(description)s AS DESCRIPTION,
+                    %(status)s AS STATUS,
+                    %(alarm_acknowledgment_time)s AS ALARM_ACKNOWLEDGMENT_TIME,
+                    %(alarm_category)s AS ALARM_CATEGORY,
+                    %(remarks)s AS REMARKS,
+                    %(more)s AS MORE,
+                    %(event_key)s AS EVENT_KEY,
+                    TO_CHAR(%(triggering_time_client)s::TIMESTAMP, 'YYYYMMDD')::INT AS PERIODO,
+                    NOW()::TIMESTAMP AS FECHA_CREACION;
+            """
+            with conn.cursor() as cur:
+                execute_batch(cur, sql, rows, page_size=500)
             conn.commit()
             log_info(f"[INFO] Insertadas {len(rows)} filas en hik_alarm_evento.")
 
