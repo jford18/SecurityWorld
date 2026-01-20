@@ -9,6 +9,7 @@ import consolasRoutes from "./routes/consolas.routes.js";
 import nodosRoutes from "./routes/nodos.routes.js";
 import fuerzaReaccionRoutes from "./routes/fuerzaReaccion.routes.js";
 import cargoRoutes from "./routes/cargo.routes.js";
+import materialSustraidoRoutes from "./routes/materialSustraido.routes.js";
 import nodosSitiosRoutes from "./routes/nodosSitios.routes.js";
 import medioComunicacionRoutes from "./routes/medioComunicacion.routes.js";
 import personaRoutes from "./routes/persona.routes.js";
@@ -72,6 +73,7 @@ const knownApiPrefixes = [
   "/api/conclusion-evento",
   "/api/fuerza-reaccion",
   "/api/cargo",
+  "/api/material-sustraido",
   "/api/persona",
   "/api/medio-comunicacion",
   "/api/clientes",
@@ -131,6 +133,7 @@ app.use("/api/nodos", nodosRoutes);
 app.use("/api/conclusion-evento", conclusionEventoRoutes);
 app.use("/api/fuerza-reaccion", fuerzaReaccionRoutes);
 app.use("/api/cargo", cargoRoutes);
+app.use("/api/material-sustraido", materialSustraidoRoutes);
 app.use("/api/persona", personaRoutes);
 app.use("/api/nodos-sitios", nodosSitiosRoutes);
 app.use("/api/medio-comunicacion", medioComunicacionRoutes);
