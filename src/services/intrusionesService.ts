@@ -20,7 +20,7 @@ export interface IntrusionPayload {
   llego_alerta?: boolean;
   medio_comunicacion_id?: number | null;
   conclusion_evento_id?: number | null;
-  sustraccion_material?: boolean;
+  material_sustraido_id?: number | null;
   sitio_id?: number | null;
   fuerza_reaccion_id?: number | null;
   persona_id?: number | null;
@@ -72,7 +72,8 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     medio_comunicacion_descripcion?: unknown;
     conclusion_evento_id?: unknown;
     conclusion_evento_descripcion?: unknown;
-    sustraccion_material?: unknown;
+    material_sustraido_id?: unknown;
+    material_sustraido?: unknown;
     fuerza_reaccion_id?: unknown;
     fuerza_reaccion_descripcion?: unknown;
     persona_id?: unknown;
@@ -144,6 +145,15 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     ? (base as { completado: boolean }).completado
     : Boolean((base as { completado?: unknown }).completado);
 
+  const materialSustraidoIdValue =
+    base.material_sustraido_id === null || base.material_sustraido_id === undefined
+      ? null
+      : Number(base.material_sustraido_id);
+  const materialSustraidoId =
+    materialSustraidoIdValue === null || Number.isNaN(materialSustraidoIdValue)
+      ? null
+      : materialSustraidoIdValue;
+
   return {
     id,
     origen: base.origen == null ? null : String(base.origen),
@@ -178,10 +188,9 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
       base.conclusion_evento_descripcion == null
         ? null
         : String(base.conclusion_evento_descripcion),
-    sustraccion_material:
-      typeof base.sustraccion_material === 'boolean'
-        ? base.sustraccion_material
-        : Boolean(base.sustraccion_material),
+    material_sustraido_id: materialSustraidoId,
+    material_sustraido:
+      base.material_sustraido == null ? null : String(base.material_sustraido),
     fuerza_reaccion_id: fuerzaReaccionId,
     fuerza_reaccion_descripcion:
       base.fuerza_reaccion_descripcion == null

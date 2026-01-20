@@ -22,6 +22,7 @@ import { Sitio, getSitios, getSitio } from '../../services/sitiosService';
 import { resolveConsolaIdByName } from '../../services/consolasService';
 import { useSession } from '../context/SessionContext';
 import { getAll as getFuerzasReaccion } from '../../services/fuerzaReaccion.service';
+import { getAll as getMaterialesSustraidos } from '../../services/materialSustraido.service';
 import { getPersonasByCliente } from '../../services/clientePersona.service';
 import { intrusionesColumns } from '@/components/intrusiones/intrusionesColumns';
 import {
@@ -65,6 +66,12 @@ type FuerzaReaccionCatalogItem = {
   id: number;
   descripcion: string;
   activo?: boolean | null;
+};
+
+type MaterialSustraidoCatalogItem = {
+  id: number;
+  descripcion: string;
+  estado?: boolean | null;
 };
 
 const normalizeTiposIntrusion = (
@@ -129,7 +136,7 @@ type IntrusionFormData = {
   no_llego_alerta: boolean;
   medio_comunicacion_id: string;
   conclusion_evento_id: string;
-  sustraccion_material: boolean;
+  material_sustraido_id: string;
   fuerza_reaccion_id: string;
   completado: boolean;
   necesita_protocolo: boolean;
@@ -183,7 +190,7 @@ const buildInitialFormData = (origen: 'HC' | 'MANUAL' = 'HC'): IntrusionFormData
   no_llego_alerta: false,
   medio_comunicacion_id: '',
   conclusion_evento_id: '',
-  sustraccion_material: false,
+  material_sustraido_id: '',
   fuerza_reaccion_id: '',
   completado: false,
   necesita_protocolo: false,
@@ -195,6 +202,7 @@ const Intrusions: React.FC = () => {
   const [mediosComunicacion, setMediosComunicacion] = useState<MedioComunicacionDTO[]>([]);
   const [tiposIntrusion, setTiposIntrusion] = useState<TipoIntrusionCatalogItem[]>([]);
   const [conclusionesEvento, setConclusionesEvento] = useState<ConclusionEventoDTO[]>([]);
+  const [materialesSustraidos, setMaterialesSustraidos] = useState<MaterialSustraidoCatalogItem[]>([]);
   const [tipoIntrusionId, setTipoIntrusionId] = useState<number | string | ''>('');
   const [tipoDescripcion, setTipoDescripcion] = useState('');
   const [requiereProtocolo, setRequiereProtocolo] = useState(false);
@@ -214,6 +222,7 @@ const Intrusions: React.FC = () => {
   const [totalHC, setTotalHC] = useState(0);
 
   const isMountedRef = useRef(true);
+  const materialSustraidoLoadedRef = useRef(false);
   const [hcSeleccionado, setHcSeleccionado] = useState<IntrusionHcQueueRow | null>(null);
   const [registroManual, setRegistroManual] = useState(false);
   const { session } = useSession();
@@ -440,6 +449,37 @@ const Intrusions: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!requiereProtocolo || materialSustraidoLoadedRef.current) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const fetchMaterialesSustraidos = async () => {
+      try {
+        const data = await getMaterialesSustraidos({ estado: true, limit: 1000, page: 1 });
+        if (!isMounted) return;
+        const lista = Array.isArray(data)
+          ? data
+          : ((data as { data?: MaterialSustraidoCatalogItem[] } | null | undefined)?.data ?? []);
+        setMaterialesSustraidos(lista.filter((item) => item?.estado !== false));
+        materialSustraidoLoadedRef.current = true;
+      } catch (err) {
+        console.error('Error al cargar materiales sustraídos:', err);
+        if (isMounted) {
+          setMaterialesSustraidos([]);
+        }
+      }
+    };
+
+    fetchMaterialesSustraidos();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [requiereProtocolo]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const fetchSitiosPorConsola = async () => {
@@ -657,7 +697,7 @@ const Intrusions: React.FC = () => {
       fecha_reaccion_fuera: '',
       fecha_llegada_fuerza_reaccion: '',
       conclusion_evento_id: '',
-      sustraccion_material: false,
+      material_sustraido_id: '',
       fuerza_reaccion_id: '',
       necesita_protocolo: false,
     }));
@@ -857,7 +897,9 @@ const Intrusions: React.FC = () => {
       conclusion_evento_id: intrusion.conclusion_evento_id
         ? String(intrusion.conclusion_evento_id)
         : '',
-      sustraccion_material: intrusion.sustraccion_material ?? false,
+      material_sustraido_id: intrusion.material_sustraido_id
+        ? String(intrusion.material_sustraido_id)
+        : '',
       fuerza_reaccion_id: intrusion.fuerza_reaccion_id
         ? String(intrusion.fuerza_reaccion_id)
         : '',
@@ -882,13 +924,13 @@ const Intrusions: React.FC = () => {
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const handleSustraccionMaterialChange = (
-    event: React.ChangeEvent<HTMLInputElement>
+  const handleMaterialSustraidoChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
   ) => {
-    const { checked } = event.target;
+    const { value } = event.target;
     setFormData((prev) => ({
       ...prev,
-      sustraccion_material: checked,
+      material_sustraido_id: value,
     }));
   };
 
@@ -1389,6 +1431,13 @@ const Intrusions: React.FC = () => {
       fuerzaReaccionId !== null && Number.isNaN(fuerzaReaccionId)
         ? null
         : fuerzaReaccionId;
+    const materialSustraidoId = formData.material_sustraido_id
+      ? Number(formData.material_sustraido_id)
+      : null;
+    const materialSustraidoValue =
+      materialSustraidoId !== null && Number.isNaN(materialSustraidoId)
+        ? null
+        : materialSustraidoId;
 
     const fechaEventoDb = fromDatetimeLocalValueToDb(formData.fecha_evento);
     const fechaReaccionDb = fromDatetimeLocalValueToDb(formData.fecha_reaccion);
@@ -1411,7 +1460,6 @@ const Intrusions: React.FC = () => {
         if (!formData.fecha_reaccion_enviada) missing.push('fecha_reaccion_enviada');
         if (!fechaLlegadaDb) missing.push('fecha_llegada_fuerza_reaccion');
         if (!conclusionEventoValue) missing.push('conclusion_evento_id');
-        if (formData.sustraccion_material === undefined) missing.push('sustraccion_material');
       }
 
       if (missing.length) {
@@ -1448,7 +1496,7 @@ const Intrusions: React.FC = () => {
         origenValue === 'HC' || hikAlarmEventoIdValue ? false : formData.no_llego_alerta,
       medio_comunicacion_id: medioComunicacionValue,
       conclusion_evento_id: necesitaProtocolo ? conclusionEventoValue : null,
-      sustraccion_material: necesitaProtocolo ? formData.sustraccion_material : false,
+      material_sustraido_id: necesitaProtocolo ? materialSustraidoValue : null,
       sitio_id: sitioIdNumber,
       fuerza_reaccion_id:
         necesitaProtocolo && fuerzaReaccionValue !== null ? fuerzaReaccionValue : null,
@@ -1880,18 +1928,27 @@ const Intrusions: React.FC = () => {
                       error={fechaReaccionFueraError}
                       max={getDateTimeInputLimit() || undefined}
                     />
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        id="sustraccion_material"
-                        name="sustraccion_material"
-                        checked={formData.sustraccion_material}
-                        onChange={handleSustraccionMaterialChange}
-                        className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
-                      />
-                      <label htmlFor="sustraccion_material" className="text-sm font-medium text-gray-700">
-                        Sustracción de material
+                    <div className="space-y-1">
+                      <label
+                        htmlFor="material_sustraido_id"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Material sustraído
                       </label>
+                      <select
+                        id="material_sustraido_id"
+                        name="material_sustraido_id"
+                        value={formData.material_sustraido_id}
+                        onChange={handleMaterialSustraidoChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      >
+                        <option value="">Seleccione...</option>
+                        {materialesSustraidos.map((material) => (
+                          <option key={material.id} value={material.id}>
+                            {material.descripcion}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                   <div className="space-y-4">

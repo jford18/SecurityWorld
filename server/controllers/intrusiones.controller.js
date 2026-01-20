@@ -83,6 +83,10 @@ const mapIntrusionRow = (row) => {
     row?.fuerza_reaccion_id === null || row?.fuerza_reaccion_id === undefined
       ? null
       : Number(row.fuerza_reaccion_id);
+  const materialSustraidoId =
+    row?.material_sustraido_id === null || row?.material_sustraido_id === undefined
+      ? null
+      : Number(row.material_sustraido_id);
 
   const personaRaw =
     row?.persona_id === null || row?.persona_id === undefined
@@ -129,7 +133,11 @@ const mapIntrusionRow = (row) => {
     conclusion_evento_id:
       conclusionId === null || Number.isNaN(conclusionId) ? null : Number(conclusionId),
     conclusion_evento_descripcion: row?.conclusion_evento_descripcion ?? null,
-    sustraccion_material: Boolean(row?.sustraccion_material),
+    material_sustraido_id:
+      materialSustraidoId === null || Number.isNaN(materialSustraidoId)
+        ? null
+        : materialSustraidoId,
+    material_sustraido: row?.material_sustraido ?? null,
     fuerza_reaccion_id:
       fuerzaReaccionId === null || Number.isNaN(fuerzaReaccionId)
         ? null
@@ -199,7 +207,6 @@ const validateCompletionRequirements = (config) => {
     fechaReaccionEnviada,
     fechaLlegadaFuerzaReaccion,
     conclusionEventoId,
-    sustraccionMaterial,
   } = config;
 
   if (!completado) {
@@ -217,9 +224,6 @@ const validateCompletionRequirements = (config) => {
     if (!fechaLlegadaFuerzaReaccion) missing.push("fecha_llegada_fuerza_reaccion");
     if (!conclusionEventoId && conclusionEventoId !== 0) {
       missing.push("conclusion_evento_id");
-    }
-    if (sustraccionMaterial === undefined || sustraccionMaterial === null) {
-      missing.push("sustraccion_material");
     }
   }
 
@@ -553,6 +557,7 @@ const getIntrusionesMetadata = async () => {
     personaColumn,
     hasFechaReaccionEnviada: columnNames.has("fecha_reaccion_enviada"),
     hasSustraccionPersonal: columnNames.has("sustraccion_personal"),
+    hasMaterialSustraidoId: columnNames.has("material_sustraido_id"),
     hasNoLlegoAlerta: columnNames.has("no_llego_alerta"),
     hasHikAlarmEventoId: columnNames.has("hik_alarm_evento_id"),
     hasOrigen: columnNames.has("origen"),
@@ -677,7 +682,7 @@ export const listIntrusiones = async (_req, res) => {
       metadata.hasHikAlarmEventoId ? "i.hik_alarm_evento_id" : null,
       "i.medio_comunicacion_id",
       "i.conclusion_evento_id",
-      "i.sustraccion_material",
+      metadata.hasMaterialSustraidoId ? "i.material_sustraido_id" : null,
       "i.fuerza_reaccion_id",
       metadata.personaColumn ? `i.${metadata.personaColumn} AS persona_id` : null,
       metadata.personaColumn
@@ -688,6 +693,7 @@ export const listIntrusiones = async (_req, res) => {
       "m.descripcion AS medio_comunicacion_descripcion",
       "ce.descripcion AS conclusion_evento_descripcion",
       "fr.descripcion AS fuerza_reaccion_descripcion",
+      metadata.hasMaterialSustraidoId ? "ms.descripcion AS material_sustraido" : null,
     ].filter(Boolean);
 
     const joins = [
@@ -696,6 +702,10 @@ export const listIntrusiones = async (_req, res) => {
       "LEFT JOIN public.catalogo_conclusion_evento AS ce ON ce.id = i.conclusion_evento_id",
       'LEFT JOIN public."catalogo_fuerza_reaccion" AS fr ON fr.id = i.fuerza_reaccion_id',
     ];
+
+    if (metadata.hasMaterialSustraidoId) {
+      joins.push("LEFT JOIN public.material_sustraido AS ms ON ms.id = i.material_sustraido_id");
+    }
 
     if (metadata.personaColumn) {
       joins.push(
@@ -929,7 +939,7 @@ export const createIntrusion = async (req, res) => {
     body.medio_comunicacion?.medio_comunicacion_id ??
     null;
   const rawConclusionEventoId = body.conclusion_evento_id ?? body.CONCLUSION_EVENTO_ID;
-  const rawSustraccionMaterial = body.sustraccion_material ?? body.SUSTRACCION_MATERIAL;
+  const rawMaterialSustraidoId = body.material_sustraido_id ?? body.MATERIAL_SUSTRAIDO_ID;
   const rawFuerzaReaccionId = body.fuerza_reaccion_id ?? body.FUERZA_REACCION_ID;
   const rawPersonaId = body.persona_id ?? body.personal_id ?? body.PERSONA_ID ?? body.PERSONAL_ID;
   const rawEstado = body.estado ?? body.ESTADO ?? null;
@@ -988,8 +998,7 @@ export const createIntrusion = async (req, res) => {
       ? null
       : Number(rawMedioComunicacionId);
   const conclusionEventoValue = parseIntegerOrNull(rawConclusionEventoId);
-  const sustraccionMaterialValue =
-    typeof rawSustraccionMaterial === "boolean" ? rawSustraccionMaterial : false;
+  const materialSustraidoValue = parseIntegerOrNull(rawMaterialSustraidoId);
   const sitioIdValue = parseIntegerOrNull(rawSitioId);
   const fuerzaReaccionValue = parseIntegerOrNull(rawFuerzaReaccionId);
   const personaIdValue =
@@ -1134,6 +1143,18 @@ export const createIntrusion = async (req, res) => {
     });
   }
 
+  if (
+    metadata.hasMaterialSustraidoId &&
+    rawMaterialSustraidoId !== undefined &&
+    rawMaterialSustraidoId !== null &&
+    materialSustraidoValue === undefined
+  ) {
+    return res.status(400).json({
+      message: "El identificador del material sustraído no es válido.",
+      details: { field: "material_sustraido_id" },
+    });
+  }
+
   if (metadata.personaColumn && rawPersonaId !== undefined && personaIdValue === undefined) {
     return res.status(400).json({
       message: "El identificador de la persona no es válido.",
@@ -1150,7 +1171,6 @@ export const createIntrusion = async (req, res) => {
     fechaReaccionEnviada: fechaReaccionEnviadaValue,
     fechaLlegadaFuerzaReaccion: fechaLlegadaFuerzaReaccionValue,
     conclusionEventoId: conclusionEventoValue,
-    sustraccionMaterial: sustraccionMaterialValue,
   });
 
   if (missingCompletionFields.length) {
@@ -1191,11 +1211,15 @@ export const createIntrusion = async (req, res) => {
     columns.push(
       "medio_comunicacion_id",
       "conclusion_evento_id",
-      "sustraccion_material",
       "fuerza_reaccion_id"
     );
 
-    values.push(medioComValue, conclusionEventoValue, sustraccionMaterialValue, fuerzaReaccionValue);
+    values.push(medioComValue, conclusionEventoValue, fuerzaReaccionValue);
+
+    if (metadata.hasMaterialSustraidoId) {
+      columns.push("material_sustraido_id");
+      values.push(materialSustraidoValue);
+    }
 
     if (metadata.hasCompletado) {
       columns.push("completado");
@@ -1243,8 +1267,8 @@ export const createIntrusion = async (req, res) => {
       metadata.hasHikAlarmEventoId ? "hik_alarm_evento_id" : null,
       "medio_comunicacion_id",
       "conclusion_evento_id",
-      "sustraccion_material",
       "fuerza_reaccion_id",
+      metadata.hasMaterialSustraidoId ? "material_sustraido_id" : null,
       metadata.personaColumn
         ? `${metadata.personaColumn} AS persona_id`
         : null,
@@ -1254,6 +1278,13 @@ export const createIntrusion = async (req, res) => {
           FROM public."catalogo_fuerza_reaccion"
          WHERE id = fuerza_reaccion_id
        ) AS fuerza_reaccion_descripcion`,
+      metadata.hasMaterialSustraidoId
+        ? `(
+        SELECT descripcion
+          FROM public.material_sustraido
+         WHERE id = material_sustraido_id
+       ) AS material_sustraido`
+        : null,
     ].filter(Boolean);
 
     const insertSql = `INSERT INTO public.intrusiones (${columns.join(", ")})
@@ -1339,8 +1370,8 @@ export const updateIntrusion = async (req, res) => {
       metadata.hasHikAlarmEventoId ? "hik_alarm_evento_id" : null,
       "medio_comunicacion_id",
       "conclusion_evento_id",
-      "sustraccion_material",
       "fuerza_reaccion_id",
+      metadata.hasMaterialSustraidoId ? "material_sustraido_id" : null,
       metadata.personaColumn,
     ].filter(Boolean);
 
@@ -1509,12 +1540,19 @@ export const updateIntrusion = async (req, res) => {
     pushUpdate("conclusion_evento_id", conclusionValue);
   }
 
-  const sustraccionValue =
-    body.sustraccion_material !== undefined
-      ? Boolean(body.sustraccion_material)
-      : Boolean(currentRow?.sustraccion_material);
-  if (body.sustraccion_material !== undefined) {
-    pushUpdate("sustraccion_material", sustraccionValue);
+  const materialSustraidoValue =
+    body.material_sustraido_id !== undefined
+      ? parseIntegerOrNull(body.material_sustraido_id)
+      : parseIntegerOrNull(currentRow?.material_sustraido_id);
+  if (
+    metadata.hasMaterialSustraidoId &&
+    body.material_sustraido_id !== undefined &&
+    materialSustraidoValue === undefined
+  ) {
+    return res.status(400).json({ mensaje: "El identificador del material sustraído no es válido." });
+  }
+  if (metadata.hasMaterialSustraidoId && body.material_sustraido_id !== undefined) {
+    pushUpdate("material_sustraido_id", materialSustraidoValue);
   }
 
   const fuerzaValue =
@@ -1613,7 +1651,6 @@ export const updateIntrusion = async (req, res) => {
     fechaReaccionEnviada: fechaReaccionEnviadaValue,
     fechaLlegadaFuerzaReaccion: fechaLlegadaValue,
     conclusionEventoId: conclusionValue,
-    sustraccionMaterial: sustraccionValue,
   });
 
   if (missingCompletion.length) {
@@ -1641,9 +1678,11 @@ export const updateIntrusion = async (req, res) => {
         metadata.hasNecesitaProtocolo ? "necesita_protocolo" : "FALSE"
       } AS necesita_protocolo, ${metadata.hasOrigen ? "origen" : "NULL"} AS origen, ${
         metadata.hasHikAlarmEventoId ? "hik_alarm_evento_id" : "NULL"
-      } AS hik_alarm_evento_id, medio_comunicacion_id, conclusion_evento_id, sustraccion_material, fuerza_reaccion_id, (SELECT nombre FROM public.sitios WHERE id = sitio_id) AS sitio_nombre, (SELECT descripcion FROM public."catalogo_fuerza_reaccion" WHERE id = fuerza_reaccion_id) AS fuerza_reaccion_descripcion${
+      } AS hik_alarm_evento_id, medio_comunicacion_id, conclusion_evento_id, fuerza_reaccion_id, ${
+        metadata.hasMaterialSustraidoId ? "material_sustraido_id," : ""
+      } (SELECT nombre FROM public.sitios WHERE id = sitio_id) AS sitio_nombre, (SELECT descripcion FROM public."catalogo_fuerza_reaccion" WHERE id = fuerza_reaccion_id) AS fuerza_reaccion_descripcion${
         metadata.personaColumn ? `, ${metadata.personaColumn} AS persona_id` : ""
-      }`,
+      }${metadata.hasMaterialSustraidoId ? ", (SELECT descripcion FROM public.material_sustraido WHERE id = material_sustraido_id) AS material_sustraido" : ""}`,
       values
     );
 
@@ -1986,11 +2025,14 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
     A.FECHA_REACCION_ENVIADA,
     A.FECHA_LLEGADA_FUERZA_REACCION,
     A.CONCLUSION_EVENTO,
-    D.DESCRIPCION AS MEDIO_COMUNICACION_DESCRIPCION
+    D.DESCRIPCION AS MEDIO_COMUNICACION_DESCRIPCION,
+    A.MATERIAL_SUSTRAIDO_ID,
+    E.DESCRIPCION AS MATERIAL_SUSTRAIDO
 FROM PUBLIC.INTRUSIONES A
 LEFT JOIN PUBLIC.SITIOS B ON (B.ID = A.SITIO_ID)
 LEFT JOIN PUBLIC.PERSONA C ON (C.ID = A.PERSONA_ID)
 LEFT JOIN PUBLIC.CATALOGO_MEDIO_COMUNICACION D ON (D.ID = A.MEDIO_COMUNICACION_ID)
+LEFT JOIN PUBLIC.MATERIAL_SUSTRAIDO E ON (E.ID = A.MATERIAL_SUSTRAIDO_ID)
 WHERE 1=1${filterClause}
 ORDER BY A.FECHA_EVENTO DESC;`;
 
@@ -2010,8 +2052,9 @@ ORDER BY A.FECHA_EVENTO DESC;`;
         "LLEGO_ALERTA",
         "FECHA_REACCION_FUERA",
         "CONCLUSION_EVENTO_ID",
-        "SUSTRACCION_MATERIAL",
+        "MATERIAL_SUSTRAIDO_ID",
         "FUERZA_REACCION_ID",
+        "MATERIAL_SUSTRAIDO",
         "SITIO_ID",
         "SITIO_NOMBRE",
         "SITIO_DESCRIPCION",
@@ -2045,12 +2088,9 @@ ORDER BY A.FECHA_EVENTO DESC;`;
           : "No",
         formatDateValue(row?.fecha_reaccion_fuera),
         row?.conclusion_evento_id ?? "",
-        row?.sustraccion_material === null || row?.sustraccion_material === undefined
-          ? ""
-          : row.sustraccion_material
-          ? "Sí"
-          : "No",
+        row?.material_sustraido_id ?? "",
         row?.fuerza_reaccion_id ?? "",
+        row?.material_sustraido ?? "",
         row?.sitio_id ?? "",
         row?.sitio_nombre ?? "",
         row?.sitio_descripcion ?? "",
