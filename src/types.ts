@@ -178,7 +178,8 @@ export interface Intrusion {
   medio_comunicacion_descripcion?: string | null;
   conclusion_evento_id: number | null;
   conclusion_evento_descripcion?: string | null;
-  sustraccion_material: boolean;
+  material_sustraido_id?: number | null;
+  material_sustraido?: string | null;
   fuerza_reaccion_id: number | null;
   fuerza_reaccion_descripcion?: string | null;
   persona_id?: number | null;

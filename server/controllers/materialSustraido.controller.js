@@ -48,11 +48,11 @@ const normalizeBoolean = (value, defaultValue = null) => {
 
 export const listMaterialSustraidos = async (req, res) => {
   try {
-    const { search = '', estado, page = 1, limit = 10 } = req.query ?? {};
+    const { search = '', estado, activo, page = 1, limit = 10 } = req.query ?? {};
 
     const result = await listMaterialSustraido({
       search,
-      estado,
+      estado: estado ?? activo,
       page,
       limit,
     });
