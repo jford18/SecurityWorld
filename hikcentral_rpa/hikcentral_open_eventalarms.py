@@ -13,7 +13,7 @@ import numpy as np
 import psutil
 import psycopg2
 from dotenv import load_dotenv
-from psycopg2.extras import execute_batch
+from psycopg2.extras import execute_values
 from selenium import webdriver
 from selenium.common.exceptions import (
     ElementClickInterceptedException,
@@ -1251,33 +1251,37 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> None:
         log_info(f"[EVENT] Preview registros mapeados: {preview_records}")
 
         rows = []
+        fecha_creacion = datetime.now()
         for _, row in df.iterrows():
             triggering_time = normalize_ts(row.get("triggering_time_client"))
             ack_time = normalize_ts(row.get("alarm_acknowledgment_time"))
+            periodo = calcular_periodo(triggering_time)
             rows.append(
-                {
-                    "id_extraccion": id_extraccion,
-                    "mark": row.get("mark"),
-                    "name": row.get("name"),
-                    "trigger_alarm": row.get("trigger_alarm"),
-                    "priority": row.get("priority"),
-                    "triggering_time_client": triggering_time,
-                    "source": row.get("source"),
-                    "region": row.get("region"),
-                    "trigger_event": row.get("trigger_event"),
-                    "description": row.get("description"),
-                    "status": row.get("status"),
-                    "alarm_acknowledgment_time": ack_time,
-                    "alarm_category": row.get("alarm_category"),
-                    "remarks": row.get("remarks"),
-                    "more": row.get("more"),
-                    "event_key": row.get("event_key"),
-                }
+                (
+                    id_extraccion,
+                    row.get("mark"),
+                    row.get("name"),
+                    row.get("trigger_alarm"),
+                    row.get("priority"),
+                    triggering_time,
+                    row.get("source"),
+                    row.get("region"),
+                    row.get("trigger_event"),
+                    row.get("description"),
+                    row.get("status"),
+                    ack_time,
+                    row.get("alarm_category"),
+                    row.get("remarks"),
+                    row.get("more"),
+                    row.get("event_key"),
+                    periodo,
+                    fecha_creacion,
+                )
             )
 
-        total_filas = total_original
-        total_nuevos = len(rows)
-        total_duplicados = total_filas - total_nuevos
+        total_preparados = len(rows)
+        total_insertados = 0
+        total_omitidos = 0
 
         if not rows:
             log_info("[INFO] No hay filas para insertar en hik_alarm_evento.")
@@ -1303,30 +1307,17 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> None:
                     PERIODO,
                     FECHA_CREACION
                 )
-                SELECT
-                    %(id_extraccion)s AS ID_EXTRACCION,
-                    %(mark)s AS MARK,
-                    %(name)s AS NAME,
-                    %(trigger_alarm)s AS TRIGGER_ALARM,
-                    %(priority)s AS PRIORITY,
-                    %(triggering_time_client)s AS TRIGGERING_TIME_CLIENT,
-                    %(source)s AS SOURCE,
-                    %(region)s AS REGION,
-                    %(trigger_event)s AS TRIGGER_EVENT,
-                    %(description)s AS DESCRIPTION,
-                    %(status)s AS STATUS,
-                    %(alarm_acknowledgment_time)s AS ALARM_ACKNOWLEDGMENT_TIME,
-                    %(alarm_category)s AS ALARM_CATEGORY,
-                    %(remarks)s AS REMARKS,
-                    %(more)s AS MORE,
-                    %(event_key)s AS EVENT_KEY,
-                    TO_CHAR(%(triggering_time_client)s::TIMESTAMP, 'YYYYMMDD')::INT AS PERIODO,
-                    NOW()::TIMESTAMP AS FECHA_CREACION;
+                VALUES %s
+                ON CONFLICT (EVENT_KEY) DO NOTHING;
             """
             with conn.cursor() as cur:
-                execute_batch(cur, sql, rows, page_size=500)
+                execute_values(cur, sql, rows, page_size=500)
+                total_insertados = cur.rowcount
             conn.commit()
-            log_info(f"[INFO] Insertadas {len(rows)} filas en hik_alarm_evento.")
+            total_omitidos = total_preparados - total_insertados
+            log_info(f"[INFO] Total registros preparados: {total_preparados}")
+            log_info(f"[INFO] Insertados: {total_insertados}")
+            log_info(f"[INFO] Omitidos por duplicado: {total_omitidos}")
 
         with conn.cursor() as cur:
             cur.execute(
@@ -1339,7 +1330,7 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> None:
                     estado = 'OK'
                 WHERE id = %s;
                 """,
-                (total_filas, total_nuevos, total_duplicados, id_extraccion),
+                (total_preparados, total_insertados, total_omitidos, id_extraccion),
             )
         conn.commit()
 
@@ -1491,9 +1482,9 @@ def procesar_alarm_report(file_path: str, timer: StepTimer) -> None:
 
         if not registros:
             logger_info("[DB] No hay registros de Alarm Report para insertar.")
-            total_filas = len(df)
-            total_nuevos = len(registros)
-            total_duplicados = total_filas - total_nuevos
+            total_preparados = len(registros)
+            total_insertados = 0
+            total_omitidos = 0
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -1505,12 +1496,15 @@ def procesar_alarm_report(file_path: str, timer: StepTimer) -> None:
                         estado = 'OK'
                     WHERE id = %s;
                     """,
-                    (total_filas, total_nuevos, total_duplicados, id_extraccion),
+                    (total_preparados, total_insertados, total_omitidos, id_extraccion),
                 )
             conn.commit()
             return
 
-        logger_info(f"[EVENT] Registros a insertar en hik_alarm_evento: {len(registros)}")
+        total_preparados = len(registros)
+        total_insertados = 0
+        total_omitidos = 0
+        logger_info(f"[EVENT] Registros a insertar en hik_alarm_evento: {total_preparados}")
 
         sql = """
             INSERT INTO public.hik_alarm_evento (
@@ -1531,37 +1525,27 @@ def procesar_alarm_report(file_path: str, timer: StepTimer) -> None:
                 more,
                 event_key,
                 periodo
-            ) VALUES (
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s
-            );
+            ) VALUES %s
+            ON CONFLICT (event_key) DO NOTHING;
         """
         with conn.cursor() as cur:
-            execute_batch(cur, sql, registros, page_size=500)
+            execute_values(cur, sql, registros, page_size=500)
+            total_insertados = cur.rowcount
         conn.commit()
+        total_omitidos = total_preparados - total_insertados
         logger_info(
-            f"[DB] Se insertaron {len(registros)} registros en hik_alarm_evento "
+            f"[INFO] Total registros preparados: {total_preparados}"
+        )
+        logger_info(f"[INFO] Insertados: {total_insertados}")
+        logger_info(f"[INFO] Omitidos por duplicado: {total_omitidos}")
+        logger_info(
+            f"[DB] Se insertaron {total_insertados} registros en hik_alarm_evento "
             f"(id_extraccion={id_extraccion})."
         )
 
-        total_filas = len(df)
-        total_nuevos = len(registros)
-        total_duplicados = total_filas - total_nuevos
+        total_filas = total_preparados
+        total_nuevos = total_insertados
+        total_duplicados = total_omitidos
         with conn.cursor() as cur:
             cur.execute(
                 """
