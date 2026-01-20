@@ -96,10 +96,11 @@ type DonutDatum = {
   value: number;
 };
 
-type StackedDatum = Record<string, number | string> & {
+type StackedDatum = {
   problema_label: string;
   total?: number;
-};
+  equipos?: Record<string, string>;
+} & Record<string, number | string | Record<string, string> | undefined>;
 
 type TendenciaDatum = {
   mes: string;
@@ -194,7 +195,34 @@ const StackedBarChartCard = React.memo(
               width={160}
               label={STACKED_Y_AXIS_LABEL}
             />
-            <Tooltip formatter={(value: number) => formatInteger(Number(value))} />
+            <Tooltip
+              shared={false}
+              content={({ active, payload, label }) => {
+                if (!active || !payload || payload.length === 0) {
+                  return null;
+                }
+
+                const item = payload[0];
+                const dataKey = String(item.dataKey ?? '');
+                const value = Number(item.value ?? 0);
+                const equiposMap = item.payload?.equipos;
+                const equipos =
+                  typeof equiposMap === 'object' && equiposMap !== null
+                    ? String(equiposMap[dataKey] ?? '')
+                    : '';
+                const equiposLabel = equipos.trim().length > 0 ? equipos : 'Sin información';
+
+                return (
+                  <div className="rounded border border-gray-200 bg-white p-2 text-xs shadow">
+                    <p className="font-semibold text-gray-700">{label}</p>
+                    <p className="text-gray-600">
+                      {dataKey}: {formatInteger(value)}
+                    </p>
+                    <p className="text-gray-600">Equipos: {equiposLabel}</p>
+                  </div>
+                );
+              }}
+            />
             <Legend />
             {haciendaKeys.map((hacienda, index) => {
               const isLast = index === haciendaKeys.length - 1;
@@ -480,15 +508,19 @@ const DashboardHome: React.FC = () => {
 
   const stackedData = useMemo(() => {
     const rows = dashboard?.pendientes_por_problema_hacienda ?? [];
-    const map = new Map<string, Record<string, number | string>>();
+    const map = new Map<string, StackedDatum>();
 
     rows.forEach((row) => {
       const label = row.problema_label?.trim() || 'Sin problema';
       const hacienda = row.hacienda?.trim() || 'Sin hacienda';
       const total = Number(row.total ?? 0);
+      const equipos =
+        typeof row.equipos === 'string' && row.equipos.trim().length > 0
+          ? row.equipos.trim()
+          : '';
 
       if (!map.has(label)) {
-        map.set(label, { problema_label: label, total: 0 });
+        map.set(label, { problema_label: label, total: 0, equipos: {} });
       }
 
       const entry = map.get(label);
@@ -496,6 +528,12 @@ const DashboardHome: React.FC = () => {
         const previous = Number(entry[hacienda] ?? 0);
         entry[hacienda] = previous + total;
         entry.total = Number(entry.total ?? 0) + total;
+        if (!entry.equipos) {
+          entry.equipos = {};
+        }
+        if (equipos) {
+          entry.equipos[hacienda] = equipos;
+        }
       }
     });
 
