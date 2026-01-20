@@ -6,6 +6,7 @@ import hashlib
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 import psutil
 import psycopg2
 from dotenv import load_dotenv
@@ -293,6 +294,26 @@ def normalize_ts(value):
     if isinstance(value, datetime):
         return value.replace(tzinfo=None)
     return value
+
+
+def to_py(v):
+    # Convierte nulos pandas/numpy a None y timestamps a datetime python
+    if v is None:
+        return None
+    # pd.NA / NaN / NaT
+    if pd.isna(v):
+        return None
+    # pandas Timestamp
+    if isinstance(v, pd.Timestamp):
+        return v.to_pydatetime()
+    # numpy scalar -> python scalar
+    if isinstance(v, (np.generic,)):
+        return v.item()
+    # strings: strip opcional
+    if isinstance(v, str):
+        s = v.strip()
+        return s if s != "" else None
+    return v
 
 
 def calcular_periodo(value):
@@ -1145,6 +1166,7 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> None:
         df["alarm_acknowledgment_time"] = pd.to_datetime(
             df["alarm_acknowledgment_time"], errors="coerce"
         )
+        df = df.applymap(to_py)
 
         required_data_cols = [
             "name",
@@ -1393,6 +1415,7 @@ def procesar_alarm_report(file_path: str, timer: StepTimer) -> None:
 
         df["fecha_creacion"] = datetime.now()
         df = df.where(pd.notnull(df), None)
+        df = df.applymap(to_py)
 
         registros = []
         for _, row in df.iterrows():
