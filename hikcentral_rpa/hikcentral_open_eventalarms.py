@@ -52,33 +52,25 @@ class PerformanceRecorder:
     def update_cpu(self, cpu_percent: float):
         self._update_cpu_max(cpu_percent)
 
-    def add_step(
-        self,
-        label: str,
-        step_secs: float,
-        total_secs: float,
-        cpu_percent: float,
-        mem_percent: float,
-        proc_mem_mb: float,
-    ):
+    def add_step(self, step_data: dict):
+        label = step_data.get("label", "")
         num_paso, descripcion = self._parse_step_label(label)
         if num_paso is None:
-            return {
-                "filas_extraidas": total_preparados,
-                "insertados": total_insertados,
-                "omitidos_duplicado": total_omitidos,
-            }
-
-        self._update_cpu_max(cpu_percent)
+            num_paso = 0
+        self._update_cpu_max(step_data.get("cpu", 0.0))
         self.steps.append(
             {
                 "num_paso": num_paso,
                 "descripcion": descripcion,
-                "tiempo_paso": round(step_secs, 2),
-                "tiempo_total": round(total_secs, 2),
-                "cpu": round(cpu_percent, 1),
-                "ram": round(mem_percent, 1),
-                "py_mem": int(proc_mem_mb),
+                "tiempo_paso": round(step_data.get("duracion_seg", 0.0), 2),
+                "tiempo_total": round(step_data.get("tiempo_total", 0.0), 2),
+                "cpu": round(step_data.get("cpu", 0.0), 1),
+                "ram": round(step_data.get("ram", 0.0), 1),
+                "py_mem": int(step_data.get("py_mem_mb", 0)),
+                "filas_extraidas": step_data.get("filas_extraidas", 0),
+                "filas_preparadas": step_data.get("filas_preparadas", 0),
+                "filas_insertadas": step_data.get("filas_insertadas", 0),
+                "duplicados": step_data.get("duplicados", 0),
             }
         )
 
@@ -105,7 +97,19 @@ class StepTimer:
         self.recorder = recorder
         self.proc = psutil.Process(os.getpid())
 
-    def mark(self, label: str):
+    def mark(
+        self,
+        label: str,
+        filas_extraidas: int = 0,
+        filas_preparadas: int = 0,
+        filas_insertadas: int = 0,
+        duplicados: int = 0,
+        **kwargs,
+    ):
+        filas_extraidas = int(kwargs.get("filas_extraidas", filas_extraidas) or 0)
+        filas_preparadas = int(kwargs.get("filas_preparadas", filas_preparadas) or 0)
+        filas_insertadas = int(kwargs.get("filas_insertadas", filas_insertadas) or 0)
+        duplicados = int(kwargs.get("duplicados", duplicados) or 0)
         now = time.perf_counter()
         step_secs = now - self.last
         total_secs = now - self.start
@@ -124,14 +128,19 @@ class StepTimer:
         )
 
         if self.recorder:
-            self.recorder.add_step(
-                label,
-                step_secs,
-                total_secs,
-                cpu_percent,
-                mem_percent,
-                proc_mem_mb,
-            )
+            step_data = {
+                "label": label,
+                "filas_extraidas": filas_extraidas,
+                "filas_preparadas": filas_preparadas,
+                "filas_insertadas": filas_insertadas,
+                "duplicados": duplicados,
+                "duracion_seg": step_secs,
+                "tiempo_total": total_secs,
+                "cpu": cpu_percent,
+                "ram": mem_percent,
+                "py_mem_mb": proc_mem_mb,
+            }
+            self.recorder.add_step(step_data)
 
         self.last = now
 
@@ -1341,6 +1350,8 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
         preview_records = df.head(2).to_dict(orient="records")
         log_info(f"[EVENT] Filas extraídas: {len(df)}")
         log_info(f"[EVENT] Preview registros mapeados: {preview_records}")
+        if step_timer:
+            step_timer.mark("[EVENT] Datos extraídos", filas_extraidas=len(df))
 
         rows = []
         fecha_creacion = datetime.now()
@@ -1374,6 +1385,8 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
         total_preparados = len(rows)
         total_insertados = 0
         total_omitidos = 0
+        if step_timer:
+            step_timer.mark("[EVENT] Datos preparados", filas_preparadas=total_preparados)
 
         if not rows:
             log_info("[INFO] No hay filas para insertar en hik_alarm_evento.")
@@ -1410,6 +1423,12 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
             log_info(f"[INFO] Total registros preparados: {total_preparados}")
             log_info(f"[INFO] Insertados: {total_insertados}")
             log_info(f"[INFO] Omitidos por duplicado: {total_omitidos}")
+            if step_timer:
+                step_timer.mark(
+                    "[EVENT] Insert BD",
+                    filas_insertadas=total_insertados,
+                    duplicados=total_omitidos,
+                )
 
         with conn.cursor() as cur:
             cur.execute(
@@ -1663,7 +1682,12 @@ def procesar_alarm_report(file_path: str, timer: StepTimer) -> None:
         conn.commit()
 
         if timer:
-            timer.mark(step_name)
+            timer.mark(
+                step_name,
+                filas_preparadas=total_preparados,
+                filas_insertadas=total_insertados,
+                duplicados=total_omitidos,
+            )
 
         return {
             "filas_extraidas": total_preparados,
@@ -1926,7 +1950,13 @@ def run_for_host(host: str) -> dict:
             except Exception:
                 print("[WARN] No se pudo guardar el screenshot de error.")
         if timer:
-            timer.mark("[ERROR] Fin por excepción")
+            timer.mark(
+                "[ERROR] Fin por excepción",
+                filas_extraidas=0,
+                filas_preparadas=0,
+                filas_insertadas=0,
+                duplicados=0,
+            )
         return {
             "host": host,
             "ok": False,
