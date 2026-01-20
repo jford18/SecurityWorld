@@ -1,9 +1,12 @@
+import argparse
 import os
 import time
 import traceback
 from datetime import datetime
 import hashlib
 from pathlib import Path
+from urllib.error import URLError, HTTPError
+from urllib.request import Request, urlopen
 
 import pandas as pd
 import numpy as np
@@ -133,13 +136,46 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = BASE_DIR / ".env"
 load_dotenv(ENV_PATH)
 
-URL = "http://172.16.9.10/#/"
+DEFAULT_HOSTS = ["172.16.9.10", "172.16.9.11"]
+URL = ""
 SCRIPT_NAME = "hikcentral_open_eventalarms.py"
 HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
 HIK_PASSWORD = os.getenv("HIK_PASSWORD", "SW2112asm")
 
 LOG_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\logs")
 DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")
+
+
+def host_is_up(host: str, timeout: float = 2.5) -> bool:
+    url = f"http://{host}/"
+    request = Request(url, method="GET")
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            return response.status < 500
+    except (HTTPError, URLError, TimeoutError, OSError):
+        return False
+
+
+def resolve_hik_host(cli_host: str | None) -> tuple[str, str]:
+    if cli_host:
+        return cli_host.strip(), "arg"
+
+    env_host = os.getenv("HIK_HOST")
+    if env_host and env_host.strip():
+        return env_host.strip(), "env"
+
+    env_hosts = os.getenv("HIK_HOSTS")
+    if env_hosts:
+        hosts = [h.strip() for h in env_hosts.split(",") if h.strip()]
+    else:
+        hosts = DEFAULT_HOSTS
+
+    for host in hosts:
+        if host_is_up(host):
+            return host, "autodetect"
+        print(f"[WARN] Host no responde: {host}")
+
+    raise RuntimeError("Ningún host HikCentral disponible en HIK_HOSTS/DEFAULT_HOSTS")
 
 
 def get_downloadcenter_root() -> Path:
@@ -1643,7 +1679,7 @@ def cerrar_sesion(driver, wait: WebDriverWait):
         print("[WARN] No se pudo cerrar sesión limpiamente.")
 
 
-def run():
+def run(cli_host: str | None = None):
     global step_timer, performance_recorder
 
     performance_recorder = PerformanceRecorder(time.perf_counter())
@@ -1668,6 +1704,11 @@ def run():
     export_file_path: Path | None = None
 
     try:
+        host, reason = resolve_hik_host(cli_host)
+        print(f"[INFO] Host seleccionado: {host} (motivo: {reason})")
+        global URL
+        URL = f"http://{host}/#/"
+
         driver = crear_driver()
         wait = WebDriverWait(driver, 30)
 
@@ -1797,4 +1838,8 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser(description="Automatiza Event and Alarm Search en HikCentral.")
+    parser.add_argument("--host", type=str, help="Host/IP de HikCentral (ej: 172.16.9.11)")
+    args = parser.parse_args()
+
+    run(cli_host=args.host)
