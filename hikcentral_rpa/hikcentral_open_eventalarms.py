@@ -218,6 +218,29 @@ def find_latest_alarm_report(download_dir: Path) -> Path | None:
     return candidates[0]
 
 
+def wait_for_new_alarm_report(
+    download_dir: Path,
+    before_files: set[Path],
+    timeout: int = 120,
+) -> Path:
+    """
+    Espera un nuevo archivo Alarm_Report*.xlsx en download_dir y devuelve el más reciente.
+    """
+    download_dir.mkdir(parents=True, exist_ok=True)
+    fin = time.time() + timeout
+
+    while time.time() < fin:
+        current = set(download_dir.glob("Alarm_Report*.xlsx"))
+        nuevos = list(current - before_files)
+        if nuevos:
+            ultimo = max(nuevos, key=lambda p: p.stat().st_mtime)
+            if not list(download_dir.glob("*.crdownload")):
+                return ultimo
+        time.sleep(1)
+
+    raise RuntimeError("No se detectó ningún archivo descargado desde Event and Alarm Search.")
+
+
 def find_last_alarm_report_file() -> Path | None:
     """
     Busca el último archivo Alarm_Report_* en la carpeta:
@@ -885,6 +908,8 @@ def click_export_event_and_alarm(
     """
     print("[7] Abriendo panel Export en Event and Alarm Search...")
 
+    before_files = set(download_dir.glob("Alarm_Report*.xlsx"))
+
     wait = WebDriverWait(driver, timeout)
 
     export_icon_xpath = "//i[contains(@class,'h-icon-export')]/ancestor::button[1]"
@@ -944,11 +969,18 @@ def click_export_event_and_alarm(
 
     log_info("[EXPORT] Esperando archivo Alarm_Report_* en carpeta de descargas...")
 
-    archivo = esperar_descarga_y_renombrar_host(
+    archivo = wait_for_new_alarm_report(
         download_dir=download_dir,
-        host_label=host_label,
+        before_files=before_files,
         timeout=timeout,
     )
+    host_suffix = host_label.replace(".", "_")
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    nuevo_nombre = f"Alarm_Report_{timestamp}_{host_suffix}{archivo.suffix}"
+    destino = download_dir / nuevo_nombre
+    archivo = archivo.rename(destino)
+    if step_timer:
+        step_timer.mark("[9] Descarga detectada")
 
     log_info(f"[EXPORT] Ruta final del archivo exportado: {archivo}")
 
@@ -1761,6 +1793,11 @@ def run_for_host(host: str) -> dict:
     )
     timer = step_timer
 
+    total_encontrados = 0
+    total_preparados = 0
+    total_insertados = 0
+    total_duplicados = 0
+    archivo_descargado: Path | None = None
     export_file_path: Path | None = None
     resultados_carga = {
         "filas_extraidas": 0,
@@ -1827,6 +1864,7 @@ def run_for_host(host: str) -> dict:
             timeout=30,
             timer=timer,
         )
+        archivo_descargado = export_file_path
 
         print(f"[INFO] Ruta final del archivo exportado: {export_file_path}")
 
@@ -1853,6 +1891,10 @@ def run_for_host(host: str) -> dict:
             timer.mark("[10] FIN_OK")
 
         resultados_carga = insertar_alarm_evento_from_excel(export_file_path)
+        total_encontrados = resultados_carga.get("filas_extraidas", 0)
+        total_preparados = resultados_carga.get("filas_extraidas", 0)
+        total_insertados = resultados_carga.get("insertados", 0)
+        total_duplicados = resultados_carga.get("omitidos_duplicado", 0)
 
         print(
             "[INFO] === Fin host "
@@ -1864,8 +1906,12 @@ def run_for_host(host: str) -> dict:
         return {
             "host": host,
             "ok": True,
+            "motivo": None,
             "archivo": str(export_file_path),
-            **resultados_carga,
+            "total_encontrados": total_encontrados,
+            "total_preparados": total_preparados,
+            "total_insertados": total_insertados,
+            "total_duplicados": total_duplicados,
         }
 
     except Exception as e:
@@ -1881,7 +1927,16 @@ def run_for_host(host: str) -> dict:
                 print("[WARN] No se pudo guardar el screenshot de error.")
         if timer:
             timer.mark("[ERROR] Fin por excepción")
-        raise
+        return {
+            "host": host,
+            "ok": False,
+            "motivo": str(e),
+            "archivo": str(archivo_descargado) if archivo_descargado else None,
+            "total_encontrados": total_encontrados,
+            "total_preparados": total_preparados,
+            "total_insertados": total_insertados,
+            "total_duplicados": total_duplicados,
+        }
 
     finally:
         if driver:
@@ -1933,21 +1988,18 @@ if __name__ == "__main__":
                 {
                     "host": host,
                     "ok": False,
-                    "error": "Host no responde",
+                    "motivo": "Host no responde",
                     "archivo": None,
-                    "filas_extraidas": 0,
-                    "insertados": 0,
-                    "omitidos_duplicado": 0,
+                    "total_encontrados": 0,
+                    "total_preparados": 0,
+                    "total_insertados": 0,
+                    "total_duplicados": 0,
                 }
             )
             continue
 
-        try:
-            res = run_for_host(host)
-            resultados.append(res)
-        except Exception as ex:
-            print(f"[ERROR] Falló host {host}: {ex}")
-            resultados.append({"host": host, "ok": False, "error": str(ex)})
+        res = run_for_host(host)
+        resultados.append(res)
 
     print("[INFO] === Resumen final por host ===")
     for res in resultados:
@@ -1955,15 +2007,15 @@ if __name__ == "__main__":
             print(
                 "[INFO] Host "
                 f"{res.get('host')} | ok | archivo: {res.get('archivo')} | "
-                f"extraídas: {res.get('filas_extraidas')} | "
-                f"insertados: {res.get('insertados')} | "
-                f"duplicados: {res.get('omitidos_duplicado')}"
+                f"extraídas: {res.get('total_encontrados')} | "
+                f"insertados: {res.get('total_insertados')} | "
+                f"duplicados: {res.get('total_duplicados')}"
             )
         else:
             print(
                 "[INFO] Host "
                 f"{res.get('host')} | ERROR | "
-                f"motivo: {res.get('error', 'desconocido')}"
+                f"motivo: {res.get('motivo', 'desconocido')}"
             )
 
     if any(res.get("ok") for res in resultados):
