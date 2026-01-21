@@ -133,9 +133,9 @@ const formatDurationFromSeconds = (duration?: number | null) => {
   ).padStart(2, '0')}`;
 };
 
-  const EditFailureModal: React.FC<{
-    failure: TechnicalFailure;
-    departamentos: CatalogoDepartamento[];
+const EditFailureModal: React.FC<{
+  failure: TechnicalFailure;
+  departamentos: CatalogoDepartamento[];
   responsables: CatalogoResponsable[];
   onSave: (updatedFailure: TechnicalFailure) => void;
   onCloseFallo: (updatedFailure: TechnicalFailure) => void;
@@ -149,6 +149,7 @@ const formatDurationFromSeconds = (duration?: number | null) => {
   historyError?: string | null;
   isHistoryLoading?: boolean;
   isAdmin?: boolean;
+  readOnly?: boolean;
 }> = ({
   failure,
   departamentos,
@@ -165,6 +166,7 @@ const formatDurationFromSeconds = (duration?: number | null) => {
   historyError,
   isHistoryLoading,
   isAdmin = false,
+  readOnly = false,
 }) => {
   const normalizeFailure = useCallback(
     (failureToNormalize: TechnicalFailure) => {
@@ -236,8 +238,8 @@ const formatDurationFromSeconds = (duration?: number | null) => {
   >('general');
 
   const isClosed = (failure.estado || '').toUpperCase() === 'CERRADO';
-  const isReadOnly = isClosed;
-  const canDelete = isReadOnly && isAdmin;
+  const isReadOnly = readOnly || isClosed;
+  const canDelete = !isReadOnly && isAdmin;
 
   useEffect(() => {
     setEditData(normalizeFailure(failure));
@@ -246,6 +248,7 @@ const formatDurationFromSeconds = (duration?: number | null) => {
   }, [failure, normalizeFailure]);
 
   const updateField = (name: keyof TechnicalFailure, value: string | undefined) => {
+    if (isReadOnly) return;
     setEditData((prev) => ({ ...prev, [name]: value }));
     if (name === 'departamentoResponsableId' || name === 'novedadDetectada') {
       setFormErrors((prev) => ({ ...prev, [name]: undefined }));
@@ -257,6 +260,7 @@ const formatDurationFromSeconds = (duration?: number | null) => {
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
     >,
   ) => {
+    if (isReadOnly) return;
     const { name, value } = e.target;
     updateField(name as keyof TechnicalFailure, value);
   };
@@ -319,6 +323,7 @@ const formatDurationFromSeconds = (duration?: number | null) => {
   }, [editData.departamentoResponsableId, editData.deptResponsable]);
 
   const handleSave = () => {
+    if (isReadOnly) return;
     onSave(editData);
   };
 
@@ -362,14 +367,18 @@ const formatDurationFromSeconds = (duration?: number | null) => {
     <div className="flex flex-col h-full">
       <div className="flex flex-col gap-2 mb-4">
         <h4 className="text-[#1C2E4A] text-xl font-semibold">
-          Editar Reporte de Fallo (Supervisor)
+          {isReadOnly
+            ? 'Ver Reporte de Fallo (Supervisor)'
+            : 'Editar Reporte de Fallo (Supervisor)'}
         </h4>
         <p className="text-sm text-gray-500">
-          Actualiza la información del reporte seleccionado sin perder de vista el historial.
+          {isReadOnly
+            ? 'Consulta la información del reporte seleccionado.'
+            : 'Actualiza la información del reporte seleccionado sin perder de vista el historial.'}
         </p>
         {isReadOnly && (
           <p className="text-sm text-red-600 font-semibold">
-            Este fallo se encuentra cerrado y no puede ser modificado.
+            Este fallo se encuentra en modo solo lectura y no puede ser modificado.
           </p>
         )}
       </div>
@@ -505,6 +514,7 @@ const formatDurationFromSeconds = (duration?: number | null) => {
               name="departamentoResponsableId"
               value={editData.departamentoResponsableId ?? ''}
               onChange={(e) => {
+                if (isReadOnly) return;
                 const { value, options, selectedIndex } = e.target;
                 const selectedLabel = options[selectedIndex]?.text ?? '';
                 setEditData((prev) => ({
@@ -696,7 +706,7 @@ const formatDurationFromSeconds = (duration?: number | null) => {
             onClick={onClose}
             className="px-6 py-2 bg-gray-200 text-gray-800 font-semibold rounded-md hover:bg-gray-300 transition-colors"
           >
-            Cancelar
+            {isReadOnly ? 'Cerrar' : 'Cancelar'}
           </button>
           {!isReadOnly && (
             <button
@@ -731,6 +741,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
   const [departmentTimelineError, setDepartmentTimelineError] = useState<string | null>(
     null,
   );
+  const [formMode, setFormMode] = useState<'edit' | 'view'>('edit');
   const [filters, setFilters] = useState<FallosHeaderFilters>({
     clienteId: '',
     reportadoCliente: '',
@@ -879,6 +890,14 @@ const TechnicalFailuresSupervisor: React.FC = () => {
 
   const handleEdit = (failure: TechnicalFailure) => {
     setCurrentFailure(failure);
+    setFormMode('edit');
+    setIsModalOpen(true);
+    loadHistory(failure.id);
+  };
+
+  const handleView = (failure: TechnicalFailure) => {
+    setCurrentFailure(failure);
+    setFormMode('view');
     setIsModalOpen(true);
     loadHistory(failure.id);
   };
@@ -886,6 +905,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setCurrentFailure(null);
+    setFormMode('edit');
   };
 
   const resolveDepartamentoId = useCallback(
@@ -1079,7 +1099,14 @@ const TechnicalFailuresSupervisor: React.FC = () => {
           withContainer={false}
           renderActions={(failure) => {
             if (isResolvedFailure(failure)) {
-              return null;
+              return (
+                <button
+                  onClick={() => handleView(failure)}
+                  className="text-blue-600 hover:underline text-sm font-semibold"
+                >
+                  Ver
+                </button>
+              );
             }
 
             return (
@@ -1111,6 +1138,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
           historyError={historyError}
           isHistoryLoading={isHistoryLoading}
           isAdmin={isAdmin}
+          readOnly={formMode === 'view'}
         />
       )}
     </div>
@@ -1133,6 +1161,7 @@ const EditTechnicalFailureSupervisorModal: React.FC<{
   historyError?: string | null;
   isHistoryLoading?: boolean;
   isAdmin?: boolean;
+  readOnly?: boolean;
 }> = ({
   failure,
   departamentos,
@@ -1149,6 +1178,7 @@ const EditTechnicalFailureSupervisorModal: React.FC<{
   historyError,
   isHistoryLoading,
   isAdmin,
+  readOnly = false,
 }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
@@ -1169,6 +1199,7 @@ const EditTechnicalFailureSupervisorModal: React.FC<{
           historyError={historyError}
           isHistoryLoading={isHistoryLoading}
           isAdmin={isAdmin}
+          readOnly={readOnly}
         />
       </div>
     </div>
