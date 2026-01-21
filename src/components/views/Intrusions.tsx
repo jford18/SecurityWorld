@@ -382,8 +382,18 @@ const Intrusions: React.FC = () => {
   }, []);
 
   const loadIntrusiones = useCallback(async () => {
+    if (!consolaIdSeleccionada) {
+      if (isMountedRef.current) {
+        setIntrusions([]);
+        setError(null);
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
-      const data = await fetchIntrusiones();
+      setLoading(true);
+      const data = await fetchIntrusiones(consolaIdSeleccionada);
       if (!isMountedRef.current) return;
       setIntrusions(data);
       setError(null);
@@ -397,7 +407,7 @@ const Intrusions: React.FC = () => {
         setLoading(false);
       }
     }
-  }, []);
+  }, [consolaIdSeleccionada]);
 
   useEffect(() => {
     isMountedRef.current = true;
