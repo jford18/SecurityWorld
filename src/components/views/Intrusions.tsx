@@ -29,6 +29,8 @@ import {
   formatLocalDateTimeInput,
   fromDatetimeLocalValueToDb,
   parseDbTimestampToLocal,
+  formatGridYYYYMMDDHHmm,
+  toDatetimeLocalValue,
 } from '@/utils/datetime';
 
 const toBoolean = (value: unknown, defaultValue = false): boolean => {
@@ -126,6 +128,7 @@ type IntrusionFormData = {
   hik_alarm_evento_id: string | null;
   trigger_event_hc: string | null;
   fecha_evento: string;
+  fecha_evento_hc: string;
   fecha_reaccion: string;
   fecha_reaccion_enviada: string;
   fecha_reaccion_fuera: string;
@@ -176,27 +179,41 @@ const formatDateTimeForDisplay = (value?: string | null) => {
   });
 };
 
-const buildInitialFormData = (origen: 'HC' | 'MANUAL' = 'HC'): IntrusionFormData => ({
-  origen,
-  hik_alarm_evento_id: null,
-  trigger_event_hc: null,
-  fecha_evento: getInitialDateTimeValue(),
-  fecha_reaccion: '',
-  fecha_reaccion_enviada: '',
-  fecha_reaccion_fuera: '',
-  fecha_llegada_fuerza_reaccion: '',
-  sitioId: '',
-  estado: '',
-  descripcion: '',
-  no_llego_alerta: false,
-  medio_comunicacion_id: '',
-  conclusion_evento_id: '',
-  material_sustraido_id: '',
-  sustraccion_material: false,
-  fuerza_reaccion_id: '',
-  completado: false,
-  necesita_protocolo: false,
-});
+const resolveHcEventDateValue = (row?: IntrusionHcQueueRow | null) => {
+  if (!row) return '';
+  const fechaBase =
+    row.fecha_evento_hc ??
+    (row as Record<string, unknown>)?.fechaEventoHc ??
+    (row as Record<string, unknown>)?.eventTime ??
+    null;
+  return fechaBase ? toDatetimeLocalValue(fechaBase) : '';
+};
+
+const buildInitialFormData = (origen: 'HC' | 'MANUAL' = 'HC'): IntrusionFormData => {
+  const fechaInicial = getInitialDateTimeValue();
+  return {
+    origen,
+    hik_alarm_evento_id: null,
+    trigger_event_hc: null,
+    fecha_evento: fechaInicial,
+    fecha_evento_hc: fechaInicial,
+    fecha_reaccion: '',
+    fecha_reaccion_enviada: '',
+    fecha_reaccion_fuera: '',
+    fecha_llegada_fuerza_reaccion: '',
+    sitioId: '',
+    estado: '',
+    descripcion: '',
+    no_llego_alerta: false,
+    medio_comunicacion_id: '',
+    conclusion_evento_id: '',
+    material_sustraido_id: '',
+    sustraccion_material: false,
+    fuerza_reaccion_id: '',
+    completado: false,
+    necesita_protocolo: false,
+  };
+};
 
 const Intrusions: React.FC = () => {
   const [formData, setFormData] = useState<IntrusionFormData>(buildInitialFormData('HC'));
@@ -616,9 +633,11 @@ const Intrusions: React.FC = () => {
   }, []);
 
   const handleFechaEventoChange = (value: string | null) => {
+    const nextValue = value ?? '';
     setFormData((prev) => ({
       ...prev,
-      fecha_evento: value ?? '',
+      fecha_evento: nextValue,
+      fecha_evento_hc: nextValue,
     }));
   };
 
@@ -757,9 +776,7 @@ const Intrusions: React.FC = () => {
 
     const sitioMatch = findSitioForHcEvent(hcSeleccionado);
     const sitioIdValue = sitioMatch?.id ?? null;
-    const fechaEventoValue =
-      formatLocalDateTimeInput(hcSeleccionado?.fecha_evento_hc || '') ||
-      getInitialDateTimeValue();
+    const fechaEventoValue = resolveHcEventDateValue(hcSeleccionado) || getInitialDateTimeValue();
 
     setFormData({
       ...buildInitialFormData('HC'),
@@ -771,6 +788,7 @@ const Intrusions: React.FC = () => {
           : null,
       trigger_event_hc: hcSeleccionado?.trigger_event ?? null,
       fecha_evento: fechaEventoValue,
+      fecha_evento_hc: fechaEventoValue,
       no_llego_alerta: false,
       sitioId: sitioIdValue ? String(sitioIdValue) : '',
     });
@@ -876,6 +894,7 @@ const Intrusions: React.FC = () => {
         : null,
       trigger_event_hc: null,
       fecha_evento: formatLocalDateTimeInput(intrusion.fecha_evento),
+      fecha_evento_hc: formatLocalDateTimeInput(intrusion.fecha_evento),
       fecha_reaccion: intrusion.fecha_reaccion
         ? formatLocalDateTimeInput(intrusion.fecha_reaccion)
         : '',
@@ -1469,6 +1488,7 @@ const Intrusions: React.FC = () => {
         : materialSustraidoId;
 
     const fechaEventoDb = fromDatetimeLocalValueToDb(formData.fecha_evento);
+    const fechaEventoHcDb = fromDatetimeLocalValueToDb(formData.fecha_evento_hc);
     const fechaReaccionDb = fromDatetimeLocalValueToDb(formData.fecha_reaccion);
     const fechaReaccionEnviadaDb = fromDatetimeLocalValueToDb(
       formData.fecha_reaccion_enviada
@@ -1509,6 +1529,8 @@ const Intrusions: React.FC = () => {
       origen: origenValue,
       hik_alarm_evento_id: hikAlarmEventoIdValue,
       fecha_evento: fechaEventoDb ?? formData.fecha_evento,
+      fecha_evento_hc:
+        fechaEventoDb ?? fechaEventoHcDb ?? formData.fecha_evento_hc ?? formData.fecha_evento,
       fecha_reaccion: fechaReaccionDb,
       fecha_reaccion_enviada:
         necesitaProtocolo && formData.fecha_reaccion_enviada
@@ -1600,7 +1622,7 @@ const Intrusions: React.FC = () => {
             <thead className="bg-gray-50">
               <tr>
                 {[
-                  { key: 'fecha_evento_hc', label: 'Fecha evento HC' },
+                  { key: 'fecha_evento_hc', label: 'FECHA EVENTO HC' },
                   { key: 'region', label: 'Región' },
                   { key: 'name', label: 'Nombre' },
                   { key: 'trigger_event', label: 'Evento' },
@@ -1652,7 +1674,11 @@ const Intrusions: React.FC = () => {
                       className="hover:bg-gray-50"
                     >
                       <td className="px-4 py-2 text-gray-700">
-                        {row.fecha_evento_hc ? new Date(row.fecha_evento_hc).toLocaleString() : 'Sin fecha'}
+                        {formatGridYYYYMMDDHHmm(
+                          row.fecha_evento_hc ||
+                            (row as Record<string, unknown>)?.fechaEventoHc ||
+                            (row as Record<string, unknown>)?.eventTime
+                        ) || 'Sin fecha'}
                       </td>
                       <td className="px-4 py-2 text-gray-700">{row.region || 'Sin región'}</td>
                       <td

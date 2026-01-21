@@ -30,39 +30,19 @@ export const parseDbTimestampToLocal = (value?: string | Date | null): Date | nu
 };
 
 const formatTwoDigits = (value: number) => String(value).padStart(2, '0');
+const pad2 = (value: number) => String(value).padStart(2, '0');
 
 export const toDatetimeLocalValue = (value?: string | Date | null): string => {
   if (!value) return '';
 
-  if (value instanceof Date) {
-    if (Number.isNaN(value.getTime())) return '';
-    const year = value.getFullYear();
-    const month = formatTwoDigits(value.getMonth() + 1);
-    const day = formatTwoDigits(value.getDate());
-    const hours = formatTwoDigits(value.getHours());
-    const minutes = formatTwoDigits(value.getMinutes());
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  const parsed = parseDbTimestampToLocal(value);
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    return '';
   }
 
-  const raw = String(value).trim();
-  if (!raw) return '';
-
-  const match = raw.match(DATE_TIME_PARTS_REGEX);
-  if (match) {
-    const [, datePart, timePart] = match;
-    return `${datePart}T${timePart}`;
-  }
-
-  if (ISO_WITH_TZ_REGEX.test(raw)) {
-    const cleaned = raw.replace(ISO_WITH_TZ_REGEX, '');
-    const tzMatch = cleaned.match(DATE_TIME_PARTS_REGEX);
-    if (tzMatch) {
-      const [, datePart, timePart] = tzMatch;
-      return `${datePart}T${timePart}`;
-    }
-  }
-
-  return '';
+  return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(
+    parsed.getDate()
+  )}T${pad2(parsed.getHours())}:${pad2(parsed.getMinutes())}`;
 };
 
 export const fromDatetimeLocalValueToDb = (value?: string | null): string | null => {
@@ -94,6 +74,16 @@ export const formatLocalDateTime = (value?: string | Date | null): string => {
   const minutes = formatTwoDigits(parsed.getMinutes());
 
   return `${year}-${month}-${day} ${hours}:${minutes}`;
+};
+
+export const formatGridYYYYMMDDHHmm = (value?: string | Date | null): string => {
+  if (!value) return '';
+  const parsed = parseDbTimestampToLocal(value);
+  if (!parsed) return '';
+
+  return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(
+    parsed.getDate()
+  )} ${pad2(parsed.getHours())}:${pad2(parsed.getMinutes())}`;
 };
 
 export const formatLocalDateTimeInput = (value?: string | Date | null): string => {

@@ -5,6 +5,7 @@ export interface IntrusionPayload {
   origen?: string;
   hik_alarm_evento_id?: number | null;
   fecha_evento?: string;
+  fecha_evento_hc?: string;
   fecha_reaccion?: string | null;
   fecha_reaccion_enviada?: string | null;
   fecha_llegada_fuerza_reaccion?: string | null;
