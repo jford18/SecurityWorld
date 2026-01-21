@@ -748,7 +748,6 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
   const alarmCategoryField = "COALESCE(B.ALARM_CATEGORY, A.ALARM_CATEGORY)";
   const statusField = "COALESCE(A.STATUS, '')";
 
-  whereParts.push(`${alarmCategoryField} ILIKE '%EVENTO%'`);
   whereParts.push(`${statusField} NOT ILIKE '%VERDADERA%'`);
   whereParts.push(`${alarmCategoryField} NOT ILIKE '%VERDADERA%'`);
   whereParts.push(
