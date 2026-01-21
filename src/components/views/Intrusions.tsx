@@ -430,7 +430,14 @@ const Intrusions: React.FC = () => {
         if (!isMounted) return;
         console.log('[ENCOLADOS HC FE] data length:', data?.length, 'total:', total);
         console.log('[ENCOLADOS HC FE] first row:', data?.[0]);
-        setHcQueue(Array.isArray(data) ? data : []);
+        setHcQueue(
+          Array.isArray(data)
+            ? data.map((row) => ({
+                ...row,
+                id: row.hik_alarm_evento_id,
+              }))
+            : []
+        );
         setTotalHC(total || 0);
       } catch (err) {
         console.error('Error al cargar encolados HC:', err);
@@ -981,10 +988,10 @@ const Intrusions: React.FC = () => {
   };
 
   const totalPagesHC = Math.ceil(totalHC / rowsPerPageHC);
-  const noHayDatos = Array.isArray(hcQueue) && hcQueue.length === 0;
+  const searchLower = useMemo(() => (hcSearch || '').trim().toLowerCase(), [hcSearch]);
 
   const filteredHcQueue = useMemo(() => {
-    return hcQueue.filter((row) => {
+    const baseRows = hcQueue.filter((row) => {
       const intrusionValue =
         row.intrusion_id ??
         (row as Record<string, unknown>)?.intrusionId ??
@@ -1002,7 +1009,24 @@ const Intrusions: React.FC = () => {
       const hasEvento = category.includes('evento') || status.includes('evento');
       return hasEvento;
     });
-  }, [hcQueue, normalizeText]);
+
+    if (!searchLower) {
+      return baseRows;
+    }
+
+    return baseRows.filter((row) => {
+      const region = normalizeText(row.region);
+      const name = normalizeText(row.name);
+      const evento = normalizeText(row.trigger_event);
+      return (
+        region.includes(searchLower) ||
+        name.includes(searchLower) ||
+        evento.includes(searchLower)
+      );
+    });
+  }, [hcQueue, normalizeText, searchLower]);
+
+  const noHayDatos = Array.isArray(filteredHcQueue) && filteredHcQueue.length === 0;
 
   const intrusionesTableData = useMemo<IntrusionConsolidadoRow[]>(
     () =>
@@ -1590,7 +1614,14 @@ const Intrusions: React.FC = () => {
         setHcSeleccionado(null);
         try {
           const refreshed = await fetchEncoladosHc();
-          setHcQueue(refreshed.data || []);
+          setHcQueue(
+            Array.isArray(refreshed.data)
+              ? refreshed.data.map((row) => ({
+                  ...row,
+                  id: row.hik_alarm_evento_id,
+                }))
+              : []
+          );
           setTotalHC(refreshed.total || 0);
         } catch (refreshError) {
           console.error('Error al refrescar encolados HC:', refreshError);
@@ -1608,6 +1639,12 @@ const Intrusions: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
+  console.log(
+    '[ENCOLADOS HC FE] render rows:',
+    filteredHcQueue?.length,
+    filteredHcQueue?.[0]
+  );
 
   return (
     <div>

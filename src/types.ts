@@ -187,6 +187,7 @@ export interface Intrusion {
 }
 
 export interface IntrusionHcQueueRow {
+  id?: number;
   fecha_evento_hc: string | null;
   region: string | null;
   name: string | null;
