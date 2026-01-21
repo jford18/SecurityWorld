@@ -11,6 +11,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  LegendProps,
   LabelList,
   ComposedChart,
   Line,
@@ -207,6 +208,29 @@ const StackedBarChartCard = React.memo(
       return <p className="mt-8 text-center text-sm text-gray-400">Sin datos de pendientes.</p>;
     }
 
+    const renderLegend = ({ payload }: LegendProps) => {
+      if (!payload || payload.length === 0) {
+        return null;
+      }
+
+      return (
+        <div className="mt-2 max-h-[100px] overflow-y-auto overflow-x-hidden sm:max-h-[140px]">
+          <ul className="flex flex-wrap gap-2 text-xs text-gray-600">
+            {payload.map((entry) => (
+              <li key={`${entry.value}-${entry.dataKey}`} className="flex items-center gap-2">
+                <span
+                  className="h-2 w-2 rounded-sm"
+                  style={{ backgroundColor: entry.color }}
+                  aria-hidden="true"
+                />
+                <span>{entry.value}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    };
+
     return (
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%" debounce={250}>
@@ -260,7 +284,7 @@ const StackedBarChartCard = React.memo(
                 );
               }}
             />
-            <Legend />
+            <Legend content={renderLegend} />
             {haciendaKeys.map((hacienda, index) => {
               const isLast = index === haciendaKeys.length - 1;
               return (
