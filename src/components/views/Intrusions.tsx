@@ -426,10 +426,12 @@ const Intrusions: React.FC = () => {
     const loadEncoladosHc = async () => {
       setHcLoading(true);
       try {
-        const response = await fetchEncoladosHc();
+        const { data, total } = await fetchEncoladosHc();
         if (!isMounted) return;
-        setHcQueue(response.data || []);
-        setTotalHC(response.total || 0);
+        console.log('[ENCOLADOS HC FE] data length:', data?.length, 'total:', total);
+        console.log('[ENCOLADOS HC FE] first row:', data?.[0]);
+        setHcQueue(Array.isArray(data) ? data : []);
+        setTotalHC(total || 0);
       } catch (err) {
         console.error('Error al cargar encolados HC:', err);
       } finally {
@@ -979,6 +981,7 @@ const Intrusions: React.FC = () => {
   };
 
   const totalPagesHC = Math.ceil(totalHC / rowsPerPageHC);
+  const noHayDatos = Array.isArray(hcQueue) && hcQueue.length === 0;
 
   const filteredHcQueue = useMemo(() => {
     return hcQueue.filter((row) => {
@@ -1663,7 +1666,7 @@ const Intrusions: React.FC = () => {
                     Cargando eventos de HC...
                   </td>
                 </tr>
-              ) : filteredHcQueue.length === 0 ? (
+              ) : noHayDatos ? (
                 <tr>
                   <td colSpan={9} className="px-4 py-3 text-center text-gray-500">
                     No hay eventos encolados.
