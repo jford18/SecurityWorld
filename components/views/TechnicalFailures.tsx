@@ -150,6 +150,12 @@ const TechnicalFailures: React.FC = () => {
   const [sitios, setSitios] = useState<string[]>([]);
 
   useEffect(() => {
+    console.log('[DEBUG OPERADOR] session/raw:', session);
+    console.log('[DEBUG OPERADOR] localStorage user:', localStorage.getItem('user'));
+    console.log('[DEBUG OPERADOR] localStorage usuario:', localStorage.getItem('usuario'));
+  }, [session]);
+
+  useEffect(() => {
     const stored = localStorage.getItem("reportes");
     if (stored) {
       setFailures(JSON.parse(stored));
@@ -456,41 +462,60 @@ const TechnicalFailures: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {failures.map((fallo) => (
-                <tr key={fallo.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.fecha}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{fallo.equipo_afectado}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.descripcion_fallo}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.responsable}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {(() => {
-                        const estado = calcularEstado(fallo);
-                        return (
-                          <span
-                            style={{
-                              backgroundColor: estado.color,
-                              color: "white",
-                              padding: "4px 8px",
-                              borderRadius: "4px",
-                              fontSize: "0.9em",
-                              fontWeight: "bold",
-                              display: "inline-block",
-                              minWidth: "110px",
-                              textAlign: "center"
-                            }}
-                          >
-                            {estado.texto}
-                          </span>
-                        );
-                      })()}
-                  </td>
-                  {session.role === 'supervisor' && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button onClick={() => handleEdit(fallo)} className="text-indigo-600 hover:text-indigo-900">Editar</button>
+              {failures.map((fallo) => {
+                const row = fallo;
+                const operadorRaw =
+                  row?.responsable ??
+                  row?.operador ??
+                  row?.OPERADOR ??
+                  row?.usuario_operador ??
+                  row?.USUARIO_OPERADOR ??
+                  row?.usuario ??
+                  row?.USUARIO ??
+                  row?.user;
+
+                console.log('[DEBUG OPERADOR] row:', row);
+                console.log('[DEBUG OPERADOR] operadorRaw:', operadorRaw, 'typeof:', typeof operadorRaw);
+
+                const operadorTexto = operadorRaw == null ? '' : String(operadorRaw);
+                console.log('[DEBUG OPERADOR] operadorTexto(final):', operadorTexto);
+
+                return (
+                  <tr key={fallo.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.fecha}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{fallo.equipo_afectado}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fallo.descripcion_fallo}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{operadorTexto}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {(() => {
+                          const estado = calcularEstado(fallo);
+                          return (
+                            <span
+                              style={{
+                                backgroundColor: estado.color,
+                                color: "white",
+                                padding: "4px 8px",
+                                borderRadius: "4px",
+                                fontSize: "0.9em",
+                                fontWeight: "bold",
+                                display: "inline-block",
+                                minWidth: "110px",
+                                textAlign: "center"
+                              }}
+                            >
+                              {estado.texto}
+                            </span>
+                          );
+                        })()}
                     </td>
-                  )}
-                </tr>
-              ))}
+                    {session.role === 'supervisor' && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button onClick={() => handleEdit(fallo)} className="text-indigo-600 hover:text-indigo-900">Editar</button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
