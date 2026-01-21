@@ -649,7 +649,7 @@ const markHikAlarmEventoProcesado = async (hikAlarmEventoId) => {
   return true;
 };
 
-export const listIntrusiones = async (_req, res) => {
+export const listIntrusiones = async (req, res) => {
   let metadata;
   try {
     metadata = await getIntrusionesMetadata();
@@ -661,6 +661,7 @@ export const listIntrusiones = async (_req, res) => {
   }
 
   try {
+    const consolaId = Number(req.query?.consolaId || 0);
     const selectColumns = [
       "i.id",
       "i.descripcion",
@@ -714,12 +715,21 @@ export const listIntrusiones = async (_req, res) => {
       );
     }
 
+    const filters = [];
+    const params = [];
+
+    if (consolaId > 0) {
+      params.push(consolaId);
+      filters.push(`s.consola_id = $${params.length}`);
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
     const sql = `SELECT ${selectColumns.join(", ")}
        FROM public.intrusiones AS i
        ${joins.join("\n       ")}
+       ${whereClause}
        ORDER BY i.fecha_evento DESC NULLS LAST, i.id DESC`;
-
-    const params = [];
 
     const result = await pool.query(sql, params);
     const intrusiones = result.rows.map(mapIntrusionRow);

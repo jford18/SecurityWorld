@@ -364,8 +364,19 @@ const buildQueryString = (params: IntrusionConsolidadoFilters) => {
   return query ? `?${query}` : '';
 };
 
-export const fetchIntrusiones = async (): Promise<Intrusion[]> => {
-  const { data } = await apiClient.get<Intrusion[] | { data?: Intrusion[] }>('/intrusiones');
+export const fetchIntrusiones = async (
+  consolaId?: number | string | null
+): Promise<Intrusion[]> => {
+  const searchParams = new URLSearchParams();
+
+  if (consolaId !== undefined && consolaId !== null && consolaId !== '') {
+    searchParams.append('consolaId', String(consolaId));
+  }
+
+  const query = searchParams.toString();
+  const { data } = await apiClient.get<Intrusion[] | { data?: Intrusion[] }>(
+    `/intrusiones${query ? `?${query}` : ''}`
+  );
   return normalizeIntrusionArray(data);
 };
 
