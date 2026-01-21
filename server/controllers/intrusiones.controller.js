@@ -746,12 +746,22 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
     "LEFT JOIN public.hik_alarm_evento B ON (B.ID = A.HIK_ALARM_EVENTO_ID)",
   ];
   const alarmCategoryField = "COALESCE(B.ALARM_CATEGORY, A.ALARM_CATEGORY)";
+  const allowedAlarmCategories = [
+    "AUTORIZADO",
+    "NO AUTORIZADO",
+    "EVENTO DE ROBO",
+    "VISITA",
+    "RONDA DE FUERZA REACCION",
+  ];
   const statusField = "COALESCE(A.STATUS, '')";
 
   whereParts.push(`${statusField} NOT ILIKE '%VERDADERA%'`);
   whereParts.push(`${alarmCategoryField} NOT ILIKE '%VERDADERA%'`);
   whereParts.push(
     "(A.INTRUSION_ID IS NULL OR TRIM(COALESCE(A.INTRUSION_ID::text, '')) = '' OR TRIM(COALESCE(A.INTRUSION_ID::text, '')) = '0')"
+  );
+  whereParts.push(
+    `UPPER(TRIM(${alarmCategoryField})) IN (${allowedAlarmCategories.map((category) => `'${category}'`).join(", ")})`
   );
 
   if (consolaId > 0) {
