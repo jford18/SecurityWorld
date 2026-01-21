@@ -982,6 +982,16 @@ const Intrusions: React.FC = () => {
 
   const filteredHcQueue = useMemo(() => {
     return hcQueue.filter((row) => {
+      const intrusionValue =
+        row.intrusion_id ??
+        (row as Record<string, unknown>)?.intrusionId ??
+        (row as Record<string, unknown>)?.intrusion_vinculada ??
+        (row as Record<string, unknown>)?.intrusionVinculada ??
+        null;
+      const intrusionNormalized = intrusionValue == null ? '' : String(intrusionValue).trim();
+      if (intrusionNormalized && intrusionNormalized !== '0') {
+        return false;
+      }
       const status = normalizeText(row.status);
       const category = normalizeText(row.alarm_category);
       const hasVerdadera = status.includes('verdadera') || category.includes('verdadera');
