@@ -57,6 +57,7 @@ const toBoolean = (value: unknown, defaultValue = false): boolean => {
 
 const NO_DEFINIDO_VALUE = 'NO_DEFINIDO';
 const NO_DEFINIDO_OPTION_LABEL = 'Tipo de evento no definido';
+const DEBUG_ENCOLADOS = false;
 
 type TipoIntrusionCatalogItem = {
   id: number | string;
@@ -428,8 +429,10 @@ const Intrusions: React.FC = () => {
       try {
         const { data, total } = await fetchEncoladosHc();
         if (!isMounted) return;
-        console.log('[ENCOLADOS HC FE] data length:', data?.length, 'total:', total);
-        console.log('[ENCOLADOS HC FE] first row:', data?.[0]);
+        if (DEBUG_ENCOLADOS) {
+          console.log('[ENCOLADOS HC FE] data length:', data?.length, 'total:', total);
+          console.log('[ENCOLADOS HC FE] first row:', data?.[0]);
+        }
         setHcQueue(
           Array.isArray(data)
             ? data.map((row) => ({
@@ -990,8 +993,10 @@ const Intrusions: React.FC = () => {
   const totalPagesHC = Math.ceil(totalHC / rowsPerPageHC);
   const searchLower = useMemo(() => (hcSearch || '').trim().toLowerCase(), [hcSearch]);
 
+  const rowsToRender = Array.isArray(hcQueue) ? hcQueue : [];
+
   const filteredHcQueue = useMemo(() => {
-    const baseRows = hcQueue.filter((row) => {
+    const baseRows = rowsToRender.filter((row) => {
       const intrusionValue =
         row.intrusion_id ??
         (row as Record<string, unknown>)?.intrusionId ??
@@ -1004,9 +1009,16 @@ const Intrusions: React.FC = () => {
       }
       const status = normalizeText(row.status);
       const category = normalizeText(row.alarm_category);
-      const hasVerdadera = status.includes('verdadera') || category.includes('verdadera');
+      const hasVerdadera =
+        (status && status.includes('verdadera')) ||
+        (category && category.includes('verdadera'));
       if (hasVerdadera) return false;
-      const hasEvento = category.includes('evento') || status.includes('evento');
+      const hasEvento =
+        (category && category.includes('evento')) ||
+        (status && status.includes('evento'));
+      if (!status && !category) {
+        return true;
+      }
       return hasEvento;
     });
 
@@ -1024,7 +1036,7 @@ const Intrusions: React.FC = () => {
         evento.includes(searchLower)
       );
     });
-  }, [hcQueue, normalizeText, searchLower]);
+  }, [normalizeText, rowsToRender, searchLower]);
 
   const noHayDatos = Array.isArray(filteredHcQueue) && filteredHcQueue.length === 0;
 
@@ -1640,11 +1652,13 @@ const Intrusions: React.FC = () => {
     }
   };
 
-  console.log(
-    '[ENCOLADOS HC FE] render rows:',
-    filteredHcQueue?.length,
-    filteredHcQueue?.[0]
-  );
+  if (DEBUG_ENCOLADOS) {
+    console.log(
+      '[ENCOLADOS HC FE] RENDER encoladosHC:',
+      Array.isArray(rowsToRender) ? rowsToRender.length : rowsToRender,
+      rowsToRender?.[0]
+    );
+  }
 
   return (
     <div>
