@@ -77,6 +77,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const actionsEnabled = showActions && Boolean(handleEdit || renderActions);
+  const stickyActions = actionsEnabled && (_activeRole ?? '').toLowerCase() === 'supervisor';
   const showEquipoColumn = filters.tipoAfectacion.trim().toLowerCase().startsWith('equipo');
   const columnsCount = (actionsEnabled ? 9 : 8) + (showEquipoColumn ? 1 : 0);
 
@@ -360,6 +361,13 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     }
   };
 
+  const actionHeaderClasses = stickyActions
+    ? 'sticky right-0 z-30 bg-white min-w-[110px] w-[110px] text-right border-l shadow-[-6px_0_6px_rgba(0,0,0,0.06)]'
+    : '';
+  const actionCellClasses = stickyActions
+    ? 'sticky right-0 z-20 bg-white min-w-[110px] w-[110px] text-right border-l shadow-[-6px_0_6px_rgba(0,0,0,0.06)]'
+    : '';
+
   const content = (
     <>
       <div className="flex items-center justify-between mb-4">
@@ -443,7 +451,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               {actionsEnabled && (
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${actionHeaderClasses}`}
                 >
                   Acción
                 </th>
@@ -528,7 +536,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               </th>
               <th className="px-6 py-2" />
               <th className="px-6 py-2" />
-              {actionsEnabled && <th className="px-6 py-2" />}
+              {actionsEnabled && <th className={`px-6 py-2 ${actionHeaderClasses}`} />}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -602,7 +610,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                       ?? 'Sin información'}
                   </td>
                   {actionsEnabled && (
-                    <td className="px-6 py-3 text-left whitespace-nowrap">
+                    <td className={`px-6 py-3 text-left whitespace-nowrap ${actionCellClasses}`}>
                       {renderActions ? (
                         renderActions(fallo)
                       ) : (
