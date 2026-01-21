@@ -234,12 +234,12 @@ const Intrusions: React.FC = () => {
   const [fechaReaccionEnviadaError, setFechaReaccionEnviadaError] = useState('');
   const [disableSave, setDisableSave] = useState(false);
   const [editingIntrusionId, setEditingIntrusionId] = useState<number | null>(null);
-  const [hcQueue, setHcQueue] = useState<IntrusionHcQueueRow[]>([]);
+  const [encoladosHC, setEncoladosHC] = useState<IntrusionHcQueueRow[]>([]);
   const [hcLoading, setHcLoading] = useState(false);
   const [hcSearch, setHcSearch] = useState('');
   const [pageHC, setPageHC] = useState(0);
   const [rowsPerPageHC] = useState(20);
-  const [totalHC, setTotalHC] = useState(0);
+  const [totalEncoladosHC, setTotalEncoladosHC] = useState(0);
 
   const isMountedRef = useRef(true);
   const materialSustraidoLoadedRef = useRef(false);
@@ -427,21 +427,20 @@ const Intrusions: React.FC = () => {
     const loadEncoladosHc = async () => {
       setHcLoading(true);
       try {
-        const { data, total } = await fetchEncoladosHc();
+        const resp = await fetchEncoladosHc();
         if (!isMounted) return;
+        const data = Array.isArray(resp?.data) ? resp.data : [];
+        const total = Number(resp?.total ?? data.length);
         if (DEBUG_ENCOLADOS) {
           console.log('[ENCOLADOS HC FE] data length:', data?.length, 'total:', total);
           console.log('[ENCOLADOS HC FE] first row:', data?.[0]);
         }
-        setHcQueue(
-          Array.isArray(data)
-            ? data.map((row) => ({
-                ...row,
-                id: row.hik_alarm_evento_id,
-              }))
-            : []
-        );
-        setTotalHC(total || 0);
+        const normalized = data.map((row) => ({
+          ...row,
+          id: row.id ?? row.hik_alarm_evento_id,
+        }));
+        setEncoladosHC(normalized);
+        setTotalEncoladosHC(total);
       } catch (err) {
         console.error('Error al cargar encolados HC:', err);
       } finally {
@@ -990,55 +989,24 @@ const Intrusions: React.FC = () => {
     }));
   };
 
-  const totalPagesHC = Math.ceil(totalHC / rowsPerPageHC);
-  const searchLower = useMemo(() => (hcSearch || '').trim().toLowerCase(), [hcSearch]);
+  const totalPagesHC = Math.ceil(totalEncoladosHC / rowsPerPageHC);
+  const rowsBase = Array.isArray(encoladosHC) ? encoladosHC : [];
+  const q = (hcSearch || '').trim().toLowerCase();
 
-  const rowsToRender = Array.isArray(hcQueue) ? hcQueue : [];
+  const rowsToRender = !q
+    ? rowsBase
+    : rowsBase.filter((row) => {
+        const region = String(row.region || '').toLowerCase();
+        const name = String(row.name || '').toLowerCase();
+        return region.includes(q) || name.includes(q);
+      });
 
-  const filteredHcQueue = useMemo(() => {
-    const baseRows = rowsToRender.filter((row) => {
-      const intrusionValue =
-        row.intrusion_id ??
-        (row as Record<string, unknown>)?.intrusionId ??
-        (row as Record<string, unknown>)?.intrusion_vinculada ??
-        (row as Record<string, unknown>)?.intrusionVinculada ??
-        null;
-      const intrusionNormalized = intrusionValue == null ? '' : String(intrusionValue).trim();
-      if (intrusionNormalized && intrusionNormalized !== '0') {
-        return false;
-      }
-      const status = normalizeText(row.status);
-      const category = normalizeText(row.alarm_category);
-      const hasVerdadera =
-        (status && status.includes('verdadera')) ||
-        (category && category.includes('verdadera'));
-      if (hasVerdadera) return false;
-      const hasEvento =
-        (category && category.includes('evento')) ||
-        (status && status.includes('evento'));
-      if (!status && !category) {
-        return true;
-      }
-      return hasEvento;
-    });
+  console.log('[ENCOLADOS HC] ROWS_TO_RENDER:', {
+    rowsToRender,
+    len: Array.isArray(rowsToRender) ? rowsToRender.length : 'NO_ARRAY',
+  });
 
-    if (!searchLower) {
-      return baseRows;
-    }
-
-    return baseRows.filter((row) => {
-      const region = normalizeText(row.region);
-      const name = normalizeText(row.name);
-      const evento = normalizeText(row.trigger_event);
-      return (
-        region.includes(searchLower) ||
-        name.includes(searchLower) ||
-        evento.includes(searchLower)
-      );
-    });
-  }, [normalizeText, rowsToRender, searchLower]);
-
-  const noHayDatos = Array.isArray(filteredHcQueue) && filteredHcQueue.length === 0;
+  const noHayEventos = rowsToRender.length === 0;
 
   const intrusionesTableData = useMemo<IntrusionConsolidadoRow[]>(
     () =>
@@ -1626,15 +1594,14 @@ const Intrusions: React.FC = () => {
         setHcSeleccionado(null);
         try {
           const refreshed = await fetchEncoladosHc();
-          setHcQueue(
-            Array.isArray(refreshed.data)
-              ? refreshed.data.map((row) => ({
-                  ...row,
-                  id: row.hik_alarm_evento_id,
-                }))
-              : []
-          );
-          setTotalHC(refreshed.total || 0);
+          const refreshedData = Array.isArray(refreshed?.data) ? refreshed.data : [];
+          const refreshedTotal = Number(refreshed?.total ?? refreshedData.length);
+          const normalized = refreshedData.map((row) => ({
+            ...row,
+            id: row.id ?? row.hik_alarm_evento_id,
+          }));
+          setEncoladosHC(normalized);
+          setTotalEncoladosHC(refreshedTotal);
         } catch (refreshError) {
           console.error('Error al refrescar encolados HC:', refreshError);
         }
@@ -1652,13 +1619,11 @@ const Intrusions: React.FC = () => {
     }
   };
 
-  if (DEBUG_ENCOLADOS) {
-    console.log(
-      '[ENCOLADOS HC FE] RENDER encoladosHC:',
-      Array.isArray(rowsToRender) ? rowsToRender.length : rowsToRender,
-      rowsToRender?.[0]
-    );
-  }
+  console.log('[ENCOLADOS HC] STATE:', {
+    encoladosHC,
+    len: Array.isArray(encoladosHC) ? encoladosHC.length : 'NO_ARRAY',
+    tipo: typeof encoladosHC,
+  });
 
   return (
     <div>
@@ -1717,14 +1682,14 @@ const Intrusions: React.FC = () => {
                     Cargando eventos de HC...
                   </td>
                 </tr>
-              ) : noHayDatos ? (
+              ) : noHayEventos ? (
                 <tr>
                   <td colSpan={9} className="px-4 py-3 text-center text-gray-500">
                     No hay eventos encolados.
                   </td>
                 </tr>
               ) : (
-                filteredHcQueue.map((row) => {
+                rowsToRender.map((row) => {
                   const categoriaRaw =
                     row?.alarm_category ??
                     (row as Record<string, unknown>)?.alarmCategory ??
@@ -1780,7 +1745,7 @@ const Intrusions: React.FC = () => {
           </table>
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-2 text-xs text-gray-500">
-          <span>Total: {totalHC}</span>
+          <span>Total: {totalEncoladosHC}</span>
           <div className="flex items-center gap-2 text-sm text-gray-700">
             <span>
               Página {totalPagesHC > 0 ? pageHC + 1 : 0} de {totalPagesHC || 0}
