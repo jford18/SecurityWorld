@@ -646,13 +646,29 @@ export const fetchIntrusionesEncoladasHc = async (
 
   const query = searchParams.toString();
 
-  const { data } = await apiClient.get<IntrusionesHcResponse>(
+  const response = await apiClient.get<IntrusionesHcResponse>(
     `/intrusiones/encolados-hc${query ? `?${query}` : ''}`
   );
 
-  const payload = data as Partial<IntrusionesHcResponse> & { data?: unknown };
-  const parsedData = Array.isArray(payload.data)
-    ? (payload.data as IntrusionHcQueueRow[]).map((item) => ({
+  console.log('[ENCOLADOS HC FE] raw response:', response?.data);
+
+  const payload = response?.data as
+    | (Partial<IntrusionesHcResponse> & {
+        data?: unknown;
+        rows?: unknown;
+        result?: unknown;
+        count?: unknown;
+      })
+    | undefined;
+
+  const rows =
+    payload?.data ??
+    payload?.rows ??
+    payload?.result ??
+    [];
+
+  const parsedData = Array.isArray(rows)
+    ? (rows as IntrusionHcQueueRow[]).map((item) => ({
         ...item,
         trigger_event: item?.trigger_event ?? null,
         source: item?.source ?? null,
@@ -660,7 +676,12 @@ export const fetchIntrusionesEncoladasHc = async (
       }))
     : [];
 
-  return { data: parsedData, total: payload.total ?? parsedData.length };
+  const total =
+    (payload?.total as number | undefined) ??
+    (payload?.count as number | undefined) ??
+    parsedData.length;
+
+  return { data: parsedData, total };
 };
 
 export const openIntrusionDesdeHc = async (
