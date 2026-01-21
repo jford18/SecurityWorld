@@ -920,7 +920,9 @@ export const createIntrusion = async (req, res) => {
     body.ubicacion ?? body.UBICACION ?? body.sitio_nombre ?? body.SITIO_NOMBRE ?? null;
   const rawTipoText = body.tipo ?? body.TIPO ?? null;
   const rawSitioId = body.sitio_id ?? body.SITIO_ID ?? body.sitioId ?? null;
-  const rawFechaEvento = body.fecha_evento ?? body.FECHA_EVENTO ?? null;
+  const rawFechaEventoHc = body.fecha_evento_hc ?? body.FECHA_EVENTO_HC ?? null;
+  const rawFechaEvento =
+    body.fecha_evento ?? body.FECHA_EVENTO ?? rawFechaEventoHc ?? null;
   const rawFechaReaccion = body.fecha_reaccion ?? body.FECHA_REACCION ?? null;
   const rawFechaReaccionEnviada =
     body.fecha_reaccion_enviada ?? body.FECHA_REACCION_ENVIADA ?? null;
@@ -977,9 +979,10 @@ export const createIntrusion = async (req, res) => {
     completado: completado ?? body.COMPLETADO,
   });
 
-  const fechaEventoValue = rawFechaEvento
-    ? parseFechaValue(rawFechaEvento)
-    : formatDateTimeString(new Date());
+  const fechaEventoNormalized = rawFechaEvento ? parseFechaValue(rawFechaEvento) : null;
+  const fechaEventoHcNormalized = rawFechaEventoHc ? parseFechaValue(rawFechaEventoHc) : null;
+  let fechaEventoValue =
+    fechaEventoNormalized ?? fechaEventoHcNormalized ?? formatDateTimeString(new Date());
   const fechaReaccionValue = rawFechaReaccion ? parseFechaValue(rawFechaReaccion) : null;
   const fechaReaccionEnviadaValue = rawFechaReaccionEnviada
     ? parseFechaValue(rawFechaReaccionEnviada)
@@ -1025,6 +1028,20 @@ export const createIntrusion = async (req, res) => {
     : false;
 
   if (
+    hikAlarmEventoValue &&
+    fechaEventoNormalized &&
+    fechaEventoHcNormalized &&
+    fechaEventoNormalized !== fechaEventoHcNormalized
+  ) {
+    console.warn("[INTRUSIONES][CREATE] Fecha evento HC distinta, se fuerza igualdad.", {
+      hik_alarm_evento_id: hikAlarmEventoValue,
+      fecha_evento: fechaEventoNormalized,
+      fecha_evento_hc: fechaEventoHcNormalized,
+    });
+    fechaEventoValue = fechaEventoNormalized;
+  }
+
+  if (
     completadoValue &&
     (medioComValue === null || medioComValue === undefined || medioComValue === 0 || Number.isNaN(medioComValue))
   ) {
@@ -1058,10 +1075,17 @@ export const createIntrusion = async (req, res) => {
     });
   }
 
-  if (rawFechaEvento && !fechaEventoValue) {
+  if (rawFechaEvento && !fechaEventoNormalized) {
     return res.status(400).json({
       message: "La fecha y hora del evento no es válida.",
       details: { field: "fecha_evento" },
+    });
+  }
+
+  if (rawFechaEventoHc && !fechaEventoHcNormalized) {
+    return res.status(400).json({
+      message: "La fecha y hora del evento HC no es válida.",
+      details: { field: "fecha_evento_hc" },
     });
   }
 
@@ -1395,6 +1419,7 @@ export const updateIntrusion = async (req, res) => {
   const rawNoLlego = body.no_llego_alerta ?? body.NO_LLEGO_ALERTA ?? body.llego_alerta ?? currentRow?.no_llego_alerta ?? currentRow?.llego_alerta;
   const rawCompletado = body.completado ?? body.COMPLETADO ?? currentRow?.completado;
   const rawNecesitaProtocolo = body.necesita_protocolo ?? body.NECESITA_PROTOCOLO ?? currentRow?.necesita_protocolo;
+  const rawFechaEventoHc = body.fecha_evento_hc ?? body.FECHA_EVENTO_HC;
 
   const updates = [];
   const values = [];
@@ -1418,12 +1443,42 @@ export const updateIntrusion = async (req, res) => {
   if (body.descripcion !== undefined) pushUpdate("descripcion", body.descripcion);
   if (body.ubicacion !== undefined) pushUpdate("ubicacion", body.ubicacion);
 
-  const fechaEventoValue =
-    body.fecha_evento !== undefined ? parseFechaValue(body.fecha_evento) : parseFechaValue(currentRow?.fecha_evento);
-  if (body.fecha_evento !== undefined && !fechaEventoValue) {
+  const fechaEventoNormalized =
+    body.fecha_evento !== undefined ? parseFechaValue(body.fecha_evento) : null;
+  const fechaEventoHcNormalized =
+    rawFechaEventoHc !== undefined ? parseFechaValue(rawFechaEventoHc) : null;
+  const hasFechaEventoInput = body.fecha_evento !== undefined || rawFechaEventoHc !== undefined;
+  let fechaEventoValue = hasFechaEventoInput
+    ? parseFechaValue(body.fecha_evento !== undefined ? body.fecha_evento : rawFechaEventoHc)
+    : parseFechaValue(currentRow?.fecha_evento);
+
+  if (body.fecha_evento !== undefined && !fechaEventoNormalized) {
     return res.status(400).json({ mensaje: "La fecha y hora del evento no es válida." });
   }
-  if (body.fecha_evento !== undefined) pushUpdate("fecha_evento", fechaEventoValue);
+
+  if (rawFechaEventoHc !== undefined && !fechaEventoHcNormalized) {
+    return res.status(400).json({ mensaje: "La fecha y hora del evento HC no es válida." });
+  }
+
+  const hikAlarmEventoValue = metadata.hasHikAlarmEventoId
+    ? parseIntegerOrNull(rawHikAlarm)
+    : null;
+
+  if (
+    hikAlarmEventoValue &&
+    fechaEventoNormalized &&
+    fechaEventoHcNormalized &&
+    fechaEventoNormalized !== fechaEventoHcNormalized
+  ) {
+    console.warn("[INTRUSIONES][UPDATE] Fecha evento HC distinta, se fuerza igualdad.", {
+      hik_alarm_evento_id: hikAlarmEventoValue,
+      fecha_evento: fechaEventoNormalized,
+      fecha_evento_hc: fechaEventoHcNormalized,
+    });
+    fechaEventoValue = fechaEventoNormalized;
+  }
+
+  if (hasFechaEventoInput) pushUpdate("fecha_evento", fechaEventoValue);
 
   const fechaReaccionValue =
     body.fecha_reaccion !== undefined
