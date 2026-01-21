@@ -57,7 +57,6 @@ interface TechnicalFailuresHistoryProps {
 const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   failures,
   isLoading,
-  activeRole: _activeRole,
   handleEdit,
   showActions = true,
   enableExport = false,
@@ -77,7 +76,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const actionsEnabled = showActions && Boolean(handleEdit || renderActions);
-  const stickyActions = actionsEnabled && (_activeRole ?? '').toLowerCase() === 'supervisor';
+  const stickyActions = actionsEnabled;
   const showEquipoColumn = filters.tipoAfectacion.trim().toLowerCase().startsWith('equipo');
   const columnsCount = (actionsEnabled ? 9 : 8) + (showEquipoColumn ? 1 : 0);
 
@@ -362,10 +361,10 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   };
 
   const actionHeaderClasses = stickyActions
-    ? 'sticky right-0 z-30 bg-white min-w-[110px] w-[110px] text-right border-l shadow-[-6px_0_6px_rgba(0,0,0,0.06)]'
+    ? 'sticky right-0 z-40 bg-white min-w-[110px] w-[110px] border-l shadow-[-6px_0_6px_rgba(0,0,0,0.06)]'
     : '';
   const actionCellClasses = stickyActions
-    ? 'sticky right-0 z-20 bg-white min-w-[110px] w-[110px] text-right border-l shadow-[-6px_0_6px_rgba(0,0,0,0.06)]'
+    ? 'sticky right-0 z-30 bg-white min-w-[110px] w-[110px] border-l shadow-[-6px_0_6px_rgba(0,0,0,0.06)]'
     : '';
 
   const content = (
@@ -397,8 +396,8 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
           )}
         </div>
       </div>
-      <div className="overflow-x-auto relative">
-        <table className="min-w-full divide-y divide-gray-200">
+      <div className="overflow-x-auto relative max-w-full isolate">
+        <table className="min-w-max w-full border-separate border-spacing-0 divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               <th
