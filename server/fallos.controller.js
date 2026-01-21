@@ -1449,7 +1449,7 @@ export const createFallo = async (req, res) => {
       `,
       [
         falloId, // FALLO_ID
-        departamentoId || null, // DEPARTAMENTO_ID
+        1, // DEPARTAMENTO_ID (forzado para creación desde /fallos/operador)
         verificacionAperturaId, // VERIFICACION_APERTURA_ID (usuario que registra el fallo)
         null, // VERIFICACION_CIERRE_ID (todavía no aplica)
         novedadDetectada || null, // NOVEDAD_DETECTADA
