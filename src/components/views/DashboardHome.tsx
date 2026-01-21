@@ -72,6 +72,13 @@ const formatPercent = (value: number) => `${formatDecimal(value, 2)} %`;
 const formatInteger = (value: number) =>
   new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 }).format(value);
 
+const truncateLabel = (value: string, maxLength = 50) => {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, maxLength - 1)}…`;
+};
+
 const formatMonthLabel = (mes: string) => {
   const [year, month] = mes.split('-').map(Number);
   if (!year || !month) {
@@ -84,6 +91,7 @@ const formatMonthLabel = (mes: string) => {
 const CHART_CARD_STYLE = { contain: 'layout paint', transform: 'translateZ(0)' };
 const STACKED_CHART_MARGIN = { top: 10, right: 30, left: 20, bottom: 10 };
 const TENDENCIA_CHART_MARGIN = { top: 10, right: 30, left: 0, bottom: 10 };
+const STACKED_TICK_MAX = 50;
 const STACKED_Y_AXIS_LABEL = {
   value: 'Tipo de afectación y problema',
   angle: -90,
@@ -101,6 +109,14 @@ type StackedDatum = {
   total?: number;
   equipos?: Record<string, string>;
 } & Record<string, number | string | Record<string, string> | undefined>;
+
+type StackedAxisTickProps = {
+  x: number;
+  y: number;
+  payload: {
+    value: string;
+  };
+};
 
 type TendenciaDatum = {
   mes: string;
@@ -178,7 +194,15 @@ const DonutChart = React.memo(({ data }: { data: DonutDatum[] }) => {
 DonutChart.displayName = 'DonutChart';
 
 const StackedBarChartCard = React.memo(
-  ({ data, haciendaKeys }: { data: StackedDatum[]; haciendaKeys: string[] }) => {
+  ({
+    data,
+    haciendaKeys,
+    labelPorProblema,
+  }: {
+    data: StackedDatum[];
+    haciendaKeys: string[];
+    labelPorProblema: Record<string, string>;
+  }) => {
     if (!data.length) {
       return <p className="mt-8 text-center text-sm text-gray-400">Sin datos de pendientes.</p>;
     }
@@ -194,6 +218,19 @@ const StackedBarChartCard = React.memo(
               dataKey="problema_label"
               width={160}
               label={STACKED_Y_AXIS_LABEL}
+              tick={(props: StackedAxisTickProps) => {
+                const rawLabel = labelPorProblema[props.payload.value] ?? props.payload.value;
+                const displayLabel = truncateLabel(rawLabel, STACKED_TICK_MAX);
+
+                return (
+                  <g transform={`translate(${props.x},${props.y})`}>
+                    <title>{rawLabel}</title>
+                    <text x={0} y={0} dy={4} textAnchor="end" fill="#666">
+                      {displayLabel}
+                    </text>
+                  </g>
+                );
+              }}
             />
             <Tooltip
               shared={false}
@@ -538,6 +575,18 @@ const DashboardHome: React.FC = () => {
     });
 
     return Array.from(map.values());
+  }, [dashboard]);
+
+  const labelPorProblema = useMemo(() => {
+    const rows = dashboard?.pendientes_por_problema_hacienda ?? [];
+    return rows.reduce<Record<string, string>>((acc, row) => {
+      const problema = row.problema_label?.trim() || 'Sin problema';
+      const ejeLabel = row.eje_label?.trim();
+      if (ejeLabel) {
+        acc[problema] = ejeLabel;
+      }
+      return acc;
+    }, {});
   }, [dashboard]);
 
   const haciendaKeys = useMemo(() => {
@@ -936,7 +985,11 @@ const DashboardHome: React.FC = () => {
           <h4 className="text-sm font-semibold text-gray-600">
             Fallos pendientes por Problema y HACIENDA
           </h4>
-          <StackedBarChartCard data={stackedData} haciendaKeys={haciendaKeys} />
+          <StackedBarChartCard
+            data={stackedData}
+            haciendaKeys={haciendaKeys}
+            labelPorProblema={labelPorProblema}
+          />
         </div>
       </div>
 

@@ -17,6 +17,8 @@ export interface PendientesPorProblemaHacienda {
   hacienda: string;
   total: number;
   equipos?: string | null;
+  eje_label?: string | null;
+  tiene_equipo?: number | null;
 }
 
 export interface TablaDepartamentosRow {
