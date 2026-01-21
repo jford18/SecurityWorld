@@ -751,6 +751,9 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
   whereParts.push(`${alarmCategoryField} ILIKE '%EVENTO%'`);
   whereParts.push(`${statusField} NOT ILIKE '%VERDADERA%'`);
   whereParts.push(`${alarmCategoryField} NOT ILIKE '%VERDADERA%'`);
+  whereParts.push(
+    "(A.INTRUSION_ID IS NULL OR TRIM(COALESCE(A.INTRUSION_ID::text, '')) = '' OR TRIM(COALESCE(A.INTRUSION_ID::text, '')) = '0')"
+  );
 
   if (consolaId > 0) {
     filterValues.push(consolaId);
