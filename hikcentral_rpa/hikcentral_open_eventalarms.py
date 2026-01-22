@@ -303,6 +303,7 @@ def wait_new_alarm_report(
 ) -> Path | None:
     fin = time.time() + timeout
     last_candidate: Path | None = None
+    last_print = 0.0
 
     while time.time() < fin:
         current = snapshot_alarm_reports(downloadcenter_root)
@@ -328,6 +329,22 @@ def wait_new_alarm_report(
                         pass
             except Exception:
                 pass
+
+        now = time.time()
+        if now - last_print >= 5:
+            last_print = now
+            try:
+                cand = last_candidate
+                if cand and cand.exists():
+                    log_size = cand.stat().st_size
+                    print(
+                        "[EXPORT] esperando... candidatos nuevos detectados. "
+                        f"último={cand.name} size={log_size} bytes"
+                    )
+                else:
+                    print("[EXPORT] esperando... aún sin archivo nuevo en Downloadcenter")
+            except Exception:
+                print("[EXPORT] esperando... (sin detalle)")
 
         time.sleep(1)
 
@@ -1029,7 +1046,7 @@ def click_export_event_and_alarm(
 
     # Esperar el archivo REAL en Downloadcenter (NO en DOWNLOAD_DIR)
     log_info("[EXPORT] Esperando Alarm_Report_* en Downloadcenter (HCWebControlService)...")
-    src_file = wait_new_alarm_report(downloadcenter_root, before, timeout=max(180, timeout))
+    src_file = wait_new_alarm_report(downloadcenter_root, before, timeout=max(300, timeout))
 
     if not src_file or not src_file.exists():
         log_error("[ERROR] No se detectó Alarm_Report_* en Downloadcenter.")
@@ -1293,7 +1310,41 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
         df.columns = headers
 
         df = df.dropna(how="all")
-        df = df[df["Mark"].notna()].copy()
+
+        # IMPORTANTE:
+        # En muchos reportes la columna "Mark" viene vacía (checkbox),
+        # así que NO debemos filtrar por Mark. En su lugar, filtramos por
+        # columnas de negocio que sí deberían tener datos.
+        key_cols = [
+            "Name",
+            "Triggering Time (Client)",
+            "Source",
+            "Region",
+            "Trigger Event",
+        ]
+
+        def _has_data(v) -> bool:
+            if v is None or pd.isna(v):
+                return False
+            s = str(v).strip()
+            if s == "" or s.lower() == "nan":
+                return False
+            return True
+
+        # mantener filas donde al menos una columna clave tenga data
+        if all(c in df.columns for c in key_cols):
+            mask = df[key_cols].applymap(_has_data).any(axis=1)
+            total_before = len(df)
+            df = df[mask].copy()
+            log_info(
+                "[EVENT] Filas después de filtro por columnas clave: "
+                f"{len(df)} (antes: {total_before})"
+            )
+        else:
+            log_info(
+                "[WARN] No se pudo aplicar filtro por columnas clave. "
+                f"Columnas presentes: {list(df.columns)}"
+            )
 
         log_info(f"[EVENT] header_row detectado: {header_row}")
         log_info(f"[EVENT] Columnas encontradas en Alarm_Report: {list(df.columns)}")
@@ -1362,6 +1413,20 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
         for col in required_data_cols:
             if col not in df.columns:
                 raise ValueError(f"[EVENT] Falta columna requerida: {col}")
+
+        if df.empty:
+            # guardar evidencia rápida para debug
+            try:
+                LOG_DIR.mkdir(parents=True, exist_ok=True)
+                debug_csv = (
+                    LOG_DIR
+                    / f"debug_alarm_report_vacio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                )
+                # intenta salvar primeras 50 filas del RAW (sin romper)
+                raw.head(50).to_csv(debug_csv, index=False, header=False)
+                log_info(f"[DEBUG] Se guardó RAW preview (50 filas) en: {debug_csv}")
+            except Exception as e:
+                log_info(f"[DEBUG] No se pudo guardar preview RAW: {e}")
 
         if df[required_data_cols].dropna(how="all").empty:
             raise ValueError(
