@@ -62,12 +62,17 @@ class PerformanceRecorder:
         proc_mem_mb: float,
     ):
         num_paso, descripcion = self._parse_step_label(label)
+
+        # Si no viene con [N], igual lo registramos con un número alto (para [ERROR], [FIN], etc.)
         if num_paso is None:
-            return {
-                "filas_extraidas": total_preparados,
-                "insertados": total_insertados,
-                "omitidos_duplicado": total_omitidos,
-            }
+            txt = (descripcion or label or "").strip()
+            if txt.startswith("[ERROR]"):
+                num_paso = 9999
+            elif txt.startswith("[FIN]"):
+                num_paso = 9998
+            else:
+                num_paso = 9997
+            descripcion = txt if txt else label
 
         self._update_cpu_max(cpu_percent)
         self.steps.append(
@@ -180,6 +185,14 @@ def resolve_hik_host(cli_host: str | None) -> tuple[str, str]:
         print(f"[WARN] Host no responde: {host}")
 
     raise RuntimeError("Ningún host HikCentral disponible en HIK_HOSTS/DEFAULT_HOSTS")
+
+
+def parse_hosts_from_args(cli_host: str | None, cli_hosts: str | None) -> list[str]:
+    if cli_host:
+        return [cli_host.strip()]
+    if cli_hosts:
+        return [host.strip() for host in cli_hosts.split(",") if host.strip()]
+    return DEFAULT_HOSTS
 
 
 def get_downloadcenter_root() -> Path:
@@ -528,19 +541,20 @@ def wait_click(driver, by, value, timeout=20):
 
 
 # XPaths específicos para el diálogo Export de Event and Alarm Search
+EXPORT_DIALOG_WRAPPER_XPATH = (
+    "//div[contains(@class,'el-dialog__wrapper')]"
+    "[.//span[contains(@class,'el-dialog__title') and contains(normalize-space(),'Export')]]"
+)
+
 EXPORT_PASSWORD_INPUT_XPATH = (
-    "//input[@type='password' and @placeholder='Password'"
-    " and contains(@class,'el-input__inner')]"
+    f"{EXPORT_DIALOG_WRAPPER_XPATH}"
+    "//input[@type='password' and contains(@class,'el-input__inner')]"
 )
 
 EXPORT_SAVE_BUTTON_XPATH = (
-    "("
-    "//button[@title='Save'"
-    "        and contains(@class,'el-button')"
-    "        and contains(@class,'el-button--primary')"
-    "        and .//div[contains(@class,'el-button-slot-wrapper')"
-    "                 and normalize-space()='Save']"
-    "]"
+    f"({EXPORT_DIALOG_WRAPPER_XPATH}"
+    "//button[contains(@class,'el-button') and contains(@class,'el-button--primary')"
+    " and (@title='Save' or .//div[normalize-space()='Save'] or .//span[normalize-space()='Save'])]"
     ")[1]"
 )
 
@@ -877,6 +891,7 @@ def click_export_event_and_alarm(
     download_dir: Path,
     host_label: str,
     timeout=30,
+    download_timeout=180,
     timer: StepTimer | None = None,
 ):
     """
@@ -903,30 +918,23 @@ def click_export_event_and_alarm(
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_BUTTON")
 
-    log_info = globals().get("log_info", print)
-    log_error = globals().get("log_error", print)
-
-    type_export_password_if_needed(driver, timeout=8, timer=timer)
-
-    # Hacer clic en el botón Save del diálogo Export
-    click_export_save_button(driver, timeout=10, timer=timer)
-
-    export_dialog_xpath = (
-        "//div[contains(@class,'el-dialog__wrapper')]//span[contains(@class,'el-dialog__title') and contains(normalize-space(),'Export')]"
-    )
+    # 1) Esperar diálogo Export visible (NO dar Save antes de tiempo)
     try:
         WebDriverWait(driver, timeout).until(
-            EC.visibility_of_element_located((By.XPATH, export_dialog_xpath))
+            EC.visibility_of_element_located((By.XPATH, EXPORT_DIALOG_WRAPPER_XPATH))
         )
     except TimeoutException:
-        print("[WARN] No se mostró el diálogo de Export después de hacer clic en el botón.")
+        print("[WARN] No se mostró el diálogo Export.")
         if timer:
-            timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_ERROR_NO_DIALOG")
+            timer.mark("[7] EXPORT_NO_DIALOG")
         return None
 
+    # 2) Seleccionar Excel ANTES de Save
     excel_option_xpath = (
-        "//div[contains(@class,'el-dialog__wrapper')]//label[contains(@class,'el-radio') and "
-        "(contains(translate(@title,'excel','EXCEL'),'EXCEL') or .//span[contains(translate(normalize-space(),'excel','EXCEL'),'EXCEL')])]"
+        f"{EXPORT_DIALOG_WRAPPER_XPATH}"
+        "//label[contains(@class,'el-radio') and "
+        "(contains(translate(@title,'excel','EXCEL'),'EXCEL') "
+        " or .//span[contains(translate(normalize-space(),'excel','EXCEL'),'EXCEL')])]"
     )
     try:
         excel_option = wait.until(
@@ -934,29 +942,41 @@ def click_export_event_and_alarm(
         )
         safe_js_click(driver, excel_option)
     except TimeoutException:
-        print("[WARN] No se encontró la opción de formato Excel en el diálogo de Export.")
+        print("[WARN] No se encontró la opción Excel en Export.")
         if timer:
-            timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_ERROR_NO_EXCEL")
+            timer.mark("[7] EXPORT_NO_EXCEL")
         return None
 
-    if timer:
-        timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
+    # 3) Capturar baseline del Downloadcenter (fallback)
+    baseline_dc_mtime = None
+    try:
+        dc_root = get_downloadcenter_root()
+        if dc_root.exists():
+            last_dc = find_latest_alarm_report(dc_root)
+            baseline_dc_mtime = last_dc.stat().st_mtime if last_dc else None
+    except Exception:
+        baseline_dc_mtime = None
 
-    log_info("[EXPORT] Esperando archivo Alarm_Report_* en carpeta de descargas...")
+    # 4) Escribir password si el Export lo pide
+    type_export_password_if_needed(driver, timeout=8, timer=timer)
 
-    archivo = esperar_descarga_y_renombrar_host(
+    # 5) Click Save para disparar la descarga
+    click_export_save_button(driver, timeout=10, timer=timer)
+
+    # 6) Si aparece confirmación adicional, resolverla sin fallar
+    handle_password_confirm_if_present(driver, timeout=10)
+
+    print("[EXPORT] Esperando archivo Alarm_Report_* (host_dir o Downloadcenter)...")
+    archivo = esperar_descarga_alarm_report_multi(
         download_dir=download_dir,
         host_label=host_label,
-        timeout=timeout,
+        baseline_dc_mtime=baseline_dc_mtime,
+        timeout=download_timeout,
     )
 
-    log_info(f"[EXPORT] Ruta final del archivo exportado: {archivo}")
-
-    if not archivo:
-        log_error("[ERROR] No se detectó ningún archivo descargado desde Event and Alarm Search.")
-        take_screenshot(driver, "event_and_alarm_search")
-        return None
-
+    print(f"[EXPORT] Ruta final del archivo exportado: {archivo}")
+    if timer:
+        timer.mark("[7] EXPORT_DESCARGA_OK")
     return archivo
 
 
@@ -1165,6 +1185,75 @@ def esperar_descarga_y_renombrar_host(
         time.sleep(1)
 
     raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
+
+
+def esperar_descarga_alarm_report_multi(
+    download_dir: Path,
+    host_label: str,
+    baseline_dc_mtime: float | None,
+    timeout: int = 180,
+) -> Path:
+    import shutil
+
+    download_dir.mkdir(parents=True, exist_ok=True)
+    existentes = {f.name for f in download_dir.glob("*") if f.is_file()}
+    fin = time.time() + timeout
+    host_suffix = host_label.replace(".", "_")
+
+    downloadcenter_root = get_downloadcenter_root()
+
+    while time.time() < fin:
+        # 1) Intentar en carpeta del host (Chrome/CDP)
+        archivos = [f for f in download_dir.glob("*") if f.is_file()]
+        nuevos = [
+            f for f in archivos
+            if f.name not in existentes and not f.name.endswith(".crdownload")
+        ]
+        if nuevos:
+            cand = max(nuevos, key=lambda f: f.stat().st_mtime)
+            size1 = cand.stat().st_size
+            time.sleep(1)
+            size2 = cand.stat().st_size
+            if size1 == size2 and size2 > 0:
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                nuevo_nombre = f"Alarm_Report_{timestamp}_{host_suffix}{cand.suffix}"
+                destino = download_dir / nuevo_nombre
+                cand = cand.rename(destino)
+                print(f"[INFO] Archivo descargado detectado en host_dir: {cand}")
+                if step_timer:
+                    step_timer.mark("[9] Descarga detectada")
+                return cand
+
+        # 2) Fallback: HCWebControlService Downloadcenter
+        try:
+            if downloadcenter_root.exists():
+                dc_file = find_latest_alarm_report(downloadcenter_root)
+                if dc_file and dc_file.is_file():
+                    mtime = dc_file.stat().st_mtime
+                    if baseline_dc_mtime is None or mtime > baseline_dc_mtime:
+                        size1 = dc_file.stat().st_size
+                        time.sleep(1)
+                        size2 = dc_file.stat().st_size
+                        if size1 == size2 and size2 > 0:
+                            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                            nuevo_nombre = f"Alarm_Report_{timestamp}_{host_suffix}{dc_file.suffix}"
+                            destino = download_dir / nuevo_nombre
+                            shutil.copy2(dc_file, destino)
+                            print(
+                                "[INFO] Archivo detectado en Downloadcenter y copiado: "
+                                f"{destino}"
+                            )
+                            if step_timer:
+                                step_timer.mark("[9] Descarga detectada")
+                            return destino
+        except Exception:
+            pass
+
+        time.sleep(2)
+
+    raise TimeoutError(
+        "No se detectó ningún archivo descargado (host_dir ni Downloadcenter) en el tiempo esperado."
+    )
 
 
 def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
@@ -1881,6 +1970,7 @@ def run_for_host(host: str) -> dict:
             download_dir=host_dir,
             host_label=host,
             timeout=30,
+            download_timeout=180,
             timer=timer,
         )
 
@@ -1973,16 +2063,16 @@ def run_for_host(host: str) -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Automatiza Event and Alarm Search en HikCentral.")
     parser.add_argument("--host", type=str, help="Host/IP de HikCentral (ej: 172.16.9.11)")
+    parser.add_argument(
+        "--hosts",
+        type=str,
+        help="Lista de hosts separada por coma (ej: 172.16.9.10,172.16.9.11)",
+    )
     args = parser.parse_args()
 
-    if args.host:
-        print(
-            f"[WARN] Parámetro --host ({args.host}) ignorado. "
-            "La ejecución procesa todos los hosts por defecto."
-        )
-
     resultados = []
-    for host in DEFAULT_HOSTS:
+    hosts_to_run = parse_hosts_from_args(args.host, args.hosts)
+    for host in hosts_to_run:
         if not host_is_up(host):
             print(f"[WARN] Host no responde: {host}. Se omite.")
             resultados.append(
