@@ -1,6 +1,7 @@
 import argparse
 import os
 import time
+import shutil
 import traceback
 from datetime import datetime
 import hashlib
@@ -921,11 +922,6 @@ def click_export_event_and_alarm(
     log_info = globals().get("log_info", print)
     log_error = globals().get("log_error", print)
 
-    type_export_password_if_needed(driver, timeout=8, timer=timer)
-
-    # Hacer clic en el botón Save del diálogo Export
-    click_export_save_button(driver, timeout=10, timer=timer)
-
     export_dialog_xpath = (
         "//div[contains(@class,'el-dialog__wrapper')]//span[contains(@class,'el-dialog__title') and contains(normalize-space(),'Export')]"
     )
@@ -954,16 +950,37 @@ def click_export_event_and_alarm(
             timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_ERROR_NO_EXCEL")
         return None
 
+    type_export_password_if_needed(driver, timeout=8, timer=timer)
+
+    # Hacer clic en el botón Save del diálogo Export
+    click_export_save_button(driver, timeout=10, timer=timer)
+
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
 
+    log_info(f"Esperando descarga en: {download_dir}")
     log_info("[EXPORT] Esperando archivo Alarm_Report_* en carpeta de descargas...")
 
-    archivo = esperar_descarga_y_renombrar_host(
-        download_dir=download_dir,
-        host_label=host_label,
-        timeout=timeout,
-    )
+    try:
+        archivo = esperar_descarga_y_renombrar_host(
+            download_dir=download_dir,
+            host_label=host_label,
+            timeout=timeout,
+        )
+    except TimeoutError:
+        log_info("Fallback a Downloadcenter...")
+        last_report = find_last_alarm_report_file()
+        if last_report:
+            log_info(f"[EXPORT] Fallback encontrado en: {last_report}")
+            host_suffix = host_label.replace(".", "_")
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            fallback_name = f"Alarm_Report_{timestamp}_{host_suffix}.xlsx"
+            download_dir.mkdir(parents=True, exist_ok=True)
+            destino = download_dir / fallback_name
+            shutil.copy2(last_report, destino)
+            archivo = destino
+        else:
+            archivo = None
 
     log_info(f"[EXPORT] Ruta final del archivo exportado: {archivo}")
 
@@ -1895,7 +1912,7 @@ def run_for_host(host: str) -> dict:
             password=HIK_PASSWORD,
             download_dir=host_dir,
             host_label=host,
-            timeout=30,
+            timeout=180,
             timer=timer,
         )
 
