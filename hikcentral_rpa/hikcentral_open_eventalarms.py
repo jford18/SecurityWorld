@@ -1998,14 +1998,13 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    try:
-        hosts = parse_hosts_from_args(args.host, args.hosts)
-    except ValueError as exc:
-        print(f"[ERROR] {exc}")
-        raise SystemExit(1)
+    if args.host:
+        hosts_to_run = [args.host.strip()]
+    else:
+        hosts_to_run = DEFAULT_HOSTS
 
     resultados = []
-    for host in hosts:
+    for host in hosts_to_run:
         if not host_is_up(host):
             print(f"[WARN] Host no responde: {host}. Se intentará igual.")
 
