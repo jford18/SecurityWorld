@@ -1294,8 +1294,6 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
                 normalize_value(row.get("source")),
                 normalize_value(row.get("region")),
                 normalize_value(row.get("trigger_event")),
-                normalize_value(row.get("priority")),
-                normalize_value(row.get("status")),
             ]
             raw_key = "|".join(parts)
             return hashlib.md5(raw_key.encode("utf-8")).hexdigest()
@@ -1346,38 +1344,96 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
         if not rows:
             log_info("[INFO] No hay filas para insertar en hik_alarm_evento.")
         else:
-            sql = """
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'hik_alarm_evento'
+                      AND column_name = 'fecha_actualizacion';
+                    """
+                )
+                has_fecha_actualizacion = cur.fetchone() is not None
+
+            event_keys = df["event_key"].tolist()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM public.hik_alarm_evento
+                    WHERE EVENT_KEY = ANY(%s);
+                    """,
+                    (event_keys,),
+                )
+                existentes = cur.fetchone()[0]
+
+            columnas = [
+                "ID_EXTRACCION",
+                "MARK",
+                "NAME",
+                "TRIGGER_ALARM",
+                "PRIORITY",
+                "TRIGGERING_TIME_CLIENT",
+                "SOURCE",
+                "REGION",
+                "TRIGGER_EVENT",
+                "DESCRIPTION",
+                "STATUS",
+                "ALARM_ACKNOWLEDGMENT_TIME",
+                "ALARM_CATEGORY",
+                "REMARKS",
+                "MORE",
+                "EVENT_KEY",
+                "PERIODO",
+                "FECHA_CREACION",
+            ]
+            if has_fecha_actualizacion:
+                columnas.append("FECHA_ACTUALIZACION")
+
+            columnas_sql = ",\n                    ".join(columnas)
+            valores_placeholders = ", ".join(["%s"] * len(rows[0]))
+            template = f"({valores_placeholders}"
+            if has_fecha_actualizacion:
+                template = f"{template}, NOW()"
+            template = f"{template})"
+
+            update_set = """
+                    MARK = EXCLUDED.MARK,
+                    NAME = EXCLUDED.NAME,
+                    TRIGGER_ALARM = EXCLUDED.TRIGGER_ALARM,
+                    PRIORITY = EXCLUDED.PRIORITY,
+                    TRIGGERING_TIME_CLIENT = EXCLUDED.TRIGGERING_TIME_CLIENT,
+                    SOURCE = EXCLUDED.SOURCE,
+                    REGION = EXCLUDED.REGION,
+                    TRIGGER_EVENT = EXCLUDED.TRIGGER_EVENT,
+                    DESCRIPTION = EXCLUDED.DESCRIPTION,
+                    STATUS = EXCLUDED.STATUS,
+                    ALARM_ACKNOWLEDGMENT_TIME = EXCLUDED.ALARM_ACKNOWLEDGMENT_TIME,
+                    ALARM_CATEGORY = EXCLUDED.ALARM_CATEGORY,
+                    REMARKS = EXCLUDED.REMARKS,
+                    MORE = EXCLUDED.MORE,
+                    PERIODO = EXCLUDED.PERIODO
+            """
+            if has_fecha_actualizacion:
+                update_set = f"{update_set},\n                    FECHA_ACTUALIZACION = NOW()"
+
+            sql = f"""
                 INSERT INTO public.hik_alarm_evento (
-                    ID_EXTRACCION,
-                    MARK,
-                    NAME,
-                    TRIGGER_ALARM,
-                    PRIORITY,
-                    TRIGGERING_TIME_CLIENT,
-                    SOURCE,
-                    REGION,
-                    TRIGGER_EVENT,
-                    DESCRIPTION,
-                    STATUS,
-                    ALARM_ACKNOWLEDGMENT_TIME,
-                    ALARM_CATEGORY,
-                    REMARKS,
-                    MORE,
-                    EVENT_KEY,
-                    PERIODO,
-                    FECHA_CREACION
+                    {columnas_sql}
                 )
                 VALUES %s
-                ON CONFLICT (EVENT_KEY) DO NOTHING;
+                ON CONFLICT (EVENT_KEY) DO UPDATE SET
+                    {update_set};
             """
             with conn.cursor() as cur:
-                execute_values(cur, sql, rows, page_size=500)
-                total_insertados = cur.rowcount
+                execute_values(cur, sql, rows, page_size=500, template=template)
             conn.commit()
-            total_omitidos = total_preparados - total_insertados
+            total_insertados = total_preparados - existentes
+            total_omitidos = existentes
             log_info(f"[INFO] Total registros preparados: {total_preparados}")
-            log_info(f"[INFO] Insertados: {total_insertados}")
-            log_info(f"[INFO] Omitidos por duplicado: {total_omitidos}")
+            log_info(f"[INFO] Nuevos insertados: {total_insertados}")
+            log_info(f"[INFO] Actualizados por duplicado: {total_omitidos}")
 
         with conn.cursor() as cur:
             cur.execute(
