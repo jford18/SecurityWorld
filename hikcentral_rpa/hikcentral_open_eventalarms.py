@@ -544,10 +544,18 @@ def wait_click(driver, by, value, timeout=20):
 
 
 # XPaths específicos para el diálogo Export de Event and Alarm Search
-EXPORT_PASSWORD_INPUT_XPATH = (
-    "//input[@type='password' and @placeholder='Password'"
-    " and contains(@class,'el-input__inner')]"
+EXPORT_PANEL_XPATH = (
+    "//div[contains(@class,'el-drawer') or contains(@class,'drawer') or contains(@class,'el-dialog')]"
+    "[.//*[normalize-space()='Export']]"
 )
+EXPORT_PASSWORD_INPUT_XPATHS = [
+    (
+        f"{EXPORT_PANEL_XPATH}"
+        "//label[contains(normalize-space(),'Confirm Password')]/"
+        "following::input[@type='password'][1]"
+    ),
+    f"{EXPORT_PANEL_XPATH}//input[@type='password'][1]",
+]
 
 EXPORT_SAVE_BUTTON_XPATH = (
     "("
@@ -573,10 +581,24 @@ def type_export_password_if_needed(driver, timeout=8, timer=None):
     logger_info = globals().get("log_info", print)
 
     try:
-        pwd_input = wait.until(
-            EC.visibility_of_element_located((By.XPATH, EXPORT_PASSWORD_INPUT_XPATH))
-        )
+        wait.until(EC.visibility_of_element_located((By.XPATH, EXPORT_PANEL_XPATH)))
     except TimeoutException:
+        logger_warn("[EXPORT] Panel Export no visible, se omite escritura de password.")
+        return False
+
+    pwd_input = None
+    end_time = time.time() + timeout
+    for xpath in EXPORT_PASSWORD_INPUT_XPATHS:
+        remaining = max(0.1, end_time - time.time())
+        try:
+            pwd_input = WebDriverWait(driver, remaining).until(
+                EC.visibility_of_element_located((By.XPATH, xpath))
+            )
+            break
+        except TimeoutException:
+            continue
+
+    if not pwd_input:
         logger_warn(
             "[EXPORT] No apareció cuadro de password en Export, se asume que no es requerido."
         )
@@ -585,6 +607,9 @@ def type_export_password_if_needed(driver, timeout=8, timer=None):
     pwd_input.click()
     pwd_input.clear()
     pwd_input.send_keys(HIK_PASSWORD)
+    if not pwd_input.get_attribute("value"):
+        pwd_input.click()
+        pwd_input.send_keys(HIK_PASSWORD)
 
     logger_info("[EXPORT] Password escrito correctamente en el cuadro Export.")
     return True
