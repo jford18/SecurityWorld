@@ -63,11 +63,9 @@ class PerformanceRecorder:
     ):
         num_paso, descripcion = self._parse_step_label(label)
         if num_paso is None:
-            return {
-                "filas_extraidas": total_preparados,
-                "insertados": total_insertados,
-                "omitidos_duplicado": total_omitidos,
-            }
+            # Labels sin [n] (ej: "[ERROR] ...") deben registrarse igual, sin romper el script
+            num_paso = 9999
+            descripcion = label.strip()
 
         self._update_cpu_max(cpu_percent)
         self.steps.append(
