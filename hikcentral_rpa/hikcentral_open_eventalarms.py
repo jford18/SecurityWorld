@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 import time
 import traceback
 from datetime import datetime
@@ -63,11 +64,7 @@ class PerformanceRecorder:
     ):
         num_paso, descripcion = self._parse_step_label(label)
         if num_paso is None:
-            return {
-                "filas_extraidas": total_preparados,
-                "insertados": total_insertados,
-                "omitidos_duplicado": total_omitidos,
-            }
+            return
 
         self._update_cpu_max(cpu_percent)
         self.steps.append(
@@ -182,10 +179,42 @@ def resolve_hik_host(cli_host: str | None) -> tuple[str, str]:
     raise RuntimeError("Ningún host HikCentral disponible en HIK_HOSTS/DEFAULT_HOSTS")
 
 
+def parse_hosts_from_args(host: str | None, hosts: str | None) -> list[str]:
+    candidates: list[str] = []
+    if host and host.strip():
+        candidates.append(host.strip())
+    if hosts:
+        candidates.extend([h.strip() for h in hosts.split(",") if h.strip()])
+
+    seen = set()
+    deduped: list[str] = []
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        deduped.append(candidate)
+    return deduped
+
+
+def parse_hosts_from_env() -> list[str]:
+    env_host = os.getenv("HIK_HOST")
+    if env_host and env_host.strip():
+        return [env_host.strip()]
+
+    env_hosts = os.getenv("HIK_HOSTS")
+    if env_hosts and env_hosts.strip():
+        return [h.strip() for h in env_hosts.split(",") if h.strip()]
+
+    return DEFAULT_HOSTS
+
+
 def get_downloadcenter_root() -> Path:
-    user_home = Path(os.environ["USERPROFILE"])
-    root = user_home / "HCWebControlService" / "Downloadcenter"
-    return root
+    env_root = os.getenv("HIK_DOWNLOADCENTER") or os.getenv("HC_DOWNLOADCENTER")
+    if env_root and env_root.strip():
+        return Path(env_root.strip())
+
+    user_home = Path(os.environ.get("USERPROFILE", str(Path.home())))
+    return user_home / "HCWebControlService" / "Downloadcenter"
 
 
 def take_screenshot(driver, label: str) -> Path:
@@ -248,6 +277,70 @@ def find_last_alarm_report_file() -> Path | None:
     last_file = max(candidates, key=lambda p: p.stat().st_mtime)
     print(f"[INFO] Último Alarm_Report encontrado: {last_file}")
     return last_file
+
+
+def snapshot_alarm_reports(downloadcenter_root: Path) -> set[Path]:
+    if not downloadcenter_root.exists():
+        return set()
+
+    files: set[Path] = set()
+    for p in downloadcenter_root.rglob("*"):
+        if not p.is_file():
+            continue
+        name = p.name
+        if not name.startswith("Alarm_Report_"):
+            continue
+        if not name.lower().endswith((".xlsx", ".xls")):
+            continue
+        files.add(p)
+    return files
+
+
+def wait_new_alarm_report(
+    downloadcenter_root: Path,
+    before: set[Path],
+    timeout: int = 180,
+) -> Path | None:
+    fin = time.time() + timeout
+    last_candidate: Path | None = None
+
+    while time.time() < fin:
+        current = snapshot_alarm_reports(downloadcenter_root)
+        nuevos = [p for p in current if p not in before]
+
+        if nuevos:
+            # el más nuevo por fecha de modificación
+            last_candidate = max(nuevos, key=lambda p: p.stat().st_mtime)
+
+            # esperar tamaño estable (descarga terminada)
+            try:
+                size1 = last_candidate.stat().st_size
+                time.sleep(1)
+                size2 = last_candidate.stat().st_size
+                if size1 == size2 and size2 > 0:
+                    # validar que se puede abrir (evitar lock)
+                    try:
+                        with open(last_candidate, "rb") as f:
+                            f.read(64)
+                        return last_candidate
+                    except Exception:
+                        # si está bloqueado, seguir esperando
+                        pass
+            except Exception:
+                pass
+
+        time.sleep(1)
+
+    return last_candidate
+
+
+def copiar_alarm_report_a_downloads(src: Path, host_dir: Path, host_label: str) -> Path:
+    host_dir.mkdir(parents=True, exist_ok=True)
+    host_suffix = host_label.replace(".", "_")
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    destino = host_dir / f"Alarm_Report_{timestamp}_{host_suffix}{src.suffix}"
+    shutil.copy2(src, destino)
+    return destino
 
 
 def esperar_descarga(download_dir: Path, archivos_previos, timeout: int = 120) -> str:
@@ -899,33 +992,19 @@ def click_export_event_and_alarm(
             EC.element_to_be_clickable((By.XPATH, fallback_xpath))
         )
 
+    # snapshot del downloadcenter ANTES de exportar
+    downloadcenter_root = get_downloadcenter_root()
+    before = snapshot_alarm_reports(downloadcenter_root)
+    print(f"[EXPORT] Downloadcenter: {downloadcenter_root}")
+
     safe_js_click(driver, export_btn)
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_BUTTON")
 
-    log_info = globals().get("log_info", print)
-    log_error = globals().get("log_error", print)
-
-    type_export_password_if_needed(driver, timeout=8, timer=timer)
-
-    # Hacer clic en el botón Save del diálogo Export
-    click_export_save_button(driver, timeout=10, timer=timer)
-
-    export_dialog_xpath = (
-        "//div[contains(@class,'el-dialog__wrapper')]//span[contains(@class,'el-dialog__title') and contains(normalize-space(),'Export')]"
-    )
-    try:
-        WebDriverWait(driver, timeout).until(
-            EC.visibility_of_element_located((By.XPATH, export_dialog_xpath))
-        )
-    except TimeoutException:
-        print("[WARN] No se mostró el diálogo de Export después de hacer clic en el botón.")
-        if timer:
-            timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_ERROR_NO_DIALOG")
-        return None
-
+    # (opcional) seleccionar Excel ANTES de Save, si existe radio
     excel_option_xpath = (
-        "//div[contains(@class,'el-dialog__wrapper')]//label[contains(@class,'el-radio') and "
+        "//div[contains(@class,'el-dialog__wrapper') or contains(@class,'el-drawer')]"
+        "//label[contains(@class,'el-radio') and "
         "(contains(translate(@title,'excel','EXCEL'),'EXCEL') or .//span[contains(translate(normalize-space(),'excel','EXCEL'),'EXCEL')])]"
     )
     try:
@@ -933,31 +1012,40 @@ def click_export_event_and_alarm(
             EC.element_to_be_clickable((By.XPATH, excel_option_xpath))
         )
         safe_js_click(driver, excel_option)
-    except TimeoutException:
-        print("[WARN] No se encontró la opción de formato Excel en el diálogo de Export.")
-        if timer:
-            timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_ERROR_NO_EXCEL")
-        return None
+    except Exception:
+        pass
+
+    log_info = globals().get("log_info", print)
+    log_error = globals().get("log_error", print)
+
+    # password si aparece
+    type_export_password_if_needed(driver, timeout=8, timer=timer)
+
+    # Save
+    click_export_save_button(driver, timeout=10, timer=timer)
 
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
 
-    log_info("[EXPORT] Esperando archivo Alarm_Report_* en carpeta de descargas...")
+    # Esperar el archivo REAL en Downloadcenter (NO en DOWNLOAD_DIR)
+    log_info("[EXPORT] Esperando Alarm_Report_* en Downloadcenter (HCWebControlService)...")
+    src_file = wait_new_alarm_report(downloadcenter_root, before, timeout=max(180, timeout))
 
-    archivo = esperar_descarga_y_renombrar_host(
-        download_dir=download_dir,
-        host_label=host_label,
-        timeout=timeout,
-    )
-
-    log_info(f"[EXPORT] Ruta final del archivo exportado: {archivo}")
-
-    if not archivo:
-        log_error("[ERROR] No se detectó ningún archivo descargado desde Event and Alarm Search.")
-        take_screenshot(driver, "event_and_alarm_search")
+    if not src_file or not src_file.exists():
+        log_error("[ERROR] No se detectó Alarm_Report_* en Downloadcenter.")
+        take_screenshot(driver, "event_and_alarm_search_no_file")
         return None
 
-    return archivo
+    # Copiar a tu downloads por host y renombrar
+    limpiar_descargas(download_dir)  # limpia SOLO tu carpeta destino
+    final_file = copiar_alarm_report_a_downloads(src_file, download_dir, host_label)
+    log_info(f"[EXPORT] Archivo detectado en Downloadcenter: {src_file}")
+    log_info(f"[EXPORT] Archivo copiado a: {final_file}")
+
+    if timer:
+        timer.mark("[9] Descarga detectada")
+
+    return final_file
 
 
 def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = None):
@@ -1917,16 +2005,16 @@ def run_for_host(host: str) -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Automatiza Event and Alarm Search en HikCentral.")
     parser.add_argument("--host", type=str, help="Host/IP de HikCentral (ej: 172.16.9.11)")
+    parser.add_argument("--hosts", type=str, help="Hosts/IP separados por coma")
     args = parser.parse_args()
 
-    if args.host:
-        print(
-            f"[WARN] Parámetro --host ({args.host}) ignorado. "
-            "La ejecución procesa todos los hosts por defecto."
-        )
+    if args.host or args.hosts:
+        hosts_to_run = parse_hosts_from_args(args.host, args.hosts)
+    else:
+        hosts_to_run = parse_hosts_from_env()
 
     resultados = []
-    for host in DEFAULT_HOSTS:
+    for host in hosts_to_run:
         if not host_is_up(host):
             print(f"[WARN] Host no responde: {host}. Se omite.")
             resultados.append(
