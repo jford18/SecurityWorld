@@ -182,6 +182,23 @@ def resolve_hik_host(cli_host: str | None) -> tuple[str, str]:
     raise RuntimeError("Ningún host HikCentral disponible en HIK_HOSTS/DEFAULT_HOSTS")
 
 
+def parse_hosts_from_env() -> list[str]:
+    env_hosts = os.getenv("HIK_HOSTS")
+    if env_hosts:
+        return [h.strip() for h in env_hosts.split(",") if h.strip()]
+    return DEFAULT_HOSTS
+
+
+def parse_hosts_from_args(cli_host: str | None, cli_hosts: str | None) -> list[str]:
+    if cli_host and cli_hosts:
+        raise ValueError("Usa solo --host o --hosts, no ambos.")
+    if cli_host:
+        return [cli_host.strip()]
+    if cli_hosts:
+        return [h.strip() for h in cli_hosts.split(",") if h.strip()]
+    return parse_hosts_from_env()
+
+
 def get_downloadcenter_root() -> Path:
     user_home = Path(os.environ["USERPROFILE"])
     root = user_home / "HCWebControlService" / "Downloadcenter"
@@ -1922,6 +1939,7 @@ def run_for_host(host: str) -> dict:
             "ok": True,
             "archivo": str(export_file_path),
             **resultados_carga,
+            "error": None,
         }
 
     except Exception as e:
@@ -1973,37 +1991,40 @@ def run_for_host(host: str) -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Automatiza Event and Alarm Search en HikCentral.")
     parser.add_argument("--host", type=str, help="Host/IP de HikCentral (ej: 172.16.9.11)")
+    parser.add_argument(
+        "--hosts",
+        type=str,
+        help="Lista de hosts separados por coma (ej: 172.16.9.10,172.16.9.11)",
+    )
     args = parser.parse_args()
 
-    if args.host:
-        print(
-            f"[WARN] Parámetro --host ({args.host}) ignorado. "
-            "La ejecución procesa todos los hosts por defecto."
-        )
+    try:
+        hosts = parse_hosts_from_args(args.host, args.hosts)
+    except ValueError as exc:
+        print(f"[ERROR] {exc}")
+        raise SystemExit(1)
 
     resultados = []
-    for host in DEFAULT_HOSTS:
+    for host in hosts:
         if not host_is_up(host):
-            print(f"[WARN] Host no responde: {host}. Se omite.")
-            resultados.append(
-                {
-                    "host": host,
-                    "ok": False,
-                    "error": "Host no responde",
-                    "archivo": None,
-                    "filas_extraidas": 0,
-                    "insertados": 0,
-                    "omitidos_duplicado": 0,
-                }
-            )
-            continue
+            print(f"[WARN] Host no responde: {host}. Se intentará igual.")
 
         try:
             res = run_for_host(host)
             resultados.append(res)
         except Exception as ex:
             print(f"[ERROR] Falló host {host}: {ex}")
-            resultados.append({"host": host, "ok": False, "error": str(ex)})
+            resultados.append(
+                {
+                    "host": host,
+                    "ok": False,
+                    "error": str(ex),
+                    "archivo": None,
+                    "filas_extraidas": 0,
+                    "insertados": 0,
+                    "omitidos_duplicado": 0,
+                }
+            )
 
     print("[INFO] === Resumen final por host ===")
     for res in resultados:
