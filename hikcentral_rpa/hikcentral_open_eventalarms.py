@@ -544,17 +544,15 @@ def wait_click(driver, by, value, timeout=20):
 
 
 # XPaths específicos para el diálogo Export de Event and Alarm Search
-EXPORT_PANEL_XPATH = (
-    "//div[contains(@class,'el-drawer') or contains(@class,'drawer') or contains(@class,'el-dialog')]"
-    "[.//*[normalize-space()='Export']]"
+EXPORT_CONTAINER_XPATH = (
+    "//*[contains(@class,'el-drawer') or contains(@class,'el-dialog') or contains(@class,'drawer')]"
+    "[.//*[normalize-space()='Export'] or .//*[contains(normalize-space(),'Export')]][last()]"
 )
 EXPORT_PASSWORD_INPUT_XPATHS = [
-    (
-        f"{EXPORT_PANEL_XPATH}"
-        "//label[contains(normalize-space(),'Confirm Password')]/"
-        "following::input[@type='password'][1]"
-    ),
-    f"{EXPORT_PANEL_XPATH}//input[@type='password'][1]",
+    ".//input[@type='password' and (contains(@placeholder,'Password') or contains(@placeholder,'Confirm'))]",
+    ".//*[contains(normalize-space(),'Confirm Password')]/following::input[@type='password'][1]",
+    ".//*[contains(normalize-space(),'Password')]/following::input[@type='password'][1]",
+    ".//input[@type='password' and contains(@class,'el-input__inner')]",
 ]
 
 EXPORT_SAVE_BUTTON_XPATH = (
@@ -569,34 +567,36 @@ EXPORT_SAVE_BUTTON_XPATH = (
 )
 
 
-def type_export_password_if_needed(driver, timeout=8, timer=None):
+def type_export_password_if_needed(driver, password: str, timeout=8, timer=None) -> bool:
     """
     Si el cuadro Export muestra el campo Password, escribe la misma
     contraseña HIK_PASSWORD usada en el login.
     Si no aparece el campo, continuar sin error.
     """
-    wait = WebDriverWait(driver, timeout)
-
     logger_warn = globals().get("log_warn", print)
     logger_info = globals().get("log_info", print)
 
     try:
-        wait.until(EC.visibility_of_element_located((By.XPATH, EXPORT_PANEL_XPATH)))
+        container = WebDriverWait(driver, timeout).until(
+            EC.visibility_of_element_located((By.XPATH, EXPORT_CONTAINER_XPATH))
+        )
     except TimeoutException:
         logger_warn("[EXPORT] Panel Export no visible, se omite escritura de password.")
         return False
 
     pwd_input = None
     end_time = time.time() + timeout
-    for xpath in EXPORT_PASSWORD_INPUT_XPATHS:
-        remaining = max(0.1, end_time - time.time())
-        try:
-            pwd_input = WebDriverWait(driver, remaining).until(
-                EC.visibility_of_element_located((By.XPATH, xpath))
-            )
-            break
-        except TimeoutException:
-            continue
+    while time.time() < end_time and not pwd_input:
+        for xpath in EXPORT_PASSWORD_INPUT_XPATHS:
+            candidates = container.find_elements(By.XPATH, xpath)
+            for candidate in candidates:
+                if candidate.is_displayed():
+                    pwd_input = candidate
+                    break
+            if pwd_input:
+                break
+        if not pwd_input:
+            time.sleep(0.2)
 
     if not pwd_input:
         logger_warn(
@@ -606,10 +606,15 @@ def type_export_password_if_needed(driver, timeout=8, timer=None):
 
     pwd_input.click()
     pwd_input.clear()
-    pwd_input.send_keys(HIK_PASSWORD)
+    pwd_input.send_keys(password)
     if not pwd_input.get_attribute("value"):
-        pwd_input.click()
-        pwd_input.send_keys(HIK_PASSWORD)
+        driver.execute_script(
+            "arguments[0].value = arguments[1];"
+            "arguments[0].dispatchEvent(new Event('input', {bubbles: true}));"
+            "arguments[0].dispatchEvent(new Event('change', {bubbles: true}));",
+            pwd_input,
+            password,
+        )
 
     logger_info("[EXPORT] Password escrito correctamente en el cuadro Export.")
     return True
@@ -672,7 +677,7 @@ def cerrar_buscador_global_si_abrio(driver):
         pass
 
 
-def handle_export_password_if_needed(driver, timeout: int = 8):
+def handle_export_password_if_needed(driver, password: str, timeout: int = 8):
     """
     Si al exportar aparece un cuadro de diálogo pidiendo password,
     escribe la misma clave del login (HIK_PASSWORD) y hace clic en Confirm / OK.
@@ -695,7 +700,7 @@ def handle_export_password_if_needed(driver, timeout: int = 8):
     # input de password dentro del cuadro
     password_input = dialog.find_element(By.XPATH, ".//input[@type='password']")
     password_input.clear()
-    password_input.send_keys(HIK_PASSWORD)
+    password_input.send_keys(password)
 
     # botón Confirm / OK dentro del mismo cuadro
     try:
@@ -975,10 +980,11 @@ def click_export_event_and_alarm(
             timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_ERROR_NO_EXCEL")
         return None
 
-    type_export_password_if_needed(driver, timeout=8, timer=timer)
+    type_export_password_if_needed(driver, password, timeout=8, timer=timer)
 
     # Hacer clic en el botón Save del diálogo Export
     click_export_save_button(driver, timeout=10, timer=timer)
+    handle_export_password_if_needed(driver, password, timeout=8)
 
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
