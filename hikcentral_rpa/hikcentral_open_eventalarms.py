@@ -1065,10 +1065,12 @@ def click_export_event_and_alarm(
     return final_file
 
 
-def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = None):
+def click_trigger_filter(
+    driver, mode: str, timeout=20, timer: StepTimer | None = None
+):
     """
-    En la pantalla 'Event and Alarm Search' hace clic en el botón 'Trigger Alarm'
-    dentro del grupo de filtros Trigger Alarm (All / Not Trigger Alarm / Trigger Alarm).
+    En la pantalla 'Event and Alarm Search' hace clic en el botón del filtro Trigger Alarm.
+    mode: ALL / TRIGGER / NOT_TRIGGER
     """
 
     # Asegurar que la pantalla de Event and Alarm Search está cargada
@@ -1078,30 +1080,27 @@ def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = Non
         )
     )
 
-    # XPath específico para el botón Trigger Alarm
+    label = {"ALL": "All", "TRIGGER": "Trigger Alarm", "NOT_TRIGGER": "Not Trigger Alarm"}[
+        mode
+    ]
     btn_xpath = (
-        "//div[@title='Trigger Alarm' "
+        f"//div[@title='{label}' "
         "and contains(@class,'button') "
-        "and normalize-space()='Trigger Alarm']"
+        f"and normalize-space()='{label}']"
     )
 
-    # Esperar a que el botón sea clickable
     btn = WebDriverWait(driver, timeout).until(
         EC.element_to_be_clickable((By.XPATH, btn_xpath))
     )
+    safe_js_click(driver, btn)
 
-    # Scroll y clic con JS para asegurarnos de disparar el evento
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
-    driver.execute_script("arguments[0].click();", btn)
-
-    # Esperar a que el botón quede marcado (class incluye 'select')
     WebDriverWait(driver, timeout).until(
         lambda d: "select" in d.find_element(By.XPATH, btn_xpath).get_attribute("class")
     )
 
-    print("[9] Botón 'Trigger Alarm' seleccionado correctamente.")
+    print(f"[9] Botón '{label}' seleccionado correctamente.")
     if timer:
-        timer.mark("[9] CLICK_TRIGGER_ALARM")
+        timer.mark(f"[9] CLICK_TRIGGER_FILTER_{mode}")
 
 
 def limpiar_descargas(download_dir: Path = DOWNLOAD_DIR):
@@ -1310,6 +1309,24 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
         df.columns = headers
 
         df = df.dropna(how="all")
+        total_pre = len(df)
+        if total_pre == 0:
+            log_info("[EVENT] Report sin registros (0 filas). Se omite carga.")
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.hik_alarm_extraccion
+                    SET fecha_fin = now(),
+                        total_filas = %s,
+                        total_nuevos = %s,
+                        total_duplicados = %s,
+                        estado = 'OK'
+                    WHERE id = %s;
+                    """,
+                    (0, 0, 0, id_extraccion),
+                )
+            conn.commit()
+            return {"filas_extraidas": 0, "insertados": 0, "omitidos_duplicado": 0}
 
         # IMPORTANTE:
         # En muchos reportes la columna "Mark" viene vacía (checkbox),
@@ -1333,7 +1350,7 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
 
         # mantener filas donde al menos una columna clave tenga data
         if all(c in df.columns for c in key_cols):
-            mask = df[key_cols].applymap(_has_data).any(axis=1)
+            mask = df[key_cols].apply(lambda s: s.map(_has_data)).any(axis=1)
             total_before = len(df)
             df = df[mask].copy()
             log_info(
@@ -1401,7 +1418,7 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
         df["alarm_acknowledgment_time"] = pd.to_datetime(
             df["alarm_acknowledgment_time"], errors="coerce"
         )
-        df = df.applymap(to_py)
+        df = df.map(to_py)
 
         required_data_cols = [
             "name",
@@ -1429,9 +1446,24 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
                 log_info(f"[DEBUG] No se pudo guardar preview RAW: {e}")
 
         if df[required_data_cols].dropna(how="all").empty:
-            raise ValueError(
-                "[EVENT] Las columnas requeridas no contienen datos. Se aborta la carga."
+            log_info(
+                "[EVENT] Report sin datos en columnas requeridas. Se omite carga (0 filas)."
             )
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.hik_alarm_extraccion
+                    SET fecha_fin = now(),
+                        total_filas = %s,
+                        total_nuevos = %s,
+                        total_duplicados = %s,
+                        estado = 'OK'
+                    WHERE id = %s;
+                    """,
+                    (0, 0, 0, id_extraccion),
+                )
+            conn.commit()
+            return {"filas_extraidas": 0, "insertados": 0, "omitidos_duplicado": 0}
 
         def build_event_key(row) -> str:
             def normalize_value(value) -> str:
@@ -1660,7 +1692,7 @@ def procesar_alarm_report(file_path: str, timer: StepTimer) -> None:
 
         df["fecha_creacion"] = datetime.now()
         df = df.where(pd.notnull(df), None)
-        df = df.applymap(to_py)
+        df = df.map(to_py)
 
         registros = []
         for _, row in df.iterrows():
@@ -1891,7 +1923,7 @@ def cerrar_sesion(driver, wait: WebDriverWait):
         print("[WARN] No se pudo cerrar sesión limpiamente.")
 
 
-def run_for_host(host: str) -> dict:
+def run_for_host(host: str, trigger_filter_mode: str) -> dict:
     global step_timer, performance_recorder
 
     print(f"[INFO] === Iniciando extracción para host {host} ===")
@@ -1968,7 +2000,7 @@ def run_for_host(host: str) -> dict:
         click_sidebar_alarm_search(driver, timeout=30, timer=timer)
         click_sidebar_event_and_alarm_search(driver, timeout=30, timer=timer)
         validar_event_and_alarm_search_screen(driver, timeout=40, timer=timer)
-        click_trigger_alarm_button(driver, timeout=30, timer=timer)
+        click_trigger_filter(driver, trigger_filter_mode, timeout=30, timer=timer)
         click_search_button(driver, timeout=40, timer=timer)
 
         limpiar_descargas(host_dir)
@@ -2071,6 +2103,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Automatiza Event and Alarm Search en HikCentral.")
     parser.add_argument("--host", type=str, help="Host/IP de HikCentral (ej: 172.16.9.11)")
     parser.add_argument("--hosts", type=str, help="Hosts/IP separados por coma")
+    parser.add_argument(
+        "--trigger-filter",
+        type=str,
+        default="ALL",
+        choices=["ALL", "TRIGGER", "NOT_TRIGGER"],
+        help="Filtro Trigger Alarm en Event and Alarm Search",
+    )
     args = parser.parse_args()
 
     if args.host or args.hosts:
@@ -2078,6 +2117,7 @@ if __name__ == "__main__":
     else:
         hosts_to_run = parse_hosts_from_env()
 
+    trigger_filter_mode = args.trigger_filter.upper()
     resultados = []
     for host in hosts_to_run:
         if not host_is_up(host):
@@ -2096,7 +2136,7 @@ if __name__ == "__main__":
             continue
 
         try:
-            res = run_for_host(host)
+            res = run_for_host(host, trigger_filter_mode)
             resultados.append(res)
         except Exception as ex:
             print(f"[ERROR] Falló host {host}: {ex}")
