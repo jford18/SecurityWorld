@@ -1165,48 +1165,69 @@ def set_el_input_password(driver, container, password: str, required: bool = Tru
     return len(value)
 
 
-def complete_export_modal(driver, password: str, timeout: int = 15):
+def _get_visible_export_modal(driver):
+    modal_xpaths = [
+        "//div[contains(@class,'el-dialog__wrapper') or contains(@class,'el-drawer__wrapper')]"
+        "[.//*[normalize-space()='Export']]",
+        "//div[contains(@class,'el-dialog') or contains(@class,'el-drawer')][.//*[normalize-space()='Export']]",
+    ]
+    for modal_xpath in modal_xpaths:
+        try:
+            candidates = driver.find_elements(By.XPATH, modal_xpath)
+        except Exception:
+            continue
+        for candidate in candidates:
+            if _is_visible_element(driver, candidate):
+                return candidate
+    return None
+
+
+def dump_export_modal_html(driver, label_prefix: str) -> Path | None:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = LOG_DIR / f"{label_prefix}_{timestamp}.html"
+    try:
+        modal = _get_visible_export_modal(driver)
+    except Exception:
+        modal = None
+    if not modal:
+        return None
+    try:
+        html = driver.execute_script("return arguments[0].outerHTML;", modal)
+    except Exception:
+        html = None
+    if not html:
+        return None
+    output_path.write_text(html, encoding="utf-8")
+    print(f"[EXPORT] HTML del modal Export guardado en: {output_path}")
+    return output_path
+
+
+def complete_export_modal(driver, password: str, timeout: int = 20) -> None:
     logger_warn = globals().get("log_warn", print)
     logger_error = globals().get("log_error", print)
 
-    modal_xpath = (
-        "//div[contains(@class,'el-dialog__wrapper') and .//span[normalize-space()='Export']]"
-    )
-    modal_fallback_xpath = (
-        "//div[contains(@class,'el-dialog') and .//*[normalize-space()='Export']]"
-    )
-
     password_xpath = (
-        ".//label[.//span[normalize-space()='Confirm Password']]/"
-        "following::input[@type='password'][1]"
+        ".//label[.//span[normalize-space()='Confirm Password'] or "
+        "contains(normalize-space(),'Confirm Password')]/following::input[@type='password'][1]"
     )
     password_fallback_xpath = ".//input[@type='password' and @placeholder='Password']"
-
-    save_xpath = (
-        ".//button[@title='Save' or .//div[normalize-space()='Save'] "
-        "or .//span[normalize-space()='Save']]"
-    )
+    save_xpath = ".//button[@title='Save' or .//*[normalize-space()='Save']]"
 
     try:
         driver.switch_to.default_content()
     except Exception:
         pass
 
+    wait = WebDriverWait(driver, timeout)
     try:
-        modal = WebDriverWait(driver, timeout).until(
-            EC.visibility_of_element_located((By.XPATH, modal_xpath))
-        )
-    except TimeoutException:
+        modal = wait.until(lambda d: _get_visible_export_modal(d))
+    except TimeoutException as exc:
         try:
-            modal = WebDriverWait(driver, timeout).until(
-                EC.visibility_of_element_located((By.XPATH, modal_fallback_xpath))
-            )
-        except TimeoutException as exc:
-            try:
-                take_screenshot(driver, "export_modal_missing")
-            except Exception:
-                logger_warn("[EXPORT] No se pudo guardar screenshot del modal Export.")
-            raise exc
+            take_screenshot(driver, "export_modal_missing")
+        except Exception:
+            logger_warn("[EXPORT] No se pudo guardar screenshot del modal Export.")
+        raise exc
 
     log_info = globals().get("log_info", print)
     log_info("[EXPORT] Modal Export visible.")
@@ -1229,24 +1250,58 @@ def complete_export_modal(driver, password: str, timeout: int = 15):
         pass
 
     print("[EXPORT] Seteando password en modal Export...")
-    pwd_input.click()
-    pwd_input.send_keys(Keys.CONTROL, "a")
-    pwd_input.send_keys(Keys.BACKSPACE)
-    pwd_input.send_keys(password)
+    try:
+        pwd_input.click()
+    except Exception:
+        try:
+            driver.execute_script("arguments[0].click();", pwd_input)
+        except Exception:
+            pass
 
-    value = (pwd_input.get_attribute("value") or "").strip()
+    value = ""
+
+    try:
+        pwd_input.click()
+        pwd_input.send_keys(Keys.CONTROL, "a")
+        pwd_input.send_keys(Keys.BACKSPACE)
+        pwd_input.send_keys(password)
+        value = (pwd_input.get_attribute("value") or "").strip()
+    except Exception:
+        value = (pwd_input.get_attribute("value") or "").strip()
+
     if not value:
-        driver.execute_script(
-            """
-            const el = arguments[0];
-            const val = arguments[1];
-            el.value = val;
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            """,
-            pwd_input,
-            password,
-        )
+        try:
+            ActionChains(driver).move_to_element(pwd_input).pause(0.2).click().pause(0.1).key_down(
+                Keys.CONTROL
+            ).send_keys("a").key_up(Keys.CONTROL).send_keys(
+                Keys.BACKSPACE
+            ).send_keys(
+                password
+            ).perform()
+        except Exception:
+            pass
+        value = (pwd_input.get_attribute("value") or "").strip()
+
+    if not value:
+        try:
+            driver.execute_script(
+                """
+                const el = arguments[0];
+                const val = arguments[1];
+                const setter = Object.getOwnPropertyDescriptor(
+                    window.HTMLInputElement.prototype, 'value'
+                ).set;
+                el.focus();
+                setter.call(el, val);
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+                """,
+                pwd_input,
+                password,
+            )
+        except Exception:
+            pass
         value = (pwd_input.get_attribute("value") or "").strip()
 
     if not value:
@@ -1273,8 +1328,11 @@ def complete_export_modal(driver, password: str, timeout: int = 15):
         driver.execute_script("arguments[0].click();", save_btn)
 
     try:
-        WebDriverWait(driver, timeout).until(EC.invisibility_of_element(modal))
-    except TimeoutException as exc:
+        wait.until(
+            lambda d: not _is_visible_element(d, modal)
+            or not modal.is_displayed()
+        )
+    except (TimeoutException, StaleElementReferenceException) as exc:
         try:
             take_screenshot(driver, "export_modal_still_visible")
         except Exception:
@@ -1669,7 +1727,18 @@ def export_event_alarms(driver, wait, export_password: str, logger=None) -> bool
             pass
 
         log_step("🔹 STEP EXPORT-02: Completar modal Export...", logger)
-        complete_export_modal(driver, export_password, timeout=15)
+        try:
+            complete_export_modal(driver, export_password, timeout=20)
+        except Exception:
+            try:
+                take_screenshot(driver, "export_password_failed")
+            except Exception:
+                pass
+            try:
+                dump_export_modal_html(driver, "export_modal_failed")
+            except Exception:
+                pass
+            raise
 
         log_step("✅ EXPORT: completado", logger)
         return True
