@@ -879,6 +879,12 @@ EXPORT_DRAWER_CONTAINER_SELECTOR = (
 )
 EXPORT_DRAWER_PASSWORD_SELECTOR = 'input.el-input__inner[placeholder="Password"]'
 EXPORT_DRAWER_SAVE_REL_XPATH = ".//button[normalize-space()='Save' or .//*[normalize-space()='Save']]"
+EXPORT_PANEL_XPATH = (
+    "//div[(contains(@class,'el-drawer') or contains(@class,'el-dialog') "
+    "or contains(@class,'drawer-main') or contains(@class,'el-drawer__wrapper') "
+    "or contains(@class,'el-dialog__wrapper') or @role='dialog')]"
+    "[.//*[normalize-space()='Export']]"
+)
 
 
 def _set_input_value_js(driver, input_el, value: str):
@@ -1182,6 +1188,105 @@ def _get_visible_export_modal(driver):
     return None
 
 
+def wait_for_export_panel(driver, timeout: int = 20):
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+    wait = WebDriverWait(driver, timeout)
+    return wait.until(EC.visibility_of_element_located((By.XPATH, EXPORT_PANEL_XPATH)))
+
+
+def fill_export_confirm_password(driver, panel, password: str) -> None:
+    logger_warn = globals().get("log_warn", print)
+    logger_error = globals().get("log_error", print)
+
+    label_xpath = (
+        ".//label[.//span[normalize-space()='Confirm Password'] or "
+        "normalize-space()='Confirm Password' or "
+        "contains(normalize-space(),'Confirm Password')]/following::input[@type='password'][1]"
+    )
+    fallback_xpath = ".//input[@type='password' and @placeholder='Password']"
+
+    pwd_input = None
+    selector_used = ""
+    try:
+        pwd_input = panel.find_element(By.XPATH, label_xpath)
+        selector_used = f"xpath:{label_xpath}"
+    except Exception:
+        try:
+            pwd_input = panel.find_element(By.XPATH, fallback_xpath)
+            selector_used = f"xpath:{fallback_xpath}"
+        except Exception as exc:
+            logger_error(
+                "[EXPORT] No se encontró input Confirm Password en panel Export. "
+                f"label_xpath={label_xpath} fallback_xpath={fallback_xpath}"
+            )
+            try:
+                take_screenshot(driver, "export_confirm_password_missing")
+            except Exception:
+                logger_warn("[EXPORT] No se pudo guardar screenshot del input Confirm Password.")
+            raise exc
+
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", pwd_input)
+    except Exception:
+        pass
+
+    value = ""
+
+    try:
+        pwd_input.click()
+        pwd_input.send_keys(Keys.CONTROL, "a")
+        pwd_input.send_keys(Keys.BACKSPACE)
+        pwd_input.send_keys(password)
+        value = (pwd_input.get_attribute("value") or "").strip()
+    except Exception:
+        value = (pwd_input.get_attribute("value") or "").strip()
+
+    if not value:
+        try:
+            ActionChains(driver).move_to_element(pwd_input).pause(0.1).click().pause(0.1).key_down(
+                Keys.CONTROL
+            ).send_keys("a").key_up(Keys.CONTROL).send_keys(Keys.BACKSPACE).send_keys(
+                password
+            ).perform()
+        except Exception:
+            pass
+        value = (pwd_input.get_attribute("value") or "").strip()
+
+    if not value:
+        try:
+            driver.execute_script(
+                """
+                const el = arguments[0];
+                const val = arguments[1];
+                el.focus();
+                el.value = val;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                """,
+                pwd_input,
+                password,
+            )
+        except Exception:
+            pass
+        value = (pwd_input.get_attribute("value") or "").strip()
+
+    if not value:
+        logger_error(
+            "[EXPORT] No se pudo setear Confirm Password en panel Export. "
+            f"selector={selector_used}"
+        )
+        try:
+            take_screenshot(driver, "export_confirm_password_set_failed")
+        except Exception:
+            logger_warn("[EXPORT] No se pudo guardar screenshot del Confirm Password.")
+        raise RuntimeError("No se pudo setear Confirm Password en el panel Export.")
+
+    print(f"[EXPORT] Confirm Password seteado (len={len(value)}) usando {selector_used}.")
+
+
 def dump_export_modal_html(driver, label_prefix: str) -> Path | None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1207,21 +1312,11 @@ def complete_export_modal(driver, password: str, timeout: int = 20) -> None:
     logger_warn = globals().get("log_warn", print)
     logger_error = globals().get("log_error", print)
 
-    password_xpath = (
-        ".//label[.//span[normalize-space()='Confirm Password'] or "
-        "contains(normalize-space(),'Confirm Password')]/following::input[@type='password'][1]"
-    )
-    password_fallback_xpath = ".//input[@type='password' and @placeholder='Password']"
     save_xpath = ".//button[@title='Save' or .//*[normalize-space()='Save']]"
-
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
 
     wait = WebDriverWait(driver, timeout)
     try:
-        modal = wait.until(lambda d: _get_visible_export_modal(d))
+        modal = wait_for_export_panel(driver, timeout=timeout)
     except TimeoutException as exc:
         try:
             take_screenshot(driver, "export_modal_missing")
@@ -1233,84 +1328,10 @@ def complete_export_modal(driver, password: str, timeout: int = 20) -> None:
     log_info("[EXPORT] Modal Export visible.")
 
     try:
-        pwd_input = modal.find_element(By.XPATH, password_xpath)
+        fill_export_confirm_password(driver, modal, password)
     except Exception:
-        try:
-            pwd_input = modal.find_element(By.XPATH, password_fallback_xpath)
-        except Exception as exc:
-            try:
-                take_screenshot(driver, "export_modal_password_missing")
-            except Exception:
-                logger_warn("[EXPORT] No se pudo guardar screenshot del input Password.")
-            raise exc
-
-    try:
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", pwd_input)
-    except Exception:
-        pass
-
-    print("[EXPORT] Seteando password en modal Export...")
-    try:
-        pwd_input.click()
-    except Exception:
-        try:
-            driver.execute_script("arguments[0].click();", pwd_input)
-        except Exception:
-            pass
-
-    value = ""
-
-    try:
-        pwd_input.click()
-        pwd_input.send_keys(Keys.CONTROL, "a")
-        pwd_input.send_keys(Keys.BACKSPACE)
-        pwd_input.send_keys(password)
-        value = (pwd_input.get_attribute("value") or "").strip()
-    except Exception:
-        value = (pwd_input.get_attribute("value") or "").strip()
-
-    if not value:
-        try:
-            ActionChains(driver).move_to_element(pwd_input).pause(0.2).click().pause(0.1).key_down(
-                Keys.CONTROL
-            ).send_keys("a").key_up(Keys.CONTROL).send_keys(
-                Keys.BACKSPACE
-            ).send_keys(
-                password
-            ).perform()
-        except Exception:
-            pass
-        value = (pwd_input.get_attribute("value") or "").strip()
-
-    if not value:
-        try:
-            driver.execute_script(
-                """
-                const el = arguments[0];
-                const val = arguments[1];
-                const setter = Object.getOwnPropertyDescriptor(
-                    window.HTMLInputElement.prototype, 'value'
-                ).set;
-                el.focus();
-                setter.call(el, val);
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-                el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-                """,
-                pwd_input,
-                password,
-            )
-        except Exception:
-            pass
-        value = (pwd_input.get_attribute("value") or "").strip()
-
-    if not value:
-        logger_error("[EXPORT] No se pudo setear el password en el modal Export.")
-        try:
-            take_screenshot(driver, "export_modal_password_set_failed")
-        except Exception:
-            logger_warn("[EXPORT] No se pudo guardar screenshot del modal Export.")
-        raise RuntimeError("No se pudo setear el password en el modal Export.")
+        logger_error("[EXPORT] No se pudo setear el Confirm Password en el modal Export.")
+        raise
 
     try:
         save_btn = modal.find_element(By.XPATH, save_xpath)
@@ -1705,8 +1726,7 @@ def click_search_button(driver, timeout=30, timer: StepTimer | None = None):
 def export_event_alarms(driver, wait, export_password: str, logger=None) -> bool:
     log_step("🚀 EXPORT: inicio", logger)
 
-    # Fallback: si no está seteado HIK_EXPORT_PASSWORD, usar la misma del login
-    export_password = (export_password or "").strip() or HIK_PASSWORD
+    export_password = HIK_PASSWORD
 
     try:
         log_step("🔹 STEP EXPORT-01: Click Export (toolbar)...", logger)
@@ -1773,7 +1793,7 @@ def click_export_event_and_alarm(
     before = snapshot_alarm_reports(downloadcenter_root)
     print(f"[EXPORT] Downloadcenter: {downloadcenter_root}")
 
-    export_password = os.getenv("HIK_EXPORT_PASSWORD", "")
+    export_password = HIK_PASSWORD
     ok = export_event_alarms(driver, wait, export_password, logger=print)
     if not ok:
         print("[EXPORT] Export falló, se aborta la espera de descarga.")
