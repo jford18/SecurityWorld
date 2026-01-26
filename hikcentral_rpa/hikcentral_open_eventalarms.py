@@ -702,12 +702,20 @@ def _is_visible_element(driver, element) -> bool:
     return bool(is_visible)
 
 
-def get_visible_export_container(driver, timeout=8):
+def get_visible_export_container(driver, timeout=8, take_fail_screenshot: bool = True):
     wait = WebDriverWait(driver, timeout)
+    last_print_ts = 0.0
 
     def _locate_container(_driver):
+        nonlocal last_print_ts
         candidates = _driver.find_elements(By.CSS_SELECTOR, EXPORT_DRAWER_CONTAINER_SELECTOR)
         visible = [el for el in candidates if _is_visible_element(_driver, el)]
+        now = time.time()
+        if now - last_print_ts >= 2.0:
+            print(
+                f"[EXPORT] buscando drawer... visibles={len(visible)} candidatos={len(candidates)}"
+            )
+            last_print_ts = now
         best = None
         best_score = -1
         for idx, element in enumerate(visible):
@@ -757,11 +765,67 @@ def get_visible_export_container(driver, timeout=8):
             )
         except Exception:
             logger_warn("[EXPORT] No se encontró container visible de Export.")
-        try:
-            take_screenshot(driver, "export_container_missing")
-        except Exception:
-            logger_warn("[EXPORT] No se pudo guardar screenshot del drawer Export.")
+        if take_fail_screenshot:
+            try:
+                take_screenshot(driver, "export_container_missing")
+            except Exception:
+                logger_warn("[EXPORT] No se pudo guardar screenshot del drawer Export.")
         raise exc
+
+
+def find_export_drawer_any_frame(driver, timeout=12):
+    try:
+        driver.switch_to.default_content()
+        container = get_visible_export_container(driver, timeout=timeout, take_fail_screenshot=False)
+        if container:
+            return container, "default"
+    except TimeoutException:
+        pass
+
+    frames = driver.find_elements(By.TAG_NAME, "iframe") + driver.find_elements(By.TAG_NAME, "frame")
+    for idx, frame in enumerate(frames):
+        try:
+            driver.switch_to.default_content()
+            driver.switch_to.frame(frame)
+        except Exception:
+            continue
+        try:
+            container = get_visible_export_container(
+                driver, timeout=timeout, take_fail_screenshot=False
+            )
+        except TimeoutException:
+            container = None
+        if container:
+            return container, f"iframe[{idx}]"
+
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+    return None, "none"
+
+
+def _dump_export_candidates(driver, scope_label: str):
+    try:
+        candidates = driver.find_elements(By.CSS_SELECTOR, EXPORT_DRAWER_CONTAINER_SELECTOR)
+    except Exception as exc:
+        print(f"[EXPORT][DEBUG] {scope_label} error listando candidatos: {exc}")
+        return
+    visible = []
+    visible_texts = []
+    for candidate in candidates:
+        if not _is_visible_element(driver, candidate):
+            continue
+        visible.append(candidate)
+        try:
+            text = driver.execute_script("return (arguments[0].innerText || '').trim();", candidate)
+        except Exception:
+            text = (candidate.text or "").strip()
+        visible_texts.append((text or "")[:200])
+    print(
+        f"[EXPORT][DEBUG] {scope_label} candidatos={len(candidates)} visibles={len(visible)} "
+        f"textos={visible_texts}"
+    )
 
 
 def set_el_input_password(driver, container, password: str):
@@ -814,12 +878,14 @@ def set_el_input_password(driver, container, password: str):
     except Exception:
         pass
 
+    print("[7] Seteando password en input placeholder=Password ...")
     pwd_input.click()
     pwd_input.send_keys(Keys.CONTROL, "a")
     pwd_input.send_keys(Keys.BACKSPACE)
     pwd_input.send_keys(password)
 
-    if not (pwd_input.get_attribute("value") or "").strip():
+    value = (pwd_input.get_attribute("value") or "").strip()
+    if not value:
         driver.execute_script(
             """
             const el = arguments[0];
@@ -832,8 +898,11 @@ def set_el_input_password(driver, container, password: str):
             pwd_input,
             password,
         )
+        value = (pwd_input.get_attribute("value") or "").strip()
 
-    if not (pwd_input.get_attribute("value") or "").strip():
+    print(f"[7] Password value length={len(value)}")
+
+    if not value:
         logger_error(
             "[EXPORT] No se pudo setear el password en el drawer Export. "
             f"type={pwd_input.get_attribute('type')}, "
@@ -846,6 +915,7 @@ def set_el_input_password(driver, container, password: str):
         except Exception:
             logger_warn("[EXPORT] No se pudo guardar screenshot del drawer Export.")
         raise RuntimeError("No se pudo setear el password en el drawer Export.")
+    return len(value)
 
 
 def click_save_in_container(driver, container, timeout=10):
@@ -863,6 +933,7 @@ def click_save_in_container(driver, container, timeout=10):
             logger_warn("[EXPORT] No se pudo guardar screenshot del drawer Export.")
         raise exc
 
+    print("[7] Clic Save...")
     try:
         save_btn.click()
     except Exception:
@@ -1224,6 +1295,9 @@ def click_export_event_and_alarm(
     safe_js_click(driver, export_btn)
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_BUTTON")
+    print("[7] Export clickeado. Esperando drawer Export...")
+    if timer:
+        timer.mark("[71] EXPORT_CLICK_OK")
 
     # (opcional) seleccionar Excel ANTES de Save, si existe radio
     excel_option_xpath = (
@@ -1242,11 +1316,70 @@ def click_export_event_and_alarm(
     log_info = globals().get("log_info", print)
     log_error = globals().get("log_error", print)
 
-    container = get_visible_export_container(driver, timeout=12)
-    set_el_input_password(driver, container, HIK_PASSWORD)
+    container, frame_label = find_export_drawer_any_frame(driver, timeout=12)
+    if container is None:
+        take_screenshot(driver, "export_drawer_not_found")
+        print("[EXPORT][DEBUG] No se encontró drawer Export ni en default_content ni en iframes.")
+        try:
+            driver.switch_to.default_content()
+        except Exception:
+            pass
+        frames = driver.find_elements(By.TAG_NAME, "iframe") + driver.find_elements(By.TAG_NAME, "frame")
+        print(f"[EXPORT][DEBUG] iframes root detectados: {len(frames)}")
+        for idx, frame in enumerate(frames):
+            try:
+                frame_id = frame.get_attribute("id")
+                frame_name = frame.get_attribute("name")
+                frame_src = frame.get_attribute("src")
+                frame_class = frame.get_attribute("class")
+                frame_visible = _is_visible_element(driver, frame)
+                print(
+                    "[EXPORT][DEBUG] iframe[{idx}] visible={vis} id={fid} name={fname} "
+                    "class={fclass} src={fsrc}".format(
+                        idx=idx,
+                        vis=frame_visible,
+                        fid=frame_id,
+                        fname=frame_name,
+                        fclass=frame_class,
+                        fsrc=frame_src,
+                    )
+                )
+            except Exception as exc:
+                print(f"[EXPORT][DEBUG] iframe[{idx}] error leyendo atributos: {exc}")
+        _dump_export_candidates(driver, "default_content")
+        for idx, frame in enumerate(frames):
+            try:
+                driver.switch_to.default_content()
+                driver.switch_to.frame(frame)
+                _dump_export_candidates(driver, f"iframe[{idx}]")
+            except Exception as exc:
+                print(f"[EXPORT][DEBUG] iframe[{idx}] error al inspeccionar candidatos: {exc}")
+        try:
+            driver.switch_to.default_content()
+        except Exception:
+            pass
+        raise TimeoutException("No se encontró drawer Export en ningún frame")
+
+    container_tag = getattr(container, "tag_name", "n/a")
+    container_class = container.get_attribute("class") if container else ""
+    print(
+        "[7] Drawer Export detectado "
+        f"(frame={frame_label}, tag={container_tag}, class={container_class})"
+    )
+    if timer:
+        timer.mark("[72] EXPORT_DRAWER_FOUND")
+    print("[7] Seteando password en drawer Export...")
+    value_len = set_el_input_password(driver, container, HIK_PASSWORD)
+    print(f"[7] Password seteado OK (len={value_len})")
+    if timer:
+        timer.mark("[73] EXPORT_PASSWORD_SET")
 
     save_ts = time.time()
+    print("[7] Clic en Save del drawer Export...")
     click_save_in_container(driver, container, timeout=15)
+    print("[7] Save OK, drawer cerrado.")
+    if timer:
+        timer.mark("[74] EXPORT_SAVE_OK")
 
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
