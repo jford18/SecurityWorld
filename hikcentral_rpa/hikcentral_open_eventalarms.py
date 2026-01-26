@@ -1165,6 +1165,123 @@ def set_el_input_password(driver, container, password: str, required: bool = Tru
     return len(value)
 
 
+def complete_export_modal(driver, password: str, timeout: int = 15):
+    logger_warn = globals().get("log_warn", print)
+    logger_error = globals().get("log_error", print)
+
+    modal_xpath = (
+        "//div[contains(@class,'el-dialog__wrapper') and .//span[normalize-space()='Export']]"
+    )
+    modal_fallback_xpath = (
+        "//div[contains(@class,'el-dialog') and .//*[normalize-space()='Export']]"
+    )
+
+    password_xpath = (
+        ".//label[.//span[normalize-space()='Confirm Password']]/"
+        "following::input[@type='password'][1]"
+    )
+    password_fallback_xpath = ".//input[@type='password' and @placeholder='Password']"
+
+    save_xpath = (
+        ".//button[@title='Save' or .//div[normalize-space()='Save'] "
+        "or .//span[normalize-space()='Save']]"
+    )
+
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+
+    try:
+        modal = WebDriverWait(driver, timeout).until(
+            EC.visibility_of_element_located((By.XPATH, modal_xpath))
+        )
+    except TimeoutException:
+        try:
+            modal = WebDriverWait(driver, timeout).until(
+                EC.visibility_of_element_located((By.XPATH, modal_fallback_xpath))
+            )
+        except TimeoutException as exc:
+            try:
+                take_screenshot(driver, "export_modal_missing")
+            except Exception:
+                logger_warn("[EXPORT] No se pudo guardar screenshot del modal Export.")
+            raise exc
+
+    log_info = globals().get("log_info", print)
+    log_info("[EXPORT] Modal Export visible.")
+
+    try:
+        pwd_input = modal.find_element(By.XPATH, password_xpath)
+    except Exception:
+        try:
+            pwd_input = modal.find_element(By.XPATH, password_fallback_xpath)
+        except Exception as exc:
+            try:
+                take_screenshot(driver, "export_modal_password_missing")
+            except Exception:
+                logger_warn("[EXPORT] No se pudo guardar screenshot del input Password.")
+            raise exc
+
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", pwd_input)
+    except Exception:
+        pass
+
+    print("[EXPORT] Seteando password en modal Export...")
+    pwd_input.click()
+    pwd_input.send_keys(Keys.CONTROL, "a")
+    pwd_input.send_keys(Keys.BACKSPACE)
+    pwd_input.send_keys(password)
+
+    value = (pwd_input.get_attribute("value") or "").strip()
+    if not value:
+        driver.execute_script(
+            """
+            const el = arguments[0];
+            const val = arguments[1];
+            el.value = val;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            """,
+            pwd_input,
+            password,
+        )
+        value = (pwd_input.get_attribute("value") or "").strip()
+
+    if not value:
+        logger_error("[EXPORT] No se pudo setear el password en el modal Export.")
+        try:
+            take_screenshot(driver, "export_modal_password_set_failed")
+        except Exception:
+            logger_warn("[EXPORT] No se pudo guardar screenshot del modal Export.")
+        raise RuntimeError("No se pudo setear el password en el modal Export.")
+
+    try:
+        save_btn = modal.find_element(By.XPATH, save_xpath)
+    except Exception as exc:
+        try:
+            take_screenshot(driver, "export_modal_save_missing")
+        except Exception:
+            logger_warn("[EXPORT] No se pudo guardar screenshot del botón Save.")
+        raise exc
+
+    print("[EXPORT] Clic en Save (modal Export)...")
+    try:
+        save_btn.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", save_btn)
+
+    try:
+        WebDriverWait(driver, timeout).until(EC.invisibility_of_element(modal))
+    except TimeoutException as exc:
+        try:
+            take_screenshot(driver, "export_modal_still_visible")
+        except Exception:
+            logger_warn("[EXPORT] No se pudo guardar screenshot del modal Export.")
+        raise RuntimeError("El modal Export no se cerró tras Save.") from exc
+
+
 def click_save_in_container(driver, container, timeout=10):
     logger_warn = globals().get("log_warn", print)
     logger_error = globals().get("log_error", print)
@@ -1551,24 +1668,8 @@ def export_event_alarms(driver, wait, export_password: str, logger=None) -> bool
         except Exception:
             pass
 
-        # Detectar drawer/dialog de Export en cualquier frame
-        log_step("🔹 STEP EXPORT-02: Detectar drawer/dialog Export...", logger)
-        drawer, scope = find_export_drawer_any_frame(driver, timeout=12)
-        if drawer:
-            log_step(f"✅ Drawer Export detectado en {scope}", logger)
-
-            # Setear password SOLO si existe input (no reventar si no existe)
-            try:
-                set_el_input_password(driver, drawer, export_password, required=False)
-            except Exception:
-                # si el input existe pero falla, ahí sí se verá en logs/screenshot por set_el_input_password
-                raise
-
-            # Click Save si existe; si no existe, continuar
-            try_click_save_in_container(driver, drawer, timeout=10)
-        else:
-            # Fallback: algunos builds muestran message-box con password
-            handle_password_confirm_if_present(driver, timeout=8)
+        log_step("🔹 STEP EXPORT-02: Completar modal Export...", logger)
+        complete_export_modal(driver, export_password, timeout=15)
 
         log_step("✅ EXPORT: completado", logger)
         return True
