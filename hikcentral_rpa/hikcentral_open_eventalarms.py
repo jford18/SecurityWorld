@@ -1,6 +1,7 @@
 import argparse
 import os
 import shutil
+import re
 import time
 import traceback
 from datetime import datetime
@@ -299,6 +300,7 @@ def snapshot_alarm_reports(downloadcenter_root: Path) -> set[Path]:
 def wait_new_alarm_report(
     downloadcenter_root: Path,
     before: set[Path],
+    start_ts: float | None = None,
     timeout: int = 180,
 ) -> Path | None:
     fin = time.time() + timeout
@@ -311,7 +313,14 @@ def wait_new_alarm_report(
 
         if nuevos:
             # el más nuevo por fecha de modificación
-            last_candidate = max(nuevos, key=lambda p: p.stat().st_mtime)
+            if start_ts is not None:
+                nuevos = [
+                    p
+                    for p in nuevos
+                    if p.exists() and p.stat().st_mtime >= (start_ts - 2)
+                ]
+            if nuevos:
+                last_candidate = max(nuevos, key=lambda p: p.stat().st_mtime)
 
             # esperar tamaño estable (descarga terminada)
             try:
@@ -637,22 +646,43 @@ def wait_click(driver, by, value, timeout=20):
     return el
 
 
-# XPaths específicos para el diálogo Export de Event and Alarm Search
-EXPORT_PASSWORD_INPUT_XPATH = (
-    "//input[@type='password' and @placeholder='Password'"
-    " and contains(@class,'el-input__inner')]"
+# ====== Export drawer (robusto ElementUI) ======
+EXPORT_DRAWER_XPATH = (
+    "(//div[contains(@class,'el-drawer__wrapper') or contains(@class,'el-dialog__wrapper') "
+    " or contains(@class,'drawer-main') or contains(@class,'el-drawer')]"
+    "[.//*[normalize-space()='Export']])[last()]"
 )
 
-EXPORT_SAVE_BUTTON_XPATH = (
-    "("
-    "//button[@title='Save'"
-    "        and contains(@class,'el-button')"
-    "        and contains(@class,'el-button--primary')"
-    "        and .//div[contains(@class,'el-button-slot-wrapper')"
-    "                 and normalize-space()='Save']"
-    "]"
-    ")[1]"
+EXPORT_DRAWER_PASSWORD_REL_XPATH = (
+    ".//*[contains(normalize-space(),'Confirm Password')]/ancestor::*[contains(@class,'el-form-item')][1]"
+    "//input[@type='password' or @placeholder='Password']"
 )
+
+EXPORT_DRAWER_SAVE_REL_XPATH = ".//button[.//*[normalize-space()='Save']]"
+
+
+def _set_input_value_js(driver, input_el, value: str):
+    driver.execute_script(
+        """
+        const el = arguments[0];
+        const val = arguments[1];
+        el.focus();
+        el.value = val;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        """,
+        input_el,
+        value,
+    )
+
+
+def _blur_active(driver):
+    try:
+        driver.execute_script(
+            "document.activeElement && document.activeElement.blur && document.activeElement.blur();"
+        )
+    except Exception:
+        pass
 
 
 def type_export_password_if_needed(driver, timeout=8, timer=None):
@@ -667,18 +697,37 @@ def type_export_password_if_needed(driver, timeout=8, timer=None):
     logger_info = globals().get("log_info", print)
 
     try:
-        pwd_input = wait.until(
-            EC.visibility_of_element_located((By.XPATH, EXPORT_PASSWORD_INPUT_XPATH))
-        )
+        drawer = wait.until(EC.visibility_of_element_located((By.XPATH, EXPORT_DRAWER_XPATH)))
     except TimeoutException:
         logger_warn(
-            "[EXPORT] No apareció cuadro de password en Export, se asume que no es requerido."
+            "[EXPORT] No se detectó drawer visible de Export, se asume que no es requerido."
         )
         return False
 
-    pwd_input.click()
-    pwd_input.clear()
-    pwd_input.send_keys(HIK_PASSWORD)
+    try:
+        pwd_input = WebDriverWait(drawer, timeout).until(
+            lambda d: drawer.find_element(By.XPATH, EXPORT_DRAWER_PASSWORD_REL_XPATH)
+        )
+    except Exception:
+        logger_warn("[EXPORT] Drawer Export visible pero no se encontró input 'Confirm Password'.")
+        return False
+
+    # Set robusto (ElementUI): JS + eventos + fallback send_keys
+    try:
+        _set_input_value_js(driver, pwd_input, HIK_PASSWORD)
+        time.sleep(0.2)
+        _blur_active(driver)
+    except Exception:
+        pass
+
+    # Fallback clásico
+    try:
+        pwd_input.click()
+        pwd_input.clear()
+        pwd_input.send_keys(HIK_PASSWORD)
+        _blur_active(driver)
+    except Exception:
+        pass
 
     logger_info("[EXPORT] Password escrito correctamente en el cuadro Export.")
     return True
@@ -692,11 +741,13 @@ def click_export_save_button(driver, timeout=10, timer=None):
     """
     step_name = "[7] CLICK_EXPORT_EVENT_AND_ALARM_SAVE_BUTTON"
     logger_info = globals().get("log_info", print)
+    logger_error = globals().get("log_error", print)
 
     try:
         wait = WebDriverWait(driver, timeout)
-        save_btn = wait.until(
-            EC.element_to_be_clickable((By.XPATH, EXPORT_SAVE_BUTTON_XPATH))
+        drawer = wait.until(EC.visibility_of_element_located((By.XPATH, EXPORT_DRAWER_XPATH)))
+        save_btn = WebDriverWait(drawer, timeout).until(
+            lambda d: drawer.find_element(By.XPATH, EXPORT_DRAWER_SAVE_REL_XPATH)
         )
 
         logger_info("[EXPORT] Botón Save localizado, haciendo clic...")
@@ -713,7 +764,7 @@ def click_export_save_button(driver, timeout=10, timer=None):
             timer.mark(step_name)
 
     except TimeoutException:
-        log_error("[EXPORT] No se pudo localizar/clic el botón Save del cuadro Export (timeout).")
+        logger_error("[EXPORT] No se pudo localizar/clic el botón Save del cuadro Export (timeout).")
         raise
 
 
@@ -1039,6 +1090,7 @@ def click_export_event_and_alarm(
     type_export_password_if_needed(driver, timeout=8, timer=timer)
 
     # Save
+    save_ts = time.time()
     click_export_save_button(driver, timeout=10, timer=timer)
 
     if timer:
@@ -1046,7 +1098,12 @@ def click_export_event_and_alarm(
 
     # Esperar el archivo REAL en Downloadcenter (NO en DOWNLOAD_DIR)
     log_info("[EXPORT] Esperando Alarm_Report_* en Downloadcenter (HCWebControlService)...")
-    src_file = wait_new_alarm_report(downloadcenter_root, before, timeout=max(300, timeout))
+    src_file = wait_new_alarm_report(
+        downloadcenter_root,
+        before,
+        start_ts=save_ts,
+        timeout=max(300, timeout),
+    )
 
     if not src_file or not src_file.exists():
         log_error("[ERROR] No se detectó Alarm_Report_* en Downloadcenter.")
