@@ -647,18 +647,11 @@ def wait_click(driver, by, value, timeout=20):
 
 
 # ====== Export drawer (robusto ElementUI) ======
-EXPORT_DRAWER_XPATH = (
-    "(//div[contains(@class,'el-drawer__wrapper') or contains(@class,'el-dialog__wrapper') "
-    " or contains(@class,'drawer-main') or contains(@class,'el-drawer')]"
-    "[.//*[normalize-space()='Export']])[last()]"
+EXPORT_DRAWER_CONTAINER_SELECTOR = (
+    ".el-drawer__wrapper, .el-dialog__wrapper, .drawer-main, .el-drawer"
 )
-
-EXPORT_DRAWER_PASSWORD_REL_XPATH = (
-    ".//*[contains(normalize-space(),'Confirm Password')]/ancestor::*[contains(@class,'el-form-item')][1]"
-    "//input[@type='password' or @placeholder='Password']"
-)
-
-EXPORT_DRAWER_SAVE_REL_XPATH = ".//button[.//*[normalize-space()='Save']]"
+EXPORT_DRAWER_PASSWORD_SELECTOR = 'input.el-input__inner[placeholder="Password"]'
+EXPORT_DRAWER_SAVE_REL_XPATH = ".//button[normalize-space()='Save' or .//*[normalize-space()='Save']]"
 
 
 def _set_input_value_js(driver, input_el, value: str):
@@ -670,6 +663,7 @@ def _set_input_value_js(driver, input_el, value: str):
         el.value = val;
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.blur();
         """,
         input_el,
         value,
@@ -685,6 +679,30 @@ def _blur_active(driver):
         pass
 
 
+def _is_visible_export_container(driver, element):
+    if not element.is_displayed():
+        return False
+    try:
+        has_offset_parent = driver.execute_script(
+            "return arguments[0].offsetParent !== null;", element
+        )
+    except Exception:
+        has_offset_parent = True
+    container_text = element.text or ""
+    return has_offset_parent and "Export" in container_text
+
+
+def get_visible_export_container(driver, timeout=8):
+    wait = WebDriverWait(driver, timeout)
+
+    def _locate_container(_driver):
+        candidates = _driver.find_elements(By.CSS_SELECTOR, EXPORT_DRAWER_CONTAINER_SELECTOR)
+        visible = [el for el in candidates if _is_visible_export_container(_driver, el)]
+        return visible[-1] if visible else False
+
+    return wait.until(_locate_container)
+
+
 def type_export_password_if_needed(driver, timeout=8, timer=None):
     """
     Si el cuadro Export muestra el campo Password, escribe la misma
@@ -697,40 +715,69 @@ def type_export_password_if_needed(driver, timeout=8, timer=None):
     logger_info = globals().get("log_info", print)
 
     try:
-        drawer = wait.until(EC.visibility_of_element_located((By.XPATH, EXPORT_DRAWER_XPATH)))
+        drawer = get_visible_export_container(driver, timeout=timeout)
     except TimeoutException:
         logger_warn(
             "[EXPORT] No se detectó drawer visible de Export, se asume que no es requerido."
         )
         return False
 
-    try:
-        pwd_input = WebDriverWait(drawer, timeout).until(
-            lambda d: drawer.find_element(By.XPATH, EXPORT_DRAWER_PASSWORD_REL_XPATH)
-        )
-    except Exception:
-        logger_warn("[EXPORT] Drawer Export visible pero no se encontró input 'Confirm Password'.")
+    pwd_candidates = drawer.find_elements(By.CSS_SELECTOR, EXPORT_DRAWER_PASSWORD_SELECTOR)
+    pwd_input = None
+    for candidate in pwd_candidates:
+        attr_type = (candidate.get_attribute("type") or "").strip().lower()
+        attr_outer = (candidate.get_attribute("outerinputtype") or "").strip().lower()
+        if attr_type == "password" or attr_outer == "password":
+            pwd_input = candidate
+            break
+
+    if pwd_input is None:
+        try:
+            drawer_html = driver.execute_script("return arguments[0].outerHTML;", drawer)
+            preview = (drawer_html or "")[:1200]
+            logger_warn(
+                "[EXPORT] Drawer Export visible pero no se encontró input Password. "
+                f"Preview HTML: {preview}"
+            )
+        except Exception:
+            logger_warn("[EXPORT] Drawer Export visible pero no se encontró input Password.")
+        try:
+            take_screenshot(driver, "export_password_input_missing")
+        except Exception:
+            logger_warn("[EXPORT] No se pudo guardar screenshot del drawer Export.")
         return False
 
-    # Set robusto (ElementUI): JS + eventos + fallback send_keys
-    try:
-        _set_input_value_js(driver, pwd_input, HIK_PASSWORD)
-        time.sleep(0.2)
-        _blur_active(driver)
-    except Exception:
-        pass
+    for attempt in range(3):
+        try:
+            _set_input_value_js(driver, pwd_input, HIK_PASSWORD)
+            time.sleep(0.2)
+            _blur_active(driver)
+        except Exception:
+            pass
 
-    # Fallback clásico
-    try:
-        pwd_input.click()
-        pwd_input.clear()
-        pwd_input.send_keys(HIK_PASSWORD)
-        _blur_active(driver)
-    except Exception:
-        pass
+        if not pwd_input.get_attribute("value"):
+            try:
+                pwd_input.click()
+                pwd_input.clear()
+                pwd_input.send_keys(HIK_PASSWORD)
+                _blur_active(driver)
+            except Exception:
+                pass
 
-    logger_info("[EXPORT] Password escrito correctamente en el cuadro Export.")
-    return True
+        if pwd_input.get_attribute("value"):
+            logger_info("[EXPORT] Password escrito correctamente en el cuadro Export.")
+            return True
+
+        time.sleep(0.3)
+
+    logger_warn(
+        "[EXPORT] No se pudo setear el password en el drawer Export. "
+        f"type={pwd_input.get_attribute('type')}, "
+        f"outerinputtype={pwd_input.get_attribute('outerinputtype')}, "
+        f"placeholder={pwd_input.get_attribute('placeholder')}, "
+        f"class={pwd_input.get_attribute('class')}"
+    )
+    return False
 
 
 def click_export_save_button(driver, timeout=10, timer=None):
@@ -744,8 +791,7 @@ def click_export_save_button(driver, timeout=10, timer=None):
     logger_error = globals().get("log_error", print)
 
     try:
-        wait = WebDriverWait(driver, timeout)
-        drawer = wait.until(EC.visibility_of_element_located((By.XPATH, EXPORT_DRAWER_XPATH)))
+        drawer = get_visible_export_container(driver, timeout=timeout)
         save_btn = WebDriverWait(drawer, timeout).until(
             lambda d: drawer.find_element(By.XPATH, EXPORT_DRAWER_SAVE_REL_XPATH)
         )
