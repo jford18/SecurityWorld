@@ -26,6 +26,7 @@ from selenium.common.exceptions import (
 from selenium.common.exceptions import TimeoutException as SeleniumTimeout
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
@@ -596,6 +597,66 @@ def safe_click(driver, element, step_name: str | None = None, logger=None):
         if step_name:
             log_step(f"❌ {step_name}: FAIL -> {exc}", logger)
         raise
+
+
+def wait_for_overlays_to_clear(driver, timeout=8, logger=None):
+    overlay_selectors = [
+        ".el-loading-mask",
+        ".loading",
+        ".spinner",
+        ".ant-spin",
+        "[class*='loading']",
+    ]
+    for selector in overlay_selectors:
+        try:
+            if driver.find_elements(By.CSS_SELECTOR, selector):
+                log_step("Overlay detectado / esperando...", logger)
+            WebDriverWait(driver, timeout).until(
+                EC.invisibility_of_element_located((By.CSS_SELECTOR, selector))
+            )
+        except TimeoutException:
+            continue
+        except Exception:
+            continue
+
+
+def click_seguro(driver, by, locator, nombre, timeout=12, logger=None):
+    end_time = time.time() + timeout
+    last_exc: Exception | None = None
+    while time.time() < end_time:
+        try:
+            wait = WebDriverWait(driver, max(2, min(6, timeout)))
+            element = wait.until(EC.presence_of_element_located((by, locator)))
+            wait.until(EC.element_to_be_clickable((by, locator)))
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", element)
+            try:
+                element.click()
+                log_step("Click normal ok", logger)
+                return element
+            except ElementClickInterceptedException as exc:
+                last_exc = exc
+                try:
+                    driver.execute_script("arguments[0].click();", element)
+                    log_step("Click JS ok", logger)
+                    return element
+                except Exception as js_exc:
+                    last_exc = js_exc
+                    try:
+                        ActionChains(driver).move_to_element(element).pause(0.2).click().perform()
+                        log_step("Click ActionChains ok", logger)
+                        return element
+                    except Exception as ac_exc:
+                        last_exc = ac_exc
+                        continue
+            except StaleElementReferenceException as exc:
+                last_exc = exc
+                continue
+        except (TimeoutException, StaleElementReferenceException) as exc:
+            last_exc = exc
+            continue
+    if last_exc:
+        raise last_exc
+    raise TimeoutException(f"No se pudo hacer click en {nombre}")
 
 
 def find_in_frames(driver, wait, by, value, logger=None):
@@ -1355,30 +1416,82 @@ def export_event_alarms(driver, wait, export_password: str, logger=None) -> bool
 
     try:
         log_step("🔹 STEP EXPORT-01: Abrir Export...", logger)
-        try:
-            export_icon = wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "i.icomoon-common_export"))
-            )
-        except TimeoutException:
-            export_icon = wait.until(
-                EC.presence_of_element_located(
-                    (
-                        By.XPATH,
-                        "//*[self::i or self::span][contains(@class,'export') or contains(@class,'Export')]",
-                    )
+        log_step("Intentando click Export…", logger)
+        wait_for_overlays_to_clear(driver, timeout=8, logger=logger)
+        export_locators = [
+            (
+                By.XPATH,
+                "//span[normalize-space()='Export']/ancestor::*[self::button or self::a][1]",
+            ),
+            (
+                By.XPATH,
+                "//*[self::button or self::a]//*[contains(normalize-space(),'Export')]/"
+                "ancestor::*[self::button or self::a][1]",
+            ),
+            (
+                By.XPATH,
+                "//*[self::button or self::a][@title='Export' or @aria-label='Export' or "
+                "contains(@title,'Export') or contains(@aria-label,'Export')]",
+            ),
+        ]
+        export_clicked = False
+        last_exc: Exception | None = None
+        for by, locator in export_locators:
+            try:
+                click_seguro(driver, by, locator, "Export", timeout=12, logger=logger)
+                export_clicked = True
+                break
+            except (TimeoutException, ElementClickInterceptedException, StaleElementReferenceException) as exc:
+                last_exc = exc
+                continue
+        if not export_clicked:
+            try:
+                driver.save_screenshot("./debug_export_fail.png")
+                print("[EXPORT] Screenshot guardado en ./debug_export_fail.png")
+            except Exception as shot_exc:
+                print(f"[EXPORT] No se pudo guardar screenshot: {shot_exc}")
+            try:
+                print(f"[EXPORT] URL actual: {driver.current_url}")
+                print(f"[EXPORT] Título: {driver.title}")
+                export_matches = driver.find_elements(
+                    By.XPATH, "//*[contains(normalize-space(),'Export')]"
                 )
-            )
+                resumen = [
+                    f"{el.tag_name}: {(el.text or el.get_attribute('title') or '')[:80]}"
+                    for el in export_matches[:10]
+                ]
+                print(
+                    f"[EXPORT] Matches 'Export': {len(export_matches)} -> {resumen}"
+                )
+            except Exception as summary_exc:
+                print(f"[EXPORT] No se pudo imprimir resumen: {summary_exc}")
+            raise last_exc or TimeoutException("No se pudo hacer click en Export.")
 
-        click_target = export_icon
         try:
-            if export_icon.tag_name.lower() != "button":
-                parent_btn = export_icon.find_elements(By.XPATH, "./ancestor::button[1]")
-                if parent_btn:
-                    click_target = parent_btn[0]
+            click_seguro(
+                driver,
+                By.XPATH,
+                "//span[normalize-space()='Excel']/ancestor::*[self::button or self::li or self::a][1]",
+                "Excel",
+                timeout=4,
+                logger=logger,
+            )
         except Exception:
-            click_target = export_icon
-
-        safe_click(driver, click_target, "STEP EXPORT-01", logger)
+            pass
+        try:
+            click_seguro(
+                driver,
+                By.XPATH,
+                "//button[normalize-space()='OK' or normalize-space()='Confirm' or "
+                "normalize-space()='Export'] | "
+                "//span[normalize-space()='OK' or normalize-space()='Confirm' or "
+                "normalize-space()='Export']/ancestor::button[1]",
+                "Confirm Export",
+                timeout=4,
+                logger=logger,
+            )
+        except Exception:
+            pass
 
         log_step("🔹 STEP EXPORT-02: Detectar panel “Export”...", logger)
         title_element = find_in_frames(
