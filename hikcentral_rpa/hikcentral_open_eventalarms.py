@@ -649,7 +649,8 @@ def wait_click(driver, by, value, timeout=20):
 
 # ====== Export drawer (robusto ElementUI) ======
 EXPORT_DRAWER_CONTAINER_SELECTOR = (
-    "div.el-drawer__wrapper, div.el-dialog__wrapper, div.el-drawer, div.el-dialog, div.drawer-main"
+    "div.el-drawer__wrapper, div.el-dialog__wrapper, div.el-drawer, div.el-dialog, "
+    "div.drawer-main, [role='dialog']"
 )
 EXPORT_DRAWER_PASSWORD_SELECTOR = 'input.el-input__inner[placeholder="Password"]'
 EXPORT_DRAWER_SAVE_REL_XPATH = ".//button[normalize-space()='Save' or .//*[normalize-space()='Save']]"
@@ -680,21 +681,25 @@ def _blur_active(driver):
         pass
 
 
-def _is_visible_export_container(driver, element):
+def _is_visible_element(driver, element) -> bool:
     try:
         is_visible = driver.execute_script(
-            "return arguments[0].offsetParent !== null && arguments[0].getClientRects().length > 0;",
+            """
+            return (function(el){
+                if(!el) return false;
+                const s = window.getComputedStyle(el);
+                if(!s || s.display==='none' || s.visibility==='hidden' || Number(s.opacity)===0) {
+                    return false;
+                }
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0;
+            })(arguments[0]);
+            """,
             element,
         )
     except Exception:
         return False
-    if not is_visible:
-        return False
-    try:
-        container_text = driver.execute_script("return arguments[0].innerText || '';", element)
-    except Exception:
-        container_text = element.text or ""
-    return "Export" in container_text
+    return bool(is_visible)
 
 
 def get_visible_export_container(driver, timeout=8):
@@ -702,8 +707,32 @@ def get_visible_export_container(driver, timeout=8):
 
     def _locate_container(_driver):
         candidates = _driver.find_elements(By.CSS_SELECTOR, EXPORT_DRAWER_CONTAINER_SELECTOR)
-        visible = [el for el in candidates if _is_visible_export_container(_driver, el)]
-        return visible[-1] if visible else False
+        visible = [el for el in candidates if _is_visible_element(_driver, el)]
+        best = None
+        best_score = -1
+        for idx, element in enumerate(visible):
+            score = 0
+            password_selectors = [
+                'input.el-input__inner[placeholder="Password"][type="password"]',
+                'input.el-input__inner[outerinputtype="password"]',
+                'input[type="password"][placeholder="Password"]',
+            ]
+            for selector in password_selectors:
+                if element.find_elements(By.CSS_SELECTOR, selector):
+                    score += 100
+                    break
+            if element.find_elements(By.XPATH, EXPORT_DRAWER_SAVE_REL_XPATH):
+                score += 20
+            try:
+                inner_text = _driver.execute_script("return arguments[0].innerText || '';", element)
+            except Exception:
+                inner_text = element.text or ""
+            if "Export" in (inner_text or ""):
+                score += 10
+            if score > best_score or score == best_score:
+                best_score = score
+                best = element
+        return best if best is not None else False
 
     try:
         return wait.until(_locate_container)
@@ -713,14 +742,7 @@ def get_visible_export_container(driver, timeout=8):
             candidates = driver.find_elements(By.CSS_SELECTOR, EXPORT_DRAWER_CONTAINER_SELECTOR)
             visible_texts = []
             for candidate in candidates:
-                try:
-                    is_visible = driver.execute_script(
-                        "return arguments[0].offsetParent !== null && arguments[0].getClientRects().length > 0;",
-                        candidate,
-                    )
-                except Exception:
-                    is_visible = False
-                if not is_visible:
+                if not _is_visible_element(driver, candidate):
                     continue
                 try:
                     text = driver.execute_script(
@@ -728,10 +750,10 @@ def get_visible_export_container(driver, timeout=8):
                     )
                 except Exception:
                     text = (candidate.text or "").strip()
-                visible_texts.append(text)
+                visible_texts.append((text or "")[:200])
             logger_warn(
                 "[EXPORT] No se encontró container visible de Export. "
-                f"Textos visibles: {visible_texts}"
+                f"Candidatos: {len(candidates)}. Textos visibles: {visible_texts}"
             )
         except Exception:
             logger_warn("[EXPORT] No se encontró container visible de Export.")
@@ -749,7 +771,8 @@ def set_el_input_password(driver, container, password: str):
     pwd_input = None
     selectors = [
         'input.el-input__inner[placeholder="Password"][type="password"]',
-        "input.el-input__inner[outerinputtype=\"password\"]",
+        'input.el-input__inner[outerinputtype="password"]',
+        'input[type="password"][placeholder="Password"]',
     ]
 
     for selector in selectors:
@@ -830,7 +853,7 @@ def click_save_in_container(driver, container, timeout=10):
     logger_error = globals().get("log_error", print)
 
     try:
-        save_btn = WebDriverWait(container, timeout).until(
+        save_btn = WebDriverWait(driver, timeout).until(
             lambda d: container.find_element(By.XPATH, EXPORT_DRAWER_SAVE_REL_XPATH)
         )
     except TimeoutException as exc:
@@ -858,9 +881,9 @@ def click_save_in_container(driver, container, timeout=10):
         raise RuntimeError("El drawer Export indicó error de requerido tras Save.")
 
     try:
-        WebDriverWait(driver, timeout).until(EC.invisibility_of_element(container))
+        WebDriverWait(driver, timeout).until(lambda d: not _is_visible_element(d, container))
     except TimeoutException:
-        if container.is_displayed():
+        if _is_visible_element(driver, container):
             try:
                 take_screenshot(driver, "export_save_drawer_still_visible")
             except Exception:
@@ -1219,11 +1242,11 @@ def click_export_event_and_alarm(
     log_info = globals().get("log_info", print)
     log_error = globals().get("log_error", print)
 
-    container = get_visible_export_container(driver, timeout=8)
+    container = get_visible_export_container(driver, timeout=12)
     set_el_input_password(driver, container, HIK_PASSWORD)
 
     save_ts = time.time()
-    click_save_in_container(driver, container, timeout=10)
+    click_save_in_container(driver, container, timeout=15)
 
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
