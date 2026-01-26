@@ -1,6 +1,7 @@
 import argparse
 import os
 import shutil
+import sys
 import re
 import time
 import traceback
@@ -828,7 +829,7 @@ def _dump_export_candidates(driver, scope_label: str):
     )
 
 
-def set_el_input_password(driver, container, password: str):
+def set_el_input_password(driver, container, password: str, required: bool = True):
     logger_warn = globals().get("log_warn", print)
     logger_error = globals().get("log_error", print)
 
@@ -856,6 +857,10 @@ def set_el_input_password(driver, container, password: str):
             pwd_input = None
 
     if pwd_input is None:
+        if not required:
+            print("[7] Drawer Export sin input Password. Continuo sin setear password.")
+            return 0
+
         try:
             drawer_html = driver.execute_script("return arguments[0].outerHTML;", container)
             preview = (drawer_html or "")[:1500]
@@ -903,6 +908,7 @@ def set_el_input_password(driver, container, password: str):
     print(f"[7] Password value length={len(value)}")
 
     if not value:
+        # Si el input existe pero no se logra setear, esto sí es error.
         logger_error(
             "[EXPORT] No se pudo setear el password en el drawer Export. "
             f"type={pwd_input.get_attribute('type')}, "
@@ -960,6 +966,27 @@ def click_save_in_container(driver, container, timeout=10):
             except Exception:
                 logger_warn("[EXPORT] No se pudo guardar screenshot del drawer Export.")
             raise RuntimeError("El drawer Export no se cerró tras Save.")
+
+
+def try_click_save_in_container(driver, container, timeout=6) -> bool:
+    """
+    Intenta hacer clic en Save si existe dentro del container.
+    Si no existe o no aparece, NO revienta (vuelve a comportamiento "como antes").
+    """
+    try:
+        click_save_in_container(driver, container, timeout=timeout)
+        return True
+    except TimeoutException:
+        print("[7] No se encontró botón Save en el drawer Export. Continuo.")
+        return False
+    except Exception as exc:
+        # si hay drawer pero el click falla raro, preferimos fallar con evidencia
+        print(f"[WARN] Error al intentar Save en drawer Export: {exc}")
+        try:
+            take_screenshot(driver, "export_save_click_error")
+        except Exception:
+            pass
+        raise
 
 
 def type_export_password_if_needed(driver, timeout=8, timer=None):
@@ -1295,7 +1322,7 @@ def click_export_event_and_alarm(
     safe_js_click(driver, export_btn)
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_BUTTON")
-    print("[7] Export clickeado. Esperando drawer Export...")
+    print("[7] Export clickeado. Validando si aparece password (diálogo/drawer)...")
     if timer:
         timer.mark("[71] EXPORT_CLICK_OK")
 
@@ -1313,73 +1340,74 @@ def click_export_event_and_alarm(
     except Exception:
         pass
 
+    # 1) Primero intenta resolver password si aparece como diálogo (lo que ya funcionaba antes)
+    try:
+        handle_export_password_if_needed(driver, timeout=4)
+    except Exception as exc:
+        print(f"[WARN] handle_export_password_if_needed falló: {exc}")
+    try:
+        handle_password_confirm_if_present(driver, timeout=4)
+    except Exception as exc:
+        print(f"[WARN] handle_password_confirm_if_present falló: {exc}")
+
     log_info = globals().get("log_info", print)
     log_error = globals().get("log_error", print)
 
-    container, frame_label = find_export_drawer_any_frame(driver, timeout=12)
-    if container is None:
-        take_screenshot(driver, "export_drawer_not_found")
-        print("[EXPORT][DEBUG] No se encontró drawer Export ni en default_content ni en iframes.")
-        try:
-            driver.switch_to.default_content()
-        except Exception:
-            pass
-        frames = driver.find_elements(By.TAG_NAME, "iframe") + driver.find_elements(By.TAG_NAME, "frame")
-        print(f"[EXPORT][DEBUG] iframes root detectados: {len(frames)}")
-        for idx, frame in enumerate(frames):
-            try:
-                frame_id = frame.get_attribute("id")
-                frame_name = frame.get_attribute("name")
-                frame_src = frame.get_attribute("src")
-                frame_class = frame.get_attribute("class")
-                frame_visible = _is_visible_element(driver, frame)
-                print(
-                    "[EXPORT][DEBUG] iframe[{idx}] visible={vis} id={fid} name={fname} "
-                    "class={fclass} src={fsrc}".format(
-                        idx=idx,
-                        vis=frame_visible,
-                        fid=frame_id,
-                        fname=frame_name,
-                        fclass=frame_class,
-                        fsrc=frame_src,
-                    )
-                )
-            except Exception as exc:
-                print(f"[EXPORT][DEBUG] iframe[{idx}] error leyendo atributos: {exc}")
-        _dump_export_candidates(driver, "default_content")
-        for idx, frame in enumerate(frames):
-            try:
-                driver.switch_to.default_content()
-                driver.switch_to.frame(frame)
-                _dump_export_candidates(driver, f"iframe[{idx}]")
-            except Exception as exc:
-                print(f"[EXPORT][DEBUG] iframe[{idx}] error al inspeccionar candidatos: {exc}")
-        try:
-            driver.switch_to.default_content()
-        except Exception:
-            pass
-        raise TimeoutException("No se encontró drawer Export en ningún frame")
+    # 2) Luego intenta el drawer SOLO en default_content (evita colgarse escaneando iframes)
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
 
-    container_tag = getattr(container, "tag_name", "n/a")
-    container_class = container.get_attribute("class") if container else ""
-    print(
-        "[7] Drawer Export detectado "
-        f"(frame={frame_label}, tag={container_tag}, class={container_class})"
-    )
-    if timer:
-        timer.mark("[72] EXPORT_DRAWER_FOUND")
-    print("[7] Seteando password en drawer Export...")
-    value_len = set_el_input_password(driver, container, HIK_PASSWORD)
-    print(f"[7] Password seteado OK (len={value_len})")
-    if timer:
-        timer.mark("[73] EXPORT_PASSWORD_SET")
+    container = None
+    try:
+        container = get_visible_export_container(driver, timeout=6, take_fail_screenshot=False)
+    except TimeoutException:
+        container = None
 
     save_ts = time.time()
-    print("[7] Clic en Save del drawer Export...")
-    click_save_in_container(driver, container, timeout=15)
-    print("[7] Save OK, drawer cerrado.")
-    if timer:
-        timer.mark("[74] EXPORT_SAVE_OK")
+
+    if container:
+        try:
+            container_tag = getattr(container, "tag_name", "n/a")
+            container_class = container.get_attribute("class") if container else ""
+            print(f"[7] Drawer Export detectado (tag={container_tag}, class={container_class})")
+        except Exception:
+            print("[7] Drawer Export detectado.")
+
+        if timer:
+            timer.mark("[72] EXPORT_DRAWER_FOUND")
+
+        # Password en drawer: opcional (si no hay input, continúa)
+        print("[7] Validando input Password en drawer Export...")
+        value_len = set_el_input_password(driver, container, HIK_PASSWORD, required=False)
+        if value_len > 0:
+            print(f"[7] Password seteado OK (len={value_len})")
+            if timer:
+                timer.mark("[73] EXPORT_PASSWORD_SET")
+        else:
+            print("[7] No se solicitó Password en drawer Export.")
+
+        # Save: opcional (si no hay botón Save, continúa)
+        print("[7] Intentando Save en drawer Export (si existe)...")
+        saved = try_click_save_in_container(driver, container, timeout=6)
+        if saved:
+            print("[7] Save OK (drawer procesado/cerrado).")
+            if timer:
+                timer.mark("[74] EXPORT_SAVE_OK")
+
+        # Por si el password aparece DESPUÉS (diálogo confirmación)
+        try:
+            handle_export_password_if_needed(driver, timeout=4)
+        except Exception:
+            pass
+        try:
+            handle_password_confirm_if_present(driver, timeout=4)
+        except Exception:
+            pass
+    else:
+        # comportamiento previo: si no aparece drawer, continuar y esperar archivo
+        print("[7] No apareció drawer Export. Continuo esperando archivo en Downloadcenter.")
 
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
