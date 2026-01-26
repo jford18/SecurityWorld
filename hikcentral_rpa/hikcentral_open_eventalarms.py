@@ -672,22 +672,28 @@ def click_export_toolbar_button(driver, timeout=15, logger=None) -> None:
         pass
 
     export_locators = [
-        # Caso típico: cualquier nodo con texto Export, clic en el ancestro clickeable más cercano
+        # ✅ Botón real del toolbar
+        (
+            By.CSS_SELECTOR,
+            "button[title='Export'].el-button.is-icon-text",
+        ),
+        # ✅ Fallback: cualquier botón con title Export
         (
             By.XPATH,
-            "//*[normalize-space()='Export']/ancestor-or-self::*[self::button or self::a or self::div][1]",
+            "//button[@title='Export']",
         ),
-        # Caso: atributo title/aria-label
+        # ✅ Fallback: botón que contenga texto Export dentro (div/span)
         (
             By.XPATH,
-            "//*[@title='Export' or @aria-label='Export' or contains(@title,'Export') or "
-            "contains(@aria-label,'Export')]",
+            "//button[contains(@class,'el-button') and ("
+            ".//div[normalize-space()='Export'] or .//span[normalize-space()='Export']"
+            ")]",
         ),
-        # Caso: icono de export (varía según versión)
+        # ✅ Fallback icono export/download dentro de un botón
         (
             By.XPATH,
             "//*[self::i or self::svg][contains(@class,'export') or contains(@class,'download')]/"
-            "ancestor-or-self::*[self::button or self::a or self::div][1]",
+            "ancestor::button[1]",
         ),
     ]
 
@@ -707,10 +713,25 @@ def click_export_toolbar_button(driver, timeout=15, logger=None) -> None:
       const s = window.getComputedStyle(el);
       if (!s || s.display === 'none' || s.visibility === 'hidden' || Number(s.opacity) === 0) return false;
       const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0;
+      if (r.width <= 0 || r.height <= 0) return false;
+
+      const vw = window.innerWidth || document.documentElement.clientWidth;
+      const vh = window.innerHeight || document.documentElement.clientHeight;
+
+      // debe intersectar con viewport
+      return (r.right > 0 && r.bottom > 0 && r.left < vw && r.top < vh);
     };
 
-    const candidates = Array.from(document.querySelectorAll('button, a, div, span'))
+    // 1) Preferir botón real por title
+    let btn = document.querySelector("button[title='Export']");
+    if (btn && isVisible(btn)) {
+      btn.scrollIntoView({block:'center'});
+      btn.click();
+      return true;
+    }
+
+    // 2) Fallback: botones visibles con texto Export
+    const candidates = Array.from(document.querySelectorAll('button'))
       .filter(el => isVisible(el) && (el.innerText || '').trim() === 'Export');
 
     if (!candidates.length) return false;
@@ -724,14 +745,9 @@ def click_export_toolbar_button(driver, timeout=15, logger=None) -> None:
       return scoreA - scoreB;
     });
 
-    let el = candidates[0];
-    // si es span, subir al contenedor
-    if (el.tagName.toLowerCase() === 'span') {
-      const parent = el.closest('button,a,div');
-      if (parent) el = parent;
-    }
-    el.scrollIntoView({block:'center'});
-    el.click();
+    btn = candidates[0];
+    btn.scrollIntoView({block:'center'});
+    btn.click();
     return true;
     """
     try:
@@ -892,23 +908,40 @@ def _blur_active(driver):
 
 def _is_visible_element(driver, element) -> bool:
     try:
-        is_visible = driver.execute_script(
-            """
-            return (function(el){
-                if(!el) return false;
-                const s = window.getComputedStyle(el);
-                if(!s || s.display==='none' || s.visibility==='hidden' || Number(s.opacity)===0) {
-                    return false;
-                }
-                const r = el.getBoundingClientRect();
-                return r.width > 0 && r.height > 0;
-            })(arguments[0]);
-            """,
-            element,
+        return bool(
+            driver.execute_script(
+                """
+                return (function(el){
+                    if(!el) return false;
+
+                    const s = window.getComputedStyle(el);
+                    if(!s || s.display==='none' || s.visibility==='hidden' || Number(s.opacity)===0) {
+                        return false;
+                    }
+
+                    const r = el.getBoundingClientRect();
+                    if (r.width <= 0 || r.height <= 0) return false;
+
+                    // ✅ Debe intersectar con el viewport (evita drawers fuera de pantalla como right:-400px)
+                    const vw = window.innerWidth || document.documentElement.clientWidth;
+                    const vh = window.innerHeight || document.documentElement.clientHeight;
+
+                    const intersects =
+                        r.right > 0 &&
+                        r.bottom > 0 &&
+                        r.left < vw &&
+                        r.top < vh;
+
+                    if (!intersects) return false;
+
+                    return true;
+                })(arguments[0]);
+                """,
+                element,
+            )
         )
     except Exception:
         return False
-    return bool(is_visible)
 
 
 def get_visible_export_container(driver, timeout=8, take_fail_screenshot: bool = True):
