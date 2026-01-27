@@ -661,8 +661,8 @@ def click_seguro(driver, by, locator, nombre, timeout=12, logger=None):
 
 def click_export_toolbar_button(driver, timeout=15, logger=None) -> None:
     """
-    Click robusto al botón Export (arriba a la derecha).
-    En HikCentral a veces el texto 'Export' no está en <span> o el clic real está en el contenedor.
+    Click 100% seguro al botón Export del toolbar (arriba derecha).
+    Evita confundir el texto 'Export' del drawer (existe oculto en el DOM).
     """
     wait_for_overlays_to_clear(driver, timeout=8, logger=logger)
 
@@ -671,98 +671,40 @@ def click_export_toolbar_button(driver, timeout=15, logger=None) -> None:
     except Exception:
         pass
 
-    export_locators = [
-        # ✅ Botón real del toolbar
-        (
-            By.CSS_SELECTOR,
-            "button[title='Export'].el-button.is-icon-text",
-        ),
-        # ✅ Fallback: cualquier botón con title Export
-        (
-            By.XPATH,
-            "//button[@title='Export']",
-        ),
-        # ✅ Fallback: botón que contenga texto Export dentro (div/span)
-        (
-            By.XPATH,
-            "//button[contains(@class,'el-button') and ("
-            ".//div[normalize-space()='Export'] or .//span[normalize-space()='Export']"
-            ")]",
-        ),
-        # ✅ Fallback icono export/download dentro de un botón
-        (
-            By.XPATH,
-            "//*[self::i or self::svg][contains(@class,'export') or contains(@class,'download')]/"
-            "ancestor::button[1]",
-        ),
-    ]
+    wait = WebDriverWait(driver, timeout)
 
-    last_exc = None
-    for by, locator in export_locators:
-        try:
-            click_seguro(driver, by, locator, "Export", timeout=timeout, logger=logger)
-            return
-        except Exception as exc:
-            last_exc = exc
-            continue
+    # 1) anclar al contenedor del toolbar
+    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.alarm-head-operation")))
 
-    # Fallback JS: busca elemento visible cuyo innerText sea "Export" y esté en zona superior derecha
-    js = """
-    const isVisible = (el) => {
-      if (!el) return false;
-      const s = window.getComputedStyle(el);
-      if (!s || s.display === 'none' || s.visibility === 'hidden' || Number(s.opacity) === 0) return false;
-      const r = el.getBoundingClientRect();
-      if (r.width <= 0 || r.height <= 0) return false;
+    # 2) botón real Export dentro del toolbar
+    export_btn = wait.until(
+        EC.element_to_be_clickable(
+            (By.CSS_SELECTOR, "div.alarm-head-operation button[title='Export'].el-button.is-icon-text")
+        )
+    )
 
-      const vw = window.innerWidth || document.documentElement.clientWidth;
-      const vh = window.innerHeight || document.documentElement.clientHeight;
-
-      // debe intersectar con viewport
-      return (r.right > 0 && r.bottom > 0 && r.left < vw && r.top < vh);
-    };
-
-    // 1) Preferir botón real por title
-    let btn = document.querySelector("button[title='Export']");
-    if (btn && isVisible(btn)) {
-      btn.scrollIntoView({block:'center'});
-      btn.click();
-      return true;
-    }
-
-    // 2) Fallback: botones visibles con texto Export
-    const candidates = Array.from(document.querySelectorAll('button'))
-      .filter(el => isVisible(el) && (el.innerText || '').trim() === 'Export');
-
-    if (!candidates.length) return false;
-
-    candidates.sort((a, b) => {
-      const ra = a.getBoundingClientRect();
-      const rb = b.getBoundingClientRect();
-      // preferir top y derecha
-      const scoreA = (ra.top) + (window.innerWidth - ra.right);
-      const scoreB = (rb.top) + (window.innerWidth - rb.right);
-      return scoreA - scoreB;
-    });
-
-    btn = candidates[0];
-    btn.scrollIntoView({block:'center'});
-    btn.click();
-    return true;
-    """
-    try:
-        ok = WebDriverWait(driver, 6).until(lambda d: d.execute_script(js))
-        if ok:
-            return
-    except Exception as exc:
-        last_exc = exc
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", export_btn)
 
     try:
-        take_screenshot(driver, "export_click_failed")
-    except Exception:
-        pass
+        export_btn.click()
+        log_step("Click Export toolbar OK", logger)
+    except ElementClickInterceptedException:
+        driver.execute_script("arguments[0].click();", export_btn)
+        log_step("Click Export toolbar OK (JS)", logger)
 
-    raise last_exc if last_exc else TimeoutException("No se pudo hacer click en Export (toolbar).")
+    # 3) validar drawer abierto: div.drawer div.main visible y SIN main-hide
+    def drawer_abierto(d):
+        mains = d.find_elements(By.CSS_SELECTOR, "div.drawer div.main")
+        for m in mains:
+            try:
+                cls = (m.get_attribute("class") or "")
+                if m.is_displayed() and ("main-hide" not in cls):
+                    return True
+            except Exception:
+                continue
+        return False
+
+    wait.until(drawer_abierto)
 
 
 def find_in_frames(driver, wait, by, value, logger=None):
@@ -919,6 +861,15 @@ def _is_visible_element(driver, element) -> bool:
                 """
                 return (function(el){
                     if(!el) return false;
+
+                    const cls_attr = (el.getAttribute("class") || "");
+                    if (cls_attr.includes("main-hide")) return false;
+
+                    const right = (window.getComputedStyle(el).right || "");
+                    if (right.includes("-400px")) return false;
+
+                    const ariaHidden = el.getAttribute("aria-hidden");
+                    if (ariaHidden === "true") return false;
 
                     const s = window.getComputedStyle(el);
                     if(!s || s.display==='none' || s.visibility==='hidden' || Number(s.opacity)===0) {
