@@ -146,6 +146,7 @@ URL = ""
 SCRIPT_NAME = "hikcentral_open_eventalarms.py"
 HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
 HIK_PASSWORD = os.getenv("HIK_PASSWORD", "SW2112asm")
+HIK_EXPORT_PASSWORD = os.getenv("HIK_EXPORT_PASSWORD", HIK_PASSWORD)
 
 LOG_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\logs")
 DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")
@@ -705,6 +706,58 @@ def click_export_toolbar_button(driver, timeout=15, logger=None) -> None:
         return False
 
     wait.until(drawer_abierto)
+
+
+def click_export_and_enter_password(driver, export_password, logger=None, timeout=15):
+    """
+    Hace clic en el botón 'Export', espera la apertura del modal de exportación,
+    ingresa la contraseña y confirma la exportación.
+    """
+    wait = WebDriverWait(driver, timeout)
+
+    log_step("🔹 Buscando botón Export...", logger)
+    try:
+        container = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.alarm-head-operation")))
+        export_btn = container.find_element(By.CSS_SELECTOR, "button[title='Export'].el-button.is-icon-text")
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", export_btn)
+        try:
+            export_btn.click()
+            log_step("✔️ Click Export (normal)", logger)
+        except ElementClickInterceptedException:
+            driver.execute_script("arguments[0].click();", export_btn)
+            log_step("✔️ Click Export (JS fallback)", logger)
+    except Exception as e:
+        take_screenshot(driver, "error_click_export")
+        raise RuntimeError(f"No se pudo hacer clic en Export: {e}")
+
+    # Esperar a que aparezca el modal con campo de contraseña
+    log_step("🔹 Esperando modal de exportación...", logger)
+    try:
+        password_input = wait.until(
+            EC.visibility_of_element_located((By.CSS_SELECTOR, "input[type='password'].el-input__inner"))
+        )
+        password_input.clear()
+        password_input.send_keys(export_password)
+        driver.execute_script("arguments[0].blur();", password_input)
+        log_step("✔️ Contraseña escrita", logger)
+    except TimeoutException:
+        take_screenshot(driver, "error_password_modal")
+        raise RuntimeError("No apareció el campo de contraseña en modal de exportación.")
+
+    # Hacer clic en botón Save
+    log_step("🔹 Buscando botón Save...", logger)
+    try:
+        save_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[text()='Save']]")))
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", save_btn)
+        try:
+            save_btn.click()
+            log_step("✔️ Click botón Save (normal)", logger)
+        except ElementClickInterceptedException:
+            driver.execute_script("arguments[0].click();", save_btn)
+            log_step("✔️ Click botón Save (JS fallback)", logger)
+    except Exception as e:
+        take_screenshot(driver, "error_click_save")
+        raise RuntimeError(f"No se pudo hacer clic en Save: {e}")
 
 
 def find_in_frames(driver, wait, by, value, logger=None):
@@ -1677,8 +1730,6 @@ def click_search_button(driver, timeout=30, timer: StepTimer | None = None):
 def export_event_alarms(driver, wait, export_password: str, logger=None) -> bool:
     log_step("🚀 EXPORT: inicio", logger)
 
-    export_password = HIK_PASSWORD
-
     try:
         log_step("🔹 STEP EXPORT-01: Click Export (toolbar)...", logger)
         click_export_toolbar_button(driver, timeout=12, logger=logger)
@@ -1709,7 +1760,13 @@ def export_event_alarms(driver, wait, export_password: str, logger=None) -> bool
                 dump_export_modal_html(driver, "export_modal_failed")
             except Exception:
                 pass
-            raise
+            log_step("⚠️ Export modal falló, intentando flujo alternativo...", logger)
+            click_export_and_enter_password(
+                driver,
+                export_password,
+                logger=logger,
+                timeout=20,
+            )
 
         log_step("✅ EXPORT: completado", logger)
         return True
@@ -1744,7 +1801,7 @@ def click_export_event_and_alarm(
     before = snapshot_alarm_reports(downloadcenter_root)
     print(f"[EXPORT] Downloadcenter: {downloadcenter_root}")
 
-    export_password = HIK_PASSWORD
+    export_password = password or HIK_EXPORT_PASSWORD
     ok = export_event_alarms(driver, wait, export_password, logger=print)
     if not ok:
         print("[EXPORT] Export falló, se aborta la espera de descarga.")
@@ -2724,7 +2781,7 @@ def run_for_host(host: str, trigger_filter_mode: str) -> dict:
         limpiar_descargas(host_dir)
         export_file_path = click_export_event_and_alarm(
             driver,
-            password=HIK_PASSWORD,
+            password=HIK_EXPORT_PASSWORD,
             download_dir=host_dir,
             host_label=host,
             timeout=30,
