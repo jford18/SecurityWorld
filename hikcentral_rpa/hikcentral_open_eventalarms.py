@@ -649,18 +649,35 @@ EXPORT_DIALOG_CONFIRM_PASSWORD_INPUT_XPATH = (
     "contains(translate(@placeholder,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'confirm')]"
 )
 
-EXPORT_PASSWORD_INPUT_REL_XPATH = (
-    ".//input[contains(@class,'el-input__inner') and @placeholder='Password' "
-    "and (@outerinputtype='password' or @outerinputtype='Password')]"
-)
-EXPORT_PASSWORD_INPUT_FALLBACK_REL_XPATH = (
-    ".//input[contains(@class,'el-input__inner') and @placeholder='Password']"
-)
-EXPORT_PASSWORD_LABEL_FALLBACK_REL_XPATH = (
-    ".//*[contains(normalize-space(),'Confirm Password')]/ancestor::*"
-    "[contains(@class,'el-form-item') or contains(@class,'form-item')][1]"
-    "//input[contains(@class,'el-input__inner')]"
-)
+EXPORT_CONTAINER_JS = """
+const inputs = Array.from(document.querySelectorAll('input[placeholder="Password"]'))
+  .filter(i => i && i.offsetParent !== null);
+
+let target = null;
+target = inputs.find(i => (i.getAttribute('outerinputtype') || '').toLowerCase() === 'password') || inputs[0];
+if (!target) return null;
+
+const hasConfirm = (el) => {
+  const root = el.closest('.el-drawer, .el-dialog, [class*="drawer"], [class*="dialog"]') || document.body;
+  const txt = (root.innerText || '').toLowerCase();
+  return txt.includes('confirm password') && txt.includes('save');
+};
+
+let container = target.closest('.el-drawer, .el-dialog, [class*="drawer"], [class*="dialog"]');
+if (!container) container = target.closest('body');
+if (!container) return null;
+
+let node = container;
+for (let i = 0; i < 6 && node; i += 1) {
+  const txt = (node.innerText || '').toLowerCase();
+  if (txt.includes('confirm password') && txt.includes('save') && txt.includes('export')) return node;
+  node = node.parentElement;
+}
+const txt2 = (container.innerText || '').toLowerCase();
+if (txt2.includes('confirm password') && txt2.includes('save')) return container;
+
+return null;
+"""
 
 EXPORT_DIALOG_SAVE_BUTTON_XPATH = (
     ".//button[@title='Save'"
@@ -694,43 +711,48 @@ def _log_message(logger, level: str, message: str):
         print(message)
 
 
-def wait_export_drawer_visible(driver, timeout=10):
+def find_export_container(driver):
+    driver.switch_to.default_content()
+    return driver.execute_script(EXPORT_CONTAINER_JS)
+
+
+def wait_export_container(driver, timeout=12):
     logger_info = _resolve_logger("log_info")
     wait = WebDriverWait(driver, timeout)
-
-    def is_export_drawer_visible(_driver):
-        containers = _driver.find_elements(By.XPATH, EXPORT_DRAWER_XPATH)
-        for container in containers:
-            try:
-                if container.is_displayed():
-                    return container
-            except StaleElementReferenceException:
-                continue
-        return False
-
-    container = wait.until(is_export_drawer_visible)
-    _log_message(logger_info, "info", "[EXPORT] Export drawer detectado")
+    wait.until(lambda d: find_export_container(d) is not None)
+    container = find_export_container(driver)
+    _log_message(logger_info, "info", "[EXPORT] Contenedor Export detectado")
     return container
 
 
 def find_export_confirm_password_input(export_container):
-    candidates = []
-    for xpath in (
-        EXPORT_PASSWORD_INPUT_REL_XPATH,
-        EXPORT_PASSWORD_INPUT_FALLBACK_REL_XPATH,
-        EXPORT_PASSWORD_LABEL_FALLBACK_REL_XPATH,
-    ):
+    try:
+        inputs = export_container.find_elements(
+            By.CSS_SELECTOR,
+            "input.el-input__inner[placeholder='Password']",
+        )
+    except Exception:
+        return None
+    visibles = []
+    for element in inputs:
         try:
-            candidates = export_container.find_elements(By.XPATH, xpath)
-        except Exception:
-            candidates = []
-        for element in candidates:
-            try:
-                if element.is_displayed() and element.is_enabled():
-                    return element
-            except StaleElementReferenceException:
-                continue
-    return None
+            if element.is_displayed() and element.is_enabled():
+                visibles.append(element)
+        except StaleElementReferenceException:
+            continue
+    return visibles[-1] if visibles else None
+
+
+def fill_confirm_password_in_container(driver, export_container, password, logger=None):
+    logger_info = logger if logger is not None else _resolve_logger("log_info")
+    logger_warn = _resolve_logger("log_warn")
+
+    confirm_input = find_export_confirm_password_input(export_container)
+    if confirm_input is None:
+        _log_message(logger_warn, "warning", "[EXPORT] Campo Confirm Password no encontrado en panel Export.")
+        return False
+
+    return set_input_value_robusto(driver, confirm_input, password, logger=logger_info)
 
 
 def set_input_value_robusto(driver, element, value, logger=None):
@@ -773,7 +795,7 @@ el.dispatchEvent(new Event('change', {bubbles: true}));
     if not current_value:
         _log_message(logger_warn, "warning", "[EXPORT] No se pudo escribir password en input.")
     else:
-        _log_message(logger_info, "info", f"[EXPORT] Password escrito, len={len(current_value)}")
+        _log_message(logger_info, "info", f"[EXPORT] Password escrito len={len(current_value)}")
 
     return bool(current_value)
 
@@ -786,12 +808,12 @@ def click_save_in_export(driver, export_container, timeout=10, timer=None):
 
     def find_save_button():
         try:
-            buttons = export_container.find_elements(By.XPATH, EXPORT_SAVE_BTN_REL_XPATH)
+            buttons = export_container.find_elements(By.CSS_SELECTOR, "button")
         except Exception:
             return None
         for btn in buttons:
             try:
-                if btn.is_displayed() and btn.is_enabled():
+                if btn.is_displayed() and btn.is_enabled() and btn.text.strip() == "Save":
                     return btn
             except StaleElementReferenceException:
                 continue
@@ -802,6 +824,18 @@ def click_save_in_export(driver, export_container, timeout=10, timer=None):
     except TimeoutException:
         _log_message(logger_error, "error", "[EXPORT] No se encontró botón Save visible en panel Export.")
         take_screenshot(driver, "export_save_not_found")
+        dump = driver.execute_script(
+            """
+return Array.from(document.querySelectorAll('button'))
+  .map(btn => ({
+    vis: !!btn.offsetParent,
+    text: (btn.innerText || '').trim(),
+    cls: btn.className
+  }))
+  .filter(btn => btn.text.toLowerCase().includes('save'));
+"""
+        )
+        _log_message(logger_error, "error", f"[EXPORT] Dump botones Save visibles: {dump}")
         raise
 
     driver.execute_script("arguments[0].scrollIntoView({block:'center'});", save_btn)
@@ -817,40 +851,22 @@ def click_save_in_export(driver, export_container, timeout=10, timer=None):
                 _log_message(logger_warn, "warning", "[EXPORT] Click estándar en Save falló.")
                 raise
 
-    _log_message(logger_info, "info", "[EXPORT] Click Save ok")
+    _log_message(logger_info, "info", "[EXPORT] Click Save OK")
     if timer is not None:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_SAVE_BUTTON")
 
+    try:
+        WebDriverWait(driver, 8).until(
+            lambda d: find_save_button() is None or not export_container.is_displayed()
+        )
+    except TimeoutException:
+        _log_message(
+            logger_warn,
+            "warning",
+            "[EXPORT] El panel Export no se cerró o el botón Save siguió visible.",
+        )
+
     return True
-
-def get_visible_export_container(driver, timeout=10):
-    wait = WebDriverWait(driver, timeout)
-
-    def is_export_container_visible(_driver):
-        containers = _driver.find_elements(By.XPATH, EXPORT_DIALOG_CONTAINER_XPATH)
-        for container in containers:
-            try:
-                if not container.is_displayed():
-                    continue
-                has_confirm_label = bool(
-                    container.find_elements(
-                        By.XPATH,
-                        ".//span[normalize-space()='Confirm Password']",
-                    )
-                )
-                has_save_button = bool(
-                    container.find_elements(
-                        By.XPATH,
-                        ".//button[contains(@class,'el-button') and (@title='Save' or .//*[normalize-space()='Save'])]",
-                    )
-                )
-                if has_confirm_label or has_save_button:
-                    return container
-            except StaleElementReferenceException:
-                continue
-        return False
-
-    return wait.until(is_export_container_visible)
 
 
 def fill_confirm_password_and_click_save(driver, password, timeout=12, timer=None) -> bool:
@@ -860,32 +876,29 @@ def fill_confirm_password_and_click_save(driver, password, timeout=12, timer=Non
     logger_error = _resolve_logger("log_error")
 
     try:
-        container = wait_export_drawer_visible(driver, timeout=timeout)
+        container = wait_export_container(driver, timeout=timeout)
     except TimeoutException:
-        _log_message(logger_error, "error", "[EXPORT] No se encontró contenedor visible de Export.")
+        _log_message(logger_error, "error", "[EXPORT] No se encontró contenedor Export.")
         take_screenshot(driver, "export_container_timeout")
+        dump = driver.execute_script(
+            """
+return Array.from(document.querySelectorAll('input[placeholder="Password"]'))
+  .map(i => ({
+    vis: !!i.offsetParent,
+    outer: i.getAttribute('outerinputtype'),
+    cls: i.className
+  }));
+"""
+        )
+        _log_message(logger_error, "error", f"[EXPORT] Dump inputs Password visibles: {dump}")
         raise
 
-    confirm_input = find_export_confirm_password_input(container)
-    if confirm_input is None:
-        _log_message(logger_warn, "warning", "[EXPORT] Campo Confirm Password no encontrado en panel Export.")
-    else:
-        set_input_value_robusto(driver, confirm_input, password, logger=logger_info)
+    fill_confirm_password_in_container(driver, container, password, logger=logger_info)
 
     click_save_in_export(driver, container, timeout=timeout, timer=timer)
 
     if timer is not None:
         timer.mark(step_name)
-
-    try:
-        WebDriverWait(driver, timeout).until(
-            EC.invisibility_of_element_located((By.XPATH, EXPORT_CONTAINER_XPATH))
-        )
-    except TimeoutException:
-        try:
-            WebDriverWait(driver, 2).until(lambda d: not container.is_displayed())
-        except Exception:
-            _log_message(logger_warn, "warning", "[EXPORT] Contenedor Export no se ocultó tras Save.")
 
     return True
 
@@ -963,7 +976,7 @@ def click_export_save_button(driver, timeout=10, timer=None):
     logger_error = _resolve_logger("log_error")
 
     try:
-        container = wait_export_drawer_visible(driver, timeout=timeout)
+        container = wait_export_container(driver, timeout=timeout)
         _log_message(logger_info, "info", "[EXPORT] Botón Save localizado en contenedor Export, haciendo clic...")
         click_save_in_export(driver, container, timeout=timeout, timer=timer)
         return True
@@ -1295,8 +1308,26 @@ def click_export_event_and_alarm(
     log_info = globals().get("log_info", print)
     log_error = globals().get("log_error", print)
 
-    # password si aparece y Save dentro del contenedor visible
-    fill_confirm_password_and_click_save(driver, password, timeout=12, timer=timer)
+    try:
+        container = wait_export_container(driver, timeout=12)
+    except TimeoutException:
+        log_error("[EXPORT] No se encontró contenedor Export.")
+        take_screenshot(driver, "export_container_timeout")
+        dump = driver.execute_script(
+            """
+return Array.from(document.querySelectorAll('input[placeholder="Password"]'))
+  .map(i => ({
+    vis: !!i.offsetParent,
+    outer: i.getAttribute('outerinputtype'),
+    cls: i.className
+  }));
+"""
+        )
+        log_error(f"[EXPORT] Dump inputs Password visibles: {dump}")
+        raise
+
+    fill_confirm_password_in_container(driver, container, password, logger=log_info)
+    click_save_in_export(driver, container, timeout=12, timer=timer)
 
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
