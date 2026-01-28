@@ -1364,9 +1364,29 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
                 raise ValueError(f"[EVENT] Falta columna requerida: {col}")
 
         if df[required_data_cols].dropna(how="all").empty:
-            raise ValueError(
-                "[EVENT] Las columnas requeridas no contienen datos. Se aborta la carga."
-            )
+            log_info("[EVENT] Alarm Report sin eventos, no hay filas para insertar.")
+            total_preparados = 0
+            total_insertados = 0
+            total_omitidos = 0
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.hik_alarm_extraccion
+                    SET fecha_fin = now(),
+                        total_filas = %s,
+                        total_nuevos = %s,
+                        total_duplicados = %s,
+                        estado = 'OK'
+                    WHERE id = %s;
+                    """,
+                    (total_preparados, total_insertados, total_omitidos, id_extraccion),
+                )
+            conn.commit()
+            return {
+                "filas_extraidas": total_preparados,
+                "insertados": total_insertados,
+                "omitidos_duplicado": total_omitidos,
+            }
 
         def build_event_key(row) -> str:
             def normalize_value(value) -> str:
