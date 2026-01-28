@@ -25,6 +25,7 @@ from selenium.common.exceptions import TimeoutException as SeleniumTimeout
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
@@ -621,28 +622,35 @@ def wait_click(driver, by, value, timeout=20):
 
 
 # XPaths específicos para el diálogo Export de Event and Alarm Search
-EXPORT_PASSWORD_INPUT_XPATH = (
-    "//input[@type='password' and @placeholder='Password'"
-    " and contains(@class,'el-input__inner')]"
+EXPORT_DIALOG_CONTAINER_XPATH = (
+    "//div[contains(@class,'el-dialog__wrapper') and not(contains(@style,'display: none'))]"
+    "//div[contains(@class,'el-dialog')]"
+    " | //div[contains(@class,'el-drawer__wrapper') and not(contains(@style,'display: none'))]"
+    "//div[contains(@class,'el-drawer')]"
 )
 
-EXPORT_SAVE_BUTTON_XPATH = (
-    "("
-    "//button[@title='Save'"
+EXPORT_DIALOG_PASSWORD_INPUTS_XPATH = ".//input[@type='password' and contains(@class,'el-input__inner')]"
+
+EXPORT_DIALOG_CONFIRM_PASSWORD_INPUT_XPATH = (
+    ".//input[@type='password' and contains(@class,'el-input__inner') and "
+    "contains(translate(@placeholder,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'confirm')]"
+)
+
+EXPORT_DIALOG_SAVE_BUTTON_XPATH = (
+    ".//button[@title='Save'"
     "        and contains(@class,'el-button')"
     "        and contains(@class,'el-button--primary')"
-    "        and .//div[contains(@class,'el-button-slot-wrapper')"
+    "        and (.//div[contains(@class,'el-button-slot-wrapper')"
     "                 and normalize-space()='Save']"
+    "             or .//span[normalize-space()='Save'])"
     "]"
-    ")[1]"
 )
 
 
-def type_export_password_if_needed(driver, timeout=8, timer=None):
+def type_export_password_and_confirm_if_present(driver, timeout=8, timer=None) -> bool:
     """
-    Si el cuadro Export muestra el campo Password, escribe la misma
-    contraseña HIK_PASSWORD usada en el login.
-    Si no aparece el campo, continuar sin error.
+    Si el panel Export muestra campos Password/Confirm Password, escribe la misma
+    contraseña HIK_PASSWORD usada en el login. Si no aparecen, continuar sin error.
     """
     wait = WebDriverWait(driver, timeout)
 
@@ -650,47 +658,91 @@ def type_export_password_if_needed(driver, timeout=8, timer=None):
     logger_info = globals().get("log_info", print)
 
     try:
-        pwd_input = wait.until(
-            EC.visibility_of_element_located((By.XPATH, EXPORT_PASSWORD_INPUT_XPATH))
+        container = wait.until(
+            EC.visibility_of_element_located((By.XPATH, EXPORT_DIALOG_CONTAINER_XPATH))
         )
     except TimeoutException:
+        logger_warn("[EXPORT] No se encontró panel Export visible para password.")
+        return False
+
+    inputs = [
+        inp
+        for inp in container.find_elements(By.XPATH, EXPORT_DIALOG_PASSWORD_INPUTS_XPATH)
+        if inp.is_displayed()
+    ]
+    if not inputs:
         logger_warn(
-            "[EXPORT] No apareció cuadro de password en Export, se asume que no es requerido."
+            "[EXPORT] No se encontraron inputs de password en Export, se asume que no es requerido."
         )
         return False
 
-    pwd_input.click()
-    pwd_input.clear()
-    pwd_input.send_keys(HIK_PASSWORD)
+    password_input = None
+    confirm_input = None
+    for inp in inputs:
+        placeholder = (inp.get_attribute("placeholder") or "").strip().lower()
+        if "confirm" in placeholder:
+            confirm_input = inp
+        elif "password" in placeholder and password_input is None:
+            password_input = inp
 
-    logger_info("[EXPORT] Password escrito correctamente en el cuadro Export.")
-    return True
+    if password_input is None and inputs:
+        password_input = inputs[0]
+    if confirm_input is None and len(inputs) >= 2:
+        confirm_input = inputs[1]
+
+    typed = False
+    for field in [password_input, confirm_input]:
+        if field is None:
+            continue
+        safe_click(driver, field)
+        field.clear()
+        field.send_keys(HIK_PASSWORD)
+        typed = True
+
+    if typed:
+        try:
+            (confirm_input or password_input).send_keys(Keys.TAB)
+        except Exception:
+            pass
+        logger_info("[EXPORT] Password(s) escritos correctamente en el panel Export.")
+        if timer is not None:
+            timer.mark("[7] EXPORT_PASSWORDS_TYPED")
+
+    return typed
 
 
 def click_export_save_button(driver, timeout=10, timer=None):
     """
     Hace clic en el botón Save del cuadro Export.
-    Usa EXPORT_SAVE_BUTTON_XPATH, que apunta al <button> con título 'Save'
-    y cuyo interior contiene el div.el-button-slot-wrapper con texto 'Save'.
+    Usa EXPORT_DIALOG_SAVE_BUTTON_XPATH relativo al contenedor visible del Export.
     """
     step_name = "[7] CLICK_EXPORT_EVENT_AND_ALARM_SAVE_BUTTON"
     logger_info = globals().get("log_info", print)
 
     try:
         wait = WebDriverWait(driver, timeout)
-        save_btn = wait.until(
-            EC.element_to_be_clickable((By.XPATH, EXPORT_SAVE_BUTTON_XPATH))
+        container = wait.until(
+            EC.visibility_of_element_located((By.XPATH, EXPORT_DIALOG_CONTAINER_XPATH))
         )
+        save_btn = wait.until(
+            lambda d: container.find_element(By.XPATH, EXPORT_DIALOG_SAVE_BUTTON_XPATH)
+        )
+        wait.until(lambda d: save_btn.is_displayed() and save_btn.is_enabled())
 
         logger_info("[EXPORT] Botón Save localizado, haciendo clic...")
 
         # A veces Selenium .click() falla por overlays; usa JS click como refuerzo.
         try:
-            save_btn.click()
+            safe_click(driver, save_btn)
         except Exception:
-            driver.execute_script("arguments[0].click();", save_btn)
+            safe_js_click(driver, save_btn)
 
         logger_info("[EXPORT] Botón Save del cuadro Export clickeado correctamente.")
+
+        try:
+            wait.until(EC.invisibility_of_element(container))
+        except TimeoutException:
+            pass
 
         if timer is not None:
             timer.mark(step_name)
@@ -1019,7 +1071,7 @@ def click_export_event_and_alarm(
     log_error = globals().get("log_error", print)
 
     # password si aparece
-    type_export_password_if_needed(driver, timeout=8, timer=timer)
+    type_export_password_and_confirm_if_present(driver, timeout=8, timer=timer)
 
     # Save
     click_export_save_button(driver, timeout=10, timer=timer)
