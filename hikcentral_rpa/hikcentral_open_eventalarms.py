@@ -140,7 +140,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = BASE_DIR / ".env"
 load_dotenv(ENV_PATH)
 
-DEFAULT_HOSTS = ["172.16.9.10"]
+DEFAULT_HOSTS = ["172.16.9.10", "172.16.9.11"]
 URL = ""
 SCRIPT_NAME = "hikcentral_open_eventalarms.py"
 HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
