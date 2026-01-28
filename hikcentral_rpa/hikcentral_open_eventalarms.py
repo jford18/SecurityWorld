@@ -760,6 +760,95 @@ def click_export_and_enter_password(driver, export_password, logger=None, timeou
         raise RuntimeError(f"No se pudo hacer clic en Save: {e}")
 
 
+def click_export_and_submit_password(driver, export_password: str, logger=None, timeout=15) -> bool:
+    """
+    Hace clic en el botón Export del módulo Event and Alarm Search y maneja el drawer
+    de exportación, incluyendo la contraseña si es requerida. Devuelve True en éxito.
+    """
+    wait = WebDriverWait(driver, timeout)
+
+    try:
+        toolbar = wait.until(
+            EC.visibility_of_element_located((By.CSS_SELECTOR, ".alarm-head-operation"))
+        )
+        log_step("[EXPORT] Toolbar Event and Alarm Search visible.", logger)
+    except TimeoutException:
+        take_screenshot(driver, "export_toolbar_not_visible")
+        log_step("[EXPORT] Toolbar no visible dentro del timeout.", logger)
+        return False
+
+    try:
+        export_button = toolbar.find_element(
+            By.CSS_SELECTOR,
+            "button[title='Export'].el-button.is-icon-text",
+        )
+    except NoSuchElementException:
+        take_screenshot(driver, "export_button_not_found")
+        log_step("[EXPORT] Botón Export no encontrado en toolbar.", logger)
+        return False
+
+    drawer_opened = False
+    for attempt in range(1, 4):
+        try:
+            export_button.click()
+            log_step(f"[EXPORT] Click en Export (intento {attempt}).", logger)
+        except ElementClickInterceptedException:
+            driver.execute_script("arguments[0].click();", export_button)
+            log_step(f"[EXPORT] Click en Export vía JS (intento {attempt}).", logger)
+
+        try:
+            WebDriverWait(driver, 5).until(
+                lambda d: d.find_element(By.CSS_SELECTOR, ".drawer .main:not(.main-hide)")
+            )
+            log_step("[EXPORT] Drawer de exportación abierto.", logger)
+            drawer_opened = True
+            break
+        except TimeoutException:
+            if attempt < 3:
+                log_step(f"[EXPORT] Drawer no abrió, reintentando ({attempt} de 3).", logger)
+            else:
+                take_screenshot(driver, "export_drawer_open_failed")
+                log_step("[EXPORT] Drawer no abrió tras 3 intentos.", logger)
+
+    if not drawer_opened:
+        return False
+
+    password_input = None
+    try:
+        candidate = driver.find_element(By.CSS_SELECTOR, "input[type='password']")
+        if candidate.is_displayed():
+            password_input = candidate
+    except NoSuchElementException:
+        password_input = None
+
+    if password_input:
+        try:
+            driver.execute_script("arguments[0].scrollIntoView(true);", password_input)
+            password_input.clear()
+            password_input.send_keys(export_password)
+            log_step("[EXPORT] Contraseña ingresada.", logger)
+        except Exception as exc:
+            take_screenshot(driver, "export_password_entry_failed")
+            log_step(f"[EXPORT] Error al ingresar contraseña: {exc}", logger)
+            return False
+    else:
+        log_step("[EXPORT] No se detectó prompt de contraseña.", logger)
+
+    try:
+        confirm_button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, ".drawer .el-button--primary"))
+        )
+        confirm_button.click()
+        log_step("[EXPORT] Botón de confirmación clicado.", logger)
+    except TimeoutException:
+        take_screenshot(driver, "export_confirm_button_not_found")
+        log_step("[EXPORT] Botón de confirmación no encontrado o no clicable.", logger)
+        return False
+
+    log_step("[EXPORT] Exportación completada.", logger)
+    return True
+
+
 def find_in_frames(driver, wait, by, value, logger=None):
     log_step("🔹 STEP EXPORT-FRAME: buscando en frames...", logger)
     try:
