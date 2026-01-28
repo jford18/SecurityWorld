@@ -1,8 +1,5 @@
 import argparse
 import os
-import shutil
-import sys
-import re
 import time
 import traceback
 from datetime import datetime
@@ -26,9 +23,7 @@ from selenium.common.exceptions import (
 from selenium.common.exceptions import TimeoutException as SeleniumTimeout
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
@@ -68,7 +63,11 @@ class PerformanceRecorder:
     ):
         num_paso, descripcion = self._parse_step_label(label)
         if num_paso is None:
-            return
+            return {
+                "filas_extraidas": total_preparados,
+                "insertados": total_insertados,
+                "omitidos_duplicado": total_omitidos,
+            }
 
         self._update_cpu_max(cpu_percent)
         self.steps.append(
@@ -141,12 +140,11 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = BASE_DIR / ".env"
 load_dotenv(ENV_PATH)
 
-DEFAULT_HOSTS = ["172.16.9.10", "172.16.9.11"]
+DEFAULT_HOSTS = ["172.16.9.10"]
 URL = ""
 SCRIPT_NAME = "hikcentral_open_eventalarms.py"
 HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
 HIK_PASSWORD = os.getenv("HIK_PASSWORD", "SW2112asm")
-HIK_EXPORT_PASSWORD = os.getenv("HIK_EXPORT_PASSWORD", HIK_PASSWORD)
 
 LOG_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\logs")
 DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")
@@ -184,42 +182,10 @@ def resolve_hik_host(cli_host: str | None) -> tuple[str, str]:
     raise RuntimeError("Ningún host HikCentral disponible en HIK_HOSTS/DEFAULT_HOSTS")
 
 
-def parse_hosts_from_args(host: str | None, hosts: str | None) -> list[str]:
-    candidates: list[str] = []
-    if host and host.strip():
-        candidates.append(host.strip())
-    if hosts:
-        candidates.extend([h.strip() for h in hosts.split(",") if h.strip()])
-
-    seen = set()
-    deduped: list[str] = []
-    for candidate in candidates:
-        if candidate in seen:
-            continue
-        seen.add(candidate)
-        deduped.append(candidate)
-    return deduped
-
-
-def parse_hosts_from_env() -> list[str]:
-    env_host = os.getenv("HIK_HOST")
-    if env_host and env_host.strip():
-        return [env_host.strip()]
-
-    env_hosts = os.getenv("HIK_HOSTS")
-    if env_hosts and env_hosts.strip():
-        return [h.strip() for h in env_hosts.split(",") if h.strip()]
-
-    return DEFAULT_HOSTS
-
-
 def get_downloadcenter_root() -> Path:
-    env_root = os.getenv("HIK_DOWNLOADCENTER") or os.getenv("HC_DOWNLOADCENTER")
-    if env_root and env_root.strip():
-        return Path(env_root.strip())
-
-    user_home = Path(os.environ.get("USERPROFILE", str(Path.home())))
-    return user_home / "HCWebControlService" / "Downloadcenter"
+    user_home = Path(os.environ["USERPROFILE"])
+    root = user_home / "HCWebControlService" / "Downloadcenter"
+    return root
 
 
 def take_screenshot(driver, label: str) -> Path:
@@ -282,95 +248,6 @@ def find_last_alarm_report_file() -> Path | None:
     last_file = max(candidates, key=lambda p: p.stat().st_mtime)
     print(f"[INFO] Último Alarm_Report encontrado: {last_file}")
     return last_file
-
-
-def snapshot_alarm_reports(downloadcenter_root: Path) -> set[Path]:
-    if not downloadcenter_root.exists():
-        return set()
-
-    files: set[Path] = set()
-    for p in downloadcenter_root.rglob("*"):
-        if not p.is_file():
-            continue
-        name = p.name
-        if not name.startswith("Alarm_Report_"):
-            continue
-        if not name.lower().endswith((".xlsx", ".xls")):
-            continue
-        files.add(p)
-    return files
-
-
-def wait_new_alarm_report(
-    downloadcenter_root: Path,
-    before: set[Path],
-    start_ts: float | None = None,
-    timeout: int = 180,
-) -> Path | None:
-    fin = time.time() + timeout
-    last_candidate: Path | None = None
-    last_print = 0.0
-
-    while time.time() < fin:
-        current = snapshot_alarm_reports(downloadcenter_root)
-        nuevos = [p for p in current if p not in before]
-
-        if nuevos:
-            # el más nuevo por fecha de modificación
-            if start_ts is not None:
-                nuevos = [
-                    p
-                    for p in nuevos
-                    if p.exists() and p.stat().st_mtime >= (start_ts - 2)
-                ]
-            if nuevos:
-                last_candidate = max(nuevos, key=lambda p: p.stat().st_mtime)
-
-            # esperar tamaño estable (descarga terminada)
-            try:
-                size1 = last_candidate.stat().st_size
-                time.sleep(1)
-                size2 = last_candidate.stat().st_size
-                if size1 == size2 and size2 > 0:
-                    # validar que se puede abrir (evitar lock)
-                    try:
-                        with open(last_candidate, "rb") as f:
-                            f.read(64)
-                        return last_candidate
-                    except Exception:
-                        # si está bloqueado, seguir esperando
-                        pass
-            except Exception:
-                pass
-
-        now = time.time()
-        if now - last_print >= 5:
-            last_print = now
-            try:
-                cand = last_candidate
-                if cand and cand.exists():
-                    log_size = cand.stat().st_size
-                    print(
-                        "[EXPORT] esperando... candidatos nuevos detectados. "
-                        f"último={cand.name} size={log_size} bytes"
-                    )
-                else:
-                    print("[EXPORT] esperando... aún sin archivo nuevo en Downloadcenter")
-            except Exception:
-                print("[EXPORT] esperando... (sin detalle)")
-
-        time.sleep(1)
-
-    return last_candidate
-
-
-def copiar_alarm_report_a_downloads(src: Path, host_dir: Path, host_label: str) -> Path:
-    host_dir.mkdir(parents=True, exist_ok=True)
-    host_suffix = host_label.replace(".", "_")
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    destino = host_dir / f"Alarm_Report_{timestamp}_{host_suffix}{src.suffix}"
-    shutil.copy2(src, destino)
-    return destino
 
 
 def esperar_descarga(download_dir: Path, archivos_previos, timeout: int = 120) -> str:
@@ -568,318 +445,12 @@ def registrar_ejecucion_y_pasos(
         return None
 
 
-def log_step(msg: str, logger=None):
-    if logger:
-        logger(msg)
-    else:
-        print(msg)
-
-
-def safe_click(driver, element, step_name: str | None = None, logger=None):
+def safe_click(driver, el):
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
     try:
-        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", element)
-        element.click()
-        if step_name:
-            log_step(f"✅ {step_name}: OK", logger)
-    except ElementClickInterceptedException as exc:
-        try:
-            driver.execute_script("arguments[0].click();", element)
-            if step_name:
-                log_step(f"✅ {step_name}: OK", logger)
-        except Exception as js_exc:
-            if step_name:
-                log_step(f"❌ {step_name}: FAIL -> {js_exc}", logger)
-            raise js_exc
-    except StaleElementReferenceException as exc:
-        if step_name:
-            log_step(f"❌ {step_name}: FAIL -> {exc}", logger)
-        raise
-    except Exception as exc:
-        if step_name:
-            log_step(f"❌ {step_name}: FAIL -> {exc}", logger)
-        raise
-
-
-def wait_for_overlays_to_clear(driver, timeout=8, logger=None):
-    overlay_selectors = [
-        ".el-loading-mask",
-        ".loading",
-        ".spinner",
-        ".ant-spin",
-        "[class*='loading']",
-    ]
-    for selector in overlay_selectors:
-        try:
-            if driver.find_elements(By.CSS_SELECTOR, selector):
-                log_step("Overlay detectado / esperando...", logger)
-            WebDriverWait(driver, timeout).until(
-                EC.invisibility_of_element_located((By.CSS_SELECTOR, selector))
-            )
-        except TimeoutException:
-            continue
-        except Exception:
-            continue
-
-
-def click_seguro(driver, by, locator, nombre, timeout=12, logger=None):
-    end_time = time.time() + timeout
-    last_exc: Exception | None = None
-    while time.time() < end_time:
-        try:
-            wait = WebDriverWait(driver, max(2, min(6, timeout)))
-            element = wait.until(EC.presence_of_element_located((by, locator)))
-            wait.until(EC.element_to_be_clickable((by, locator)))
-            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", element)
-            try:
-                element.click()
-                log_step("Click normal ok", logger)
-                return element
-            except ElementClickInterceptedException as exc:
-                last_exc = exc
-                try:
-                    driver.execute_script("arguments[0].click();", element)
-                    log_step("Click JS ok", logger)
-                    return element
-                except Exception as js_exc:
-                    last_exc = js_exc
-                    try:
-                        ActionChains(driver).move_to_element(element).pause(0.2).click().perform()
-                        log_step("Click ActionChains ok", logger)
-                        return element
-                    except Exception as ac_exc:
-                        last_exc = ac_exc
-                        continue
-            except StaleElementReferenceException as exc:
-                last_exc = exc
-                continue
-        except (TimeoutException, StaleElementReferenceException) as exc:
-            last_exc = exc
-            continue
-    if last_exc:
-        raise last_exc
-    raise TimeoutException(f"No se pudo hacer click en {nombre}")
-
-
-def click_export_toolbar_button(driver, timeout=15, logger=None) -> None:
-    """
-    Click 100% seguro al botón Export del toolbar (arriba derecha).
-    Evita confundir el texto 'Export' del drawer (existe oculto en el DOM).
-    """
-    wait_for_overlays_to_clear(driver, timeout=8, logger=logger)
-
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
-
-    wait = WebDriverWait(driver, timeout)
-
-    # 1) anclar al contenedor del toolbar
-    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.alarm-head-operation")))
-
-    # 2) botón real Export dentro del toolbar
-    export_btn = wait.until(
-        EC.element_to_be_clickable(
-            (By.CSS_SELECTOR, "div.alarm-head-operation button[title='Export'].el-button.is-icon-text")
-        )
-    )
-
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", export_btn)
-
-    try:
-        export_btn.click()
-        log_step("Click Export toolbar OK", logger)
-    except ElementClickInterceptedException:
-        driver.execute_script("arguments[0].click();", export_btn)
-        log_step("Click Export toolbar OK (JS)", logger)
-
-    # 3) validar drawer abierto: div.drawer div.main visible y SIN main-hide
-    def drawer_abierto(d):
-        mains = d.find_elements(By.CSS_SELECTOR, "div.drawer div.main")
-        for m in mains:
-            try:
-                cls = (m.get_attribute("class") or "")
-                if m.is_displayed() and ("main-hide" not in cls):
-                    return True
-            except Exception:
-                continue
-        return False
-
-    wait.until(drawer_abierto)
-
-
-def click_export_and_enter_password(driver, export_password, logger=None, timeout=15):
-    """
-    Hace clic en el botón 'Export', espera la apertura del modal de exportación,
-    ingresa la contraseña y confirma la exportación.
-    """
-    wait = WebDriverWait(driver, timeout)
-
-    log_step("🔹 Buscando botón Export...", logger)
-    try:
-        container = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.alarm-head-operation")))
-        export_btn = container.find_element(By.CSS_SELECTOR, "button[title='Export'].el-button.is-icon-text")
-        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", export_btn)
-        try:
-            export_btn.click()
-            log_step("✔️ Click Export (normal)", logger)
-        except ElementClickInterceptedException:
-            driver.execute_script("arguments[0].click();", export_btn)
-            log_step("✔️ Click Export (JS fallback)", logger)
-    except Exception as e:
-        take_screenshot(driver, "error_click_export")
-        raise RuntimeError(f"No se pudo hacer clic en Export: {e}")
-
-    # Esperar a que aparezca el modal con campo de contraseña
-    log_step("🔹 Esperando modal de exportación...", logger)
-    try:
-        password_input = wait.until(
-            EC.visibility_of_element_located((By.CSS_SELECTOR, "input[type='password'].el-input__inner"))
-        )
-        password_input.clear()
-        password_input.send_keys(export_password)
-        driver.execute_script("arguments[0].blur();", password_input)
-        log_step("✔️ Contraseña escrita", logger)
-    except TimeoutException:
-        take_screenshot(driver, "error_password_modal")
-        raise RuntimeError("No apareció el campo de contraseña en modal de exportación.")
-
-    # Hacer clic en botón Save
-    log_step("🔹 Buscando botón Save...", logger)
-    try:
-        save_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[text()='Save']]")))
-        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", save_btn)
-        try:
-            save_btn.click()
-            log_step("✔️ Click botón Save (normal)", logger)
-        except ElementClickInterceptedException:
-            driver.execute_script("arguments[0].click();", save_btn)
-            log_step("✔️ Click botón Save (JS fallback)", logger)
-    except Exception as e:
-        take_screenshot(driver, "error_click_save")
-        raise RuntimeError(f"No se pudo hacer clic en Save: {e}")
-
-
-def click_export_and_submit_password(driver, export_password: str, logger=None, timeout=15) -> bool:
-    """
-    Hace clic en el botón Export del módulo Event and Alarm Search y maneja el drawer
-    de exportación, incluyendo la contraseña si es requerida. Devuelve True en éxito.
-    """
-    wait = WebDriverWait(driver, timeout)
-
-    try:
-        toolbar = wait.until(
-            EC.visibility_of_element_located((By.CSS_SELECTOR, ".alarm-head-operation"))
-        )
-        log_step("[EXPORT] Toolbar Event and Alarm Search visible.", logger)
-    except TimeoutException:
-        take_screenshot(driver, "export_toolbar_not_visible")
-        log_step("[EXPORT] Toolbar no visible dentro del timeout.", logger)
-        return False
-
-    try:
-        export_button = toolbar.find_element(
-            By.CSS_SELECTOR,
-            "button[title='Export'].el-button.is-icon-text",
-        )
-    except NoSuchElementException:
-        take_screenshot(driver, "export_button_not_found")
-        log_step("[EXPORT] Botón Export no encontrado en toolbar.", logger)
-        return False
-
-    drawer_opened = False
-    for attempt in range(1, 4):
-        try:
-            export_button.click()
-            log_step(f"[EXPORT] Click en Export (intento {attempt}).", logger)
-        except ElementClickInterceptedException:
-            driver.execute_script("arguments[0].click();", export_button)
-            log_step(f"[EXPORT] Click en Export vía JS (intento {attempt}).", logger)
-
-        try:
-            WebDriverWait(driver, 5).until(
-                lambda d: d.find_element(By.CSS_SELECTOR, ".drawer .main:not(.main-hide)")
-            )
-            log_step("[EXPORT] Drawer de exportación abierto.", logger)
-            drawer_opened = True
-            break
-        except TimeoutException:
-            if attempt < 3:
-                log_step(f"[EXPORT] Drawer no abrió, reintentando ({attempt} de 3).", logger)
-            else:
-                take_screenshot(driver, "export_drawer_open_failed")
-                log_step("[EXPORT] Drawer no abrió tras 3 intentos.", logger)
-
-    if not drawer_opened:
-        return False
-
-    password_input = None
-    try:
-        candidate = driver.find_element(By.CSS_SELECTOR, "input[type='password']")
-        if candidate.is_displayed():
-            password_input = candidate
-    except NoSuchElementException:
-        password_input = None
-
-    if password_input:
-        try:
-            driver.execute_script("arguments[0].scrollIntoView(true);", password_input)
-            password_input.clear()
-            password_input.send_keys(export_password)
-            log_step("[EXPORT] Contraseña ingresada.", logger)
-        except Exception as exc:
-            take_screenshot(driver, "export_password_entry_failed")
-            log_step(f"[EXPORT] Error al ingresar contraseña: {exc}", logger)
-            return False
-    else:
-        log_step("[EXPORT] No se detectó prompt de contraseña.", logger)
-
-    try:
-        confirm_button = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, ".drawer .el-button--primary"))
-        )
-        confirm_button.click()
-        log_step("[EXPORT] Botón de confirmación clicado.", logger)
-    except TimeoutException:
-        take_screenshot(driver, "export_confirm_button_not_found")
-        log_step("[EXPORT] Botón de confirmación no encontrado o no clicable.", logger)
-        return False
-
-    log_step("[EXPORT] Exportación completada.", logger)
-    return True
-
-
-def find_in_frames(driver, wait, by, value, logger=None):
-    log_step("🔹 STEP EXPORT-FRAME: buscando en frames...", logger)
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
-
-    try:
-        element = wait.until(EC.visibility_of_element_located((by, value)))
-        return element
-    except TimeoutException:
-        pass
-
-    frames = driver.find_elements(By.TAG_NAME, "iframe")
-    for frame in frames:
-        try:
-            driver.switch_to.default_content()
-            driver.switch_to.frame(frame)
-        except Exception:
-            continue
-        try:
-            element = wait.until(EC.visibility_of_element_located((by, value)))
-            return element
-        except TimeoutException:
-            try:
-                driver.switch_to.default_content()
-            except Exception:
-                pass
-            continue
-
-    raise TimeoutException(f"No se encontró elemento {value} en frames.")
+        el.click()
+    except (ElementClickInterceptedException, StaleElementReferenceException):
+        driver.execute_script("arguments[0].click();", el)
 
 
 def safe_js_click(driver, el):
@@ -956,567 +527,22 @@ def wait_click(driver, by, value, timeout=20):
     return el
 
 
-# ====== Export drawer (robusto ElementUI) ======
-EXPORT_DRAWER_CONTAINER_SELECTOR = (
-    "div.el-drawer__wrapper, div.el-dialog__wrapper, div.el-drawer, div.el-dialog, "
-    "div.drawer-main, [role='dialog']"
-)
-EXPORT_DRAWER_PASSWORD_SELECTOR = 'input.el-input__inner[placeholder="Password"]'
-EXPORT_DRAWER_SAVE_REL_XPATH = ".//button[normalize-space()='Save' or .//*[normalize-space()='Save']]"
-EXPORT_PANEL_XPATH = (
-    "//div[(contains(@class,'el-drawer') or contains(@class,'el-dialog') "
-    "or contains(@class,'drawer-main') or contains(@class,'el-drawer__wrapper') "
-    "or contains(@class,'el-dialog__wrapper') or @role='dialog')]"
-    "[.//*[normalize-space()='Export']]"
+# XPaths específicos para el diálogo Export de Event and Alarm Search
+EXPORT_PASSWORD_INPUT_XPATH = (
+    "//input[@type='password' and @placeholder='Password'"
+    " and contains(@class,'el-input__inner')]"
 )
 
-
-def _set_input_value_js(driver, input_el, value: str):
-    driver.execute_script(
-        """
-        const el = arguments[0];
-        const val = arguments[1];
-        el.focus();
-        el.value = val;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-        el.blur();
-        """,
-        input_el,
-        value,
-    )
-
-
-def _blur_active(driver):
-    try:
-        driver.execute_script(
-            "document.activeElement && document.activeElement.blur && document.activeElement.blur();"
-        )
-    except Exception:
-        pass
-
-
-def _is_visible_element(driver, element) -> bool:
-    try:
-        return bool(
-            driver.execute_script(
-                """
-                return (function(el){
-                    if(!el) return false;
-
-                    const cls_attr = (el.getAttribute("class") || "");
-                    if (cls_attr.includes("main-hide")) return false;
-
-                    const right = (window.getComputedStyle(el).right || "");
-                    if (right.includes("-400px")) return false;
-
-                    const ariaHidden = el.getAttribute("aria-hidden");
-                    if (ariaHidden === "true") return false;
-
-                    const s = window.getComputedStyle(el);
-                    if(!s || s.display==='none' || s.visibility==='hidden' || Number(s.opacity)===0) {
-                        return false;
-                    }
-
-                    const r = el.getBoundingClientRect();
-                    if (r.width <= 0 || r.height <= 0) return false;
-
-                    // ✅ Debe intersectar con el viewport (evita drawers fuera de pantalla como right:-400px)
-                    const vw = window.innerWidth || document.documentElement.clientWidth;
-                    const vh = window.innerHeight || document.documentElement.clientHeight;
-
-                    const intersects =
-                        r.right > 0 &&
-                        r.bottom > 0 &&
-                        r.left < vw &&
-                        r.top < vh;
-
-                    if (!intersects) return false;
-
-                    return true;
-                })(arguments[0]);
-                """,
-                element,
-            )
-        )
-    except Exception:
-        return False
-
-
-def get_visible_export_container(driver, timeout=8, take_fail_screenshot: bool = True):
-    wait = WebDriverWait(driver, timeout)
-    last_print_ts = 0.0
-
-    def _locate_container(_driver):
-        nonlocal last_print_ts
-        candidates = _driver.find_elements(By.CSS_SELECTOR, EXPORT_DRAWER_CONTAINER_SELECTOR)
-        visible = [el for el in candidates if _is_visible_element(_driver, el)]
-        now = time.time()
-        if now - last_print_ts >= 2.0:
-            print(
-                f"[EXPORT] buscando drawer... visibles={len(visible)} candidatos={len(candidates)}"
-            )
-            last_print_ts = now
-        best = None
-        best_score = -1
-        for idx, element in enumerate(visible):
-            score = 0
-            password_selectors = [
-                'input.el-input__inner[placeholder="Password"][type="password"]',
-                'input.el-input__inner[outerinputtype="password"]',
-                'input[type="password"][placeholder="Password"]',
-            ]
-            for selector in password_selectors:
-                if element.find_elements(By.CSS_SELECTOR, selector):
-                    score += 100
-                    break
-            if element.find_elements(By.XPATH, EXPORT_DRAWER_SAVE_REL_XPATH):
-                score += 20
-            try:
-                inner_text = _driver.execute_script("return arguments[0].innerText || '';", element)
-            except Exception:
-                inner_text = element.text or ""
-            if "Export" in (inner_text or ""):
-                score += 10
-            if score > best_score or score == best_score:
-                best_score = score
-                best = element
-        return best if best is not None else False
-
-    try:
-        return wait.until(_locate_container)
-    except TimeoutException as exc:
-        logger_warn = globals().get("log_warn", print)
-        try:
-            candidates = driver.find_elements(By.CSS_SELECTOR, EXPORT_DRAWER_CONTAINER_SELECTOR)
-            visible_texts = []
-            for candidate in candidates:
-                if not _is_visible_element(driver, candidate):
-                    continue
-                try:
-                    text = driver.execute_script(
-                        "return (arguments[0].innerText || '').trim();", candidate
-                    )
-                except Exception:
-                    text = (candidate.text or "").strip()
-                visible_texts.append((text or "")[:200])
-            logger_warn(
-                "[EXPORT] No se encontró container visible de Export. "
-                f"Candidatos: {len(candidates)}. Textos visibles: {visible_texts}"
-            )
-        except Exception:
-            logger_warn("[EXPORT] No se encontró container visible de Export.")
-        if take_fail_screenshot:
-            try:
-                take_screenshot(driver, "export_container_missing")
-            except Exception:
-                logger_warn("[EXPORT] No se pudo guardar screenshot del drawer Export.")
-        raise exc
-
-
-def find_export_drawer_any_frame(driver, timeout=12):
-    try:
-        driver.switch_to.default_content()
-        container = get_visible_export_container(driver, timeout=timeout, take_fail_screenshot=False)
-        if container:
-            return container, "default"
-    except TimeoutException:
-        pass
-
-    frames = driver.find_elements(By.TAG_NAME, "iframe") + driver.find_elements(By.TAG_NAME, "frame")
-    for idx, frame in enumerate(frames):
-        try:
-            driver.switch_to.default_content()
-            driver.switch_to.frame(frame)
-        except Exception:
-            continue
-        try:
-            container = get_visible_export_container(
-                driver, timeout=timeout, take_fail_screenshot=False
-            )
-        except TimeoutException:
-            container = None
-        if container:
-            return container, f"iframe[{idx}]"
-
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
-    return None, "none"
-
-
-def _dump_export_candidates(driver, scope_label: str):
-    try:
-        candidates = driver.find_elements(By.CSS_SELECTOR, EXPORT_DRAWER_CONTAINER_SELECTOR)
-    except Exception as exc:
-        print(f"[EXPORT][DEBUG] {scope_label} error listando candidatos: {exc}")
-        return
-    visible = []
-    visible_texts = []
-    for candidate in candidates:
-        if not _is_visible_element(driver, candidate):
-            continue
-        visible.append(candidate)
-        try:
-            text = driver.execute_script("return (arguments[0].innerText || '').trim();", candidate)
-        except Exception:
-            text = (candidate.text or "").strip()
-        visible_texts.append((text or "")[:200])
-    print(
-        f"[EXPORT][DEBUG] {scope_label} candidatos={len(candidates)} visibles={len(visible)} "
-        f"textos={visible_texts}"
-    )
-
-
-def set_el_input_password(driver, container, password: str, required: bool = True):
-    logger_warn = globals().get("log_warn", print)
-    logger_error = globals().get("log_error", print)
-
-    pwd_input = None
-    selectors = [
-        'input.el-input__inner[placeholder="Password"][type="password"]',
-        'input.el-input__inner[outerinputtype="password"]',
-        'input[type="password"][placeholder="Password"]',
-    ]
-
-    for selector in selectors:
-        matches = container.find_elements(By.CSS_SELECTOR, selector)
-        if matches:
-            pwd_input = matches[0]
-            break
-
-    if pwd_input is None:
-        try:
-            pwd_input = container.find_element(
-                By.XPATH,
-                ".//input[contains(@class,'el-input__inner') and @type='password' and "
-                "@placeholder='Password']",
-            )
-        except Exception:
-            pwd_input = None
-
-    if pwd_input is None:
-        if not required:
-            print("[7] Drawer Export sin input Password. Continuo sin setear password.")
-            return 0
-
-        try:
-            drawer_html = driver.execute_script("return arguments[0].outerHTML;", container)
-            preview = (drawer_html or "")[:1500]
-            logger_error(
-                "[EXPORT] Drawer Export visible pero no se encontró input Password. "
-                f"Preview HTML: {preview}"
-            )
-        except Exception:
-            logger_error("[EXPORT] Drawer Export visible pero no se encontró input Password.")
-        try:
-            take_screenshot(driver, "export_password_input_missing")
-        except Exception:
-            logger_warn("[EXPORT] No se pudo guardar screenshot del drawer Export.")
-        raise RuntimeError("No se encontró el input Password en el drawer Export.")
-
-    try:
-        driver.execute_script(
-            "arguments[0].scrollIntoView({block: 'center'});", pwd_input
-        )
-    except Exception:
-        pass
-
-    print("[7] Seteando password en input placeholder=Password ...")
-    pwd_input.click()
-    pwd_input.send_keys(Keys.CONTROL, "a")
-    pwd_input.send_keys(Keys.BACKSPACE)
-    pwd_input.send_keys(password)
-
-    value = (pwd_input.get_attribute("value") or "").strip()
-    if not value:
-        driver.execute_script(
-            """
-            const el = arguments[0];
-            const val = arguments[1];
-            el.value = val;
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-            """,
-            pwd_input,
-            password,
-        )
-        value = (pwd_input.get_attribute("value") or "").strip()
-
-    print(f"[7] Password value length={len(value)}")
-
-    if not value:
-        # Si el input existe pero no se logra setear, esto sí es error.
-        logger_error(
-            "[EXPORT] No se pudo setear el password en el drawer Export. "
-            f"type={pwd_input.get_attribute('type')}, "
-            f"outerinputtype={pwd_input.get_attribute('outerinputtype')}, "
-            f"placeholder={pwd_input.get_attribute('placeholder')}, "
-            f"class={pwd_input.get_attribute('class')}"
-        )
-        try:
-            take_screenshot(driver, "export_password_set_failed")
-        except Exception:
-            logger_warn("[EXPORT] No se pudo guardar screenshot del drawer Export.")
-        raise RuntimeError("No se pudo setear el password en el drawer Export.")
-    return len(value)
-
-
-def _get_visible_export_modal(driver):
-    modal_xpaths = [
-        "//div[contains(@class,'el-dialog__wrapper') or contains(@class,'el-drawer__wrapper')]"
-        "[.//*[normalize-space()='Export']]",
-        "//div[contains(@class,'el-dialog') or contains(@class,'el-drawer')][.//*[normalize-space()='Export']]",
-    ]
-    for modal_xpath in modal_xpaths:
-        try:
-            candidates = driver.find_elements(By.XPATH, modal_xpath)
-        except Exception:
-            continue
-        for candidate in candidates:
-            if _is_visible_element(driver, candidate):
-                return candidate
-    return None
-
-
-def wait_for_export_panel(driver, timeout: int = 20):
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
-    wait = WebDriverWait(driver, timeout)
-    return wait.until(EC.visibility_of_element_located((By.XPATH, EXPORT_PANEL_XPATH)))
-
-
-def fill_export_confirm_password(driver, panel, password: str) -> None:
-    logger_warn = globals().get("log_warn", print)
-    logger_error = globals().get("log_error", print)
-
-    label_xpath = (
-        ".//label[.//span[normalize-space()='Confirm Password'] or "
-        "normalize-space()='Confirm Password' or "
-        "contains(normalize-space(),'Confirm Password')]/following::input[@type='password'][1]"
-    )
-    fallback_xpath = ".//input[@type='password' and @placeholder='Password']"
-
-    pwd_input = None
-    selector_used = ""
-    try:
-        pwd_input = panel.find_element(By.XPATH, label_xpath)
-        selector_used = f"xpath:{label_xpath}"
-    except Exception:
-        try:
-            pwd_input = panel.find_element(By.XPATH, fallback_xpath)
-            selector_used = f"xpath:{fallback_xpath}"
-        except Exception as exc:
-            logger_error(
-                "[EXPORT] No se encontró input Confirm Password en panel Export. "
-                f"label_xpath={label_xpath} fallback_xpath={fallback_xpath}"
-            )
-            try:
-                take_screenshot(driver, "export_confirm_password_missing")
-            except Exception:
-                logger_warn("[EXPORT] No se pudo guardar screenshot del input Confirm Password.")
-            raise exc
-
-    try:
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", pwd_input)
-    except Exception:
-        pass
-
-    value = ""
-
-    try:
-        pwd_input.click()
-        pwd_input.send_keys(Keys.CONTROL, "a")
-        pwd_input.send_keys(Keys.BACKSPACE)
-        pwd_input.send_keys(password)
-        value = (pwd_input.get_attribute("value") or "").strip()
-    except Exception:
-        value = (pwd_input.get_attribute("value") or "").strip()
-
-    if not value:
-        try:
-            ActionChains(driver).move_to_element(pwd_input).pause(0.1).click().pause(0.1).key_down(
-                Keys.CONTROL
-            ).send_keys("a").key_up(Keys.CONTROL).send_keys(Keys.BACKSPACE).send_keys(
-                password
-            ).perform()
-        except Exception:
-            pass
-        value = (pwd_input.get_attribute("value") or "").strip()
-
-    if not value:
-        try:
-            driver.execute_script(
-                """
-                const el = arguments[0];
-                const val = arguments[1];
-                el.focus();
-                el.value = val;
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-                """,
-                pwd_input,
-                password,
-            )
-        except Exception:
-            pass
-        value = (pwd_input.get_attribute("value") or "").strip()
-
-    if not value:
-        logger_error(
-            "[EXPORT] No se pudo setear Confirm Password en panel Export. "
-            f"selector={selector_used}"
-        )
-        try:
-            take_screenshot(driver, "export_confirm_password_set_failed")
-        except Exception:
-            logger_warn("[EXPORT] No se pudo guardar screenshot del Confirm Password.")
-        raise RuntimeError("No se pudo setear Confirm Password en el panel Export.")
-
-    print(f"[EXPORT] Confirm Password seteado (len={len(value)}) usando {selector_used}.")
-
-
-def dump_export_modal_html(driver, label_prefix: str) -> Path | None:
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = LOG_DIR / f"{label_prefix}_{timestamp}.html"
-    try:
-        modal = _get_visible_export_modal(driver)
-    except Exception:
-        modal = None
-    if not modal:
-        return None
-    try:
-        html = driver.execute_script("return arguments[0].outerHTML;", modal)
-    except Exception:
-        html = None
-    if not html:
-        return None
-    output_path.write_text(html, encoding="utf-8")
-    print(f"[EXPORT] HTML del modal Export guardado en: {output_path}")
-    return output_path
-
-
-def complete_export_modal(driver, password: str, timeout: int = 20) -> None:
-    logger_warn = globals().get("log_warn", print)
-    logger_error = globals().get("log_error", print)
-
-    save_xpath = ".//button[@title='Save' or .//*[normalize-space()='Save']]"
-
-    wait = WebDriverWait(driver, timeout)
-    try:
-        modal = wait_for_export_panel(driver, timeout=timeout)
-    except TimeoutException as exc:
-        try:
-            take_screenshot(driver, "export_modal_missing")
-        except Exception:
-            logger_warn("[EXPORT] No se pudo guardar screenshot del modal Export.")
-        raise exc
-
-    log_info = globals().get("log_info", print)
-    log_info("[EXPORT] Modal Export visible.")
-
-    try:
-        fill_export_confirm_password(driver, modal, password)
-    except Exception:
-        logger_error("[EXPORT] No se pudo setear el Confirm Password en el modal Export.")
-        raise
-
-    try:
-        save_btn = modal.find_element(By.XPATH, save_xpath)
-    except Exception as exc:
-        try:
-            take_screenshot(driver, "export_modal_save_missing")
-        except Exception:
-            logger_warn("[EXPORT] No se pudo guardar screenshot del botón Save.")
-        raise exc
-
-    print("[EXPORT] Clic en Save (modal Export)...")
-    try:
-        save_btn.click()
-    except Exception:
-        driver.execute_script("arguments[0].click();", save_btn)
-
-    try:
-        wait.until(
-            lambda d: not _is_visible_element(d, modal)
-            or not modal.is_displayed()
-        )
-    except (TimeoutException, StaleElementReferenceException) as exc:
-        try:
-            take_screenshot(driver, "export_modal_still_visible")
-        except Exception:
-            logger_warn("[EXPORT] No se pudo guardar screenshot del modal Export.")
-        raise RuntimeError("El modal Export no se cerró tras Save.") from exc
-
-
-def click_save_in_container(driver, container, timeout=10):
-    logger_warn = globals().get("log_warn", print)
-    logger_error = globals().get("log_error", print)
-
-    try:
-        save_btn = WebDriverWait(driver, timeout).until(
-            lambda d: container.find_element(By.XPATH, EXPORT_DRAWER_SAVE_REL_XPATH)
-        )
-    except TimeoutException as exc:
-        try:
-            take_screenshot(driver, "export_save_button_missing")
-        except Exception:
-            logger_warn("[EXPORT] No se pudo guardar screenshot del drawer Export.")
-        raise exc
-
-    print("[7] Clic Save...")
-    try:
-        save_btn.click()
-    except Exception:
-        driver.execute_script("arguments[0].click();", save_btn)
-
-    error_nodes = container.find_elements(By.CSS_SELECTOR, ".is-error")
-    required_text = container.find_elements(
-        By.XPATH,
-        ".//*[contains(translate(normalize-space(),'REQUIRED','required'),'required')]",
-    )
-    if error_nodes or required_text:
-        try:
-            take_screenshot(driver, "export_save_required_error")
-        except Exception:
-            logger_warn("[EXPORT] No se pudo guardar screenshot del drawer Export.")
-        raise RuntimeError("El drawer Export indicó error de requerido tras Save.")
-
-    try:
-        WebDriverWait(driver, timeout).until(lambda d: not _is_visible_element(d, container))
-    except TimeoutException:
-        if _is_visible_element(driver, container):
-            try:
-                take_screenshot(driver, "export_save_drawer_still_visible")
-            except Exception:
-                logger_warn("[EXPORT] No se pudo guardar screenshot del drawer Export.")
-            raise RuntimeError("El drawer Export no se cerró tras Save.")
-
-
-def try_click_save_in_container(driver, container, timeout=6) -> bool:
-    """
-    Intenta hacer clic en Save si existe dentro del container.
-    Si no existe o no aparece, NO revienta (vuelve a comportamiento "como antes").
-    """
-    try:
-        click_save_in_container(driver, container, timeout=timeout)
-        return True
-    except TimeoutException:
-        print("[7] No se encontró botón Save en el drawer Export. Continuo.")
-        return False
-    except Exception as exc:
-        # si hay drawer pero el click falla raro, preferimos fallar con evidencia
-        print(f"[WARN] Error al intentar Save en drawer Export: {exc}")
-        try:
-            take_screenshot(driver, "export_save_click_error")
-        except Exception:
-            pass
-        raise
+EXPORT_SAVE_BUTTON_XPATH = (
+    "("
+    "//button[@title='Save'"
+    "        and contains(@class,'el-button')"
+    "        and contains(@class,'el-button--primary')"
+    "        and .//div[contains(@class,'el-button-slot-wrapper')"
+    "                 and normalize-space()='Save']"
+    "]"
+    ")[1]"
+)
 
 
 def type_export_password_if_needed(driver, timeout=8, timer=None):
@@ -1525,12 +551,26 @@ def type_export_password_if_needed(driver, timeout=8, timer=None):
     contraseña HIK_PASSWORD usada en el login.
     Si no aparece el campo, continuar sin error.
     """
+    wait = WebDriverWait(driver, timeout)
+
+    logger_warn = globals().get("log_warn", print)
+    logger_info = globals().get("log_info", print)
+
     try:
-        drawer = get_visible_export_container(driver, timeout=timeout)
+        pwd_input = wait.until(
+            EC.visibility_of_element_located((By.XPATH, EXPORT_PASSWORD_INPUT_XPATH))
+        )
     except TimeoutException:
+        logger_warn(
+            "[EXPORT] No apareció cuadro de password en Export, se asume que no es requerido."
+        )
         return False
 
-    set_el_input_password(driver, drawer, HIK_PASSWORD)
+    pwd_input.click()
+    pwd_input.clear()
+    pwd_input.send_keys(HIK_PASSWORD)
+
+    logger_info("[EXPORT] Password escrito correctamente en el cuadro Export.")
     return True
 
 
@@ -1541,14 +581,29 @@ def click_export_save_button(driver, timeout=10, timer=None):
     y cuyo interior contiene el div.el-button-slot-wrapper con texto 'Save'.
     """
     step_name = "[7] CLICK_EXPORT_EVENT_AND_ALARM_SAVE_BUTTON"
+    logger_info = globals().get("log_info", print)
+
     try:
-        drawer = get_visible_export_container(driver, timeout=timeout)
-        click_save_in_container(driver, drawer, timeout=timeout)
+        wait = WebDriverWait(driver, timeout)
+        save_btn = wait.until(
+            EC.element_to_be_clickable((By.XPATH, EXPORT_SAVE_BUTTON_XPATH))
+        )
+
+        logger_info("[EXPORT] Botón Save localizado, haciendo clic...")
+
+        # A veces Selenium .click() falla por overlays; usa JS click como refuerzo.
+        try:
+            save_btn.click()
+        except Exception:
+            driver.execute_script("arguments[0].click();", save_btn)
+
+        logger_info("[EXPORT] Botón Save del cuadro Export clickeado correctamente.")
 
         if timer is not None:
             timer.mark(step_name)
 
     except TimeoutException:
+        log_error("[EXPORT] No se pudo localizar/clic el botón Save del cuadro Export (timeout).")
         raise
 
 
@@ -1816,59 +871,6 @@ def click_search_button(driver, timeout=30, timer: StepTimer | None = None):
         timer.mark("[6] CLICK_SEARCH_BUTTON")
 
 
-def export_event_alarms(driver, wait, export_password: str, logger=None) -> bool:
-    log_step("🚀 EXPORT: inicio", logger)
-
-    try:
-        log_step("🔹 STEP EXPORT-01: Click Export (toolbar)...", logger)
-        click_export_toolbar_button(driver, timeout=12, logger=logger)
-
-        # A veces aparece un menú para elegir Excel
-        try:
-            click_seguro(
-                driver,
-                By.XPATH,
-                "//*[normalize-space()='Excel']/ancestor-or-self::*[self::li or self::button or "
-                "self::a or self::div][1]",
-                "Excel",
-                timeout=3,
-                logger=logger,
-            )
-        except Exception:
-            pass
-
-        log_step("🔹 STEP EXPORT-02: Completar modal Export...", logger)
-        try:
-            complete_export_modal(driver, export_password, timeout=20)
-        except Exception:
-            try:
-                take_screenshot(driver, "export_password_failed")
-            except Exception:
-                pass
-            try:
-                dump_export_modal_html(driver, "export_modal_failed")
-            except Exception:
-                pass
-            log_step("⚠️ Export modal falló, intentando flujo alternativo...", logger)
-            click_export_and_enter_password(
-                driver,
-                export_password,
-                logger=logger,
-                timeout=20,
-            )
-
-        log_step("✅ EXPORT: completado", logger)
-        return True
-
-    except Exception as exc:
-        log_step(f"❌ EXPORT: FAIL -> {exc}", logger)
-        try:
-            take_screenshot(driver, "export_flow_failed")
-        except Exception:
-            pass
-        return False
-
-
 def click_export_event_and_alarm(
     driver,
     password,
@@ -1885,56 +887,83 @@ def click_export_event_and_alarm(
 
     wait = WebDriverWait(driver, timeout)
 
-    # snapshot del downloadcenter ANTES de exportar
-    downloadcenter_root = get_downloadcenter_root()
-    before = snapshot_alarm_reports(downloadcenter_root)
-    print(f"[EXPORT] Downloadcenter: {downloadcenter_root}")
+    export_icon_xpath = "//i[contains(@class,'h-icon-export')]/ancestor::button[1]"
 
-    export_password = password or HIK_EXPORT_PASSWORD
-    ok = export_event_alarms(driver, wait, export_password, logger=print)
-    if not ok:
-        print("[EXPORT] Export falló, se aborta la espera de descarga.")
+    try:
+        export_btn = wait.until(
+            EC.element_to_be_clickable((By.XPATH, export_icon_xpath))
+        )
+    except TimeoutException:
+        fallback_xpath = "//*[normalize-space()='Export']/ancestor::button[1]"
+        export_btn = wait.until(
+            EC.element_to_be_clickable((By.XPATH, fallback_xpath))
+        )
+
+    safe_js_click(driver, export_btn)
+    if timer:
+        timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_BUTTON")
+
+    log_info = globals().get("log_info", print)
+    log_error = globals().get("log_error", print)
+
+    type_export_password_if_needed(driver, timeout=8, timer=timer)
+
+    # Hacer clic en el botón Save del diálogo Export
+    click_export_save_button(driver, timeout=10, timer=timer)
+
+    export_dialog_xpath = (
+        "//div[contains(@class,'el-dialog__wrapper')]//span[contains(@class,'el-dialog__title') and contains(normalize-space(),'Export')]"
+    )
+    try:
+        WebDriverWait(driver, timeout).until(
+            EC.visibility_of_element_located((By.XPATH, export_dialog_xpath))
+        )
+    except TimeoutException:
+        print("[WARN] No se mostró el diálogo de Export después de hacer clic en el botón.")
+        if timer:
+            timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_ERROR_NO_DIALOG")
+        return None
+
+    excel_option_xpath = (
+        "//div[contains(@class,'el-dialog__wrapper')]//label[contains(@class,'el-radio') and "
+        "(contains(translate(@title,'excel','EXCEL'),'EXCEL') or .//span[contains(translate(normalize-space(),'excel','EXCEL'),'EXCEL')])]"
+    )
+    try:
+        excel_option = wait.until(
+            EC.element_to_be_clickable((By.XPATH, excel_option_xpath))
+        )
+        safe_js_click(driver, excel_option)
+    except TimeoutException:
+        print("[WARN] No se encontró la opción de formato Excel en el diálogo de Export.")
+        if timer:
+            timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_ERROR_NO_EXCEL")
         return None
 
     if timer:
         timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
 
-    save_ts = time.time()
+    log_info("[EXPORT] Esperando archivo Alarm_Report_* en carpeta de descargas...")
 
-    # Esperar el archivo REAL en Downloadcenter (NO en DOWNLOAD_DIR)
-    log_info = globals().get("log_info", print)
-    log_error = globals().get("log_error", print)
-    log_info("[EXPORT] Esperando Alarm_Report_* en Downloadcenter (HCWebControlService)...")
-    src_file = wait_new_alarm_report(
-        downloadcenter_root,
-        before,
-        start_ts=save_ts,
-        timeout=max(300, timeout),
+    archivo = esperar_descarga_y_renombrar_host(
+        download_dir=download_dir,
+        host_label=host_label,
+        timeout=timeout,
     )
 
-    if not src_file or not src_file.exists():
-        log_error("[ERROR] No se detectó Alarm_Report_* en Downloadcenter.")
-        take_screenshot(driver, "event_and_alarm_search_no_file")
+    log_info(f"[EXPORT] Ruta final del archivo exportado: {archivo}")
+
+    if not archivo:
+        log_error("[ERROR] No se detectó ningún archivo descargado desde Event and Alarm Search.")
+        take_screenshot(driver, "event_and_alarm_search")
         return None
 
-    # Copiar a tu downloads por host y renombrar
-    limpiar_descargas(download_dir)  # limpia SOLO tu carpeta destino
-    final_file = copiar_alarm_report_a_downloads(src_file, download_dir, host_label)
-    log_info(f"[EXPORT] Archivo detectado en Downloadcenter: {src_file}")
-    log_info(f"[EXPORT] Archivo copiado a: {final_file}")
-
-    if timer:
-        timer.mark("[9] Descarga detectada")
-
-    return final_file
+    return archivo
 
 
-def click_trigger_filter(
-    driver, mode: str, timeout=20, timer: StepTimer | None = None
-):
+def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = None):
     """
-    En la pantalla 'Event and Alarm Search' hace clic en el botón del filtro Trigger Alarm.
-    mode: ALL / TRIGGER / NOT_TRIGGER
+    En la pantalla 'Event and Alarm Search' hace clic en el botón 'Trigger Alarm'
+    dentro del grupo de filtros Trigger Alarm (All / Not Trigger Alarm / Trigger Alarm).
     """
 
     # Asegurar que la pantalla de Event and Alarm Search está cargada
@@ -1944,27 +973,30 @@ def click_trigger_filter(
         )
     )
 
-    label = {"ALL": "All", "TRIGGER": "Trigger Alarm", "NOT_TRIGGER": "Not Trigger Alarm"}[
-        mode
-    ]
+    # XPath específico para el botón Trigger Alarm
     btn_xpath = (
-        f"//div[@title='{label}' "
+        "//div[@title='Trigger Alarm' "
         "and contains(@class,'button') "
-        f"and normalize-space()='{label}']"
+        "and normalize-space()='Trigger Alarm']"
     )
 
+    # Esperar a que el botón sea clickable
     btn = WebDriverWait(driver, timeout).until(
         EC.element_to_be_clickable((By.XPATH, btn_xpath))
     )
-    safe_js_click(driver, btn)
 
+    # Scroll y clic con JS para asegurarnos de disparar el evento
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
+    driver.execute_script("arguments[0].click();", btn)
+
+    # Esperar a que el botón quede marcado (class incluye 'select')
     WebDriverWait(driver, timeout).until(
         lambda d: "select" in d.find_element(By.XPATH, btn_xpath).get_attribute("class")
     )
 
-    print(f"[9] Botón '{label}' seleccionado correctamente.")
+    print("[9] Botón 'Trigger Alarm' seleccionado correctamente.")
     if timer:
-        timer.mark(f"[9] CLICK_TRIGGER_FILTER_{mode}")
+        timer.mark("[9] CLICK_TRIGGER_ALARM")
 
 
 def limpiar_descargas(download_dir: Path = DOWNLOAD_DIR):
@@ -2173,59 +1205,7 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
         df.columns = headers
 
         df = df.dropna(how="all")
-        total_pre = len(df)
-        if total_pre == 0:
-            log_info("[EVENT] Report sin registros (0 filas). Se omite carga.")
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE public.hik_alarm_extraccion
-                    SET fecha_fin = now(),
-                        total_filas = %s,
-                        total_nuevos = %s,
-                        total_duplicados = %s,
-                        estado = 'OK'
-                    WHERE id = %s;
-                    """,
-                    (0, 0, 0, id_extraccion),
-                )
-            conn.commit()
-            return {"filas_extraidas": 0, "insertados": 0, "omitidos_duplicado": 0}
-
-        # IMPORTANTE:
-        # En muchos reportes la columna "Mark" viene vacía (checkbox),
-        # así que NO debemos filtrar por Mark. En su lugar, filtramos por
-        # columnas de negocio que sí deberían tener datos.
-        key_cols = [
-            "Name",
-            "Triggering Time (Client)",
-            "Source",
-            "Region",
-            "Trigger Event",
-        ]
-
-        def _has_data(v) -> bool:
-            if v is None or pd.isna(v):
-                return False
-            s = str(v).strip()
-            if s == "" or s.lower() == "nan":
-                return False
-            return True
-
-        # mantener filas donde al menos una columna clave tenga data
-        if all(c in df.columns for c in key_cols):
-            mask = df[key_cols].apply(lambda s: s.map(_has_data)).any(axis=1)
-            total_before = len(df)
-            df = df[mask].copy()
-            log_info(
-                "[EVENT] Filas después de filtro por columnas clave: "
-                f"{len(df)} (antes: {total_before})"
-            )
-        else:
-            log_info(
-                "[WARN] No se pudo aplicar filtro por columnas clave. "
-                f"Columnas presentes: {list(df.columns)}"
-            )
+        df = df[df["Mark"].notna()].copy()
 
         log_info(f"[EVENT] header_row detectado: {header_row}")
         log_info(f"[EVENT] Columnas encontradas en Alarm_Report: {list(df.columns)}")
@@ -2282,7 +1262,7 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
         df["alarm_acknowledgment_time"] = pd.to_datetime(
             df["alarm_acknowledgment_time"], errors="coerce"
         )
-        df = df.map(to_py)
+        df = df.applymap(to_py)
 
         required_data_cols = [
             "name",
@@ -2295,39 +1275,10 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
             if col not in df.columns:
                 raise ValueError(f"[EVENT] Falta columna requerida: {col}")
 
-        if df.empty:
-            # guardar evidencia rápida para debug
-            try:
-                LOG_DIR.mkdir(parents=True, exist_ok=True)
-                debug_csv = (
-                    LOG_DIR
-                    / f"debug_alarm_report_vacio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                )
-                # intenta salvar primeras 50 filas del RAW (sin romper)
-                raw.head(50).to_csv(debug_csv, index=False, header=False)
-                log_info(f"[DEBUG] Se guardó RAW preview (50 filas) en: {debug_csv}")
-            except Exception as e:
-                log_info(f"[DEBUG] No se pudo guardar preview RAW: {e}")
-
         if df[required_data_cols].dropna(how="all").empty:
-            log_info(
-                "[EVENT] Report sin datos en columnas requeridas. Se omite carga (0 filas)."
+            raise ValueError(
+                "[EVENT] Las columnas requeridas no contienen datos. Se aborta la carga."
             )
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE public.hik_alarm_extraccion
-                    SET fecha_fin = now(),
-                        total_filas = %s,
-                        total_nuevos = %s,
-                        total_duplicados = %s,
-                        estado = 'OK'
-                    WHERE id = %s;
-                    """,
-                    (0, 0, 0, id_extraccion),
-                )
-            conn.commit()
-            return {"filas_extraidas": 0, "insertados": 0, "omitidos_duplicado": 0}
 
         def build_event_key(row) -> str:
             def normalize_value(value) -> str:
@@ -2556,7 +1507,7 @@ def procesar_alarm_report(file_path: str, timer: StepTimer) -> None:
 
         df["fecha_creacion"] = datetime.now()
         df = df.where(pd.notnull(df), None)
-        df = df.map(to_py)
+        df = df.applymap(to_py)
 
         registros = []
         for _, row in df.iterrows():
@@ -2787,7 +1738,7 @@ def cerrar_sesion(driver, wait: WebDriverWait):
         print("[WARN] No se pudo cerrar sesión limpiamente.")
 
 
-def run_for_host(host: str, trigger_filter_mode: str) -> dict:
+def run_for_host(host: str) -> dict:
     global step_timer, performance_recorder
 
     print(f"[INFO] === Iniciando extracción para host {host} ===")
@@ -2864,13 +1815,13 @@ def run_for_host(host: str, trigger_filter_mode: str) -> dict:
         click_sidebar_alarm_search(driver, timeout=30, timer=timer)
         click_sidebar_event_and_alarm_search(driver, timeout=30, timer=timer)
         validar_event_and_alarm_search_screen(driver, timeout=40, timer=timer)
-        click_trigger_filter(driver, trigger_filter_mode, timeout=30, timer=timer)
+        click_trigger_alarm_button(driver, timeout=30, timer=timer)
         click_search_button(driver, timeout=40, timer=timer)
 
         limpiar_descargas(host_dir)
         export_file_path = click_export_event_and_alarm(
             driver,
-            password=HIK_EXPORT_PASSWORD,
+            password=HIK_PASSWORD,
             download_dir=host_dir,
             host_label=host,
             timeout=30,
@@ -2966,24 +1917,16 @@ def run_for_host(host: str, trigger_filter_mode: str) -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Automatiza Event and Alarm Search en HikCentral.")
     parser.add_argument("--host", type=str, help="Host/IP de HikCentral (ej: 172.16.9.11)")
-    parser.add_argument("--hosts", type=str, help="Hosts/IP separados por coma")
-    parser.add_argument(
-        "--trigger-filter",
-        type=str,
-        default="ALL",
-        choices=["ALL", "TRIGGER", "NOT_TRIGGER"],
-        help="Filtro Trigger Alarm en Event and Alarm Search",
-    )
     args = parser.parse_args()
 
-    if args.host or args.hosts:
-        hosts_to_run = parse_hosts_from_args(args.host, args.hosts)
-    else:
-        hosts_to_run = parse_hosts_from_env()
+    if args.host:
+        print(
+            f"[WARN] Parámetro --host ({args.host}) ignorado. "
+            "La ejecución procesa todos los hosts por defecto."
+        )
 
-    trigger_filter_mode = args.trigger_filter.upper()
     resultados = []
-    for host in hosts_to_run:
+    for host in DEFAULT_HOSTS:
         if not host_is_up(host):
             print(f"[WARN] Host no responde: {host}. Se omite.")
             resultados.append(
@@ -3000,7 +1943,7 @@ if __name__ == "__main__":
             continue
 
         try:
-            res = run_for_host(host, trigger_filter_mode)
+            res = run_for_host(host)
             resultados.append(res)
         except Exception as ex:
             print(f"[ERROR] Falló host {host}: {ex}")
