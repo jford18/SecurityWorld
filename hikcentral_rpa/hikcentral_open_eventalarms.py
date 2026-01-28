@@ -786,14 +786,25 @@ const el = arguments[0];
 const val = arguments[1];
 el.focus();
 el.value = val;
-el.dispatchEvent(new Event('input', {bubbles: true}));
-el.dispatchEvent(new Event('change', {bubbles: true}));
 """
         driver.execute_script(js, element, value)
-        current_value = (element.get_attribute("value") or "").strip()
 
+    driver.execute_script(
+        "arguments[0].dispatchEvent(new Event('input',{bubbles:true}));", element
+    )
+    driver.execute_script(
+        "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));", element
+    )
+    driver.execute_script(
+        "arguments[0].dispatchEvent(new KeyboardEvent('keyup',{bubbles:true,key:'a'}));",
+        element,
+    )
+    driver.execute_script("arguments[0].blur();", element)
+
+    current_value = driver.execute_script("return arguments[0].value || '';", element)
     if not current_value:
         _log_message(logger_warn, "warning", "[EXPORT] No se pudo escribir password en input.")
+        take_screenshot(driver, "export_password_empty")
     else:
         _log_message(logger_info, "info", f"[EXPORT] Password escrito len={len(current_value)}")
 
@@ -1598,7 +1609,7 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
         df.columns = headers
 
         df = df.dropna(how="all")
-        df = df[df["Mark"].notna()].copy()
+        df = df[(df["Name"].notna()) | (df["Triggering Time (Client)"].notna())].copy()
 
         log_info(f"[EVENT] header_row detectado: {header_row}")
         log_info(f"[EVENT] Columnas encontradas en Alarm_Report: {list(df.columns)}")
