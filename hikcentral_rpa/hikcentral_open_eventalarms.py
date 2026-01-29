@@ -215,6 +215,10 @@ def get_downloadcenter_root() -> Path:
     if env_root and env_root.strip():
         return Path(env_root.strip())
 
+    fixed = Path(r"C:\Users\Administrador\HCWebControlService\Downloadcenter")
+    if fixed.exists():
+        return fixed
+
     user_home = Path(os.environ.get("USERPROFILE", str(Path.home())))
     return user_home / "HCWebControlService" / "Downloadcenter"
 
