@@ -1613,10 +1613,36 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
         df.columns = headers
 
         df = df.dropna(how="all")
-        df = df[(df["Name"].notna()) | (df["Triggering Time (Client)"].notna())].copy()
+        df = df.applymap(lambda value: value.strip() if isinstance(value, str) else value)
+        df = df.replace({"": None, "nan": None})
+
+        total_after_header = len(df)
+        df = df[
+            df["Name"].notna()
+            | df["Triggering Time (Client)"].notna()
+            | df["Trigger Event"].notna()
+            | df["Source"].notna()
+            | df["Region"].notna()
+            | df["Description"].notna()
+            | df["Status"].notna()
+        ].copy()
+        total_after_filter = len(df)
 
         log_info(f"[EVENT] header_row detectado: {header_row}")
         log_info(f"[EVENT] Columnas encontradas en Alarm_Report: {list(df.columns)}")
+        log_info(f"[EVENT] Filas después del header: {total_after_header}")
+        log_info(f"[EVENT] Filas después del filtro de contenido: {total_after_filter}")
+        preview_cols = [
+            "Mark",
+            "Name",
+            "Triggering Time (Client)",
+            "Source",
+            "Region",
+            "Trigger Event",
+            "Status",
+        ]
+        preview_data = df.loc[:, preview_cols].head(3).to_dict(orient="records")
+        log_info(f"[EVENT] Preview filas filtradas: {preview_data}")
 
         column_map = {
             "Mark": "mark",
