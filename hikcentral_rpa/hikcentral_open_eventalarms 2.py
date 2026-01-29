@@ -1,0 +1,2495 @@
+import argparse
+import os
+import shutil
+import time
+import traceback
+from datetime import datetime
+import hashlib
+from pathlib import Path
+from urllib.error import URLError, HTTPError
+from urllib.request import Request, urlopen
+
+import pandas as pd
+import numpy as np
+import psutil
+import psycopg2
+from dotenv import load_dotenv
+from openpyxl import load_workbook
+from psycopg2.extras import execute_values
+from selenium import webdriver
+from selenium.common.exceptions import (
+    ElementClickInterceptedException,
+    StaleElementReferenceException,
+    TimeoutException,
+)
+from selenium.common.exceptions import TimeoutException as SeleniumTimeout
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+from webdriver_manager.chrome import ChromeDriverManager
+
+
+class PerformanceRecorder:
+    def __init__(self, start_time: float | None = None):
+        self.start_time = start_time if start_time is not None else time.perf_counter()
+        self.steps: list[dict] = []
+        self.cpu_max: float | None = None
+        self.proc = psutil.Process(os.getpid())
+
+    def _parse_step_label(self, label: str) -> tuple[int | None, str]:
+        import re
+
+        match = re.search(r"\[(\d+)\]", label)
+        if not match:
+            return None, label
+
+        return int(match.group(1)), label.strip()
+
+    def _update_cpu_max(self, cpu_percent: float):
+        if self.cpu_max is None or cpu_percent > self.cpu_max:
+            self.cpu_max = cpu_percent
+
+    def update_cpu(self, cpu_percent: float):
+        self._update_cpu_max(cpu_percent)
+
+    def add_step(
+        self,
+        label: str,
+        step_secs: float,
+        total_secs: float,
+        cpu_percent: float,
+        mem_percent: float,
+        proc_mem_mb: float,
+    ):
+        num_paso, descripcion = self._parse_step_label(label)
+        if num_paso is None:
+            return
+
+        self._update_cpu_max(cpu_percent)
+        self.steps.append(
+            {
+                "num_paso": num_paso,
+                "descripcion": descripcion,
+                "tiempo_paso": round(step_secs, 2),
+                "tiempo_total": round(total_secs, 2),
+                "cpu": round(cpu_percent, 1),
+                "ram": round(mem_percent, 1),
+                "py_mem": int(proc_mem_mb),
+            }
+        )
+
+    def record_baseline(self, cpu_percent: float, mem_percent: float):
+        self._update_cpu_max(cpu_percent)
+        total_secs = time.perf_counter() - self.start_time
+        self.steps.append(
+            {
+                "num_paso": 0,
+                "descripcion": "[0] Baseline antes de automatizar",
+                "tiempo_paso": 0.0,
+                "tiempo_total": round(total_secs, 2),
+                "cpu": round(cpu_percent, 1),
+                "ram": round(mem_percent, 1),
+                "py_mem": int(self.proc.memory_info().rss / (1024**2)),
+            }
+        )
+
+
+class StepTimer:
+    def __init__(self, start_time: float | None = None, recorder: PerformanceRecorder | None = None):
+        self.start = start_time if start_time is not None else time.perf_counter()
+        self.last = self.start
+        self.recorder = recorder
+        self.proc = psutil.Process(os.getpid())
+
+    def mark(self, label: str):
+        now = time.perf_counter()
+        step_secs = now - self.last
+        total_secs = now - self.start
+
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        registrar_cpu(cpu_percent)
+        mem = psutil.virtual_memory()
+        mem_percent = mem.percent
+        proc_mem_mb = self.proc.memory_info().rss / (1024**2)
+
+        print(
+            f"[PERF] {label:<45} "
+            f"paso: {step_secs:6.2f}s | total: {total_secs:6.2f}s | "
+            f"CPU: {cpu_percent:5.1f}% | RAM: {mem_percent:5.1f}% | "
+            f"PY-MEM: {proc_mem_mb:6.1f} MB"
+        )
+
+        if self.recorder:
+            self.recorder.add_step(
+                label,
+                step_secs,
+                total_secs,
+                cpu_percent,
+                mem_percent,
+                proc_mem_mb,
+            )
+
+        self.last = now
+
+
+BASE_DIR = Path(__file__).resolve().parents[1]
+ENV_PATH = BASE_DIR / ".env"
+load_dotenv(ENV_PATH)
+
+DEFAULT_HOSTS = ["172.16.9.11"]
+URL = ""
+SCRIPT_NAME = "hikcentral_open_eventalarms.py"
+HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
+HIK_PASSWORD = os.getenv("HIK_PASSWORD", "SW2112asm")
+
+LOG_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\logs")
+DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")
+
+
+def host_is_up(host: str, timeout: float = 2.5) -> bool:
+    url = f"http://{host}/"
+    request = Request(url, method="GET")
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            return response.status < 500
+    except (HTTPError, URLError, TimeoutError, OSError):
+        return False
+
+
+def resolve_hik_host(cli_host: str | None) -> tuple[str, str]:
+    if cli_host:
+        return cli_host.strip(), "arg"
+
+    env_host = os.getenv("HIK_HOST")
+    if env_host and env_host.strip():
+        return env_host.strip(), "env"
+
+    env_hosts = os.getenv("HIK_HOSTS")
+    if env_hosts:
+        hosts = [h.strip() for h in env_hosts.split(",") if h.strip()]
+    else:
+        hosts = DEFAULT_HOSTS
+
+    for host in hosts:
+        if host_is_up(host):
+            return host, "autodetect"
+        print(f"[WARN] Host no responde: {host}")
+
+    raise RuntimeError("Ningún host HikCentral disponible en HIK_HOSTS/DEFAULT_HOSTS")
+
+
+def parse_hosts_from_args(host: str | None, hosts: str | None) -> list[str]:
+    candidates: list[str] = []
+    if host and host.strip():
+        candidates.append(host.strip())
+    if hosts:
+        candidates.extend([h.strip() for h in hosts.split(",") if h.strip()])
+
+    seen = set()
+    deduped: list[str] = []
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        deduped.append(candidate)
+    return deduped
+
+
+def parse_hosts_from_env() -> list[str]:
+    env_host = os.getenv("HIK_HOST")
+    if env_host and env_host.strip():
+        return [env_host.strip()]
+
+    env_hosts = os.getenv("HIK_HOSTS")
+    if env_hosts and env_hosts.strip():
+        return [h.strip() for h in env_hosts.split(",") if h.strip()]
+
+    return DEFAULT_HOSTS
+
+
+def get_downloadcenter_root() -> Path:
+    env_root = os.getenv("HIK_DOWNLOADCENTER") or os.getenv("HC_DOWNLOADCENTER")
+    if env_root and env_root.strip():
+        return Path(env_root.strip())
+
+    fixed = Path(r"C:\Users\Administrador\HCWebControlService\Downloadcenter")
+    if fixed.exists():
+        return fixed
+
+    user_home = Path(os.environ.get("USERPROFILE", str(Path.home())))
+    return user_home / "HCWebControlService" / "Downloadcenter"
+
+
+def take_screenshot(driver, label: str) -> Path:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    screenshot_path = LOG_DIR / f"{label}_{timestamp}.png"
+    driver.save_screenshot(str(screenshot_path))
+    print(f"[INFO] Screenshot guardado en: {screenshot_path}")
+    return screenshot_path
+
+
+def find_latest_alarm_report(download_dir: Path) -> Path | None:
+    """
+    Busca recursivamente en download_dir la última hoja de cálculo de Event & Alarm Search.
+    HikCentral crea una carpeta 'Alarm_Report_YYYYMMDDHHMMSS' y dentro un archivo
+    'Alarm_Report_YYYYMMDDHHMMSS.xlsx'.
+    """
+    base_dir = download_dir
+    candidates: list[Path] = []
+
+    for folder in base_dir.glob("Alarm_Report_*"):
+        if folder.is_dir():
+            for file in folder.glob("*.xls*"):
+                candidates.append(file)
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates[0]
+
+
+def find_last_alarm_report_file() -> Path | None:
+    """
+    Busca el último archivo Alarm_Report_* en la carpeta:
+    C:/Users/<usuario>/HCWebControlService/Downloadcenter recorriendo subcarpetas.
+
+    Devuelve un Path o None si no encuentra nada.
+    """
+    base_dir = get_downloadcenter_root()
+    if not base_dir.exists():
+        print(f"[ERROR] Carpeta de Downloadcenter no existe: {base_dir}")
+        return None
+
+    candidates: list[Path] = []
+    for path in base_dir.rglob("*"):
+        if not path.is_file():
+            continue
+        name = path.name
+        if not name.startswith("Alarm_Report_"):
+            continue
+        if not name.lower().endswith((".xlsx", ".xls")):
+            continue
+        candidates.append(path)
+
+    if not candidates:
+        print("[ERROR] No se encontró ningún archivo Alarm_Report_* en Downloadcenter.")
+        return None
+
+    last_file = max(candidates, key=lambda p: p.stat().st_mtime)
+    print(f"[INFO] Último Alarm_Report encontrado: {last_file}")
+    return last_file
+
+
+def snapshot_alarm_reports(downloadcenter_root: Path) -> set[Path]:
+    if not downloadcenter_root.exists():
+        return set()
+
+    files: set[Path] = set()
+    for p in downloadcenter_root.rglob("*"):
+        if not p.is_file():
+            continue
+        name = p.name
+        if not name.startswith("Alarm_Report_"):
+            continue
+        if not name.lower().endswith((".xlsx", ".xls")):
+            continue
+        files.add(p)
+    return files
+
+
+def wait_new_alarm_report(
+    downloadcenter_root: Path,
+    before: set[Path],
+    timeout: int = 180,
+) -> Path | None:
+    fin = time.time() + timeout
+    last_candidate: Path | None = None
+    stable_cycles = 0
+    last_size: int | None = None
+    min_stable_cycles = 3
+
+    while time.time() < fin:
+        current = snapshot_alarm_reports(downloadcenter_root)
+        nuevos = [p for p in current if p not in before]
+
+        if nuevos:
+            # el más nuevo por fecha de modificación
+            candidate = max(nuevos, key=lambda p: p.stat().st_mtime)
+            if last_candidate != candidate:
+                stable_cycles = 0
+                last_size = None
+            last_candidate = candidate
+
+            # esperar tamaño estable (descarga terminada)
+            try:
+                stat = last_candidate.stat()
+                size = stat.st_size
+                mtime = datetime.fromtimestamp(stat.st_mtime)
+                print(f"[EXPORT] Candidato: {last_candidate} | size={size} | mtime={mtime}")
+
+                if last_size is not None and size == last_size and size > 0:
+                    stable_cycles += 1
+                else:
+                    stable_cycles = 0
+                last_size = size
+
+                if stable_cycles >= min_stable_cycles and size > 0:
+                    try:
+                        wb = load_workbook(last_candidate, data_only=True, read_only=True)
+                        if "Alarm and Event Log" not in wb.sheetnames:
+                            raise ValueError("Falta hoja 'Alarm and Event Log'")
+                        ws = wb["Alarm and Event Log"]
+                        max_row = ws.max_row or 0
+                        header_row = None
+                        for row_idx, row in enumerate(
+                            ws.iter_rows(min_row=1, max_row=min(50, max_row), values_only=True),
+                            start=1,
+                        ):
+                            if row and str(row[0]).strip() == "Mark":
+                                header_row = row_idx
+                                break
+                        if max_row <= 10 or (header_row is not None and max_row <= header_row + 1):
+                            raise ValueError("Hoja con pocas filas")
+                        print("[EXPORT] XLSX abierto OK")
+                        return last_candidate
+                    except Exception:
+                        print("[EXPORT] XLSX aún incompleto, reintentando…")
+            except Exception:
+                pass
+
+        time.sleep(1)
+
+    return last_candidate
+
+
+def copiar_alarm_report_a_downloads(src: Path, host_dir: Path, host_label: str) -> Path:
+    host_dir.mkdir(parents=True, exist_ok=True)
+    host_suffix = host_label.replace(".", "_")
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    destino = host_dir / f"Alarm_Report_{timestamp}_{host_suffix}{src.suffix}"
+    shutil.copy2(src, destino)
+    return destino
+
+
+def esperar_descarga(download_dir: Path, archivos_previos, timeout: int = 120) -> str:
+    """Espera hasta detectar un nuevo archivo .xlsx o .xls en download_dir."""
+
+    print("[9] Esperando archivo descargado...")
+    inicio = time.time()
+
+    while True:
+        archivos_actuales = os.listdir(download_dir)
+        nuevos = [
+            f
+            for f in archivos_actuales
+            if f not in archivos_previos
+            and not f.endswith(".crdownload")
+            and (f.endswith(".xlsx") or f.endswith(".xls"))
+        ]
+
+        if nuevos:
+            archivo = nuevos[0]
+            ruta = str(download_dir / archivo)
+            print(f"[9] Archivo encontrado: {ruta}")
+            if step_timer:
+                step_timer.mark("[9] Descarga detectada")
+            return ruta
+
+        if time.time() - inicio > timeout:
+            raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
+
+        time.sleep(2)
+
+cpu_measurements: list[float] = []
+step_timer: StepTimer | None = None
+performance_recorder: PerformanceRecorder | None = None
+
+
+def registrar_cpu(medicion: float):
+    cpu_measurements.append(medicion)
+
+
+def get_pg_connection():
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST", "localhost"),
+        port=os.getenv("DB_PORT", "5432"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASS", "123456"),
+        dbname=os.getenv("DB_NAME", "securityworld"),
+    )
+
+
+def crear_registro_extraccion(conn, archivo_nombre: str) -> int:
+    """
+    Inserta una fila en hik_alarm_extraccion con estado EN_PROCESO
+    y devuelve el id generado.
+    """
+    log_info = globals().get("log_info", print)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO public.hik_alarm_extraccion (archivo_nombre)
+            VALUES (%s)
+            RETURNING id;
+            """,
+            (archivo_nombre,),
+        )
+        extraccion_id = cur.fetchone()[0]
+    conn.commit()
+    log_info(
+        f"[EVENT] Creado registro hik_alarm_extraccion id={extraccion_id} para archivo {archivo_nombre}"
+    )
+    return extraccion_id
+
+
+def normalize_ts(value):
+    """
+    Devuelve None si el valor es NaT/NaN/None.
+    Si es un Timestamp de pandas, lo convierte a datetime nativo sin tz.
+    Si es un datetime ya nativo, lo deja igual.
+    """
+    if pd.isna(value):
+        return None
+    if isinstance(value, pd.Timestamp):
+        return value.to_pydatetime().replace(tzinfo=None)
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None)
+    return value
+
+
+def to_py(v):
+    # Convierte nulos pandas/numpy a None y timestamps a datetime python
+    if v is None:
+        return None
+    # pd.NA / NaN / NaT
+    if pd.isna(v):
+        return None
+    # pandas Timestamp
+    if isinstance(v, pd.Timestamp):
+        return v.to_pydatetime()
+    # numpy scalar -> python scalar
+    if isinstance(v, (np.generic,)):
+        return v.item()
+    # strings: strip opcional
+    if isinstance(v, str):
+        s = v.strip()
+        return s if s != "" else None
+    return v
+
+
+def calcular_periodo(value):
+    """
+    Calcula el periodo (YYYYMMDD) a partir de un valor de fecha/hora.
+    Si el valor es NaT/NaN/None o no es una fecha válida, devuelve None.
+    """
+    if pd.isna(value):
+        return None
+
+    v = value
+    if isinstance(v, pd.Timestamp):
+        v = v.to_pydatetime().replace(tzinfo=None)
+    elif isinstance(v, datetime):
+        v = v.replace(tzinfo=None)
+    else:
+        try:
+            v = pd.to_datetime(v).to_pydatetime().replace(tzinfo=None)
+        except Exception:
+            return None
+
+    return int(v.strftime("%Y%m%d"))
+
+
+def registrar_ejecucion_y_pasos(
+    opcion: str,
+    duracion_total_seg: float,
+    cpu_final: float,
+    ram_final: float,
+    recorder: PerformanceRecorder | None,
+):
+    try:
+        conn = get_pg_connection()
+
+        cpu_max_value = recorder.cpu_max if recorder and recorder.cpu_max is not None else 0.0
+        observacion = (
+            f"Ejecución de {opcion} finalizada en {duracion_total_seg:.2f}s. "
+            f"CPU max: {cpu_max_value:.1f}%. RAM final: {ram_final:.1f}%."
+        )
+
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO PUBLIC.LOG_RPA_EJECUCION
+                    (SCRIPT, OPCION, DURACION_TOTAL_SEG, CPU_MAX, CPU_FINAL, RAM_FINAL, OBSERVACION)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING ID_EJECUCION
+                    """,
+                    (
+                        SCRIPT_NAME,
+                        opcion,
+                        round(duracion_total_seg, 2),
+                        round(cpu_max_value, 1),
+                        round(cpu_final, 1),
+                        round(ram_final, 1),
+                        observacion,
+                    ),
+                )
+                id_ejecucion = cur.fetchone()[0]
+
+                if recorder:
+                    pasos_ordenados = sorted(recorder.steps, key=lambda x: x.get("num_paso", 0))
+                    cur.executemany(
+                        """
+                        INSERT INTO PUBLIC.LOG_RPA_EJECUCION_PASO
+                        (ID_EJECUCION, NUM_PASO, DESCRIPCION, TIEMPO_PASO_SEG, TIEMPO_TOTAL_SEG, CPU_PORCENTAJE, RAM_PORCENTAJE, PY_MEM_NIVEL)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        [
+                            (
+                                id_ejecucion,
+                                paso.get("num_paso"),
+                                paso.get("descripcion"),
+                                paso.get("tiempo_paso"),
+                                paso.get("tiempo_total"),
+                                paso.get("cpu"),
+                                paso.get("ram"),
+                                paso.get("py_mem"),
+                            )
+                            for paso in pasos_ordenados
+                        ],
+                    )
+
+        print("[INFO] Registro de rendimiento y pasos insertado correctamente.")
+        return id_ejecucion
+    except Exception as e:
+        print(f"[ERROR] No se pudo registrar el rendimiento en la base de datos: {e}")
+        return None
+
+
+def safe_click(driver, el):
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+    try:
+        el.click()
+    except (ElementClickInterceptedException, StaleElementReferenceException):
+        driver.execute_script("arguments[0].click();", el)
+
+
+def safe_js_click(driver, el):
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+    driver.execute_script("arguments[0].click();", el)
+
+
+def _safe_js_click(driver, el):
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+    driver.execute_script("arguments[0].click();", el)
+
+
+def ir_a_event_and_alarm(driver, wait: WebDriverWait):
+    """
+    Abre el módulo 'Event and Alarm' usando el menú principal de HikCentral.
+    1) Abre el popup de menús (navigation_addMenuBtn)
+    2) Dentro de navigation_menuPop hace clic en la tarjeta Event and Alarm.
+    """
+    print("[3] Abriendo módulo Event and Alarm...")
+
+    # Asegurar que estamos en el documento principal
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+
+    visible = False
+    try:
+        menu_pop = driver.find_element(By.ID, "navigation_menuPop")
+        visible = menu_pop.is_displayed()
+    except Exception:
+        visible = False
+
+    if not visible:
+        menu_btn = wait.until(
+            EC.element_to_be_clickable((By.ID, "navigation_addMenuBtn"))
+        )
+        driver.execute_script("arguments[0].click();", menu_btn)
+
+    try:
+        tile_xpath = (
+            "//div[@id='navigation_menuPop']"
+            "//div[contains(@id,'nav_box_s_menu_alarm_event')]"
+            "//*[normalize-space()='Event and Alarm' or @title='Event and Alarm']"
+        )
+        tile = wait.until(EC.element_to_be_clickable((By.XPATH, tile_xpath)))
+    except TimeoutException:
+        tile_xpath = (
+            "//div[@id='navigation_menuPop']"
+            "//div[contains(@class,'nav-pop-quick-entry-list')]"
+            "//*[normalize-space()='Event and Alarm' or @title='Event and Alarm']"
+        )
+        tile = wait.until(EC.element_to_be_clickable((By.XPATH, tile_xpath)))
+
+    driver.execute_script("arguments[0].click();", tile)
+
+    WebDriverWait(driver, 30).until(
+        EC.presence_of_element_located(
+            (
+                By.XPATH,
+                "//*[contains(normalize-space(),'Alarm Analysis') or contains(normalize-space(),'Alarm Trend')]",
+            )
+        )
+    )
+
+
+def wait_visible(driver, by, value, timeout=20):
+    return WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((by, value)))
+
+
+def wait_click(driver, by, value, timeout=20):
+    el = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((by, value)))
+    safe_click(driver, el)
+    return el
+
+
+# XPaths específicos para el diálogo Export de Event and Alarm Search
+EXPORT_DRAWER_XPATH = (
+    "//div[contains(@class,'drawer') and .//div[contains(@class,'drawer-header')]"
+    "//*[normalize-space()='Export' or @title='Export']]"
+)
+EXPORT_CONTAINER_XPATH = (
+    "//div[contains(@class,'el-dialog__wrapper') and not(contains(@style,'display: none'))]"
+    "  //div[contains(@class,'el-dialog')][1]"
+    " | "
+    "//div[contains(@class,'el-drawer__wrapper') and not(contains(@style,'display: none'))]"
+    "  //div[contains(@class,'el-drawer')][1]"
+)
+
+EXPORT_DIALOG_CONTAINER_XPATH = (
+    "//div[contains(@class,'el-dialog__wrapper') and not(contains(@style,'display: none'))]"
+    "//div[contains(@class,'el-dialog')]"
+    " | //div[contains(@class,'el-drawer__wrapper') and not(contains(@style,'display: none'))]"
+    "//div[contains(@class,'el-drawer')]"
+)
+
+EXPORT_DIALOG_PASSWORD_INPUTS_XPATH = ".//input[@type='password' and contains(@class,'el-input__inner')]"
+
+EXPORT_DIALOG_CONFIRM_PASSWORD_INPUT_XPATH = (
+    ".//input[@type='password' and contains(@class,'el-input__inner') and "
+    "contains(translate(@placeholder,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'confirm')]"
+)
+
+EXPORT_CONTAINER_JS = """
+const inputs = Array.from(document.querySelectorAll('input[placeholder="Password"]'))
+  .filter(i => i && i.offsetParent !== null);
+
+let target = null;
+target = inputs.find(i => (i.getAttribute('outerinputtype') || '').toLowerCase() === 'password') || inputs[0];
+if (!target) return null;
+
+const hasConfirm = (el) => {
+  const root = el.closest('.el-drawer, .el-dialog, [class*="drawer"], [class*="dialog"]') || document.body;
+  const txt = (root.innerText || '').toLowerCase();
+  return txt.includes('confirm password') && txt.includes('save');
+};
+
+let container = target.closest('.el-drawer, .el-dialog, [class*="drawer"], [class*="dialog"]');
+if (!container) container = target.closest('body');
+if (!container) return null;
+
+let node = container;
+for (let i = 0; i < 6 && node; i += 1) {
+  const txt = (node.innerText || '').toLowerCase();
+  if (txt.includes('confirm password') && txt.includes('save') && txt.includes('export')) return node;
+  node = node.parentElement;
+}
+const txt2 = (container.innerText || '').toLowerCase();
+if (txt2.includes('confirm password') && txt2.includes('save')) return container;
+
+return null;
+"""
+
+EXPORT_DIALOG_SAVE_BUTTON_XPATH = (
+    ".//button[@title='Save'"
+    "        and contains(@class,'el-button')"
+    "        and contains(@class,'el-button--primary')"
+    "        and (.//div[contains(@class,'el-button-slot-wrapper')"
+    "                 and normalize-space()='Save']"
+    "             or .//span[normalize-space()='Save'])"
+    "]"
+)
+
+EXPORT_SAVE_BTN_REL_XPATH = (
+    ".//button[.//*[normalize-space()='Save'] or normalize-space()='Save' "
+    "or .//div[normalize-space()='Save']]"
+)
+
+
+def _resolve_logger(name: str):
+    logger = globals().get(name)
+    return logger if logger is not None else print
+
+
+def _log_message(logger, level: str, message: str):
+    if callable(logger):
+        logger(message)
+        return
+    method = getattr(logger, level, None)
+    if callable(method):
+        method(message)
+    else:
+        print(message)
+
+
+def find_export_container(driver):
+    driver.switch_to.default_content()
+    return driver.execute_script(EXPORT_CONTAINER_JS)
+
+
+def wait_export_container(driver, timeout=12):
+    logger_info = _resolve_logger("log_info")
+    wait = WebDriverWait(driver, timeout)
+    wait.until(lambda d: find_export_container(d) is not None)
+    container = find_export_container(driver)
+    _log_message(logger_info, "info", "[EXPORT] Contenedor Export detectado")
+    return container
+
+
+def find_export_confirm_password_input(export_container):
+    try:
+        inputs = export_container.find_elements(
+            By.CSS_SELECTOR,
+            "input.el-input__inner[placeholder='Password']",
+        )
+    except Exception:
+        return None
+    visibles = []
+    for element in inputs:
+        try:
+            if element.is_displayed() and element.is_enabled():
+                visibles.append(element)
+        except StaleElementReferenceException:
+            continue
+    return visibles[-1] if visibles else None
+
+
+def fill_confirm_password_in_container(driver, export_container, password, logger=None):
+    logger_info = logger if logger is not None else _resolve_logger("log_info")
+    logger_warn = _resolve_logger("log_warn")
+
+    confirm_input = find_export_confirm_password_input(export_container)
+    if confirm_input is None:
+        _log_message(logger_warn, "warning", "[EXPORT] Campo Confirm Password no encontrado en panel Export.")
+        return False
+
+    return set_input_value_robusto(driver, confirm_input, password, logger=logger_info)
+
+
+def set_input_value_robusto(driver, element, value, logger=None):
+    logger_info = logger if logger is not None else _resolve_logger("log_info")
+    logger_warn = _resolve_logger("log_warn")
+
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", element)
+    try:
+        element.click()
+    except Exception:
+        try:
+            driver.execute_script("arguments[0].click();", element)
+        except Exception:
+            pass
+
+    try:
+        element.send_keys(Keys.CONTROL, "a")
+        element.send_keys(Keys.BACKSPACE)
+    except Exception:
+        pass
+
+    try:
+        element.send_keys(value)
+    except Exception:
+        pass
+
+    current_value = (element.get_attribute("value") or "").strip()
+    if not current_value:
+        js = """
+const el = arguments[0];
+const val = arguments[1];
+el.focus();
+el.value = val;
+"""
+        driver.execute_script(js, element, value)
+
+    driver.execute_script(
+        "arguments[0].dispatchEvent(new Event('input',{bubbles:true}));", element
+    )
+    driver.execute_script(
+        "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));", element
+    )
+    driver.execute_script(
+        "arguments[0].dispatchEvent(new KeyboardEvent('keyup',{bubbles:true,key:'a'}));",
+        element,
+    )
+    driver.execute_script("arguments[0].blur();", element)
+
+    current_value = driver.execute_script("return arguments[0].value || '';", element)
+    if not current_value:
+        _log_message(logger_warn, "warning", "[EXPORT] No se pudo escribir password en input.")
+        take_screenshot(driver, "export_password_empty")
+    else:
+        _log_message(logger_info, "info", f"[EXPORT] Password escrito len={len(current_value)}")
+
+    return bool(current_value)
+
+
+def click_save_in_export(driver, export_container, timeout=10, timer=None):
+    logger_info = _resolve_logger("log_info")
+    logger_warn = _resolve_logger("log_warn")
+    logger_error = _resolve_logger("log_error")
+    wait = WebDriverWait(driver, timeout)
+
+    def find_save_button():
+        try:
+            buttons = export_container.find_elements(By.CSS_SELECTOR, "button")
+        except Exception:
+            return None
+        for btn in buttons:
+            try:
+                if btn.is_displayed() and btn.is_enabled() and btn.text.strip() == "Save":
+                    return btn
+            except StaleElementReferenceException:
+                continue
+        return None
+
+    try:
+        save_btn = wait.until(lambda d: find_save_button())
+    except TimeoutException:
+        _log_message(logger_error, "error", "[EXPORT] No se encontró botón Save visible en panel Export.")
+        take_screenshot(driver, "export_save_not_found")
+        dump = driver.execute_script(
+            """
+return Array.from(document.querySelectorAll('button'))
+  .map(btn => ({
+    vis: !!btn.offsetParent,
+    text: (btn.innerText || '').trim(),
+    cls: btn.className
+  }))
+  .filter(btn => btn.text.toLowerCase().includes('save'));
+"""
+        )
+        _log_message(logger_error, "error", f"[EXPORT] Dump botones Save visibles: {dump}")
+        raise
+
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", save_btn)
+    try:
+        save_btn.click()
+    except Exception:
+        try:
+            driver.execute_script("arguments[0].click();", save_btn)
+        except Exception:
+            try:
+                ActionChains(driver).move_to_element(save_btn).click().perform()
+            except Exception:
+                _log_message(logger_warn, "warning", "[EXPORT] Click estándar en Save falló.")
+                raise
+
+    _log_message(logger_info, "info", "[EXPORT] Click Save OK")
+    if timer is not None:
+        timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_SAVE_BUTTON")
+
+    try:
+        WebDriverWait(driver, 8).until(
+            lambda d: find_save_button() is None or not export_container.is_displayed()
+        )
+    except TimeoutException:
+        _log_message(
+            logger_warn,
+            "warning",
+            "[EXPORT] El panel Export no se cerró o el botón Save siguió visible.",
+        )
+
+    return True
+
+
+def fill_confirm_password_and_click_save(driver, password, timeout=12, timer=None) -> bool:
+    step_name = "[7] CLICK_EXPORT_EVENT_AND_ALARM_SAVE_BUTTON"
+    logger_info = _resolve_logger("log_info")
+    logger_warn = _resolve_logger("log_warn")
+    logger_error = _resolve_logger("log_error")
+
+    try:
+        container = wait_export_container(driver, timeout=timeout)
+    except TimeoutException:
+        _log_message(logger_error, "error", "[EXPORT] No se encontró contenedor Export.")
+        take_screenshot(driver, "export_container_timeout")
+        dump = driver.execute_script(
+            """
+return Array.from(document.querySelectorAll('input[placeholder="Password"]'))
+  .map(i => ({
+    vis: !!i.offsetParent,
+    outer: i.getAttribute('outerinputtype'),
+    cls: i.className
+  }));
+"""
+        )
+        _log_message(logger_error, "error", f"[EXPORT] Dump inputs Password visibles: {dump}")
+        raise
+
+    fill_confirm_password_in_container(driver, container, password, logger=logger_info)
+
+    click_save_in_export(driver, container, timeout=timeout, timer=timer)
+
+    if timer is not None:
+        timer.mark(step_name)
+
+    return True
+
+
+def type_export_password_and_confirm_if_present(driver, timeout=8, timer=None) -> bool:
+    """
+    Si el panel Export muestra campos Password/Confirm Password, escribe la misma
+    contraseña HIK_PASSWORD usada en el login. Si no aparecen, continuar sin error.
+    """
+    wait = WebDriverWait(driver, timeout)
+
+    logger_warn = globals().get("log_warn", print)
+    logger_info = globals().get("log_info", print)
+
+    try:
+        container = wait.until(
+            EC.visibility_of_element_located((By.XPATH, EXPORT_DIALOG_CONTAINER_XPATH))
+        )
+    except TimeoutException:
+        logger_warn("[EXPORT] No se encontró panel Export visible para password.")
+        return False
+
+    inputs = [
+        inp
+        for inp in container.find_elements(By.XPATH, EXPORT_DIALOG_PASSWORD_INPUTS_XPATH)
+        if inp.is_displayed()
+    ]
+    if not inputs:
+        logger_warn(
+            "[EXPORT] No se encontraron inputs de password en Export, se asume que no es requerido."
+        )
+        return False
+
+    password_input = None
+    confirm_input = None
+    for inp in inputs:
+        placeholder = (inp.get_attribute("placeholder") or "").strip().lower()
+        if "confirm" in placeholder:
+            confirm_input = inp
+        elif "password" in placeholder and password_input is None:
+            password_input = inp
+
+    if password_input is None and inputs:
+        password_input = inputs[0]
+    if confirm_input is None and len(inputs) >= 2:
+        confirm_input = inputs[1]
+
+    typed = False
+    for field in [password_input, confirm_input]:
+        if field is None:
+            continue
+        safe_click(driver, field)
+        field.clear()
+        field.send_keys(HIK_PASSWORD)
+        typed = True
+
+    if typed:
+        try:
+            (confirm_input or password_input).send_keys(Keys.TAB)
+        except Exception:
+            pass
+        logger_info("[EXPORT] Password(s) escritos correctamente en el panel Export.")
+        if timer is not None:
+            timer.mark("[7] EXPORT_PASSWORDS_TYPED")
+
+    return typed
+
+
+def click_export_save_button(driver, timeout=10, timer=None):
+    """
+    Hace clic en el botón Save del cuadro Export.
+    Usa EXPORT_DIALOG_SAVE_BUTTON_XPATH relativo al contenedor visible del Export.
+    """
+    logger_info = _resolve_logger("log_info")
+    logger_error = _resolve_logger("log_error")
+
+    try:
+        container = wait_export_container(driver, timeout=timeout)
+        _log_message(logger_info, "info", "[EXPORT] Botón Save localizado en contenedor Export, haciendo clic...")
+        click_save_in_export(driver, container, timeout=timeout, timer=timer)
+        return True
+    except TimeoutException:
+        _log_message(logger_error, "error", "[EXPORT] No se pudo localizar/clic el botón Save del cuadro Export (timeout).")
+        take_screenshot(driver, "export_save_timeout")
+        raise
+    except Exception as e:
+        _log_message(logger_error, "error", f"[EXPORT] Error al hacer clic en Save del Export: {e}")
+        take_screenshot(driver, "export_save_error")
+        raise
+
+
+def cerrar_overlays(driver):
+    posibles_overlays = [
+        (By.CSS_SELECTOR, "button.close-button"),
+        (By.CSS_SELECTOR, ".el-dialog__headerbtn"),
+    ]
+    for by, selector in posibles_overlays:
+        try:
+            elementos = driver.find_elements(by, selector)
+            for el in elementos:
+                if el.is_displayed():
+                    safe_click(driver, el)
+        except Exception:
+            continue
+
+
+def cerrar_buscador_global_si_abrio(driver):
+    try:
+        inp = driver.find_elements(By.XPATH, "//input[contains(@placeholder,'enter function')]")
+        if inp:
+            driver.switch_to.active_element.send_keys("\ue00c")  # ESC
+    except Exception:
+        pass
+
+
+def handle_export_password_if_needed(driver, timeout: int = 8):
+    """
+    Si al exportar aparece un cuadro de diálogo pidiendo password,
+    escribe la misma clave del login (HIK_PASSWORD) y hace clic en Confirm / OK.
+    Si no aparece nada, sigue de largo sin lanzar excepción.
+    """
+    try:
+        dialog = WebDriverWait(driver, timeout).until(
+            EC.visibility_of_element_located(
+                (
+                    By.XPATH,
+                    "//div[contains(@class,'el-message-box') and .//input[@type='password']]",
+                )
+            )
+        )
+        print("[7] Diálogo de contraseña de export detectado.")
+    except TimeoutException:
+        print("[7] No apareció diálogo de contraseña, continúo sin password.")
+        return
+
+    # input de password dentro del cuadro
+    password_input = dialog.find_element(By.XPATH, ".//input[@type='password']")
+    password_input.clear()
+    password_input.send_keys(HIK_PASSWORD)
+
+    # botón Confirm / OK dentro del mismo cuadro
+    try:
+        confirm_btn = dialog.find_element(
+            By.XPATH, ".//button[.//span[normalize-space()='Confirm']]"
+        )
+    except Exception:
+        confirm_btn = dialog.find_element(
+            By.XPATH, ".//button[.//span[normalize-space()='OK']]"
+        )
+
+    safe_js_click(driver, confirm_btn)
+    print("[7] Contraseña de export ingresada y confirmada.")
+
+
+def handle_password_confirm_if_present(driver, timeout: int = 10):
+    """
+    Si aparece el diálogo de confirmación de contraseña al exportar,
+    ingresa HIK_PASSWORD y confirma. Si no aparece, no lanza error.
+    """
+    try:
+        wait = WebDriverWait(driver, timeout)
+
+        dialog = wait.until(
+            EC.visibility_of_element_located(
+                (
+                    By.XPATH,
+                    "//*[contains(normalize-space(),'Confirm') and contains(normalize-space(),'Password')]/ancestor::div[contains(@class,'el-dialog') or contains(@class,'drawer-main')][1]",
+                )
+            )
+        )
+
+        pwd_input = dialog.find_element(By.XPATH, ".//input[@type='password' or @placeholder='Password']")
+
+        pwd_input.clear()
+        pwd_input.send_keys(HIK_PASSWORD)
+
+        confirm_btn = dialog.find_element(
+            By.XPATH,
+            ".//button[.//span[normalize-space()='OK' or normalize-space()='Confirm' or normalize-space()='Aceptar']]",
+        )
+
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", confirm_btn)
+        driver.execute_script("arguments[0].click();", confirm_btn)
+
+        WebDriverWait(driver, timeout).until(EC.invisibility_of_element(dialog))
+
+        print("[INFO] Diálogo de confirmación de password resuelto correctamente.")
+
+    except SeleniumTimeout:
+        print("[INFO] No apareció diálogo de confirmación de password, continúo.")
+    except Exception as e:
+        print(f"[WARN] Error manejando diálogo de password: {e}")
+
+
+def click_sidebar_alarm_search(driver, timeout=20, timer: StepTimer | None = None):
+    """
+    Hace clic en el icono de lupa del menú lateral (Search).
+    IMPORTANTE: esta función SOLO abre el panel de Search; no intenta
+    encontrar 'Event and Alarm Search'. Eso se hace en
+    click_sidebar_event_and_alarm_search.
+    """
+    # Esperar a que la página esté completamente cargada
+    WebDriverWait(driver, timeout).until(
+        lambda d: d.execute_script("return document.readyState === 'complete'")
+    )
+
+    js = """
+        const icons = Array.from(
+            document.querySelectorAll("i.icon-svg-nav_search, i.h-icon-search, i[class*='nav_search']")
+        );
+        const visibles = icons.filter(e => e && e.offsetParent !== null);
+        if (!visibles.length) {
+            return false;
+        }
+        // La lupa del menú lateral es la que está más a la izquierda
+        visibles.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+        const icon = visibles[0];
+
+        // Buscar el contenedor clickeable (el-submenu__title) o usar el propio ícono
+        let container = icon.closest('.el-submenu__title');
+        if (!container) {
+            container = icon;
+        }
+
+        container.scrollIntoView({ block: 'center' });
+        container.click();
+        return true;
+    """
+
+    # Ejecutar el JS hasta que haga clic correctamente en la lupa
+    WebDriverWait(driver, timeout).until(
+        lambda d: d.execute_script(js)
+    )
+
+    # Dar un pequeño tiempo para que el menú se despliegue
+    time.sleep(1.5)
+
+    print("[4] Menú Search (lupa) clickeado.")
+    if timer:
+        timer.mark("[4] CLICK_SIDEBAR_SEARCH")
+
+
+def click_sidebar_event_and_alarm_search(driver, timeout=20, timer: StepTimer | None = None):
+    print("[5] Abriendo Event and Alarm Search desde el menú Search...")
+
+    try:
+        WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located(
+                (By.XPATH, "//*[normalize-space(text())='Trigger Alarm']")
+            )
+        )
+        print("[5] Event and Alarm Search ya está visible, no es necesario abrirla.")
+        if timer:
+            timer.mark("[5] EVENT_AND_ALARM_SEARCH_YA_VISIBLE")
+        return
+    except TimeoutException:
+        pass
+
+    item_xpath = (
+        "//li[contains(@class,'el-menu-item') and "
+        ".//span[normalize-space()='Event and Alarm Search']]"
+    )
+
+    try:
+        item = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.XPATH, item_xpath))
+        )
+    except TimeoutException:
+        fallback_xpath = (
+            "//*[@title='Event and Alarm Search' or "
+            "normalize-space(text())='Event and Alarm Search' or "
+            ".//span[normalize-space()='Event and Alarm Search']]"
+        )
+        item = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.XPATH, fallback_xpath))
+        )
+
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", item)
+    driver.execute_script("arguments[0].click();", item)
+
+    WebDriverWait(driver, timeout).until(
+        EC.presence_of_element_located(
+            (By.XPATH, "//*[normalize-space(text())='Trigger Alarm']")
+        )
+    )
+
+    print("[5] Pantalla Event and Alarm Search abierta.")
+    if timer:
+        timer.mark("[5] CLICK_EVENT_AND_ALARM_SEARCH")
+
+
+def validar_event_and_alarm_search_screen(driver, timeout=30, timer: StepTimer | None = None):
+    """
+    Valida que la pantalla actual corresponde a 'Event and Alarm Search'.
+    Basta con encontrar algún título o texto visible con ese nombre.
+    """
+    WebDriverWait(driver, timeout).until(
+        EC.presence_of_element_located(
+            (
+                By.XPATH,
+                "//*[contains(normalize-space(),'Event and Alarm Search')]"
+            )
+        )
+    )
+    if timer:
+        timer.mark("[6] VALIDAR_EVENT_AND_ALARM_SEARCH")
+
+
+def click_search_button(driver, timeout=30, timer: StepTimer | None = None):
+    """
+    Hace clic en el gran botón rojo 'Search' del formulario Event and Alarm Search.
+    Usa el <div class="el-button-slot-wrapper">Search</div> visto en DevTools.
+    """
+    print("[6] Haciendo clic en botón Search...")
+
+    wait = WebDriverWait(driver, timeout)
+
+    # Selector principal: button primario con el texto 'Search' dentro de div.el-button-slot-wrapper
+    search_xpath = (
+        "//button[contains(@class,'el-button') and contains(@class,'el-button--primary') "
+        "and (.//div[@class='el-button-slot-wrapper' and normalize-space()='Search'] "
+        "     or .//div[normalize-space()='Search'] "
+        "     or .//span[normalize-space()='Search'])]"
+    )
+
+    try:
+        search_btn = wait.until(
+            EC.element_to_be_clickable((By.XPATH, search_xpath))
+        )
+    except TimeoutException:
+        # Fallback muy genérico por si cambian clases pero se mantiene el texto
+        fallback_xpath = "//div[normalize-space()='Search']/ancestor::button[1]"
+        search_btn = wait.until(
+            EC.element_to_be_clickable((By.XPATH, fallback_xpath))
+        )
+
+    safe_js_click(driver, search_btn)
+
+    # Intentar validar que la tabla tenga filas (la búsqueda se ejecutó)
+    try:
+        wait.until(
+            EC.presence_of_element_located(
+                (
+                    By.XPATH,
+                    "//div[contains(@class,'el-table__body-wrapper')]//table//tr"
+                )
+            )
+        )
+    except TimeoutException:
+        print("[WARN] No se pudo validar visualmente la carga de resultados después de Search.")
+
+    if timer:
+        timer.mark("[6] CLICK_SEARCH_BUTTON")
+
+
+def click_export_event_and_alarm(
+    driver,
+    password,
+    download_dir: Path,
+    host_label: str,
+    timeout=30,
+    timer: StepTimer | None = None,
+):
+    """
+    Abre el panel 'Export' en Event and Alarm Search, introduce password si se solicita
+    y hace clic en la opción de exportar (Excel) para disparar la descarga.
+    """
+    print("[7] Abriendo panel Export en Event and Alarm Search...")
+
+    wait = WebDriverWait(driver, timeout)
+
+    export_icon_xpath = "//i[contains(@class,'h-icon-export')]/ancestor::button[1]"
+
+    try:
+        export_btn = wait.until(
+            EC.element_to_be_clickable((By.XPATH, export_icon_xpath))
+        )
+    except TimeoutException:
+        fallback_xpath = "//*[normalize-space()='Export']/ancestor::button[1]"
+        export_btn = wait.until(
+            EC.element_to_be_clickable((By.XPATH, fallback_xpath))
+        )
+
+    # snapshot del downloadcenter ANTES de exportar
+    downloadcenter_root = get_downloadcenter_root()
+    before = snapshot_alarm_reports(downloadcenter_root)
+    print(f"[EXPORT] Downloadcenter: {downloadcenter_root}")
+
+    safe_js_click(driver, export_btn)
+    if timer:
+        timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM_BUTTON")
+
+    # (opcional) seleccionar Excel ANTES de Save, si existe radio
+    excel_option_xpath = (
+        "//div[contains(@class,'el-dialog__wrapper') or contains(@class,'el-drawer')]"
+        "//label[contains(@class,'el-radio') and "
+        "(contains(translate(@title,'excel','EXCEL'),'EXCEL') or .//span[contains(translate(normalize-space(),'excel','EXCEL'),'EXCEL')])]"
+    )
+    try:
+        excel_option = wait.until(
+            EC.element_to_be_clickable((By.XPATH, excel_option_xpath))
+        )
+        safe_js_click(driver, excel_option)
+    except Exception:
+        pass
+
+    log_info = globals().get("log_info", print)
+    log_error = globals().get("log_error", print)
+
+    try:
+        container = wait_export_container(driver, timeout=12)
+    except TimeoutException:
+        log_error("[EXPORT] No se encontró contenedor Export.")
+        take_screenshot(driver, "export_container_timeout")
+        dump = driver.execute_script(
+            """
+return Array.from(document.querySelectorAll('input[placeholder="Password"]'))
+  .map(i => ({
+    vis: !!i.offsetParent,
+    outer: i.getAttribute('outerinputtype'),
+    cls: i.className
+  }));
+"""
+        )
+        log_error(f"[EXPORT] Dump inputs Password visibles: {dump}")
+        raise
+
+    fill_confirm_password_in_container(driver, container, password, logger=log_info)
+    click_save_in_export(driver, container, timeout=12, timer=timer)
+
+    if timer:
+        timer.mark("[7] CLICK_EXPORT_EVENT_AND_ALARM")
+
+    # Esperar el archivo REAL en Downloadcenter (NO en DOWNLOAD_DIR)
+    log_info("[EXPORT] Esperando Alarm_Report_* en Downloadcenter (HCWebControlService)...")
+    src_file = wait_new_alarm_report(downloadcenter_root, before, timeout=max(180, timeout))
+
+    if not src_file or not src_file.exists():
+        log_error("[ERROR] No se detectó Alarm_Report_* en Downloadcenter.")
+        take_screenshot(driver, "event_and_alarm_search_no_file")
+        return None
+
+    # Copiar a tu downloads por host y renombrar
+    log_info(f"[EXPORT] Archivo detectado en Downloadcenter: {src_file}")
+    final_file = None
+    for intento in range(1, 4):
+        final_file = copiar_alarm_report_a_downloads(src_file, download_dir, host_label)
+        src_size = src_file.stat().st_size
+        dest_size = final_file.stat().st_size if final_file.exists() else 0
+        log_info(f"[EXPORT] SRC size={src_size} | DEST size={dest_size}")
+        if src_size == dest_size and dest_size > 0:
+            break
+        try:
+            if final_file.exists():
+                final_file.unlink()
+        except Exception:
+            pass
+        time.sleep(2)
+
+    if not final_file or not final_file.exists():
+        log_error("[ERROR] No se pudo copiar Alarm_Report a downloads.")
+        return None
+
+    if src_file.stat().st_size != final_file.stat().st_size:
+        raise RuntimeError("[EXPORT] Tamaño destino distinto al origen tras reintentos.")
+
+    log_info(f"[EXPORT] Archivo copiado a: {final_file}")
+
+    if timer:
+        timer.mark("[9] Descarga detectada")
+
+    return final_file
+
+
+def click_trigger_alarm_button(driver, timeout=20, timer: StepTimer | None = None):
+    """
+    En la pantalla 'Event and Alarm Search' hace clic en el botón 'Trigger Alarm'
+    dentro del grupo de filtros Trigger Alarm (All / Not Trigger Alarm / Trigger Alarm).
+    """
+
+    # Asegurar que la pantalla de Event and Alarm Search está cargada
+    WebDriverWait(driver, timeout).until(
+        EC.presence_of_element_located(
+            (By.XPATH, "//*[contains(normalize-space(),'Event and Alarm Search')]")
+        )
+    )
+
+    # XPath específico para el botón Trigger Alarm
+    btn_xpath = (
+        "//div[@title='Trigger Alarm' "
+        "and contains(@class,'button') "
+        "and normalize-space()='Trigger Alarm']"
+    )
+
+    # Esperar a que el botón sea clickable
+    btn = WebDriverWait(driver, timeout).until(
+        EC.element_to_be_clickable((By.XPATH, btn_xpath))
+    )
+
+    # Scroll y clic con JS para asegurarnos de disparar el evento
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
+    driver.execute_script("arguments[0].click();", btn)
+
+    # Esperar a que el botón quede marcado (class incluye 'select')
+    WebDriverWait(driver, timeout).until(
+        lambda d: "select" in d.find_element(By.XPATH, btn_xpath).get_attribute("class")
+    )
+
+    print("[9] Botón 'Trigger Alarm' seleccionado correctamente.")
+    if timer:
+        timer.mark("[9] CLICK_TRIGGER_ALARM")
+
+
+def limpiar_descargas(download_dir: Path = DOWNLOAD_DIR):
+    """Elimina archivos previos en la carpeta de descargas para identificar el nuevo Excel."""
+    for f in download_dir.glob("*"):
+        try:
+            f.unlink()
+        except Exception:
+            pass
+
+
+def esperar_descarga_archivo(nombre_parcial: str | None = None, timeout: int = 180) -> Path | None:
+    """
+    Espera a que se descargue un archivo en DOWNLOAD_DIR.
+
+    Si se especifica `nombre_parcial`, busca archivos cuyo nombre contenga esa
+    cadena (excluyendo extensiones temporales). Valida que el archivo no tenga
+    la extensión .crdownload y que su tamaño se mantenga estable antes de
+    devolverlo.
+    """
+
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+    fin = time.time() + timeout
+    candidato: Path | None = None
+
+    while time.time() < fin:
+        archivos = [
+            f
+            for f in DOWNLOAD_DIR.glob("*")
+            if f.is_file()
+            and not f.name.endswith(".crdownload")
+            and (nombre_parcial is None or nombre_parcial in f.name)
+        ]
+
+        if archivos:
+            candidato = max(archivos, key=lambda f: f.stat().st_mtime)
+            size1 = candidato.stat().st_size
+            time.sleep(1)
+            size2 = candidato.stat().st_size
+            if size1 == size2 and size2 > 0:
+                return candidato
+
+        time.sleep(1)
+
+    return candidato
+
+
+def esperar_descarga_event_and_alarm(timeout: int = 180) -> Path | None:
+    """
+    Espera a que aparezca un nuevo archivo de export de Event and Alarm Search
+    en DOWNLOAD_DIR y devuelve el Path cuando la descarga termina.
+    """
+
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+    existentes = {f.name for f in DOWNLOAD_DIR.glob("*") if f.is_file()}
+
+    fin = time.time() + timeout
+    candidato: Path | None = None
+
+    while time.time() < fin:
+        archivos = [
+            f
+            for f in DOWNLOAD_DIR.glob("*")
+            if f.is_file() and not f.name.endswith(".crdownload")
+        ]
+        nuevos = [f for f in archivos if f.name not in existentes]
+
+        if nuevos:
+            candidato = max(nuevos, key=lambda f: f.stat().st_mtime)
+            size1 = candidato.stat().st_size
+            time.sleep(1)
+            size2 = candidato.stat().st_size
+            if size1 == size2 and size2 > 0:
+                return candidato
+
+        time.sleep(1)
+
+    return None
+
+
+def esperar_descarga_y_renombrar(
+    download_dir: Path = DOWNLOAD_DIR,
+    prefix: str = "event_and_alarm",
+    timeout: int = 180,
+) -> Path:
+    """
+    Espera la finalización de una descarga en download_dir y renombra el archivo
+    con el prefijo indicado.
+    """
+
+    download_dir.mkdir(parents=True, exist_ok=True)
+    existentes = {f.name for f in download_dir.glob("*") if f.is_file()}
+    fin = time.time() + timeout
+    ultimo_archivo: Path | None = None
+
+    while time.time() < fin:
+        archivos = [f for f in download_dir.glob("*") if f.is_file()]
+        nuevos = [f for f in archivos if f.name not in existentes]
+
+        if nuevos:
+            ultimo_archivo = max(nuevos, key=lambda f: f.stat().st_mtime)
+
+            if ultimo_archivo.suffix == ".crdownload":
+                time.sleep(1)
+                continue
+
+            size1 = ultimo_archivo.stat().st_size
+            time.sleep(1)
+            size2 = ultimo_archivo.stat().st_size
+            if size1 == size2 and size2 > 0:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nuevo_nombre = f"{prefix}_{timestamp}{ultimo_archivo.suffix}"
+                destino = download_dir / nuevo_nombre
+                ultimo_archivo = ultimo_archivo.rename(destino)
+                print(f"[INFO] Archivo descargado y renombrado a: {ultimo_archivo}")
+                if step_timer:
+                    step_timer.mark("[9] Descarga detectada")
+                return ultimo_archivo
+
+        time.sleep(1)
+
+    raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
+
+
+def esperar_descarga_y_renombrar_host(
+    download_dir: Path,
+    host_label: str,
+    timeout: int = 180,
+) -> Path:
+    """
+    Espera la finalización de una descarga en download_dir y renombra el archivo
+    con sufijo del host.
+    """
+    download_dir.mkdir(parents=True, exist_ok=True)
+    existentes = {f.name for f in download_dir.glob("*") if f.is_file()}
+    fin = time.time() + timeout
+    ultimo_archivo: Path | None = None
+    host_suffix = host_label.replace(".", "_")
+
+    while time.time() < fin:
+        archivos = [f for f in download_dir.glob("*") if f.is_file()]
+        nuevos = [f for f in archivos if f.name not in existentes]
+
+        if nuevos:
+            ultimo_archivo = max(nuevos, key=lambda f: f.stat().st_mtime)
+
+            if ultimo_archivo.suffix == ".crdownload":
+                time.sleep(1)
+                continue
+
+            size1 = ultimo_archivo.stat().st_size
+            time.sleep(1)
+            size2 = ultimo_archivo.stat().st_size
+            if size1 == size2 and size2 > 0:
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                nuevo_nombre = f"Alarm_Report_{timestamp}_{host_suffix}{ultimo_archivo.suffix}"
+                destino = download_dir / nuevo_nombre
+                ultimo_archivo = ultimo_archivo.rename(destino)
+                print(f"[INFO] Archivo descargado y renombrado a: {ultimo_archivo}")
+                if step_timer:
+                    step_timer.mark("[9] Descarga detectada")
+                return ultimo_archivo
+
+        time.sleep(1)
+
+    raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
+
+
+def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
+    log_info = globals().get("log_info", print)
+    log_error = globals().get("log_error", print)
+
+    conn = get_pg_connection()
+    id_extraccion = None
+    total_preparados = 0
+    total_insertados = 0
+    total_omitidos = 0
+    try:
+        archivo_nombre = os.path.basename(excel_path)
+        id_extraccion = crear_registro_extraccion(conn, archivo_nombre)
+
+        total_after_header = 0
+        raw = None
+        header_row = None
+        df = None
+        for intento in range(1, 4):
+            try:
+                size_bytes = excel_path.stat().st_size
+            except FileNotFoundError:
+                size_bytes = 0
+            size_mb = size_bytes / (1024 * 1024)
+            log_info(
+                f"[INFO] Leyendo Alarm Report desde: {excel_path} | size={size_bytes} bytes ({size_mb:.2f} MB)"
+            )
+            raw = pd.read_excel(
+                excel_path,
+                sheet_name="Alarm and Event Log",
+                header=None,
+                dtype=str,
+            )
+
+            header_row = None
+            for idx in range(len(raw)):
+                value = raw.iloc[idx, 0]
+                if str(value).strip() == "Mark":
+                    header_row = idx
+                    break
+
+            if header_row is None:
+                raise ValueError(
+                    "[EVENT] No se encontró fila de cabecera (columna 0 == 'Mark') en Alarm_Report."
+                )
+
+            headers = [str(h).strip() for h in raw.iloc[header_row].tolist()]
+            df = raw.iloc[header_row + 1 :].copy()
+            df.columns = headers
+
+            df = df.dropna(how="all")
+            df = df.applymap(lambda value: value.strip() if isinstance(value, str) else value)
+            df = df.replace({"": None, "nan": None})
+
+            total_after_header = len(df)
+            if total_after_header == 0:
+                if intento < 3:
+                    log_info("[EVENT] Sin filas luego del header, reintentando lectura...")
+                    time.sleep(2)
+                    continue
+                raise RuntimeError(
+                    "Excel sin filas luego del header; posible archivo incompleto/copiado temprano"
+                )
+            break
+
+        df = df[
+            df["Name"].notna()
+            | df["Triggering Time (Client)"].notna()
+            | df["Trigger Event"].notna()
+            | df["Source"].notna()
+            | df["Region"].notna()
+            | df["Description"].notna()
+            | df["Status"].notna()
+        ].copy()
+        total_after_filter = len(df)
+
+        log_info(f"[EVENT] header_row detectado: {header_row}")
+        log_info(f"[EVENT] Columnas encontradas en Alarm_Report: {list(df.columns)}")
+        log_info(f"[EVENT] Filas después del header: {total_after_header}")
+        log_info(f"[EVENT] Filas después del filtro de contenido: {total_after_filter}")
+        preview_cols = [
+            "Mark",
+            "Name",
+            "Triggering Time (Client)",
+            "Source",
+            "Region",
+            "Trigger Event",
+            "Status",
+        ]
+        preview_data = df.loc[:, preview_cols].head(3).to_dict(orient="records")
+        log_info(f"[EVENT] Preview filas filtradas: {preview_data}")
+
+        column_map = {
+            "Mark": "mark",
+            "Name": "name",
+            "Trigger Alarm": "trigger_alarm",
+            "Priority": "priority",
+            "Triggering Time (Client)": "triggering_time_client",
+            "Source": "source",
+            "Region": "region",
+            "Trigger Event": "trigger_event",
+            "Description": "description",
+            "Status": "status",
+            "Alarm Acknowledgment Time": "alarm_acknowledgment_time",
+            "Alarm Category": "alarm_category",
+            "Remarks": "remarks",
+            "More": "more",
+        }
+
+        missing_cols = [col for col in column_map.keys() if col not in df.columns]
+        if missing_cols:
+            raise ValueError(
+                f"[EVENT] Faltan columnas esperadas en Alarm_Report: {missing_cols}"
+            )
+
+        df = df[list(column_map.keys())].rename(columns=column_map)
+
+        string_columns = [
+            "mark",
+            "name",
+            "trigger_alarm",
+            "priority",
+            "source",
+            "region",
+            "trigger_event",
+            "description",
+            "status",
+            "alarm_category",
+            "remarks",
+            "more",
+        ]
+        for col in string_columns:
+            if col not in df.columns:
+                continue
+            df[col] = df[col].astype("string")
+            df[col] = df[col].str.strip()
+            df[col] = df[col].where(df[col].notna(), None)
+
+        df["triggering_time_client"] = pd.to_datetime(
+            df["triggering_time_client"], errors="coerce"
+        )
+        df["alarm_acknowledgment_time"] = pd.to_datetime(
+            df["alarm_acknowledgment_time"], errors="coerce"
+        )
+        df = df.applymap(to_py)
+
+        required_data_cols = [
+            "name",
+            "triggering_time_client",
+            "source",
+            "region",
+            "trigger_event",
+        ]
+        for col in required_data_cols:
+            if col not in df.columns:
+                raise ValueError(f"[EVENT] Falta columna requerida: {col}")
+
+        if df[required_data_cols].dropna(how="all").empty:
+            log_info("[EVENT] Alarm Report sin eventos, no hay filas para insertar.")
+            total_preparados = 0
+            total_insertados = 0
+            total_omitidos = 0
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.hik_alarm_extraccion
+                    SET fecha_fin = now(),
+                        total_filas = %s,
+                        total_nuevos = %s,
+                        total_duplicados = %s,
+                        estado = 'OK'
+                    WHERE id = %s;
+                    """,
+                    (total_preparados, total_insertados, total_omitidos, id_extraccion),
+                )
+            conn.commit()
+            return {
+                "filas_extraidas": total_preparados,
+                "insertados": total_insertados,
+                "omitidos_duplicado": total_omitidos,
+            }
+
+        def build_event_key(row) -> str:
+            def normalize_value(value) -> str:
+                if pd.isna(value):
+                    return ""
+                if isinstance(value, pd.Timestamp):
+                    return value.to_pydatetime().replace(tzinfo=None).isoformat()
+                return str(value).strip()
+
+            parts = [
+                normalize_value(row.get("name")),
+                normalize_value(row.get("triggering_time_client")),
+                normalize_value(row.get("source")),
+                normalize_value(row.get("region")),
+                normalize_value(row.get("trigger_event")),
+                normalize_value(row.get("priority")),
+                normalize_value(row.get("status")),
+            ]
+            raw_key = "|".join(parts)
+            return hashlib.md5(raw_key.encode("utf-8")).hexdigest()
+
+        total_original = len(df)
+        df["event_key"] = df.apply(build_event_key, axis=1)
+        df = df.drop_duplicates(subset=["event_key"]).copy()
+
+        df["id_extraccion"] = id_extraccion
+
+        preview_records = df.head(2).to_dict(orient="records")
+        log_info(f"[EVENT] Filas extraídas: {len(df)}")
+        log_info(f"[EVENT] Preview registros mapeados: {preview_records}")
+
+        rows = []
+        fecha_creacion = datetime.now()
+        for _, row in df.iterrows():
+            triggering_time = normalize_ts(row.get("triggering_time_client"))
+            ack_time = normalize_ts(row.get("alarm_acknowledgment_time"))
+            periodo = calcular_periodo(triggering_time)
+            rows.append(
+                (
+                    id_extraccion,
+                    row.get("mark"),
+                    row.get("name"),
+                    row.get("trigger_alarm"),
+                    row.get("priority"),
+                    triggering_time,
+                    row.get("source"),
+                    row.get("region"),
+                    row.get("trigger_event"),
+                    row.get("description"),
+                    row.get("status"),
+                    ack_time,
+                    row.get("alarm_category"),
+                    row.get("remarks"),
+                    row.get("more"),
+                    row.get("event_key"),
+                    periodo,
+                    fecha_creacion,
+                )
+            )
+
+        total_preparados = len(rows)
+        total_insertados = 0
+        total_omitidos = 0
+
+        if not rows:
+            log_info("[INFO] No hay filas para insertar en hik_alarm_evento.")
+        else:
+            sql = """
+                INSERT INTO public.hik_alarm_evento (
+                    ID_EXTRACCION,
+                    MARK,
+                    NAME,
+                    TRIGGER_ALARM,
+                    PRIORITY,
+                    TRIGGERING_TIME_CLIENT,
+                    SOURCE,
+                    REGION,
+                    TRIGGER_EVENT,
+                    DESCRIPTION,
+                    STATUS,
+                    ALARM_ACKNOWLEDGMENT_TIME,
+                    ALARM_CATEGORY,
+                    REMARKS,
+                    MORE,
+                    EVENT_KEY,
+                    PERIODO,
+                    FECHA_CREACION
+                )
+                VALUES %s
+                ON CONFLICT (EVENT_KEY) DO NOTHING;
+            """
+            with conn.cursor() as cur:
+                execute_values(cur, sql, rows, page_size=500)
+                total_insertados = cur.rowcount
+            conn.commit()
+            total_omitidos = total_preparados - total_insertados
+            log_info(f"[INFO] Total registros preparados: {total_preparados}")
+            log_info(f"[INFO] Insertados: {total_insertados}")
+            log_info(f"[INFO] Omitidos por duplicado: {total_omitidos}")
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE public.hik_alarm_extraccion
+                SET fecha_fin = now(),
+                    total_filas = %s,
+                    total_nuevos = %s,
+                    total_duplicados = %s,
+                    estado = 'OK'
+                WHERE id = %s;
+                """,
+                (total_preparados, total_insertados, total_omitidos, id_extraccion),
+            )
+        conn.commit()
+
+    except Exception as exc:
+        log_error(f"[ERROR] Falló la carga a hik_alarm_evento: {exc}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        if id_extraccion is not None:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.hik_alarm_extraccion
+                    SET fecha_fin = now(),
+                        estado = 'ERROR',
+                        observacion = %s
+                    WHERE id = %s;
+                    """,
+                    (str(exc), id_extraccion),
+                )
+            conn.commit()
+        raise
+    finally:
+        conn.close()
+    return {
+        "filas_extraidas": total_preparados,
+        "insertados": total_insertados,
+        "omitidos_duplicado": total_omitidos,
+    }
+
+
+def procesar_alarm_report(file_path: str, timer: StepTimer) -> None:
+    """
+    Lee el archivo Excel de Alarm Report exportado desde HikCentral y
+    lo inserta en la tabla hik_alarm_evento.
+    """
+    step_name = "[10] DB_PROCESAR_ALARM_REPORT"
+    logger_info = globals().get("log_info", print)
+    logger_error = globals().get("log_error", print)
+
+    conn = get_pg_connection()
+    id_extraccion = None
+
+    try:
+        archivo_nombre = os.path.basename(file_path)
+        id_extraccion = crear_registro_extraccion(conn, archivo_nombre)
+
+        logger_info("[DB] Procesar Alarm Report e insertar en hik_alarm_evento")
+        logger_info(f"[DB] Leyendo archivo Excel de Alarm Report: {file_path}")
+
+        df = pd.read_excel(file_path)
+        df.columns = [str(c).strip() for c in df.columns]
+        logger_info(f"[EVENT] Columnas encontradas en Alarm_Report: {list(df.columns)}")
+
+        col_event_key = None
+        for c in df.columns:
+            if str(c).strip().lower() == "event key":
+                col_event_key = c
+                break
+
+        if not col_event_key:
+            raise ValueError(
+                "[EVENT] No se encontró columna 'Event Key' en Alarm_Report, se aborta la carga."
+            )
+
+        total_original = len(df)
+        df[col_event_key] = df[col_event_key].astype(str).str.strip()
+        df = df[
+            (df[col_event_key].notna())
+            & (df[col_event_key] != "")
+            & (df[col_event_key].str.lower() != "nan")
+        ].copy()
+        filtradas = total_original - len(df)
+        if filtradas > 0:
+            logger_info(f"[EVENT] Filas descartadas por Event Key vacío o NaN: {filtradas}")
+        df = df.where(pd.notnull(df), None)
+
+        column_map = {
+            "Mark": "mark",
+            "Name": "name",
+            "Trigger Alarm": "trigger_alarm",
+            "Priority": "priority",
+            "Triggering Time (Client)": "triggering_time_client",
+            "Source": "source",
+            "Region": "region",
+            "Trigger Event": "trigger_event",
+            "Description": "description",
+            "Status": "status",
+            "Alarm Acknowledgment Time": "alarm_acknowledgment_time",
+            "Alarm Category": "alarm_category",
+            "Remarks": "remarks",
+            "More": "more",
+            col_event_key: "event_key",
+        }
+
+        columnas_disponibles = [col for col in column_map.keys() if col in df.columns]
+        if not columnas_disponibles:
+            raise ValueError("[DB] No se encontraron columnas válidas en el Alarm Report.")
+
+        df = df[columnas_disponibles]
+        df["id_extraccion"] = id_extraccion
+
+        if "Triggering Time (Client)" in df.columns:
+            df["Triggering Time (Client)"] = pd.to_datetime(
+                df["Triggering Time (Client)"], errors="coerce"
+            )
+        df["periodo"] = pd.NA
+
+        if "Alarm Acknowledgment Time" in df.columns:
+            df["Alarm Acknowledgment Time"] = pd.to_datetime(
+                df["Alarm Acknowledgment Time"], errors="coerce"
+            )
+
+        df["fecha_creacion"] = datetime.now()
+        df = df.where(pd.notnull(df), None)
+        df = df.applymap(to_py)
+
+        registros = []
+        for _, row in df.iterrows():
+            raw_event_key = row.get(col_event_key)
+            if raw_event_key is None:
+                continue
+
+            event_key = str(raw_event_key).strip()
+            if not event_key or event_key.lower() == "nan":
+                continue
+
+            triggering_time = normalize_ts(row.get("Triggering Time (Client)"))
+            alarm_ack_time = normalize_ts(row.get("Alarm Acknowledgment Time"))
+            periodo = calcular_periodo(triggering_time)
+
+            registros.append(
+                (
+                    id_extraccion,
+                    row.get("Mark"),
+                    row.get("Name"),
+                    row.get("Trigger Alarm"),
+                    row.get("Priority"),
+                    triggering_time,
+                    row.get("Source"),
+                    row.get("Region"),
+                    row.get("Trigger Event"),
+                    row.get("Description"),
+                    row.get("Status"),
+                    alarm_ack_time,
+                    row.get("Alarm Category"),
+                    row.get("Remarks"),
+                    row.get("More"),
+                    event_key,
+                    periodo,
+                )
+            )
+
+        if not registros:
+            logger_info("[DB] No hay registros de Alarm Report para insertar.")
+            total_preparados = len(registros)
+            total_insertados = 0
+            total_omitidos = 0
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.hik_alarm_extraccion
+                    SET fecha_fin = now(),
+                        total_filas = %s,
+                        total_nuevos = %s,
+                        total_duplicados = %s,
+                        estado = 'OK'
+                    WHERE id = %s;
+                    """,
+                    (total_preparados, total_insertados, total_omitidos, id_extraccion),
+                )
+            conn.commit()
+            return {
+                "filas_extraidas": total_preparados,
+                "insertados": total_insertados,
+                "omitidos_duplicado": total_omitidos,
+            }
+
+        total_preparados = len(registros)
+        total_insertados = 0
+        total_omitidos = 0
+        logger_info(f"[EVENT] Registros a insertar en hik_alarm_evento: {total_preparados}")
+
+        sql = """
+            INSERT INTO public.hik_alarm_evento (
+                id_extraccion,
+                mark,
+                name,
+                trigger_alarm,
+                priority,
+                triggering_time_client,
+                source,
+                region,
+                trigger_event,
+                description,
+                status,
+                alarm_acknowledgment_time,
+                alarm_category,
+                remarks,
+                more,
+                event_key,
+                periodo
+            ) VALUES %s
+            ON CONFLICT (event_key) DO NOTHING;
+        """
+        with conn.cursor() as cur:
+            execute_values(cur, sql, registros, page_size=500)
+            total_insertados = cur.rowcount
+        conn.commit()
+        total_omitidos = total_preparados - total_insertados
+        logger_info(
+            f"[INFO] Total registros preparados: {total_preparados}"
+        )
+        logger_info(f"[INFO] Insertados: {total_insertados}")
+        logger_info(f"[INFO] Omitidos por duplicado: {total_omitidos}")
+        logger_info(
+            f"[DB] Se insertaron {total_insertados} registros en hik_alarm_evento "
+            f"(id_extraccion={id_extraccion})."
+        )
+
+        total_filas = total_preparados
+        total_nuevos = total_insertados
+        total_duplicados = total_omitidos
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE public.hik_alarm_extraccion
+                SET fecha_fin = now(),
+                    total_filas = %s,
+                    total_nuevos = %s,
+                    total_duplicados = %s,
+                    estado = 'OK'
+                WHERE id = %s;
+                """,
+                (total_filas, total_nuevos, total_duplicados, id_extraccion),
+            )
+        conn.commit()
+
+        if timer:
+            timer.mark(step_name)
+
+        return {
+            "filas_extraidas": total_preparados,
+            "insertados": total_insertados,
+            "omitidos_duplicado": total_omitidos,
+        }
+
+    except Exception as exc:
+        logger_error(f"[DB] Error al procesar Alarm Report: {exc}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        if id_extraccion is not None:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.hik_alarm_extraccion
+                    SET fecha_fin = now(),
+                        estado = 'ERROR',
+                        observacion = %s
+                    WHERE id = %s;
+                    """,
+                    (str(exc), id_extraccion),
+                )
+            conn.commit()
+        raise
+    finally:
+        conn.close()
+
+
+def crear_driver(download_dir: Path) -> webdriver.Chrome:
+    """Configura y devuelve un driver de Chrome listo para descargar archivos."""
+
+    download_dir.mkdir(parents=True, exist_ok=True)
+
+    chrome_options = Options()
+
+    prefs = {
+        "download.default_directory": str(download_dir),
+        "download.prompt_for_download": False,
+        "download.directory_upgrade": True,
+        "safebrowsing.enabled": False,
+        "safebrowsing.disable_download_protection": True,
+        "profile.default_content_setting_values.automatic_downloads": 1,
+        "profile.default_content_setting_values.popups": 0,
+    }
+    chrome_options.add_experimental_option("prefs", prefs)
+
+    chrome_options.add_argument("--ignore-certificate-errors")
+    chrome_options.add_argument("--allow-running-insecure-content")
+    chrome_options.add_argument("--safebrowsing-disable-download-protection")
+    chrome_options.add_argument("--disable-popup-blocking")
+    chrome_options.add_argument("--disable-features=BlockInsecureDownloadRestrictions,DownloadBubble")
+    chrome_options.add_argument("--start-maximized")
+
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+
+    driver.execute_cdp_cmd(
+        "Page.setDownloadBehavior",
+        {
+            "behavior": "allow",
+            "downloadPath": str(download_dir),
+        },
+    )
+
+    driver.maximize_window()
+    print(f"[DEBUG] DOWNLOAD_DIR = {download_dir}")
+    return driver
+
+
+def cerrar_sesion(driver, wait: WebDriverWait):
+    """Intenta cerrar sesión y limpiar las cookies para evitar sesiones pegadas."""
+
+    try:
+        driver.switch_to.default_content()
+
+        perfil_button = wait.until(
+            EC.element_to_be_clickable(
+                (
+                    By.CSS_SELECTOR,
+                    "div.top-right-area__avatar, div.head-user__wrapper, div.user-avatar",
+                )
+            )
+        )
+        perfil_button.click()
+
+        logout_button = wait.until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//li[.//span[normalize-space()='Log Out'] or normalize-space()='Log Out']"
+                    " | //*[normalize-space(text())='Log Out']",
+                )
+            )
+        )
+        logout_button.click()
+
+        wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, 'input[placeholder="User Name"]'))
+        )
+    except Exception:
+        print("[WARN] No se pudo cerrar sesión limpiamente.")
+
+
+def run_for_host(host: str) -> dict:
+    global step_timer, performance_recorder
+
+    print(f"[INFO] === Iniciando extracción para host {host} ===")
+    performance_recorder = PerformanceRecorder(time.perf_counter())
+
+    baseline_cpu = psutil.cpu_percent(interval=1)
+    registrar_cpu(baseline_cpu)
+    baseline_ram = psutil.virtual_memory().percent
+    print(
+        f"[PERF] [0] Baseline antes de automatizar... CPU: {baseline_cpu:.1f}% | RAM: {baseline_ram:.1f}%"
+    )
+    if performance_recorder:
+        performance_recorder.record_baseline(baseline_cpu, baseline_ram)
+
+    driver = None
+    wait: WebDriverWait | None = None
+    step_timer = StepTimer(
+        start_time=performance_recorder.start_time if performance_recorder else None,
+        recorder=performance_recorder,
+    )
+    timer = step_timer
+
+    export_file_path: Path | None = None
+    resultados_carga = {
+        "filas_extraidas": 0,
+        "insertados": 0,
+        "omitidos_duplicado": 0,
+    }
+    host_dir = DOWNLOAD_DIR / host.replace(".", "_")
+
+    try:
+        global URL
+        URL = f"http://{host}/#/"
+
+        driver = crear_driver(download_dir=host_dir)
+        wait = WebDriverWait(driver, 30)
+
+        print("[1] Abriendo URL de login...")
+        driver.get(URL)
+        if timer:
+            timer.mark("[1] ABRIR_URL_LOGIN")
+
+        print("[2] Iniciando sesión...")
+        user_input = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, 'input[placeholder="User Name"]'))
+        )
+        password_input = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, 'input[placeholder="Password"]'))
+        )
+
+        user_input.clear()
+        user_input.send_keys(HIK_USER)
+
+        password_input.clear()
+        password_input.send_keys(HIK_PASSWORD)
+
+        login_button = wait.until(
+            EC.element_to_be_clickable((By.XPATH, "//*[normalize-space(text())='Log In']"))
+        )
+        login_button.click()
+        if timer:
+            timer.mark("[2] LOGIN")
+
+        print("[3] Esperando carga del portal principal...")
+        wait.until(lambda d: "/portal" in d.current_url)
+        if timer:
+            timer.mark("[3] PORTAL_PRINCIPAL_CARGADO")
+
+        print("[3] Navegando a Event and Alarm...")
+        ir_a_event_and_alarm(driver, wait)
+        if timer:
+            timer.mark("[4] EVENT_AND_ALARM_ABIERTO")
+
+        click_sidebar_alarm_search(driver, timeout=30, timer=timer)
+        click_sidebar_event_and_alarm_search(driver, timeout=30, timer=timer)
+        validar_event_and_alarm_search_screen(driver, timeout=40, timer=timer)
+        click_trigger_alarm_button(driver, timeout=30, timer=timer)
+        click_search_button(driver, timeout=40, timer=timer)
+
+        limpiar_descargas(host_dir)
+        export_file_path = click_export_event_and_alarm(
+            driver,
+            password=HIK_PASSWORD,
+            download_dir=host_dir,
+            host_label=host,
+            timeout=30,
+            timer=timer,
+        )
+
+        print(f"[INFO] Ruta final del archivo exportado: {export_file_path}")
+
+        if export_file_path is None:
+            raise RuntimeError(
+                "No se detectó ningún archivo descargado desde Event and Alarm Search."
+            )
+
+        size_mb = export_file_path.stat().st_size / (1024 * 1024)
+        print(
+            f"[8] Archivo de Event and Alarm Search descargado: {export_file_path} "
+            f"({size_mb:.2f} MB)"
+        )
+
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        screenshot_path = LOG_DIR / f"event_and_alarm_search_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        driver.save_screenshot(str(screenshot_path))
+        print(f"[INFO] Screenshot guardado en: {screenshot_path}")
+        if timer:
+            timer.mark("[9] SCREENSHOT_EVENT_AND_ALARM_SEARCH")
+
+        print("[OK] Flujo Event and Alarm Search + Export completado.")
+        if timer:
+            timer.mark("[10] FIN_OK")
+
+        resultados_carga = insertar_alarm_evento_from_excel(export_file_path)
+
+        print(
+            "[INFO] === Fin host "
+            f"{host} | extraídas: {resultados_carga['filas_extraidas']} | "
+            f"insertados: {resultados_carga['insertados']} | "
+            f"duplicados: {resultados_carga['omitidos_duplicado']} ==="
+        )
+
+        return {
+            "host": host,
+            "ok": True,
+            "archivo": str(export_file_path),
+            **resultados_carga,
+        }
+
+    except Exception as e:
+        print(f"[ERROR] Ocurrió un problema en el flujo Event and Alarm: {e}")
+        traceback.print_exc()
+        if driver:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            error_screenshot = LOG_DIR / f"event_and_alarm_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            try:
+                driver.save_screenshot(str(error_screenshot))
+                print(f"[INFO] Screenshot de error guardado en: {error_screenshot}")
+            except Exception:
+                print("[WARN] No se pudo guardar el screenshot de error.")
+        if timer:
+            timer.mark("[ERROR] Fin por excepción")
+        raise
+
+    finally:
+        if driver:
+            try:
+                if wait:
+                    cerrar_sesion(driver, wait)
+            except Exception:
+                pass
+            driver.quit()
+
+        final_cpu = psutil.cpu_percent(interval=1)
+        final_ram = psutil.virtual_memory().percent
+        registrar_cpu(final_cpu)
+        if performance_recorder:
+            performance_recorder.update_cpu(final_cpu)
+        print(
+            f"[PERF] [FIN] Estado al terminar script... CPU: {final_cpu:.1f}% | RAM: {final_ram:.1f}%"
+        )
+
+        duracion_total_seg = (
+            time.perf_counter() - performance_recorder.start_time if performance_recorder else 0.0
+        )
+
+        registrar_ejecucion_y_pasos(
+            opcion="Event and Alarm",
+            duracion_total_seg=duracion_total_seg,
+            cpu_final=final_cpu,
+            ram_final=final_ram,
+            recorder=performance_recorder,
+        )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Automatiza Event and Alarm Search en HikCentral.")
+    parser.add_argument("--host", type=str, help="Host/IP de HikCentral (ej: 172.16.9.11)")
+    parser.add_argument("--hosts", type=str, help="Hosts/IP separados por coma")
+    args = parser.parse_args()
+
+    if args.host or args.hosts:
+        hosts_to_run = parse_hosts_from_args(args.host, args.hosts)
+    else:
+        hosts_to_run = parse_hosts_from_env()
+
+    resultados = []
+    for host in hosts_to_run:
+        if not host_is_up(host):
+            print(f"[WARN] Host no responde: {host}. Se omite.")
+            resultados.append(
+                {
+                    "host": host,
+                    "ok": False,
+                    "error": "Host no responde",
+                    "archivo": None,
+                    "filas_extraidas": 0,
+                    "insertados": 0,
+                    "omitidos_duplicado": 0,
+                }
+            )
+            continue
+
+        try:
+            res = run_for_host(host)
+            resultados.append(res)
+        except Exception as ex:
+            print(f"[ERROR] Falló host {host}: {ex}")
+            resultados.append({"host": host, "ok": False, "error": str(ex)})
+
+    print("[INFO] === Resumen final por host ===")
+    for res in resultados:
+        if res.get("ok"):
+            print(
+                "[INFO] Host "
+                f"{res.get('host')} | ok | archivo: {res.get('archivo')} | "
+                f"extraídas: {res.get('filas_extraidas')} | "
+                f"insertados: {res.get('insertados')} | "
+                f"duplicados: {res.get('omitidos_duplicado')}"
+            )
+        else:
+            print(
+                "[INFO] Host "
+                f"{res.get('host')} | ERROR | "
+                f"motivo: {res.get('error', 'desconocido')}"
+            )
+
+    if any(res.get("ok") for res in resultados):
+        raise SystemExit(0)
+    raise SystemExit(1)
