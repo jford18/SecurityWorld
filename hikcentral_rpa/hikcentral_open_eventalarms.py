@@ -14,6 +14,7 @@ import numpy as np
 import psutil
 import psycopg2
 from dotenv import load_dotenv
+from openpyxl import load_workbook
 from psycopg2.extras import execute_values
 from selenium import webdriver
 from selenium.common.exceptions import (
@@ -309,6 +310,9 @@ def wait_new_alarm_report(
 ) -> Path | None:
     fin = time.time() + timeout
     last_candidate: Path | None = None
+    stable_cycles = 0
+    last_size: int | None = None
+    min_stable_cycles = 3
 
     while time.time() < fin:
         current = snapshot_alarm_reports(downloadcenter_root)
@@ -316,22 +320,46 @@ def wait_new_alarm_report(
 
         if nuevos:
             # el más nuevo por fecha de modificación
-            last_candidate = max(nuevos, key=lambda p: p.stat().st_mtime)
+            candidate = max(nuevos, key=lambda p: p.stat().st_mtime)
+            if last_candidate != candidate:
+                stable_cycles = 0
+                last_size = None
+            last_candidate = candidate
 
             # esperar tamaño estable (descarga terminada)
             try:
-                size1 = last_candidate.stat().st_size
-                time.sleep(1)
-                size2 = last_candidate.stat().st_size
-                if size1 == size2 and size2 > 0:
-                    # validar que se puede abrir (evitar lock)
+                stat = last_candidate.stat()
+                size = stat.st_size
+                mtime = datetime.fromtimestamp(stat.st_mtime)
+                print(f"[EXPORT] Candidato: {last_candidate} | size={size} | mtime={mtime}")
+
+                if last_size is not None and size == last_size and size > 0:
+                    stable_cycles += 1
+                else:
+                    stable_cycles = 0
+                last_size = size
+
+                if stable_cycles >= min_stable_cycles and size > 0:
                     try:
-                        with open(last_candidate, "rb") as f:
-                            f.read(64)
+                        wb = load_workbook(last_candidate, data_only=True, read_only=True)
+                        if "Alarm and Event Log" not in wb.sheetnames:
+                            raise ValueError("Falta hoja 'Alarm and Event Log'")
+                        ws = wb["Alarm and Event Log"]
+                        max_row = ws.max_row or 0
+                        header_row = None
+                        for row_idx, row in enumerate(
+                            ws.iter_rows(min_row=1, max_row=min(50, max_row), values_only=True),
+                            start=1,
+                        ):
+                            if row and str(row[0]).strip() == "Mark":
+                                header_row = row_idx
+                                break
+                        if max_row <= 10 or (header_row is not None and max_row <= header_row + 1):
+                            raise ValueError("Hoja con pocas filas")
+                        print("[EXPORT] XLSX abierto OK")
                         return last_candidate
                     except Exception:
-                        # si está bloqueado, seguir esperando
-                        pass
+                        print("[EXPORT] XLSX aún incompleto, reintentando…")
             except Exception:
                 pass
 
@@ -1357,9 +1385,29 @@ return Array.from(document.querySelectorAll('input[placeholder="Password"]'))
         return None
 
     # Copiar a tu downloads por host y renombrar
-    limpiar_descargas(download_dir)  # limpia SOLO tu carpeta destino
-    final_file = copiar_alarm_report_a_downloads(src_file, download_dir, host_label)
     log_info(f"[EXPORT] Archivo detectado en Downloadcenter: {src_file}")
+    final_file = None
+    for intento in range(1, 4):
+        final_file = copiar_alarm_report_a_downloads(src_file, download_dir, host_label)
+        src_size = src_file.stat().st_size
+        dest_size = final_file.stat().st_size if final_file.exists() else 0
+        log_info(f"[EXPORT] SRC size={src_size} | DEST size={dest_size}")
+        if src_size == dest_size and dest_size > 0:
+            break
+        try:
+            if final_file.exists():
+                final_file.unlink()
+        except Exception:
+            pass
+        time.sleep(2)
+
+    if not final_file or not final_file.exists():
+        log_error("[ERROR] No se pudo copiar Alarm_Report a downloads.")
+        return None
+
+    if src_file.stat().st_size != final_file.stat().st_size:
+        raise RuntimeError("[EXPORT] Tamaño destino distinto al origen tras reintentos.")
+
     log_info(f"[EXPORT] Archivo copiado a: {final_file}")
 
     if timer:
@@ -1588,35 +1636,57 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
         archivo_nombre = os.path.basename(excel_path)
         id_extraccion = crear_registro_extraccion(conn, archivo_nombre)
 
-        log_info(f"[INFO] Leyendo Alarm Report desde: {excel_path}")
-        raw = pd.read_excel(
-            excel_path,
-            sheet_name="Alarm and Event Log",
-            header=None,
-            dtype=str,
-        )
-
+        total_after_header = 0
+        raw = None
         header_row = None
-        for idx in range(len(raw)):
-            value = raw.iloc[idx, 0]
-            if str(value).strip() == "Mark":
-                header_row = idx
-                break
-
-        if header_row is None:
-            raise ValueError(
-                "[EVENT] No se encontró fila de cabecera (columna 0 == 'Mark') en Alarm_Report."
+        df = None
+        for intento in range(1, 4):
+            try:
+                size_bytes = excel_path.stat().st_size
+            except FileNotFoundError:
+                size_bytes = 0
+            size_mb = size_bytes / (1024 * 1024)
+            log_info(
+                f"[INFO] Leyendo Alarm Report desde: {excel_path} | size={size_bytes} bytes ({size_mb:.2f} MB)"
+            )
+            raw = pd.read_excel(
+                excel_path,
+                sheet_name="Alarm and Event Log",
+                header=None,
+                dtype=str,
             )
 
-        headers = [str(h).strip() for h in raw.iloc[header_row].tolist()]
-        df = raw.iloc[header_row + 1 :].copy()
-        df.columns = headers
+            header_row = None
+            for idx in range(len(raw)):
+                value = raw.iloc[idx, 0]
+                if str(value).strip() == "Mark":
+                    header_row = idx
+                    break
 
-        df = df.dropna(how="all")
-        df = df.applymap(lambda value: value.strip() if isinstance(value, str) else value)
-        df = df.replace({"": None, "nan": None})
+            if header_row is None:
+                raise ValueError(
+                    "[EVENT] No se encontró fila de cabecera (columna 0 == 'Mark') en Alarm_Report."
+                )
 
-        total_after_header = len(df)
+            headers = [str(h).strip() for h in raw.iloc[header_row].tolist()]
+            df = raw.iloc[header_row + 1 :].copy()
+            df.columns = headers
+
+            df = df.dropna(how="all")
+            df = df.applymap(lambda value: value.strip() if isinstance(value, str) else value)
+            df = df.replace({"": None, "nan": None})
+
+            total_after_header = len(df)
+            if total_after_header == 0:
+                if intento < 3:
+                    log_info("[EVENT] Sin filas luego del header, reintentando lectura...")
+                    time.sleep(2)
+                    continue
+                raise RuntimeError(
+                    "Excel sin filas luego del header; posible archivo incompleto/copiado temprano"
+                )
+            break
+
         df = df[
             df["Name"].notna()
             | df["Triggering Time (Client)"].notna()
