@@ -148,18 +148,26 @@ const PersonasClienteSection = ({ clienteSeleccionado }) => {
   };
 
   const filteredPersonasDisponibles = useMemo(() => {
+    const assignedIds = new Set(
+      personasAsignadas
+        .map((persona) => Number(persona.persona_id ?? persona.id))
+        .filter((id) => Number.isFinite(id))
+    );
+    const disponibles = personasDisponibles.filter(
+      (persona) => !assignedIds.has(Number(persona.id))
+    );
     const term = personaSearch.trim().toLowerCase();
     if (!term) {
-      return personasDisponibles;
+      return disponibles;
     }
 
-    return personasDisponibles.filter((persona) => {
+    return disponibles.filter((persona) => {
       const texto = `${persona.nombre ?? ""} ${persona.apellido ?? ""} ${
         persona.cargo_descripcion ?? ""
       }`;
       return texto.toLowerCase().includes(term);
     });
-  }, [personaSearch, personasDisponibles]);
+  }, [personaSearch, personasDisponibles, personasAsignadas]);
 
   const formatFechaAsignacion = (value) => {
     if (!value) {

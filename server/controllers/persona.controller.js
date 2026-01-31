@@ -430,17 +430,18 @@ export const getPersonasDisponiblesParaCliente = async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT p.id, p.nombre, p.apellido, p.cargo_id, c.descripcion AS cargo_descripcion
-         FROM persona p
-         INNER JOIN catalogo_cargo c ON c.id = p.cargo_id
-        WHERE p.estado = TRUE
-          AND NOT EXISTS (
-            SELECT 1
-              FROM public.cliente_persona cp
-             WHERE cp.persona_id = p.id
-               AND cp.cliente_id <> $1
-          )
-        ORDER BY p.apellido ASC, p.nombre ASC, p.id ASC`,
+      `SELECT
+         A.ID,
+         A.NOMBRE,
+         A.APELLIDO,
+         A.CARGO_ID,
+         C.DESCRIPCION AS CARGO_DESCRIPCION
+       FROM PERSONA A
+       JOIN CATALOGO_CARGO C ON (C.ID = A.CARGO_ID)
+       LEFT JOIN CLIENTE_PERSONA B ON (B.PERSONA_ID = A.ID AND B.CLIENTE_ID <> $1)
+       WHERE A.ESTADO = TRUE
+         AND B.PERSONA_ID IS NULL
+       ORDER BY A.APELLIDO ASC, A.NOMBRE ASC, A.ID ASC`,
       [parsedClienteId]
     );
 
