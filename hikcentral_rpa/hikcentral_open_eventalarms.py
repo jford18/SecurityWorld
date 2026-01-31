@@ -1817,9 +1817,7 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
                 normalize_value(row.get("triggering_time_client")),
                 normalize_value(row.get("source")),
                 normalize_value(row.get("region")),
-                normalize_value(row.get("trigger_event")),
-                normalize_value(row.get("priority")),
-                normalize_value(row.get("status")),
+                normalize_value(row.get("trigger_event"))
             ]
             raw_key = "|".join(parts)
             return hashlib.md5(raw_key.encode("utf-8")).hexdigest()
