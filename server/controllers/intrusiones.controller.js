@@ -761,7 +761,7 @@ export const listIntrusionesEncoladasHc = async (req, res) => {
     "NO AUTORIZADO",
     "EVENTO DE ROBO",
     "VISITA",
-    "RONDA DE FUERZA REACCION",
+    "RONDA FUERZA DE REACCION",
   ];
   const statusField = "COALESCE(A.STATUS, '')";
 
