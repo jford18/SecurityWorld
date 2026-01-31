@@ -483,6 +483,13 @@ def to_py(v):
     return v
 
 
+def df_elementwise(df, func):
+    # pandas 3: DataFrame.map (reemplaza applymap)
+    if hasattr(df, "map"):
+        return df.map(func)
+    return df.applymap(func)
+
+
 def calcular_periodo(value):
     """
     Calcula el periodo (YYYYMMDD) a partir de un valor de fecha/hora.
@@ -1673,7 +1680,9 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
             df.columns = headers
 
             df = df.dropna(how="all")
-            df = df.applymap(lambda value: value.strip() if isinstance(value, str) else value)
+            df = df_elementwise(
+                df, lambda value: value.strip() if isinstance(value, str) else value
+            )
             df = df.replace({"": None, "nan": None})
 
             total_after_header = len(df)
@@ -1766,7 +1775,7 @@ def insertar_alarm_evento_from_excel(excel_path: Path) -> dict:
         df["alarm_acknowledgment_time"] = pd.to_datetime(
             df["alarm_acknowledgment_time"], errors="coerce"
         )
-        df = df.applymap(to_py)
+        df = df_elementwise(df, to_py)
 
         required_data_cols = [
             "name",
@@ -2031,7 +2040,7 @@ def procesar_alarm_report(file_path: str, timer: StepTimer) -> None:
 
         df["fecha_creacion"] = datetime.now()
         df = df.where(pd.notnull(df), None)
-        df = df.applymap(to_py)
+        df = df_elementwise(df, to_py)
 
         registros = []
         for _, row in df.iterrows():
