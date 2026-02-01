@@ -438,11 +438,11 @@ export const getPersonasDisponiblesParaCliente = async (req, res) => {
          C.DESCRIPCION AS CARGO_DESCRIPCION
        FROM PERSONA A
        JOIN CATALOGO_CARGO C ON (C.ID = A.CARGO_ID)
-       LEFT JOIN CLIENTE_PERSONA B ON (B.PERSONA_ID = A.ID AND B.CLIENTE_ID <> $1)
+       LEFT JOIN CLIENTE_PERSONA B ON (B.PERSONA_ID = A.ID)
        WHERE A.ESTADO = TRUE
-         AND B.PERSONA_ID IS NULL
+         AND B.CLIENTE_ID IS NULL
        ORDER BY A.APELLIDO ASC, A.NOMBRE ASC, A.ID ASC`,
-      [parsedClienteId]
+      []
     );
 
     res
