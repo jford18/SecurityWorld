@@ -26,6 +26,7 @@ El script carga las variables desde `tools/user-manual/manual.env` (basado en `m
 Ejecuta el script con Node. No requiere pasos adicionales:
 
 ```bash
+cd C:\portal-sw\SecurityWorld
 node tools/user-manual/capture.screenshots.mjs
 ```
 
@@ -45,6 +46,7 @@ Las imágenes se guardan en la carpeta definida en `MANUAL_OUT` (por defecto `to
 Con las capturas listas en `tools/user-manual/out`, genera el manual en Markdown, HTML y PDF ejecutando:
 
 ```bash
+cd C:\portal-sw\SecurityWorld
 node tools/user-manual/build.manual.mjs
 ```
 
