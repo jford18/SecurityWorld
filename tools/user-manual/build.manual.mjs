@@ -65,35 +65,126 @@ const loadPages = async () => {
   return pages.sort((a, b) => a.order - b.order);
 };
 
+const buildSectionId = (page) => {
+  const normalizedTitle = page.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  return `${String(page.order).padStart(2, '0')}-${normalizedTitle}`;
+};
+
+const buildPlaceholderSection = (page) => {
+  const order = String(page.order).padStart(2, '0');
+  const sectionId = buildSectionId(page);
+  return [
+    `## ${order}. ${page.title}`,
+    `<a id="${sectionId}"></a>`,
+    `- Ruta: ${page.path}`,
+    '- Descripción: (pendiente)',
+    '- Pasos:',
+    '  1. (pendiente)',
+    '  2. (pendiente)',
+    '  3. (pendiente)',
+    '  4. (pendiente)',
+    '  5. (pendiente)',
+    '- Imagen:',
+    '  (captura pendiente)',
+    '',
+  ];
+};
+
 const buildManualFromPages = async () => {
   const pages = await loadPages();
   const lines = ['# Manual de Usuario', '', '## Índice'];
 
   pages.forEach((page) => {
-    const sectionId = `${String(page.order).padStart(2, '0')}-${page.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    const sectionId = buildSectionId(page);
     lines.push(`- [${String(page.order).padStart(2, '0')}. ${page.title}](#${sectionId})`);
   });
 
   lines.push('');
   pages.forEach((page) => {
-    const order = String(page.order).padStart(2, '0');
-    const sectionId = `${order}-${page.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-    lines.push(`## ${order}. ${page.title}`);
-    lines.push(`<a id="${sectionId}"></a>`);
-    lines.push(`- Ruta: ${page.path}`);
-    lines.push('- Descripción: (pendiente)');
-    lines.push('- Pasos:');
-    lines.push('  1. (pendiente)');
-    lines.push('  2. (pendiente)');
-    lines.push('  3. (pendiente)');
-    lines.push('  4. (pendiente)');
-    lines.push('  5. (pendiente)');
-    lines.push('- Imagen:');
-    lines.push('  (captura pendiente)');
-    lines.push('');
+    lines.push(...buildPlaceholderSection(page));
   });
 
   return lines.join('\n');
+};
+
+const parseExistingSections = (markdown) => {
+  const lines = markdown.split(/\r?\n/);
+  const sections = [];
+  let current = null;
+
+  lines.forEach((line) => {
+    const match = line.match(/^##\s+(\d{2})\.\s*(.*)$/);
+    if (match) {
+      if (current) sections.push(current);
+      current = { order: match[1], title: match[2]?.trim() || '', lines: [line] };
+      return;
+    }
+    if (current) {
+      current.lines.push(line);
+    }
+  });
+
+  if (current) sections.push(current);
+
+  return { lines, sections };
+};
+
+const mergeManualWithPages = async (markdown) => {
+  const pages = await loadPages();
+  const pagesByOrder = new Map(pages.map((page) => [String(page.order).padStart(2, '0'), page]));
+  const { lines, sections } = parseExistingSections(markdown);
+  const existingOrders = sections.map((section) => section.order);
+  const missingPages = pages.filter(
+    (page) => !existingOrders.includes(String(page.order).padStart(2, '0')),
+  );
+  if (missingPages.length === 0) {
+    return { markdown, changed: false };
+  }
+
+  const newSectionOrder = [
+    ...existingOrders,
+    ...missingPages.map((page) => String(page.order).padStart(2, '0')),
+  ];
+
+  const existingByOrder = new Map(sections.map((section) => [section.order, section]));
+
+  const tocLines = newSectionOrder.map((order) => {
+    const page = pagesByOrder.get(order);
+    const title = page?.title ?? existingByOrder.get(order)?.title ?? '';
+    const sectionId = page
+      ? buildSectionId(page)
+      : `${order}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    return `- [${order}. ${title}](#${sectionId})`;
+  });
+
+  let preamble = [];
+  const indexTitleIndex = lines.findIndex((line) => line.trim() === '## Índice');
+  const firstSectionIndex = lines.findIndex((line) => /^##\s+\d{2}\./.test(line));
+
+  if (indexTitleIndex !== -1) {
+    preamble = lines.slice(0, indexTitleIndex + 1);
+  } else if (firstSectionIndex !== -1) {
+    preamble = lines.slice(0, firstSectionIndex);
+    preamble.push('## Índice');
+  } else {
+    preamble = ['# Manual de Usuario', '', '## Índice'];
+  }
+
+  const rebuilt = [
+    ...preamble,
+    ...tocLines,
+    '',
+    ...newSectionOrder.flatMap((order) => {
+      const existing = existingByOrder.get(order);
+      if (existing) {
+        return [...existing.lines, ''];
+      }
+      const page = pagesByOrder.get(order);
+      return page ? buildPlaceholderSection(page) : [];
+    }),
+  ];
+
+  return { markdown: rebuilt.join('\n'), changed: true };
 };
 
 const getManualMarkdown = async () => {
@@ -107,7 +198,14 @@ const getManualMarkdown = async () => {
   }
 
   console.log('Using existing manual.md');
-  return fs.readFileSync(MD_PATH, 'utf-8');
+  const existing = fs.readFileSync(MD_PATH, 'utf-8');
+  const { markdown, changed } = await mergeManualWithPages(existing);
+  if (changed) {
+    await fsPromises.writeFile(MD_PATH, markdown, 'utf-8');
+    console.log('MERGE: updated manual.md with nuevas secciones');
+    return markdown;
+  }
+  return existing;
 };
 
 const syncImagesIntoMarkdown = (markdown, imagesIndex) => {

@@ -95,6 +95,13 @@ const takeNamedScreenshot = async (page, outDir, filename) => {
   console.log(`OK: ${filename}`);
 };
 
+const waitForRender = async (page, extraWaitMs) => {
+  await page.waitForLoadState('networkidle').catch(() => {});
+  if (extraWaitMs > 0) {
+    await page.waitForTimeout(extraWaitMs);
+  }
+};
+
 const enterConsole = async (page, outDir) => {
   const consoleLabel = page.getByLabel('Seleccione Consola');
   const consoleText = page.getByText('Seleccione Consola', { exact: false });
@@ -243,7 +250,7 @@ const escapeRestrictedPage = async (page) => {
   await page.waitForTimeout(500);
 };
 
-const navigateViaMenu = async (page, baseUrl, entry) => {
+const navigateViaMenu = async (page, baseUrl, entry, extraWaitMs) => {
   const normalizedPath = entry.path.startsWith('/') ? entry.path : `/${entry.path}`;
   let clicked = false;
 
@@ -264,7 +271,7 @@ const navigateViaMenu = async (page, baseUrl, entry) => {
     await page.goto(buildUrl(baseUrl, normalizedPath), { waitUntil: 'networkidle' });
   }
 
-  await page.waitForLoadState('networkidle');
+  await waitForRender(page, extraWaitMs);
   try {
     await page.waitForURL((url) => url.pathname.includes(normalizedPath), { timeout: 8000 });
   } catch {}
@@ -284,6 +291,7 @@ const main = async () => {
   const user = process.env.MANUAL_USER;
   const pass = process.env.MANUAL_PASS;
   const outDir = process.env.MANUAL_OUT;
+  const extraWaitMs = Number.parseInt(process.env.MANUAL_EXTRA_WAIT ?? '1500', 10) || 0;
 
   const missingVars = [];
   if (!baseUrl) missingVars.push('MANUAL_BASE_URL');
@@ -318,13 +326,19 @@ const main = async () => {
     if (entry.path === '/login') {
       continue;
     }
-    const normalizedPath = await navigateViaMenu(page, baseUrl, entry);
-    await page.waitForTimeout(500);
+    let normalizedPath = await navigateViaMenu(page, baseUrl, entry, extraWaitMs);
+    await page.waitForTimeout(200);
 
-    const restricted = await isRestricted(page);
-    const filename = `${String(entry.order).padStart(2, '0')}-${slugify(entry.title)}${
-      restricted ? '-restringido' : ''
-    }.png`;
+    let restricted = await isRestricted(page);
+    if (restricted) {
+      console.warn(`Detectado acceso restringido en ${normalizedPath}. Reintentando...`);
+      await escapeRestrictedPage(page);
+      normalizedPath = await navigateViaMenu(page, baseUrl, entry, extraWaitMs);
+      await page.waitForTimeout(200);
+      restricted = await isRestricted(page);
+    }
+
+    const filename = `${String(entry.order).padStart(2, '0')}-${slugify(entry.title)}.png`;
 
     await takeNamedScreenshot(page, outputDir, filename);
     console.log('PAGE', entry.order, entry.title, 'EXPECTED', normalizedPath, 'FINAL', page.url(), 'RESTRICTED', restricted);

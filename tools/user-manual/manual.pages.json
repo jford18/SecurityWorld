@@ -299,5 +299,19 @@
     "path": "/administracion/tipo-area/editar/:id",
     "menuText": "Tipo de Área - Editar",
     "waitForText": "Editar"
+  },
+  {
+    "order": 44,
+    "title": "Uptime Cámaras (Registro Manual)",
+    "path": "/fallos/operador/uptime-camaras-manual",
+    "menuText": "Uptime Cámaras Manual",
+    "waitForText": "Uptime Cámaras (Registro Manual)"
+  },
+  {
+    "order": 45,
+    "title": "Material Sustraído",
+    "path": "/administracion/material-sustraido",
+    "menuText": "Material Sustraído",
+    "waitForText": "Material Sustraído"
   }
 ]
