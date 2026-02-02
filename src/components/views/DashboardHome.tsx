@@ -127,9 +127,8 @@ const CustomXAxisTick = ({
   x,
   y,
   payload,
-  labelPorProblema,
-}: StackedAxisTickProps & { labelPorProblema: Record<string, string> }) => {
-  const rawLabel = labelPorProblema[payload.value] ?? payload.value;
+}: StackedAxisTickProps) => {
+  const rawLabel = payload.value;
   const displayLabel = truncateLabel(rawLabel, STACKED_TICK_MAX);
 
   return (
@@ -255,12 +254,7 @@ const StackedBarChartCard = React.memo(
   ({
     data,
     haciendaKeys,
-    labelPorProblema,
-  }: {
-    data: StackedDatum[];
-    haciendaKeys: string[];
-    labelPorProblema: Record<string, string>;
-  }) => {
+  }: { data: StackedDatum[]; haciendaKeys: string[] }) => {
     const [highlightedHacienda, setHighlightedHacienda] = useState<string | null>(null);
 
     if (!data.length) {
@@ -286,7 +280,7 @@ const StackedBarChartCard = React.memo(
                   interval={0}
                   height={100}
                   tickMargin={14}
-                  tick={<CustomXAxisTick labelPorProblema={labelPorProblema} />}
+                  tick={<CustomXAxisTick />}
                 />
                 <YAxis
                   type="number"
@@ -309,10 +303,7 @@ const StackedBarChartCard = React.memo(
                         ? String(equiposMap[dataKey] ?? '')
                         : '';
                     const equiposLabel = equipos.trim().length > 0 ? equipos : 'Sin información';
-                    const displayLabel =
-                      typeof label === 'string'
-                        ? labelPorProblema[label] ?? label
-                        : String(label ?? '');
+                    const displayLabel = typeof label === 'string' ? label : String(label ?? '');
 
                     return (
                       <div className="rounded border border-gray-200 bg-white p-2 text-xs shadow">
@@ -649,18 +640,6 @@ const DashboardHome: React.FC = () => {
     });
 
     return Array.from(map.values());
-  }, [dashboard]);
-
-  const labelPorProblema = useMemo(() => {
-    const rows = dashboard?.pendientes_por_problema_hacienda ?? [];
-    return rows.reduce<Record<string, string>>((acc, row) => {
-      const problema = row.problema_label?.trim() || 'Sin problema';
-      const ejeLabel = row.eje_label?.trim();
-      if (ejeLabel) {
-        acc[problema] = ejeLabel;
-      }
-      return acc;
-    }, {});
   }, [dashboard]);
 
   const haciendaKeys = useMemo(() => {
@@ -1062,7 +1041,6 @@ const DashboardHome: React.FC = () => {
           <StackedBarChartCard
             data={stackedData}
             haciendaKeys={haciendaKeys}
-            labelPorProblema={labelPorProblema}
           />
         </div>
       </div>
