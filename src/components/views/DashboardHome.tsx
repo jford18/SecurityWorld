@@ -271,16 +271,6 @@ const StackedBarChartCard = React.memo(
       });
       return map;
     }, [data]);
-
-    if (!data.length) {
-      return <p className="mt-8 text-center text-sm text-gray-400">Sin datos de pendientes.</p>;
-    }
-
-    const chartHeight = Math.max(280, data.length * ROW_HEIGHT);
-    const legendItems = haciendaKeys.map((hacienda, index) => ({
-      id: hacienda,
-      color: CHART_COLORS[index % CHART_COLORS.length],
-    }));
     const chartData = useMemo(
       () =>
         data.map((item) => {
@@ -295,6 +285,23 @@ const StackedBarChartCard = React.memo(
         }),
       [data, haciendaKeys],
     );
+    const chartHeight = useMemo(
+      () => Math.max(280, data.length * ROW_HEIGHT),
+      [data.length],
+    );
+    const legendItems = useMemo(
+      () =>
+        haciendaKeys.map((hacienda, index) => ({
+          id: hacienda,
+          color: CHART_COLORS[index % CHART_COLORS.length],
+        })),
+      [haciendaKeys],
+    );
+    const hasData = data.length > 0;
+
+    if (!hasData) {
+      return <p className="mt-8 text-center text-sm text-gray-400">Sin datos de pendientes.</p>;
+    }
 
     return (
       <div>
