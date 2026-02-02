@@ -31,6 +31,8 @@ export interface DashboardUptimeFilters {
   from: string;
   to: string;
   haciendaId?: number | null;
+  clienteId?: number | null;
+  reportadoCliente?: boolean | null;
 }
 
 export const fetchDashboardUptimeCamaras = async (

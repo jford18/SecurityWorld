@@ -4,6 +4,7 @@ import {
   DashboardUptimeResponse,
   UptimeDetalleRow,
 } from '@/services/dashboardUptimeCamarasService';
+import { getClientesActivos, type ClienteResumen } from '@/services/clientes.service';
 import { fetchDashboardUptimeCamarasManual } from '@/services/dashboardUptimeCamarasManualService';
 import { getHaciendasActivas, type HaciendaResumen } from '@/services/haciendas.service';
 import * as XLSX from 'xlsx';
@@ -103,7 +104,10 @@ const UptimeCamarasManual: React.FC = () => {
   const [fromDate, setFromDate] = useState(defaultFrom);
   const [toDate, setToDate] = useState(formatDateInput(today));
   const [selectedHacienda, setSelectedHacienda] = useState<string>('');
+  const [selectedCliente, setSelectedCliente] = useState<string>('');
+  const [reportadoCliente, setReportadoCliente] = useState(false);
   const [haciendas, setHaciendas] = useState<HaciendaResumen[]>([]);
+  const [clientes, setClientes] = useState<ClienteResumen[]>([]);
 
   const [kpis, setKpis] = useState<DashboardUptimeResponse['kpis']>({
     dias: 0,
@@ -125,6 +129,12 @@ const UptimeCamarasManual: React.FC = () => {
     getHaciendasActivas()
       .then((data) => setHaciendas(data))
       .catch(() => setHaciendas([]));
+  }, []);
+
+  useEffect(() => {
+    getClientesActivos()
+      .then((data) => setClientes(data))
+      .catch(() => setClientes([]));
   }, []);
 
   const loadData = async (filters: DashboardUptimeFilters) => {
@@ -153,13 +163,25 @@ const UptimeCamarasManual: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData({ from: fromDate, to: toDate, haciendaId: selectedHacienda ? Number(selectedHacienda) : null });
+    loadData({
+      from: fromDate,
+      to: toDate,
+      haciendaId: selectedHacienda ? Number(selectedHacienda) : null,
+      clienteId: selectedCliente ? Number(selectedCliente) : null,
+      reportadoCliente: reportadoCliente ? true : null,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    loadData({ from: fromDate, to: toDate, haciendaId: selectedHacienda ? Number(selectedHacienda) : null });
+    loadData({
+      from: fromDate,
+      to: toDate,
+      haciendaId: selectedHacienda ? Number(selectedHacienda) : null,
+      clienteId: selectedCliente ? Number(selectedCliente) : null,
+      reportadoCliente: reportadoCliente ? true : null,
+    });
   };
 
   const handleSort = (key: SortKey) => {
@@ -272,7 +294,7 @@ const UptimeCamarasManual: React.FC = () => {
       </header>
 
       <section className="bg-white rounded-lg shadow p-6 space-y-4">
-        <form className="grid grid-cols-1 md:grid-cols-4 gap-4" onSubmit={handleSubmit}>
+        <form className="grid grid-cols-1 md:grid-cols-6 gap-4" onSubmit={handleSubmit}>
           <label className="flex flex-col text-sm font-medium text-gray-700">
             Fecha Desde
             <input
@@ -308,7 +330,31 @@ const UptimeCamarasManual: React.FC = () => {
               ))}
             </select>
           </label>
-          <div className="flex items-end">
+          <label className="flex flex-col text-sm font-medium text-gray-700">
+            Cliente
+            <select
+              value={selectedCliente}
+              onChange={(e) => setSelectedCliente(e.target.value)}
+              className="mt-1 rounded-md border border-gray-300 px-3 py-2 focus:border-[#1C2E4A] focus:outline-none focus:ring-1 focus:ring-[#1C2E4A]"
+            >
+              <option value="">Todos</option>
+              {clientes.map((cliente) => (
+                <option key={cliente.id} value={cliente.id}>
+                  {cliente.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mt-6 md:mt-0">
+            <input
+              type="checkbox"
+              checked={reportadoCliente}
+              onChange={(e) => setReportadoCliente(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A]"
+            />
+            Reportado al cliente
+          </label>
+          <div className="flex items-end md:col-span-1">
             <button
               type="submit"
               className="w-full rounded-md bg-[#1C2E4A] px-4 py-2 text-white font-semibold hover:bg-[#243b55] transition-colors"

@@ -13,6 +13,14 @@ export const fetchDashboardUptimeCamarasManual = async (
     queryParams.hacienda_id = String(params.haciendaId);
   }
 
+  if (params.clienteId) {
+    queryParams.cliente_id = String(params.clienteId);
+  }
+
+  if (params.reportadoCliente !== null && params.reportadoCliente !== undefined) {
+    queryParams.reportado_cliente = String(params.reportadoCliente);
+  }
+
   queryParams.all = 'true';
 
   const { data } = await api.get<DashboardUptimeResponse>('/dashboards/uptime-camaras-manual', {
