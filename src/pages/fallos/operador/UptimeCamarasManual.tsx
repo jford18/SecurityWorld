@@ -36,6 +36,20 @@ const combineDateTime = (date: string, time: string) => {
   return Number.isNaN(timestamp) ? null : timestamp;
 };
 
+const getStableRowId = (row: any, idx: number) => {
+  const parts = [
+    row?.ID,
+    row?.CAMERA_ID,
+    row?.ENCODING_DEVICE_ID,
+    row?.IP_ADDRESS,
+    row?.SITE_NAME,
+    row?.NAME,
+  ].filter(Boolean);
+
+  if (parts.length) return parts.join('-');
+  return `ROW-${idx}`;
+};
+
 const getCameraName = (row: UptimeDetalleRow) => {
   const record = row as Record<string, unknown>;
   const candidates = [
@@ -99,7 +113,7 @@ const UptimeCamarasManual: React.FC = () => {
     uptime_pct: 0,
   });
 
-  const [allRows, setAllRows] = useState<Array<UptimeDetalleRow & { rowKey: string }>>([]);
+  const [allRows, setAllRows] = useState<Array<UptimeDetalleRow & { ROW_ID: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>({
@@ -119,9 +133,9 @@ const UptimeCamarasManual: React.FC = () => {
       setError(null);
       const data = await fetchDashboardUptimeCamarasManual(filters);
       setKpis(data.kpis);
-      const rowsWithKeys = (data.detalle ?? []).map((row) => ({
+      const rowsWithKeys = (data.detalle ?? []).map((row, idx) => ({
         ...row,
-        rowKey: crypto.randomUUID(),
+        ROW_ID: getStableRowId(row, idx),
       }));
       setAllRows(rowsWithKeys);
     } catch (err) {
@@ -382,7 +396,7 @@ const UptimeCamarasManual: React.FC = () => {
                   </tr>
                 )}
                 {sortedRows.map((row) => (
-                  <tr key={row.rowKey} className="hover:bg-gray-50">
+                  <tr key={row.ROW_ID} className="hover:bg-gray-50">
                     <td className="px-4 py-2 text-sm text-gray-700">{row.mes}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.id}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{getCameraName(row)}</td>
