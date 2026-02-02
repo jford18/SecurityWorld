@@ -89,7 +89,7 @@ const formatMonthLabel = (mes: string) => {
 };
 
 const CHART_CARD_STYLE = { contain: 'layout paint', transform: 'translateZ(0)' };
-const STACKED_CHART_MARGIN = { top: 10, right: 30, left: 20, bottom: 40 };
+const STACKED_CHART_MARGIN = { top: 10, right: 30, left: 20, bottom: 100 };
 const TENDENCIA_CHART_MARGIN = { top: 10, right: 30, left: 0, bottom: 10 };
 const STACKED_TICK_MAX = 50;
 const STACKED_Y_AXIS_LABEL = {
@@ -121,6 +121,25 @@ type StackedAxisTickProps = {
 type ScrollableLegendItem = {
   id: string;
   color: string;
+};
+
+const CustomXAxisTick = ({
+  x,
+  y,
+  payload,
+  labelPorProblema,
+}: StackedAxisTickProps & { labelPorProblema: Record<string, string> }) => {
+  const rawLabel = labelPorProblema[payload.value] ?? payload.value;
+  const displayLabel = truncateLabel(rawLabel, STACKED_TICK_MAX);
+
+  return (
+    <g transform={`translate(${x},${y}) rotate(-40)`}>
+      <title>{rawLabel}</title>
+      <text x={0} y={0} dy={16} textAnchor="end" fill="#666">
+        {displayLabel}
+      </text>
+    </g>
+  );
 };
 
 const ScrollableLegend = ({
@@ -265,21 +284,9 @@ const StackedBarChartCard = React.memo(
                   type="category"
                   dataKey="problema_label"
                   interval={0}
-                  tickMargin={12}
-                  tick={(props: StackedAxisTickProps) => {
-                    const rawLabel =
-                      labelPorProblema[props.payload.value] ?? props.payload.value;
-                    const displayLabel = truncateLabel(rawLabel, STACKED_TICK_MAX);
-
-                    return (
-                      <g transform={`translate(${props.x},${props.y})`}>
-                        <title>{rawLabel}</title>
-                        <text x={0} y={0} dy={16} textAnchor="middle" fill="#666">
-                          {displayLabel}
-                        </text>
-                      </g>
-                    );
-                  }}
+                  height={100}
+                  tickMargin={14}
+                  tick={<CustomXAxisTick labelPorProblema={labelPorProblema} />}
                 />
                 <YAxis
                   type="number"
