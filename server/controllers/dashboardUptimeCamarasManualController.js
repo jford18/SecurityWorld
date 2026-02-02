@@ -1,11 +1,52 @@
 import { pool } from "../db.js";
 
-const KPI_QUERY = `
+const REPORTADO_COLUMNS = ["reportado_al_cliente", "reportado_cliente"];
+
+const resolveReportadoClienteColumn = async () => {
+  const { rows } = await pool.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'fallos_tecnicos'
+       AND column_name = ANY($1)
+     ORDER BY column_name`,
+    [REPORTADO_COLUMNS]
+  );
+
+  return rows?.[0]?.column_name ?? null;
+};
+
+const normalizeReportadoClienteFilter = (value) => {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const truthy = ["true", "t", "1", "s", "si", "sí", "y", "yes"];
+  const falsy = ["false", "f", "0", "n", "no"];
+
+  if (truthy.includes(normalized)) {
+    return truthy;
+  }
+
+  if (falsy.includes(normalized)) {
+    return falsy;
+  }
+
+  return undefined;
+};
+
+const KPI_QUERY = (reportadoFilterSql = "") => `
 WITH PARAMS AS (
     SELECT
         $1::TIMESTAMP AS FROM_TS,
         $2::TIMESTAMP AS TO_TS,
-        $3::INT AS HACIENDA_ID
+        $3::INT AS HACIENDA_ID,
+        $4::INT AS CLIENTE_ID
 ),
 CAMERAS AS (
     SELECT
@@ -16,6 +57,7 @@ CAMERAS AS (
     JOIN PARAMS D ON (1 = 1)
     WHERE A.DEVICE_CODE IS NOT NULL
       AND (D.HACIENDA_ID IS NULL OR C.ID = D.HACIENDA_ID)
+      AND (D.CLIENTE_ID IS NULL OR B.CLIENTE_ID = D.CLIENTE_ID)
 ),
 INCIDENTS AS (
     SELECT
@@ -29,6 +71,7 @@ INCIDENTS AS (
         ) AS END_TS
     FROM PUBLIC.FALLOS_TECNICOS A
     WHERE A.CAMERA_ID IS NOT NULL
+    ${reportadoFilterSql}
 ),
 DOWNTIME AS (
     SELECT
@@ -52,6 +95,7 @@ DOWNTIME AS (
     WHERE A.END_TS > D.FROM_TS
       AND A.START_TS < D.TO_TS
       AND (D.HACIENDA_ID IS NULL OR H.ID = D.HACIENDA_ID)
+      AND (D.CLIENTE_ID IS NULL OR COALESCE(S.CLIENTE_ID, S_FALLBACK.CLIENTE_ID) = D.CLIENTE_ID)
 ),
 KPI AS (
     SELECT
@@ -75,12 +119,13 @@ SELECT
 FROM KPI A;
 `;
 
-const DETAIL_QUERY = `
+const DETAIL_QUERY = (reportadoFilterSql = "") => `
 WITH PARAMS AS (
     SELECT
         $1::TIMESTAMP AS FROM_TS,
         $2::TIMESTAMP AS TO_TS,
-        $3::INT AS HACIENDA_ID
+        $3::INT AS HACIENDA_ID,
+        $4::INT AS CLIENTE_ID
 ),
 INCIDENTS AS (
     SELECT
@@ -94,6 +139,7 @@ INCIDENTS AS (
         ) AS END_TS
     FROM PUBLIC.FALLOS_TECNICOS A
     WHERE A.CAMERA_ID IS NOT NULL
+    ${reportadoFilterSql}
 )
 SELECT
     EXTRACT(MONTH FROM A.START_TS)::INT AS MES,
@@ -134,12 +180,14 @@ LEFT JOIN PUBLIC.HACIENDA H ON (H.ID = COALESCE(S.HACIENDA_ID, S_FALLBACK.HACIEN
 WHERE A.END_TS > P.FROM_TS
   AND A.START_TS < P.TO_TS
   AND (P.HACIENDA_ID IS NULL OR H.ID = P.HACIENDA_ID)
+  AND (P.CLIENTE_ID IS NULL OR COALESCE(S.CLIENTE_ID, S_FALLBACK.CLIENTE_ID) = P.CLIENTE_ID)
 ORDER BY A.START_TS DESC;
 `;
 
 export const getDashboardUptimeCamarasManual = async (req, res) => {
   try {
-    const { from, to, hacienda_id: haciendaIdRaw } = req.query;
+    const { from, to, hacienda_id: haciendaIdRaw, cliente_id: clienteIdRaw, reportado_cliente } =
+      req.query;
 
     if (!from || !to) {
       return res.status(400).json({ message: "Los parámetros 'from' y 'to' son obligatorios" });
@@ -154,20 +202,55 @@ export const getDashboardUptimeCamarasManual = async (req, res) => {
       return res.status(400).json({ message: "El parámetro 'hacienda_id' debe ser un número válido" });
     }
 
+    const parsedClienteId =
+      clienteIdRaw === undefined || clienteIdRaw === null || clienteIdRaw === ""
+        ? null
+        : Number(clienteIdRaw);
+
+    if (clienteIdRaw && (Number.isNaN(parsedClienteId) || parsedClienteId <= 0)) {
+      return res.status(400).json({ message: "El parámetro 'cliente_id' debe ser un número válido" });
+    }
+
+    const reportadoClienteValues = normalizeReportadoClienteFilter(reportado_cliente);
+
+    if (reportado_cliente && reportadoClienteValues === undefined) {
+      return res.status(400).json({ message: "El parámetro 'reportado_cliente' debe ser válido" });
+    }
+
+    let reportadoColumn = null;
+    if (reportadoClienteValues) {
+      reportadoColumn = await resolveReportadoClienteColumn();
+      if (!reportadoColumn) {
+        return res.status(400).json({
+          message:
+            "No existe un campo reportado_al_cliente/reportado_cliente en fallos_tecnicos para aplicar el filtro.",
+        });
+      }
+    }
+
     const fromTs = `${from} 00:00:00`;
     const toTs = `${to} 23:59:59`;
 
-    const kpiParams = [fromTs, toTs, parsedHaciendaId];
-    const detalleParams = [fromTs, toTs, parsedHaciendaId];
+    const kpiParams = [fromTs, toTs, parsedHaciendaId, parsedClienteId];
+    const detalleParams = [fromTs, toTs, parsedHaciendaId, parsedClienteId];
+    const reportadoFilterSql =
+      reportadoColumn && reportadoClienteValues
+        ? `AND LOWER(CAST(A.${reportadoColumn} AS TEXT)) = ANY($5)`
+        : "";
 
-    console.log("[UPTIME-CAMARAS-MANUAL] SQL =>", KPI_QUERY);
+    if (reportadoFilterSql) {
+      kpiParams.push(reportadoClienteValues);
+      detalleParams.push(reportadoClienteValues);
+    }
+
+    console.log("[UPTIME-CAMARAS-MANUAL] SQL =>", KPI_QUERY(reportadoFilterSql));
     console.log("[UPTIME-CAMARAS-MANUAL] PARAMS =>", kpiParams);
-    console.log("[UPTIME-CAMARAS-MANUAL] SQL =>", DETAIL_QUERY);
+    console.log("[UPTIME-CAMARAS-MANUAL] SQL =>", DETAIL_QUERY(reportadoFilterSql));
     console.log("[UPTIME-CAMARAS-MANUAL] PARAMS =>", detalleParams);
 
     const [kpiResult, detalleResult] = await Promise.all([
-      pool.query(KPI_QUERY, kpiParams),
-      pool.query(DETAIL_QUERY, detalleParams),
+      pool.query(KPI_QUERY(reportadoFilterSql), kpiParams),
+      pool.query(DETAIL_QUERY(reportadoFilterSql), detalleParams),
     ]);
 
     const kpis = kpiResult.rows[0] ?? {
