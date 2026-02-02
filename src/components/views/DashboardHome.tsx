@@ -13,6 +13,7 @@ import {
   LabelList,
   ComposedChart,
   Line,
+  Legend,
 } from 'recharts';
 import { useSession } from '../context/SessionContext';
 import { resolveConsolaIdByName } from '../../services/consolasService';
@@ -241,11 +242,12 @@ const StackedBarChartCard = React.memo(
     haciendaKeys: string[];
     labelPorProblema: Record<string, string>;
   }) => {
+    const [highlightedHacienda, setHighlightedHacienda] = useState<string | null>(null);
+
     if (!data.length) {
       return <p className="mt-8 text-center text-sm text-gray-400">Sin datos de pendientes.</p>;
     }
 
-    const [highlightedHacienda, setHighlightedHacienda] = useState<string | null>(null);
     const minChartWidth = Math.max(900, data.length * 140);
     const legendItems = haciendaKeys.map((hacienda, index) => ({
       id: hacienda,
