@@ -89,9 +89,10 @@ const formatMonthLabel = (mes: string) => {
 };
 
 const CHART_CARD_STYLE = { contain: 'layout paint', transform: 'translateZ(0)' };
-const STACKED_CHART_MARGIN = { top: 10, right: 30, left: 20, bottom: 20 };
+const STACKED_CHART_MARGIN = { top: 10, right: 30, left: 260, bottom: 10 };
 const TENDENCIA_CHART_MARGIN = { top: 10, right: 30, left: 0, bottom: 10 };
 const STACKED_TICK_MAX = 50;
+const ROW_HEIGHT = 36;
 type DonutDatum = {
   name: string;
   value: number;
@@ -267,18 +268,38 @@ const StackedBarChartCard = React.memo(
       return <p className="mt-8 text-center text-sm text-gray-400">Sin datos de pendientes.</p>;
     }
 
-    const minChartHeight = Math.max(280, data.length * 34);
+    const chartHeight = Math.max(280, data.length * ROW_HEIGHT);
     const legendItems = haciendaKeys.map((hacienda, index) => ({
       id: hacienda,
       color: CHART_COLORS[index % CHART_COLORS.length],
     }));
+    const chartData = useMemo(
+      () =>
+        data.map((item) => {
+          const total =
+            typeof item.total === 'number'
+              ? item.total
+              : haciendaKeys.reduce(
+                  (acc, key) => acc + Number(item[key] ?? 0),
+                  0,
+                );
+          return { ...item, total };
+        }),
+      [data, haciendaKeys],
+    );
 
     return (
       <div>
         <div className="h-72 overflow-y-auto">
-          <div style={{ height: minChartHeight }}>
+          <div style={{ height: chartHeight }}>
             <ResponsiveContainer width="100%" height="100%" debounce={250}>
-              <BarChart data={data} layout="vertical" margin={STACKED_CHART_MARGIN}>
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={STACKED_CHART_MARGIN}
+                barCategoryGap={12}
+                barGap={0}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   type="number"
@@ -287,7 +308,7 @@ const StackedBarChartCard = React.memo(
                 <YAxis
                   type="category"
                   dataKey="problema_label"
-                  width={240}
+                  width={260}
                   tick={
                     <CustomYAxisTick labelPorProblema={labelPorProblema} />
                   }
@@ -340,19 +361,12 @@ const StackedBarChartCard = React.memo(
                       name={hacienda}
                       isAnimationActive={false}
                       fillOpacity={isHighlighted ? 1 : 0.25}
+                      barSize={20}
                     >
-                      <LabelList
-                        dataKey={hacienda}
-                        position="center"
-                        formatter={(value: number) =>
-                          value ? formatInteger(Number(value)) : ''
-                        }
-                        fill="#fff"
-                      />
                       {isLast && (
                         <LabelList
                           dataKey="total"
-                          position="top"
+                          position="right"
                           formatter={(value: number) =>
                             value ? formatInteger(Number(value)) : ''
                           }
