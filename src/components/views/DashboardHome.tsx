@@ -134,7 +134,15 @@ const CustomYAxisTick = ({
   return (
     <g transform={`translate(${x ?? 0},${y ?? 0})`}>
       <title>{rawLabel}</title>
-      <text x={0} y={0} dy={4} textAnchor="end" fill="#666">
+      <text
+        x={0}
+        y={0}
+        dy={4}
+        textAnchor="end"
+        dominantBaseline="central"
+        fill="#666"
+        style={{ overflow: 'visible' }}
+      >
         {displayLabel}
       </text>
     </g>
@@ -301,10 +309,7 @@ const StackedBarChartCard = React.memo(
                 barGap={0}
               >
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  type="number"
-                  tickFormatter={(value) => formatInteger(Number(value))}
-                />
+                <XAxis type="number" tickFormatter={formatInteger} />
                 <YAxis
                   type="category"
                   dataKey="problema_label"
