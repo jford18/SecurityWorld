@@ -104,10 +104,10 @@ type StackedDatum = {
 } & Record<string, number | string | Record<string, string> | undefined>;
 
 type StackedAxisTickProps = {
-  x: number;
-  y: number;
-  payload: {
-    value: string;
+  x?: number;
+  y?: number;
+  payload?: {
+    value?: string;
   };
 };
 
@@ -122,11 +122,16 @@ const CustomYAxisTick = ({
   payload,
   labelPorProblema,
 }: StackedAxisTickProps & { labelPorProblema: Record<string, string> }) => {
-  const rawLabel = labelPorProblema[payload.value] ?? payload.value;
+  const value = payload?.value;
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const rawLabel = labelPorProblema[value] ?? value;
   const displayLabel = truncateLabel(rawLabel, STACKED_TICK_MAX);
 
   return (
-    <g transform={`translate(${x},${y})`}>
+    <g transform={`translate(${x ?? 0},${y ?? 0})`}>
       <title>{rawLabel}</title>
       <text x={0} y={0} dy={4} textAnchor="end" fill="#666">
         {displayLabel}
@@ -250,12 +255,6 @@ const StackedBarChartCard = React.memo(
     haciendaKeys,
   }: { data: StackedDatum[]; haciendaKeys: string[] }) => {
     const [highlightedHacienda, setHighlightedHacienda] = useState<string | null>(null);
-
-    if (!data.length) {
-      return <p className="mt-8 text-center text-sm text-gray-400">Sin datos de pendientes.</p>;
-    }
-
-    const minChartHeight = Math.max(280, data.length * 34);
     const labelPorProblema = useMemo(() => {
       const map: Record<string, string> = {};
       data.forEach((item) => {
@@ -263,6 +262,12 @@ const StackedBarChartCard = React.memo(
       });
       return map;
     }, [data]);
+
+    if (!data.length) {
+      return <p className="mt-8 text-center text-sm text-gray-400">Sin datos de pendientes.</p>;
+    }
+
+    const minChartHeight = Math.max(280, data.length * 34);
     const legendItems = haciendaKeys.map((hacienda, index) => ({
       id: hacienda,
       color: CHART_COLORS[index % CHART_COLORS.length],
@@ -295,7 +300,13 @@ const StackedBarChartCard = React.memo(
                     }
 
                     const item = payload[0];
+                    if (!item) {
+                      return null;
+                    }
                     const dataKey = String(item.dataKey ?? '');
+                    if (!dataKey) {
+                      return null;
+                    }
                     const value = Number(item.value ?? 0);
                     const equiposMap = item.payload?.equipos;
                     const equipos =
