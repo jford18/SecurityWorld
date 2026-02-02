@@ -264,40 +264,42 @@ const StackedBarChartCard = React.memo(
     haciendaKeys,
   }: { data: StackedDatum[]; haciendaKeys: string[] }) => {
     const [highlightedHacienda, setHighlightedHacienda] = useState<string | null>(null);
+    const safeData = data ?? [];
+    const safeHaciendaKeys = haciendaKeys ?? [];
     const labelPorProblema = useMemo(() => {
       const map: Record<string, string> = {};
-      data.forEach((item) => {
+      safeData.forEach((item) => {
         map[item.problema_label] = item.problema_label;
       });
       return map;
-    }, [data]);
+    }, [safeData]);
     const chartData = useMemo(
       () =>
-        data.map((item) => {
+        safeData.map((item) => {
           const total =
             typeof item.total === 'number'
               ? item.total
-              : haciendaKeys.reduce(
+              : safeHaciendaKeys.reduce(
                   (acc, key) => acc + Number(item[key] ?? 0),
                   0,
                 );
           return { ...item, total };
         }),
-      [data, haciendaKeys],
+      [safeData, safeHaciendaKeys],
     );
     const chartHeight = useMemo(
-      () => Math.max(280, data.length * ROW_HEIGHT),
-      [data.length],
+      () => Math.max(280, safeData.length * ROW_HEIGHT),
+      [safeData.length],
     );
     const legendItems = useMemo(
       () =>
-        haciendaKeys.map((hacienda, index) => ({
+        safeHaciendaKeys.map((hacienda, index) => ({
           id: hacienda,
           color: CHART_COLORS[index % CHART_COLORS.length],
         })),
-      [haciendaKeys],
+      [safeHaciendaKeys],
     );
-    const hasData = data.length > 0;
+    const hasData = safeData.length > 0;
 
     if (!hasData) {
       return <p className="mt-8 text-center text-sm text-gray-400">Sin datos de pendientes.</p>;
@@ -360,8 +362,8 @@ const StackedBarChartCard = React.memo(
                     );
                   }}
                 />
-                {haciendaKeys.map((hacienda, index) => {
-                  const isLast = index === haciendaKeys.length - 1;
+                {safeHaciendaKeys.map((hacienda, index) => {
+                  const isLast = index === safeHaciendaKeys.length - 1;
                   const isHighlighted =
                     !highlightedHacienda || highlightedHacienda === hacienda;
                   return (
