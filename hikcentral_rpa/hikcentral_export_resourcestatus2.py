@@ -1102,6 +1102,28 @@ def _validar_recurso_seleccionado(driver, target_label: str) -> bool:
     return False
 
 
+def is_resource_view_loaded(driver, label: str) -> bool:
+    title_xpath = (
+        "//div[contains(@class,'resource-layout')]"
+        "//*[self::div or self::span or self::h1][normalize-space()="
+        f"'{label}']"
+    )
+    export_xpath = "//div[contains(@class,'resource-layout')]//button[@title='Export']"
+
+    try:
+        titles = driver.find_elements(By.XPATH, title_xpath)
+    except Exception:
+        titles = []
+    try:
+        exports = driver.find_elements(By.XPATH, export_xpath)
+    except Exception:
+        exports = []
+
+    title_visible = any(elem.is_displayed() for elem in titles)
+    export_visible = any(elem.is_displayed() for elem in exports)
+    return title_visible and export_visible
+
+
 def _esperar_refresco_contenido(driver, previo=None, timeout: int = 10):
     try:
         if previo:
@@ -1143,7 +1165,12 @@ def seleccionar_opcion_resource_status(driver, wait, opcion: str) -> None:
     if etiqueta_objetivo is None:
         raise Exception(f"Opción de recurso desconocida: {opcion}")
 
-    wait_loading_end(driver)
+    driver.switch_to.default_content()
+    wait_loading_end(driver, 20)
+    if is_resource_view_loaded(driver, etiqueta_objetivo):
+        print(f"[6] Recurso ya estaba seleccionado: {etiqueta_objetivo}")
+        return
+
     _switch_to_resource_iframe(driver)
 
     tabla_previa = None
@@ -1180,7 +1207,10 @@ def seleccionar_opcion_resource_status(driver, wait, opcion: str) -> None:
             for elem in elems:
                 if _element_matches(elem, _normalize_label(etiqueta_objetivo)):
                     safe_click(driver, elem)
-                    wait_loading_end(driver)
+                    wait_loading_end(driver, 20)
+                    if is_resource_view_loaded(driver, etiqueta_objetivo):
+                        print(f"[6] Recurso seleccionado por pestaña/botón: {etiqueta_objetivo}")
+                        return
                     if _validar_recurso_seleccionado(driver, etiqueta_objetivo) or _esperar_refresco_contenido(driver, tabla_previa):
                         print(f"[6] Recurso seleccionado por pestaña/botón: {etiqueta_objetivo}")
                         return
@@ -1202,12 +1232,15 @@ def seleccionar_opcion_resource_status(driver, wait, opcion: str) -> None:
             for dd in dropdowns:
                 safe_click(driver, dd)
                 time.sleep(0.2)
-                wait_loading_end(driver)
+                wait_loading_end(driver, 20)
                 opcion_elem, candidatos = find_click_by_text(driver, wait, etiqueta_objetivo)
                 encontrados.extend(candidatos)
                 if opcion_elem:
                     safe_click(driver, opcion_elem)
-                    wait_loading_end(driver)
+                    wait_loading_end(driver, 20)
+                    if is_resource_view_loaded(driver, etiqueta_objetivo):
+                        print(f"[6] Recurso seleccionado desde dropdown: {etiqueta_objetivo}")
+                        return
                     if _validar_recurso_seleccionado(driver, etiqueta_objetivo) or _esperar_refresco_contenido(driver, tabla_previa):
                         print(f"[6] Recurso seleccionado desde dropdown: {etiqueta_objetivo}")
                         return
@@ -1228,7 +1261,10 @@ def seleccionar_opcion_resource_status(driver, wait, opcion: str) -> None:
             for elem in elems:
                 if _element_matches(elem, _normalize_label(etiqueta_objetivo)):
                     safe_click(driver, elem)
-                    wait_loading_end(driver)
+                    wait_loading_end(driver, 20)
+                    if is_resource_view_loaded(driver, etiqueta_objetivo):
+                        print(f"[6] Recurso seleccionado desde menú/lateral: {etiqueta_objetivo}")
+                        return
                     if _validar_recurso_seleccionado(driver, etiqueta_objetivo) or _esperar_refresco_contenido(driver, tabla_previa):
                         print(f"[6] Recurso seleccionado desde menú/lateral: {etiqueta_objetivo}")
                         return
@@ -1237,7 +1273,10 @@ def seleccionar_opcion_resource_status(driver, wait, opcion: str) -> None:
         encontrados.extend(candidatos_extra)
         if opcion_elem:
             safe_click(driver, opcion_elem)
-            wait_loading_end(driver)
+            wait_loading_end(driver, 20)
+            if is_resource_view_loaded(driver, etiqueta_objetivo):
+                print(f"[6] Recurso seleccionado: {etiqueta_objetivo}")
+                return
             if _validar_recurso_seleccionado(driver, etiqueta_objetivo) or _esperar_refresco_contenido(driver, tabla_previa):
                 print(f"[6] Recurso seleccionado: {etiqueta_objetivo}")
                 return
