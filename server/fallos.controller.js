@@ -119,6 +119,7 @@ const mapFalloRowToDto = (row) => ({
   tipo_problema_id: row.tipo_problema_id ?? null,
   tipo_afectacion: row.tipo_afectacion || "",
   tipo_equipo_afectado: row.tipo_equipo_afectado || undefined,
+  tipo_equipo_afectado_nombre: row.tipo_equipo_afectado_nombre || undefined,
   tipo_equipo_afectado_id: row.tipo_equipo_afectado_id ?? null,
   tipo_afectacion_detalle: row.tipo_afectacion_detalle || undefined,
   tipoProblemaNombre: row.tipo_problema_descripcion || undefined,
@@ -136,6 +137,8 @@ const mapFalloRowToDto = (row) => ({
   ultimo_usuario_edito_id: row.ultimo_usuario_edito_id ?? null,
   ultimo_usuario_edito_nombre: row.ultimo_usuario_edito_nombre || null,
   ultimo_usuario_edito: row.ultimo_usuario_edito_nombre || undefined,
+  reportado_al_cliente:
+    row.reportado_al_cliente ?? row.reportado_cliente ?? null,
   responsable_verificacion_cierre_id:
     row.responsable_verificacion_cierre_id ?? null,
   responsable_verificacion_cierre_nombre:
@@ -372,6 +375,7 @@ export const getFallos = async (req, res) => {
     const consolaId = parseOptionalNumberParam(consolaIdRaw);
     const haciendaId = parseOptionalNumberParam(haciendaIdRaw);
     const reportadoClienteValues = normalizeReportadoClienteFilter(reportadoClienteRaw);
+    const reportadoColumn = await resolveReportadoClienteColumn(client);
 
     if (clienteIdRaw && clienteId === undefined) {
       return res.status(400).json({ message: "El parámetro cliente_id debe ser válido." });
@@ -409,17 +413,18 @@ export const getFallos = async (req, res) => {
       filtros.push(`AND sitio.hacienda_id = $${params.length}`);
     }
 
-    if (reportadoClienteValues) {
-      const reportadoColumn = await resolveReportadoClienteColumn(client);
-      if (reportadoColumn) {
-        params.push(reportadoClienteValues);
-        filtros.push(
-          `AND LOWER(CAST(ft.${reportadoColumn} AS TEXT)) = ANY($${params.length})`
-        );
-      }
+    if (reportadoClienteValues && reportadoColumn) {
+      params.push(reportadoClienteValues);
+      filtros.push(
+        `AND LOWER(CAST(ft.${reportadoColumn} AS TEXT)) = ANY($${params.length})`
+      );
     }
 
     const whereFilters = filtros.length > 0 ? `WHERE 1 = 1 ${filtros.join(" ")}` : "";
+
+    const reportadoSelect = reportadoColumn
+      ? `ft.${reportadoColumn} AS reportado_al_cliente`
+      : "NULL AS reportado_al_cliente";
 
     const result = await client.query(
       `SELECT
@@ -463,6 +468,13 @@ export const getFallos = async (req, res) => {
           ELSE COALESCE(ft.tipo_afectacion, 'SIN INFORMACIÓN')
         END AS tipo_afectacion_detalle,
         CASE
+          WHEN ft.camera_id IS NOT NULL THEN 'Cámaras'
+          WHEN ft.encoding_device_id IS NOT NULL THEN 'Grabador'
+          WHEN ft.ip_speaker_id IS NOT NULL THEN 'Megáfono IP'
+          WHEN ft.alarm_input_id IS NOT NULL THEN 'Alarm Input'
+          ELSE NULL
+        END AS tipo_equipo_afectado_nombre,
+        CASE
           WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN COALESCE(
             NULLIF(TRIM(
               CASE
@@ -473,10 +485,12 @@ export const getFallos = async (req, res) => {
                 ELSE NULL
               END
             ), ''),
-            NULLIF(TRIM(ft.equipo_afectado), '')
+            NULLIF(TRIM(ft.equipo_afectado), ''),
+            '-'
           )
-          ELSE NULL
+          ELSE COALESCE(NULLIF(TRIM(ft.equipo_afectado), ''), '-')
         END AS nombre_equipo,
+        ${reportadoSelect},
         ft.fecha_resolucion,
         ft.hora_resolucion,
         ft.estado,
@@ -556,6 +570,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
     const consolaId = parseOptionalNumberParam(consolaIdRaw);
     const haciendaId = parseOptionalNumberParam(haciendaIdRaw);
     const reportadoClienteValues = normalizeReportadoClienteFilter(reportadoClienteRaw);
+    const reportadoColumn = await resolveReportadoClienteColumn(client);
 
     if (clienteIdRaw && clienteId === undefined) {
       return res.status(400).json({ message: "El parámetro cliente_id debe ser válido." });
@@ -632,15 +647,20 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       filtros.push(`AND sitio.hacienda_id = $${params.length}`);
     }
 
-    if (reportadoClienteValues) {
-      const reportadoColumn = await resolveReportadoClienteColumn(client);
-      if (reportadoColumn) {
-        params.push(reportadoClienteValues);
-        filtros.push(
-          `AND LOWER(CAST(A.${reportadoColumn} AS TEXT)) = ANY($${params.length})`
-        );
-      }
+    if (reportadoClienteValues && reportadoColumn) {
+      params.push(reportadoClienteValues);
+      filtros.push(
+        `AND LOWER(CAST(A.${reportadoColumn} AS TEXT)) = ANY($${params.length})`
+      );
     }
+
+    const reportadoSelect = reportadoColumn
+      ? `CASE
+          WHEN A.${reportadoColumn} IS TRUE THEN 'SI'
+          WHEN A.${reportadoColumn} IS FALSE THEN 'NO'
+          ELSE '-'
+        END AS reportado_al_cliente`
+      : "'-' AS reportado_al_cliente";
 
     if (fechaDesde) {
       params.push(fechaDesde);
@@ -797,7 +817,32 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
               A.CAMERA_ID,
               A.ENCODING_DEVICE_ID,
               A.IP_SPEAKER_ID,
-              A.ALARM_INPUT_ID
+              A.ALARM_INPUT_ID,
+              sitio.nombre AS sitio_nombre,
+              CASE
+                WHEN A.CAMERA_ID IS NOT NULL THEN 'Cámaras'
+                WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN 'Grabador'
+                WHEN A.IP_SPEAKER_ID IS NOT NULL THEN 'Megáfono IP'
+                WHEN A.ALARM_INPUT_ID IS NOT NULL THEN 'Alarm Input'
+                ELSE NULL
+              END AS tipo_equipo_afectado_nombre,
+              CASE
+                WHEN UPPER(A.TIPO_AFECTACION) = 'EQUIPO' THEN COALESCE(
+                  NULLIF(TRIM(
+                    CASE
+                      WHEN A.CAMERA_ID IS NOT NULL THEN (camera.camera_name || ' - ' || camera.ip_address)
+                      WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN encoding_device.name
+                      WHEN A.IP_SPEAKER_ID IS NOT NULL THEN ip_speaker.name
+                      WHEN A.ALARM_INPUT_ID IS NOT NULL THEN alarm_input.name
+                      ELSE NULL
+                    END
+                  ), ''),
+                  NULLIF(TRIM(A.EQUIPO_AFECTADO), ''),
+                  '-'
+                )
+                ELSE COALESCE(NULLIF(TRIM(A.EQUIPO_AFECTADO), ''), '-')
+              END AS nombre_equipo,
+              ${reportadoSelect}
 
           FROM FALLOS_TECNICOS A
           JOIN MOVS B ON (B.FALLO_ID = A.ID)
@@ -808,6 +853,10 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
           LEFT JOIN SITIOS sitio ON (sitio.ID = A.SITIO_ID)
           LEFT JOIN CLIENTES cliente ON (cliente.ID = sitio.CLIENTE_ID)
           LEFT JOIN HACIENDA hacienda ON (hacienda.ID = sitio.HACIENDA_ID)
+          LEFT JOIN hik_camera_resource_status camera ON camera.id = A.camera_id
+          LEFT JOIN hik_encoding_device_status encoding_device ON encoding_device.id = A.encoding_device_id
+          LEFT JOIN hik_ip_speaker_status ip_speaker ON ip_speaker.id = A.ip_speaker_id
+          LEFT JOIN hik_alarm_input_status alarm_input ON alarm_input.id = A.alarm_input_id
           ${whereFilters}
       )
       SELECT *

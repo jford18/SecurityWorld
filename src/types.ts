@@ -24,6 +24,7 @@ export interface TechnicalFailure {
   tipoAfectacionDetalle?: string;
   tipo_equipo_afectado?: string;
   tipoEquipoAfectado?: string;
+  tipo_equipo_afectado_nombre?: string;
   tipo_equipo_afectado_id?: number | null;
   equipoAfectado?: string;
   horaFallo?: string;
@@ -58,6 +59,7 @@ export interface TechnicalFailure {
   hacienda_nombre?: string | null;
   consola_id?: number | null;
   reportado_cliente?: boolean | string | null;
+  reportado_al_cliente?: boolean | string | null;
 }
 
 export interface FailureDurationResponse {
