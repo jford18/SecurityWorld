@@ -985,6 +985,22 @@ def wait_loading_end(driver, timeout: int = 15):
         time.sleep(0.5)
 
 
+def wait_no_loading_masks(driver, timeout: int = 30):
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            masks = driver.find_elements(By.CSS_SELECTOR, ".el-loading-mask")
+        except Exception:
+            masks = []
+        try:
+            spinners = driver.find_elements(By.CSS_SELECTOR, ".el-loading-spinner")
+        except Exception:
+            spinners = []
+        if not any(m.is_displayed() for m in masks) and not any(s.is_displayed() for s in spinners):
+            return
+        time.sleep(0.3)
+
+
 def find_click_by_text(driver, wait, text: str):
     normalized = _normalize_label(text)
     condition = (
@@ -1019,9 +1035,7 @@ def find_click_by_text(driver, wait, text: str):
             texto_elem = _normalize_label(elem.text or elem.get_attribute("title") or "")
             if texto_elem:
                 candidates_texts.append(elem.text.strip() or elem.get_attribute("title") or "")
-            try:
-                wait.until(EC.element_to_be_clickable(elem))
-            except Exception:
+            if not elem.is_enabled():
                 continue
 
             if _element_matches(elem, normalized):
@@ -1281,11 +1295,43 @@ def encontrar_boton_export(driver, wait):
     Devuelve el WebElement del botón 'Export' en la barra de herramientas
     de la vista actual (Camera, Encoding Device, etc.).
     """
-    xpath_export = "//button[@title='Export' and .//i[contains(@class,'h-icon-export')]]"
-    wait_export = WebDriverWait(driver, 30)
-    return wait_export.until(
-        EC.element_to_be_clickable((By.XPATH, xpath_export))
-    )
+    driver.switch_to.default_content()
+    wait_no_loading_masks(driver, 30)
+
+    def _find_visible_export():
+        xpath_resource = "//div[contains(@class,'resource-layout')]//button[@title='Export']"
+        xpath_fallback = "//button[@title='Export']"
+        try:
+            elements = driver.find_elements(By.XPATH, xpath_resource)
+        except Exception:
+            elements = []
+        visibles = [e for e in elements if e.is_displayed() and e.is_enabled()]
+        if not visibles:
+            try:
+                elements = driver.find_elements(By.XPATH, xpath_fallback)
+            except Exception:
+                elements = []
+            visibles = [e for e in elements if e.is_displayed() and e.is_enabled()]
+        return visibles[0] if visibles else None
+
+    last_exc: Exception | None = None
+    for _ in range(3):
+        button = _find_visible_export()
+        if not button:
+            time.sleep(0.5)
+            continue
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", button)
+        try:
+            driver.execute_script("arguments[0].click();", button)
+            return button
+        except ElementClickInterceptedException as exc:
+            last_exc = exc
+            time.sleep(1)
+            wait_no_loading_masks(driver, 30)
+            continue
+    if last_exc:
+        raise last_exc
+    raise NoSuchElementException("No se encontró un botón Export visible.")
 
 
 def export_resource_status_to_excel(
@@ -1312,10 +1358,10 @@ def export_resource_status_to_excel(
 
     archivos_previos = os.listdir(download_dir)
     
+    wait_loading_end(driver, 20)
+    driver.switch_to.default_content()
+    wait_no_loading_masks(driver, 30)
     export_toolbar_button = encontrar_boton_export(driver, wait)
-
-    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", export_toolbar_button)
-    driver.execute_script("arguments[0].click();", export_toolbar_button)
 
     wait.until(
         EC.visibility_of_element_located(
