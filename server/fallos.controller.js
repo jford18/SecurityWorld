@@ -874,7 +874,65 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       duracion_total_fallo_hhmmss: formatDurationSeconds(row.duracion_total_fallo_seg),
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const normalizeReportadoClienteValue = (value) => {
+      if (value === null || value === undefined) {
+        return "-";
+      }
+      if (typeof value === "boolean") {
+        return value ? "SI" : "NO";
+      }
+      if (typeof value === "number") {
+        if (value === 1) return "SI";
+        if (value === 0) return "NO";
+      }
+      const normalized = String(value).trim().toLowerCase();
+      if (["si", "sí", "s", "true", "t", "1", "yes", "y"].includes(normalized)) {
+        return "SI";
+      }
+      if (["no", "n", "false", "f", "0"].includes(normalized)) {
+        return "NO";
+      }
+      return "-";
+    };
+
+    const normalizeText = (value) => {
+      if (value === null || value === undefined) return null;
+      const trimmed = String(value).trim();
+      return trimmed === "" ? null : trimmed;
+    };
+
+    const excludedColumns = new Set([
+      "sitio_id",
+      "camera_id",
+      "encoding_device_id",
+      "ip_speaker_id",
+      "alarm_input_id",
+      "equipo_afectado",
+      "reportado_al_cliente",
+      "sitio_nombre",
+      "tipo_equipo_afectado_nombre",
+      "nombre_equipo",
+    ]);
+
+    const exportRows = rows.map((row) => {
+      const baseRow = Object.fromEntries(
+        Object.entries(row).filter(([key]) => !excludedColumns.has(key))
+      );
+      const nombreEquipo =
+        normalizeText(row.nombre_equipo) ||
+        normalizeText(row.equipo_afectado) ||
+        "-";
+
+      return {
+        ...baseRow,
+        "REPORTADO AL CLIENTE": normalizeReportadoClienteValue(row.reportado_al_cliente),
+        SITIO: normalizeText(row.sitio_nombre) || "-",
+        "TIPO DE EQUIPO AFECTADO": normalizeText(row.tipo_equipo_afectado_nombre) || "-",
+        "NOMBRE DE EQUIPO": nombreEquipo,
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Fallos");
 
