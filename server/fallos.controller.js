@@ -165,7 +165,7 @@ const resolveReportadoClienteColumn = async (client) => {
     `SELECT column_name
      FROM information_schema.columns
      WHERE table_schema = 'public'
-       AND table_name = 'fallos_tecnicos'
+       AND lower(table_name) = 'fallos_tecnicos'
        AND column_name = ANY($1)
      ORDER BY column_name`,
     [REPORTADO_COLUMNS]
@@ -654,13 +654,14 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       );
     }
 
-    const reportadoSelect = reportadoColumn
-      ? `CASE
-          WHEN A.${reportadoColumn} IS TRUE THEN 'SI'
-          WHEN A.${reportadoColumn} IS FALSE THEN 'NO'
-          ELSE '-'
-        END AS reportado_al_cliente`
-      : "'-' AS reportado_al_cliente";
+    const reportadoRawExpression = reportadoColumn ? `A.${reportadoColumn}` : "NULL";
+    const reportadoRawSelect = `${reportadoRawExpression} AS reportado_cliente_raw`;
+    const reportadoSelect = `CASE
+        WHEN ${reportadoRawExpression} IS NULL THEN 'NO'
+        WHEN LOWER(TRIM(CAST(${reportadoRawExpression} AS TEXT))) IN ('true', 't', '1', 'si', 's') THEN 'SI'
+        WHEN LOWER(TRIM(CAST(${reportadoRawExpression} AS TEXT))) IN ('false', 'f', '0', 'no', 'n') THEN 'NO'
+        ELSE 'NO'
+      END AS reportado_al_cliente`;
 
     if (fechaDesde) {
       params.push(fechaDesde);
@@ -818,6 +819,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
               A.ENCODING_DEVICE_ID,
               A.IP_SPEAKER_ID,
               A.ALARM_INPUT_ID,
+              ${reportadoRawSelect},
               sitio.nombre AS sitio_nombre,
               CASE
                 WHEN A.CAMERA_ID IS NOT NULL THEN 'Cámaras'
@@ -876,7 +878,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
 
     const normalizeReportadoClienteValue = (value) => {
       if (value === null || value === undefined) {
-        return "-";
+        return "NO";
       }
       if (typeof value === "boolean") {
         return value ? "SI" : "NO";
@@ -892,7 +894,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       if (["no", "n", "false", "f", "0"].includes(normalized)) {
         return "NO";
       }
-      return "-";
+      return "NO";
     };
 
     const normalizeText = (value) => {
