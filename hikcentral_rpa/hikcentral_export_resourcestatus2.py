@@ -143,7 +143,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = BASE_DIR / ".env"
 load_dotenv(ENV_PATH)
 
-URL = "http://172.16.9.10/#/"
+URL = "http://172.16.9.11/#/"
 SCRIPT_NAME = "hikcentral_export_resourcestatus.py"
 HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
 HIK_PASSWORD = os.getenv("HIK_PASSWORD", "SW2112_asm")

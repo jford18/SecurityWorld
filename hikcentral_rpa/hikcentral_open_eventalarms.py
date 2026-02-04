@@ -144,7 +144,7 @@ DEFAULT_HOSTS = ["172.16.9.10"]
 URL = ""
 SCRIPT_NAME = "hikcentral_open_eventalarms.py"
 HIK_USER = os.getenv("HIK_USER", "Analitica_reportes")
-HIK_PASSWORD = os.getenv("HIK_PASSWORD", "SW2112asm")
+HIK_PASSWORD = os.getenv("HIK_PASSWORD", "SW2112_asm")
 
 LOG_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\logs")
 DOWNLOAD_DIR = Path(r"C:\\portal-sw\\SecurityWorld\\hikcentral_rpa\\downloads")

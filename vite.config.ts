@@ -17,17 +17,18 @@ export default defineConfig({
     },
   },
   server: {
-    host: '0.0.0.0',
-    port: 5173,
-    https: {
-      key: fs.readFileSync(path.resolve(__dirname, 'certs/dev.key')),
-      cert: fs.readFileSync(path.resolve(__dirname, 'certs/dev.crt')),
-    },
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
+  host: '0.0.0.0',
+  port: 5173,
+  // https: {
+  //   key: fs.readFileSync(path.resolve(__dirname, 'certs/dev.key')),
+  //   cert: fs.readFileSync(path.resolve(__dirname, 'certs/dev.crt')),
+  // },
+  proxy: {
+    '/api': {
+      target: 'http://localhost:3000',
+      changeOrigin: true,
     },
   },
+},
+
 })
