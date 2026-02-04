@@ -1402,35 +1402,87 @@ def export_resource_status_to_excel(
     wait_no_loading_masks(driver, 30)
     export_toolbar_button = encontrar_boton_export(driver, wait)
 
-    wait.until(
-        EC.visibility_of_element_located(
-            (
-                By.XPATH,
-                "//div[contains(@class,'drawer-head-title') and normalize-space()='Export']",
-            )
-        )
-    )
+    def obtener_panel_export(d):
+        panel_xpaths = [
+            "//div[contains(@class,'el-drawer') or contains(@class,'drawer')][.//*[normalize-space()='Export']]",
+            "//div[contains(@class,'el-dialog') or contains(@class,'dialog')][.//*[normalize-space()='Export']]",
+            "//div[.//*[contains(@class,'drawer-head-title') and normalize-space()='Export']]",
+        ]
+        for panel_xpath in panel_xpaths:
+            try:
+                candidatos = d.find_elements(By.XPATH, panel_xpath)
+            except Exception:
+                candidatos = []
+            for candidato in candidatos:
+                try:
+                    if candidato.is_displayed():
+                        return candidato
+                except Exception:
+                    continue
+        return None
+
+    panel_export = wait.until(lambda d: obtener_panel_export(d))
 
     if step_timer:
         step_timer.mark(f"[8] Panel exportación abierto ({opcion})")
 
-    excel_options = driver.find_elements(
-        By.XPATH,
-        "//div[contains(@class,'drawer')]//label[contains(@class,'el-radio') and (translate(@title,'excel','EXCEL')='EXCEL' or .//span[normalize-space()='Excel'])]",
-    )
-    if excel_options:
-        excel_option = wait.until(EC.element_to_be_clickable(excel_options[0]))
+    excel_xpath_candidates = [
+        ".//label[.//*[normalize-space()='Excel']]",
+        ".//*[self::span or self::div][normalize-space()='Excel']/ancestor::label[1]",
+    ]
+    excel_option = None
+    for excel_xpath in excel_xpath_candidates:
+        try:
+            opciones = panel_export.find_elements(By.XPATH, excel_xpath)
+        except Exception:
+            opciones = []
+        for opcion_excel in opciones:
+            try:
+                if opcion_excel.is_displayed() and opcion_excel.is_enabled():
+                    excel_option = opcion_excel
+                    break
+            except Exception:
+                continue
+        if excel_option:
+            break
+
+    if excel_option:
         driver.execute_script("arguments[0].click();", excel_option)
 
-    export_confirm_button = wait.until(
-        EC.element_to_be_clickable(
-            (
-                By.XPATH,
-                "(//div[contains(@class,'drawer') or contains(@class,'el-dialog__footer')]//button[.//div[normalize-space()='Export']])[last()]",
-            )
-        )
+    export_buttons = panel_export.find_elements(
+        By.XPATH,
+        ".//button[.//*[normalize-space()='Export'] or normalize-space()='Export']",
     )
-    driver.execute_script("arguments[0].click();", export_confirm_button)
+    export_visibles = []
+    for boton in export_buttons:
+        try:
+            if boton.is_displayed() and boton.is_enabled():
+                export_visibles.append(boton)
+        except Exception:
+            continue
+
+    if not export_visibles:
+        raise NoSuchElementException("No se encontró el botón Export dentro del panel.")
+
+    if len(export_visibles) > 1:
+        textos = []
+        for boton in export_visibles:
+            try:
+                textos.append(boton.text.strip())
+            except Exception:
+                textos.append("")
+        print(f"[DEBUG] Botones Export en panel: {len(export_visibles)} -> {textos}")
+
+    export_confirm_button = export_visibles[-1]
+    for intento in range(3):
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", export_confirm_button)
+        try:
+            driver.execute_script("arguments[0].click();", export_confirm_button)
+            break
+        except ElementClickInterceptedException:
+            time.sleep(0.5)
+            if intento == 2:
+                raise
 
     if step_timer:
         step_timer.mark(f"[8] Export lanzado ({opcion})")
