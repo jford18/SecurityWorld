@@ -188,13 +188,18 @@ const formatTimestamp = (date = new Date()) => {
   return `${year}${month}${day}_${hours}${minutes}${seconds}`;
 };
 
-const formatDateValue = (value) => {
+const formatFechaHoraPortal = (value) => {
   if (!value) return "";
 
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
+  const normalized = formatDateTimeString(value);
+  if (!normalized) return "";
 
-  return date.toISOString().replace("T", " ").replace("Z", "");
+  const [datePart = "", timePart = ""] = normalized.split(" ");
+  const [hours = "", minutes = ""] = timePart.split(":");
+
+  if (!datePart || hours === "" || minutes === "") return "";
+
+  return `${datePart} ${hours}:${minutes}`;
 };
 
 const validateCompletionRequirements = (config) => {
@@ -231,9 +236,7 @@ const validateCompletionRequirements = (config) => {
 };
 
 const mapConsolidadoRow = (row) => {
-  const fechaHoraIntrusion = row?.fecha_hora_intrusion
-    ? new Date(row.fecha_hora_intrusion).toISOString()
-    : null;
+  const fechaHoraIntrusion = formatFechaHoraPortal(row?.fecha_hora_intrusion) || null;
 
   const personaNombre = row?.persona_nombre ? String(row.persona_nombre).trim() : "";
   const cargoDescripcion = row?.cargo_descripcion ? String(row.cargo_descripcion).trim() : "";
@@ -2155,15 +2158,15 @@ ORDER BY A.FECHA_EVENTO DESC;`;
         row?.tipo ?? "",
         row?.estado ?? "",
         row?.descripcion ?? "",
-        formatDateValue(row?.fecha_evento),
-        formatDateValue(row?.fecha_reaccion),
+        formatFechaHoraPortal(row?.fecha_evento),
+        formatFechaHoraPortal(row?.fecha_reaccion),
         row?.medio_comunicacion_id ?? "",
         row?.llego_alerta === null || row?.llego_alerta === undefined
           ? ""
           : row.llego_alerta
           ? "Sí"
           : "No",
-        formatDateValue(row?.fecha_reaccion_fuera),
+        formatFechaHoraPortal(row?.fecha_reaccion_fuera),
         row?.conclusion_evento_id ?? "",
         row?.material_sustraido_id ?? "",
         row?.fuerza_reaccion_id ?? "",
@@ -2185,15 +2188,15 @@ ORDER BY A.FECHA_EVENTO DESC;`;
           : row.completado
           ? "Sí"
           : "No",
-        formatDateValue(row?.fecha_completado),
+        formatFechaHoraPortal(row?.fecha_completado),
         row?.medio_comunicacion ?? "",
         row?.necesita_protocolo === null || row?.necesita_protocolo === undefined
           ? ""
           : row.necesita_protocolo
           ? "Sí"
           : "No",
-        formatDateValue(row?.fecha_reaccion_enviada),
-        formatDateValue(row?.fecha_llegada_fuerza_reaccion),
+        formatFechaHoraPortal(row?.fecha_reaccion_enviada),
+        formatFechaHoraPortal(row?.fecha_llegada_fuerza_reaccion),
         row?.conclusion_evento ?? "",
         row?.medio_comunicacion_descripcion ?? "",
       ]),
