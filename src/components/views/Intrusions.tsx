@@ -933,7 +933,9 @@ const Intrusions: React.FC = () => {
       sitioId: intrusion.sitio_id ? String(intrusion.sitio_id) : '',
       estado: intrusion.estado ?? '',
       descripcion: intrusion.descripcion ?? '',
-      no_llego_alerta: intrusion.no_llego_alerta ?? false,
+      no_llego_alerta:
+        intrusion.no_llego_alerta ??
+        (typeof intrusion.llego_alerta === 'boolean' ? !intrusion.llego_alerta : false),
       medio_comunicacion_id: intrusion.medio_comunicacion_id
         ? String(intrusion.medio_comunicacion_id)
         : '',
@@ -1572,6 +1574,8 @@ const Intrusions: React.FC = () => {
       descripcion: formData.descripcion?.trim() || '',
       no_llego_alerta:
         origenValue === 'HC' || hikAlarmEventoIdValue ? false : formData.no_llego_alerta,
+      llego_alerta:
+        origenValue === 'HC' || hikAlarmEventoIdValue ? true : !formData.no_llego_alerta,
       medio_comunicacion_id: medioComunicacionValue,
       conclusion_evento_id: necesitaProtocolo ? conclusionEventoValue : null,
       material_sustraido_id:
