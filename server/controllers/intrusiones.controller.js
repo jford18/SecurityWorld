@@ -33,6 +33,29 @@ const parseFechaValue = (value) => {
   return formatDateTimeString(value);
 };
 
+const parseBooleanValue = (value, defaultValue = false) => {
+  if (value === null || value === undefined || value === "") {
+    return defaultValue;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1") return true;
+    if (normalized === "false" || normalized === "0") return false;
+  }
+
+  if (typeof value === "number") {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+
+  return Boolean(value);
+};
+
 const parseFechaForComparison = (value) => {
   const normalized = formatDateTimeString(value);
   if (!normalized) return null;
@@ -957,8 +980,6 @@ export const createIntrusion = async (req, res) => {
     body.fecha_reaccion_fuera ??
     body.FECHA_REACCION_FUERA ??
     null;
-  const rawNoLlegoAlerta =
-    body.no_llego_alerta ?? body.NO_LLEGO_ALERTA ?? body.llego_alerta ?? body.LLEGO_ALERTA;
   const rawMedioComunicacionId =
     medio_comunicacion_id ??
     body.MEDIO_COMUNICACION_ID ??
@@ -1042,10 +1063,18 @@ export const createIntrusion = async (req, res) => {
       ? rawOrigen.trim().toUpperCase()
       : "MANUAL"
     : null;
+  const llegoAlertaBodyValue = parseBooleanValue(
+    body.llego_alerta ?? body.LLEGO_ALERTA,
+    true
+  );
+  const noLlegoAlertaBodyValue = parseBooleanValue(
+    body.no_llego_alerta ?? body.NO_LLEGO_ALERTA,
+    !llegoAlertaBodyValue
+  );
   const noLlegoAlertaValue = metadata.hasNoLlegoAlerta
     ? hikAlarmEventoValue || origenValue === "HC"
       ? false
-      : Boolean(rawNoLlegoAlerta)
+      : noLlegoAlertaBodyValue
     : false;
   const completadoValue = Boolean(rawCompletado);
   const necesitaProtocoloValue = metadata.hasNecesitaProtocolo
@@ -1441,7 +1470,7 @@ export const updateIntrusion = async (req, res) => {
 
   const rawOrigen = body.origen ?? body.ORIGEN ?? currentRow?.origen;
   const rawHikAlarm = body.hik_alarm_evento_id ?? body.HIK_ALARM_EVENTO_ID ?? currentRow?.hik_alarm_evento_id;
-  const rawNoLlego = body.no_llego_alerta ?? body.NO_LLEGO_ALERTA ?? body.llego_alerta ?? currentRow?.no_llego_alerta ?? currentRow?.llego_alerta;
+  const rawNoLlego = body.no_llego_alerta ?? body.NO_LLEGO_ALERTA ?? body.llego_alerta ?? body.LLEGO_ALERTA;
   const rawCompletado = body.completado ?? body.COMPLETADO ?? currentRow?.completado;
   const rawNecesitaProtocolo = body.necesita_protocolo ?? body.NECESITA_PROTOCOLO ?? currentRow?.necesita_protocolo;
   const rawFechaEventoHc = body.fecha_evento_hc ?? body.FECHA_EVENTO_HC;
@@ -1651,6 +1680,15 @@ export const updateIntrusion = async (req, res) => {
       ? parseIntegerOrNull(body[metadata.personaColumn])
       : parseIntegerOrNull(currentRow?.[metadata.personaColumn])
     : null;
+
+  const llegoAlertaBodyValue = parseBooleanValue(
+    body.llego_alerta ?? body.LLEGO_ALERTA,
+    true
+  );
+  const noLlegoAlertaBodyValue = parseBooleanValue(
+    body.no_llego_alerta ?? body.NO_LLEGO_ALERTA,
+    !llegoAlertaBodyValue
+  );
   if (metadata.personaColumn && body[metadata.personaColumn] !== undefined && personaValue === undefined) {
     return res.status(400).json({ mensaje: "El identificador de la persona no es válido." });
   }
@@ -1678,8 +1716,8 @@ export const updateIntrusion = async (req, res) => {
     ? hikValue || origenValue === "HC" || currentRow?.origen === "HC"
       ? false
       : rawNoLlego === undefined
-      ? Boolean(currentRow?.no_llego_alerta)
-      : Boolean(rawNoLlego)
+      ? parseBooleanValue(currentRow?.no_llego_alerta, false)
+      : noLlegoAlertaBodyValue
     : false;
   if (metadata.hasNoLlegoAlerta) {
     pushUpdate("no_llego_alerta", noLlegoValue);
@@ -1688,10 +1726,10 @@ export const updateIntrusion = async (req, res) => {
     const llegoValue =
       shouldForceLlego
         ? true
-        : body.llego_alerta !== undefined
-        ? Boolean(body.llego_alerta)
-        : Boolean(currentRow?.llego_alerta);
-    if (body.llego_alerta !== undefined || shouldForceLlego) {
+        : body.llego_alerta !== undefined || body.LLEGO_ALERTA !== undefined
+        ? llegoAlertaBodyValue
+        : parseBooleanValue(currentRow?.llego_alerta, true);
+    if (body.llego_alerta !== undefined || body.LLEGO_ALERTA !== undefined || shouldForceLlego) {
       pushUpdate("llego_alerta", llegoValue);
     }
   }
