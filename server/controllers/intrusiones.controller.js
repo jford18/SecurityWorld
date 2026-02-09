@@ -211,32 +211,6 @@ const formatTimestamp = (date = new Date()) => {
   return `${year}${month}${day}_${hours}${minutes}${seconds}`;
 };
 
-const splitCargoPersona = (value) => {
-  if (value === null || value === undefined) {
-    return { cargo: "", persona: "" };
-  }
-
-  const normalized = String(value).trim();
-  if (!normalized) {
-    return { cargo: "", persona: "" };
-  }
-
-  if (normalized.toUpperCase() === "N/A") {
-    return { cargo: "N/A", persona: "" };
-  }
-
-  const separator = " - ";
-  const index = normalized.indexOf(separator);
-  if (index === -1) {
-    return { cargo: normalized, persona: "" };
-  }
-
-  return {
-    cargo: normalized.slice(0, index).trim(),
-    persona: normalized.slice(index + separator.length).trim(),
-  };
-};
-
 const formatFechaHoraPortal = (value) => {
   if (!value) return "";
 
@@ -2137,49 +2111,71 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
     return res.status(status).json({ mensaje: message });
   }
 
-  const { filters, values } = filterConfig;
+  const { filters, values, metadata } = filterConfig;
   const filterClause = filters.length ? `\n  AND ${filters.join("\n  AND ")}` : "";
 
+  const selectColumns = [
+    "A.ID",
+    "A.UBICACION",
+    "A.TIPO",
+    "A.ESTADO",
+    "A.DESCRIPCION",
+    "A.FECHA_EVENTO",
+    "A.FECHA_REACCION",
+    "A.MEDIO_COMUNICACION_ID",
+    "A.LLEGO_ALERTA",
+    "A.FECHA_REACCION_FUERA",
+    "A.CONCLUSION_EVENTO_ID",
+    "A.SUSTRACCION_MATERIAL",
+    "A.FUERZA_REACCION_ID",
+    "A.SITIO_ID",
+    "B.NOMBRE AS SITIO_NOMBRE",
+    "B.DESCRIPCION AS SITIO_DESCRIPCION",
+    metadata.personaColumn ? `A.${metadata.personaColumn} AS PERSONA_ID` : "NULL AS PERSONA_ID",
+    "A.ORIGEN",
+    "A.HIK_ALARM_EVENTO_ID",
+    "A.NO_LLEGO_ALERTA",
+    "A.COMPLETADO",
+    "A.FECHA_COMPLETADO",
+    "A.MEDIO_COMUNICACION",
+    "A.NECESITA_PROTOCOLO",
+    "A.FECHA_REACCION_ENVIADA",
+    "A.FECHA_LLEGADA_FUERZA_REACCION",
+    "A.CONCLUSION_EVENTO",
+    "D.DESCRIPCION AS MEDIO_COMUNICACION_DESCRIPCION",
+    "A.MATERIAL_SUSTRAIDO_ID",
+    "E.DESCRIPCION AS MATERIAL_SUSTRAIDO",
+  ];
+
+  if (metadata.personaColumn) {
+    selectColumns.push(
+      "COALESCE(F.DESCRIPCION, 'N/A') AS PERSONAL_IDENTIFICADO_CARGO",
+      "COALESCE(NULLIF(TRIM(CONCAT_WS(' ', C.NOMBRE, C.APELLIDO)), ''), 'N/A') AS PERSONAL_IDENTIFICADO_PERSONA"
+    );
+  } else {
+    selectColumns.push(
+      "'N/A' AS PERSONAL_IDENTIFICADO_CARGO",
+      "'N/A' AS PERSONAL_IDENTIFICADO_PERSONA"
+    );
+  }
+
+  const joins = [
+    "LEFT JOIN PUBLIC.SITIOS B ON (B.ID = A.SITIO_ID)",
+    "LEFT JOIN PUBLIC.CATALOGO_MEDIO_COMUNICACION D ON (D.ID = A.MEDIO_COMUNICACION_ID)",
+    "LEFT JOIN PUBLIC.MATERIAL_SUSTRAIDO E ON (E.ID = A.MATERIAL_SUSTRAIDO_ID)",
+  ];
+
+  if (metadata.personaColumn) {
+    joins.push(
+      `LEFT JOIN PUBLIC.PERSONA C ON (C.ID = A.${metadata.personaColumn})`,
+      "LEFT JOIN PUBLIC.CATALOGO_CARGO F ON (F.ID = C.CARGO_ID)"
+    );
+  }
+
   const query = `SELECT
-    A.ID,
-    A.UBICACION,
-    A.TIPO,
-    A.ESTADO,
-    A.DESCRIPCION,
-    A.FECHA_EVENTO,
-    A.FECHA_REACCION,
-    A.MEDIO_COMUNICACION_ID,
-    A.LLEGO_ALERTA,
-    A.FECHA_REACCION_FUERA,
-    A.CONCLUSION_EVENTO_ID,
-    A.SUSTRACCION_MATERIAL,
-    A.FUERZA_REACCION_ID,
-    A.SITIO_ID,
-    B.NOMBRE AS SITIO_NOMBRE,
-    B.DESCRIPCION AS SITIO_DESCRIPCION,
-    A.PERSONA_ID,
-    A.PERSONAL_IDENTIFICADO,
-    (C.NOMBRE || ' ' || C.APELLIDO) AS PERSONA_NOMBRE_COMPLETO,
-    F.DESCRIPCION AS CARGO_DESCRIPCION,
-    A.ORIGEN,
-    A.HIK_ALARM_EVENTO_ID,
-    A.NO_LLEGO_ALERTA,
-    A.COMPLETADO,
-    A.FECHA_COMPLETADO,
-    A.MEDIO_COMUNICACION,
-    A.NECESITA_PROTOCOLO,
-    A.FECHA_REACCION_ENVIADA,
-    A.FECHA_LLEGADA_FUERZA_REACCION,
-    A.CONCLUSION_EVENTO,
-    D.DESCRIPCION AS MEDIO_COMUNICACION_DESCRIPCION,
-    A.MATERIAL_SUSTRAIDO_ID,
-    E.DESCRIPCION AS MATERIAL_SUSTRAIDO
+    ${selectColumns.join(",\n    ")}
 FROM PUBLIC.INTRUSIONES A
-LEFT JOIN PUBLIC.SITIOS B ON (B.ID = A.SITIO_ID)
-LEFT JOIN PUBLIC.PERSONA C ON (C.ID = A.PERSONA_ID)
-LEFT JOIN PUBLIC.CATALOGO_CARGO F ON (F.ID = C.CARGO_ID)
-LEFT JOIN PUBLIC.CATALOGO_MEDIO_COMUNICACION D ON (D.ID = A.MEDIO_COMUNICACION_ID)
-LEFT JOIN PUBLIC.MATERIAL_SUSTRAIDO E ON (E.ID = A.MATERIAL_SUSTRAIDO_ID)
+${joins.join("\n")}
 WHERE 1=1${filterClause}
 ORDER BY A.FECHA_EVENTO DESC;`;
 
@@ -2221,14 +2217,6 @@ ORDER BY A.FECHA_EVENTO DESC;`;
         "PERSONAL_IDENTIFICADO_PERSONA",
       ],
       ...result.rows.map((row) => {
-        const personaNombre = row?.persona_nombre_completo ?? "";
-        const cargoDescripcion = row?.cargo_descripcion ?? "";
-        const personalIdentificado =
-          cargoDescripcion && personaNombre
-            ? `${cargoDescripcion} - ${personaNombre}`
-            : row?.personal_identificado ?? personaNombre;
-        const { cargo, persona } = splitCargoPersona(personalIdentificado);
-
         return [
           row?.id ?? "",
           row?.ubicacion ?? "",
@@ -2275,8 +2263,8 @@ ORDER BY A.FECHA_EVENTO DESC;`;
           formatFechaHoraPortal(row?.fecha_llegada_fuerza_reaccion),
           row?.conclusion_evento ?? "",
           row?.medio_comunicacion_descripcion ?? "",
-          cargo ?? "",
-          persona ?? "",
+          row?.personal_identificado_cargo ?? "",
+          row?.personal_identificado_persona ?? "",
         ];
       }),
     ];
