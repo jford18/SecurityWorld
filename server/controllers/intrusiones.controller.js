@@ -211,6 +211,32 @@ const formatTimestamp = (date = new Date()) => {
   return `${year}${month}${day}_${hours}${minutes}${seconds}`;
 };
 
+const splitCargoPersona = (value) => {
+  if (value === null || value === undefined) {
+    return { cargo: "", persona: "" };
+  }
+
+  const normalized = String(value).trim();
+  if (!normalized) {
+    return { cargo: "", persona: "" };
+  }
+
+  if (normalized.toUpperCase() === "N/A") {
+    return { cargo: "N/A", persona: "" };
+  }
+
+  const separator = " - ";
+  const index = normalized.indexOf(separator);
+  if (index === -1) {
+    return { cargo: normalized, persona: "" };
+  }
+
+  return {
+    cargo: normalized.slice(0, index).trim(),
+    persona: normalized.slice(index + separator.length).trim(),
+  };
+};
+
 const formatFechaHoraPortal = (value) => {
   if (!value) return "";
 
@@ -2132,7 +2158,9 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
     B.NOMBRE AS SITIO_NOMBRE,
     B.DESCRIPCION AS SITIO_DESCRIPCION,
     A.PERSONA_ID,
+    A.PERSONAL_IDENTIFICADO,
     (C.NOMBRE || ' ' || C.APELLIDO) AS PERSONA_NOMBRE_COMPLETO,
+    F.DESCRIPCION AS CARGO_DESCRIPCION,
     A.ORIGEN,
     A.HIK_ALARM_EVENTO_ID,
     A.NO_LLEGO_ALERTA,
@@ -2149,6 +2177,7 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
 FROM PUBLIC.INTRUSIONES A
 LEFT JOIN PUBLIC.SITIOS B ON (B.ID = A.SITIO_ID)
 LEFT JOIN PUBLIC.PERSONA C ON (C.ID = A.PERSONA_ID)
+LEFT JOIN PUBLIC.CATALOGO_CARGO F ON (F.ID = C.CARGO_ID)
 LEFT JOIN PUBLIC.CATALOGO_MEDIO_COMUNICACION D ON (D.ID = A.MEDIO_COMUNICACION_ID)
 LEFT JOIN PUBLIC.MATERIAL_SUSTRAIDO E ON (E.ID = A.MATERIAL_SUSTRAIDO_ID)
 WHERE 1=1${filterClause}
@@ -2177,7 +2206,6 @@ ORDER BY A.FECHA_EVENTO DESC;`;
         "SITIO_NOMBRE",
         "SITIO_DESCRIPCION",
         "PERSONA_ID",
-        "PERSONA_NOMBRE_COMPLETO",
         "ORIGEN",
         "HIK_ALARM_EVENTO_ID",
         "NO_LLEGO_ALERTA",
@@ -2189,55 +2217,68 @@ ORDER BY A.FECHA_EVENTO DESC;`;
         "FECHA_LLEGADA_FUERZA_REACCION",
         "CONCLUSION_EVENTO",
         "MEDIO_COMUNICACION_DESCRIPCION",
+        "PERSONAL_IDENTIFICADO_CARGO",
+        "PERSONAL_IDENTIFICADO_PERSONA",
       ],
-      ...result.rows.map((row) => [
-        row?.id ?? "",
-        row?.ubicacion ?? "",
-        row?.tipo ?? "",
-        row?.estado ?? "",
-        row?.descripcion ?? "",
-        formatFechaHoraPortal(row?.fecha_evento),
-        formatFechaHoraPortal(row?.fecha_reaccion),
-        row?.medio_comunicacion_id ?? "",
-        row?.llego_alerta === null || row?.llego_alerta === undefined
-          ? ""
-          : row.llego_alerta
-          ? "Sí"
-          : "No",
-        formatFechaHoraPortal(row?.fecha_reaccion_fuera),
-        row?.conclusion_evento_id ?? "",
-        row?.material_sustraido_id ?? "",
-        row?.fuerza_reaccion_id ?? "",
-        row?.material_sustraido ?? "",
-        row?.sitio_id ?? "",
-        row?.sitio_nombre ?? "",
-        row?.sitio_descripcion ?? "",
-        row?.persona_id ?? "",
-        row?.persona_nombre_completo ?? "",
-        row?.origen ?? "",
-        row?.hik_alarm_evento_id ?? "",
-        row?.no_llego_alerta === null || row?.no_llego_alerta === undefined
-          ? ""
-          : row.no_llego_alerta
-          ? "Sí"
-          : "No",
-        row?.completado === null || row?.completado === undefined
-          ? ""
-          : row.completado
-          ? "Sí"
-          : "No",
-        formatFechaHoraPortal(row?.fecha_completado),
-        row?.medio_comunicacion ?? "",
-        row?.necesita_protocolo === null || row?.necesita_protocolo === undefined
-          ? ""
-          : row.necesita_protocolo
-          ? "Sí"
-          : "No",
-        formatFechaHoraPortal(row?.fecha_reaccion_enviada),
-        formatFechaHoraPortal(row?.fecha_llegada_fuerza_reaccion),
-        row?.conclusion_evento ?? "",
-        row?.medio_comunicacion_descripcion ?? "",
-      ]),
+      ...result.rows.map((row) => {
+        const personaNombre = row?.persona_nombre_completo ?? "";
+        const cargoDescripcion = row?.cargo_descripcion ?? "";
+        const personalIdentificado =
+          cargoDescripcion && personaNombre
+            ? `${cargoDescripcion} - ${personaNombre}`
+            : row?.personal_identificado ?? personaNombre;
+        const { cargo, persona } = splitCargoPersona(personalIdentificado);
+
+        return [
+          row?.id ?? "",
+          row?.ubicacion ?? "",
+          row?.tipo ?? "",
+          row?.estado ?? "",
+          row?.descripcion ?? "",
+          formatFechaHoraPortal(row?.fecha_evento),
+          formatFechaHoraPortal(row?.fecha_reaccion),
+          row?.medio_comunicacion_id ?? "",
+          row?.llego_alerta === null || row?.llego_alerta === undefined
+            ? ""
+            : row.llego_alerta
+            ? "Sí"
+            : "No",
+          formatFechaHoraPortal(row?.fecha_reaccion_fuera),
+          row?.conclusion_evento_id ?? "",
+          row?.material_sustraido_id ?? "",
+          row?.fuerza_reaccion_id ?? "",
+          row?.material_sustraido ?? "",
+          row?.sitio_id ?? "",
+          row?.sitio_nombre ?? "",
+          row?.sitio_descripcion ?? "",
+          row?.persona_id ?? "",
+          row?.origen ?? "",
+          row?.hik_alarm_evento_id ?? "",
+          row?.no_llego_alerta === null || row?.no_llego_alerta === undefined
+            ? ""
+            : row.no_llego_alerta
+            ? "Sí"
+            : "No",
+          row?.completado === null || row?.completado === undefined
+            ? ""
+            : row.completado
+            ? "Sí"
+            : "No",
+          formatFechaHoraPortal(row?.fecha_completado),
+          row?.medio_comunicacion ?? "",
+          row?.necesita_protocolo === null || row?.necesita_protocolo === undefined
+            ? ""
+            : row.necesita_protocolo
+            ? "Sí"
+            : "No",
+          formatFechaHoraPortal(row?.fecha_reaccion_enviada),
+          formatFechaHoraPortal(row?.fecha_llegada_fuerza_reaccion),
+          row?.conclusion_evento ?? "",
+          row?.medio_comunicacion_descripcion ?? "",
+          cargo ?? "",
+          persona ?? "",
+        ];
+      }),
     ];
 
     const workbook = XLSX.utils.book_new();
