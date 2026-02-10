@@ -2149,11 +2149,23 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
 
   if (metadata.personaColumn) {
     selectColumns.push(
-      "COALESCE(F.DESCRIPCION, 'N/A') AS PERSONAL_IDENTIFICADO_CARGO",
-      "COALESCE(NULLIF(TRIM(CONCAT_WS(' ', C.NOMBRE, C.APELLIDO)), ''), 'N/A') AS PERSONAL_IDENTIFICADO_PERSONA"
+      `CASE
+        WHEN C.ID IS NULL THEN 'N/A'
+        WHEN NULLIF(TRIM(F.DESCRIPCION), '') IS NULL THEN COALESCE(NULLIF(TRIM(CONCAT_WS(' ', C.NOMBRE, C.APELLIDO)), ''), 'N/A')
+        ELSE CONCAT_WS(' - ', TRIM(F.DESCRIPCION), COALESCE(NULLIF(TRIM(CONCAT_WS(' ', C.NOMBRE, C.APELLIDO)), ''), 'N/A'))
+      END AS PERSONAL_IDENTIFICADO`,
+      `CASE
+        WHEN C.ID IS NULL THEN 'N/A'
+        ELSE COALESCE(NULLIF(TRIM(F.DESCRIPCION), ''), 'N/A')
+      END AS PERSONAL_IDENTIFICADO_CARGO`,
+      `CASE
+        WHEN C.ID IS NULL THEN 'N/A'
+        ELSE COALESCE(NULLIF(TRIM(CONCAT_WS(' ', C.NOMBRE, C.APELLIDO)), ''), 'N/A')
+      END AS PERSONAL_IDENTIFICADO_PERSONA`
     );
   } else {
     selectColumns.push(
+      "'N/A' AS PERSONAL_IDENTIFICADO",
       "'N/A' AS PERSONAL_IDENTIFICADO_CARGO",
       "'N/A' AS PERSONAL_IDENTIFICADO_PERSONA"
     );
@@ -2213,6 +2225,7 @@ ORDER BY A.FECHA_EVENTO DESC;`;
         "FECHA_LLEGADA_FUERZA_REACCION",
         "CONCLUSION_EVENTO",
         "MEDIO_COMUNICACION_DESCRIPCION",
+        "PERSONAL IDENTIFICADO (CARGO - PERSONA)",
         "PERSONAL_IDENTIFICADO_CARGO",
         "PERSONAL_IDENTIFICADO_PERSONA",
       ],
@@ -2263,6 +2276,7 @@ ORDER BY A.FECHA_EVENTO DESC;`;
           formatFechaHoraPortal(row?.fecha_llegada_fuerza_reaccion),
           row?.conclusion_evento ?? "",
           row?.medio_comunicacion_descripcion ?? "",
+          row?.personal_identificado ?? "",
           row?.personal_identificado_cargo ?? "",
           row?.personal_identificado_persona ?? "",
         ];
