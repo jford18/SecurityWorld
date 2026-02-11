@@ -1,0 +1,24 @@
+site_name: SecurityWorld - Documentación Técnica
+site_description: Manual técnico y operativo de SecurityWorld
+site_dir: site
+
+theme:
+  name: material
+  language: es
+  features:
+    - navigation.tabs
+    - navigation.top
+    - content.code.copy
+
+plugins:
+  - search
+
+nav:
+  - Inicio: docs/index.md
+  - Manual Técnico: docs/manual-tecnico/securityworld.md
+  - RPA HikCentral: docs/manual-tecnico/rpa-hikcentral.md
+  - Backend: docs/manual-tecnico/backend.md
+  - Frontend: docs/manual-tecnico/frontend.md
+  - Base de Datos: docs/manual-tecnico/base-datos.md
+  - Operación Windows Server: docs/manual-tecnico/operacion-windows.md
+  - Troubleshooting: docs/manual-tecnico/troubleshooting.md
