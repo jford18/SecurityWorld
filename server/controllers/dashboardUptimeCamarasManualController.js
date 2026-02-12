@@ -1,21 +1,5 @@
 import { pool } from "../db.js";
 
-const REPORTADO_COLUMNS = ["reportado_al_cliente", "reportado_cliente"];
-
-const resolveReportadoClienteColumn = async () => {
-  const { rows } = await pool.query(
-    `SELECT column_name
-     FROM information_schema.columns
-     WHERE table_schema = 'public'
-       AND table_name = 'fallos_tecnicos'
-       AND column_name = ANY($1)
-     ORDER BY column_name`,
-    [REPORTADO_COLUMNS]
-  );
-
-  return rows?.[0]?.column_name ?? null;
-};
-
 const normalizeReportadoClienteFilter = (value) => {
   if (value === undefined || value === null || value === "") {
     return null;
@@ -40,17 +24,8 @@ const normalizeReportadoClienteFilter = (value) => {
   return undefined;
 };
 
-const reportadoBooleanSqlExpression = (alias, columnName) => {
-  if (!columnName) {
-    return "FALSE";
-  }
-
-  return `CASE
-    WHEN ${alias}.${columnName} IS NULL THEN FALSE
-    WHEN LOWER(TRIM(CAST(${alias}.${columnName} AS TEXT))) IN ('true', 't', '1', 'si', 'sí', 's', 'y', 'yes') THEN TRUE
-    ELSE FALSE
-  END`;
-};
+const reportadoBooleanSqlExpression = (alias) =>
+  `COALESCE(${alias}.reportado_al_cliente, FALSE)`;
 
 
 const KPI_QUERY = (reportadoFilterSql = "") => `
@@ -230,25 +205,14 @@ export const getDashboardUptimeCamarasManual = async (req, res) => {
       return res.status(400).json({ message: "El parámetro 'reportado_cliente' debe ser válido" });
     }
 
-    let reportadoColumn = null;
-    if (reportadoClienteValues !== null) {
-      reportadoColumn = await resolveReportadoClienteColumn();
-      if (!reportadoColumn) {
-        return res.status(400).json({
-          message:
-            "No existe un campo reportado_al_cliente/reportado_cliente en fallos_tecnicos para aplicar el filtro.",
-        });
-      }
-    }
-
     const fromTs = `${from} 00:00:00`;
     const toTs = `${to} 23:59:59`;
 
     const kpiParams = [fromTs, toTs, parsedHaciendaId, parsedClienteId];
     const detalleParams = [fromTs, toTs, parsedHaciendaId, parsedClienteId];
     const reportadoFilterSql =
-      reportadoColumn && reportadoClienteValues !== null
-        ? `AND ${reportadoBooleanSqlExpression('A', reportadoColumn)} = $5`
+      reportadoClienteValues !== null
+        ? `AND ${reportadoBooleanSqlExpression('A')} = $5`
         : "";
 
     if (reportadoFilterSql) {

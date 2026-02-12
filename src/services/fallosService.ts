@@ -65,6 +65,7 @@ export interface TechnicalFailurePayload {
   ultimoUsuarioEditoId?: number | string | null;
   responsable_verificacion_cierre_id?: number | string | null;
   reportadoCliente?: boolean;
+  reportado_al_cliente?: boolean;
   affectationType?: string;
   tipo_afectacion?: string;
   horaFallo?: string;
@@ -355,11 +356,18 @@ export const createFallo = async (
   console.log('[fallosService.createFallo] payload:', payload);
   console.log('[fallosService.createFallo] usuarioId que se enviará:', usuarioId);
 
+  const reportadoAlCliente =
+    payload.reportado_al_cliente !== undefined
+      ? Boolean(payload.reportado_al_cliente)
+      : Boolean(payload.reportadoCliente);
+
   const body = {
     ...payload,
     usuarioId,
-    reportado_al_cliente: Boolean(payload.reportadoCliente),
+    reportado_al_cliente: reportadoAlCliente,
   };
+
+  delete (body as Partial<TechnicalFailurePayload>).reportadoCliente;
 
   console.log('[fallosService.createFallo] body final que se envía a /fallos:', body);
 
@@ -379,7 +387,24 @@ export const updateFallo = async (
   payload: TechnicalFailurePayload,
   context?: RequestContext,
 ): Promise<TechnicalFailure> => {
-  const { data } = await apiClient.put<TechnicalFailure>(`/fallos/${id}`, payload, {
+  const reportadoAlCliente =
+    payload.reportado_al_cliente !== undefined
+      ? Boolean(payload.reportado_al_cliente)
+      : payload.reportadoCliente !== undefined
+        ? Boolean(payload.reportadoCliente)
+        : undefined;
+
+  const body: TechnicalFailurePayload = {
+    ...payload,
+  };
+
+  if (reportadoAlCliente !== undefined) {
+    body.reportado_al_cliente = reportadoAlCliente;
+  }
+
+  delete (body as Partial<TechnicalFailurePayload>).reportadoCliente;
+
+  const { data } = await apiClient.put<TechnicalFailure>(`/fallos/${id}`, body, {
     headers: buildRoleHeaders(context),
   });
   return data;

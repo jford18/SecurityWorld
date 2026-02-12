@@ -24,22 +24,6 @@ const parseClienteIds = (value) => {
   return parsed.length > 0 ? parsed : null;
 };
 
-const REPORTADO_COLUMNS = ["reportado_al_cliente", "reportado_cliente"];
-
-const resolveReportadoClienteColumn = async () => {
-  const { rows } = await pool.query(
-    `SELECT column_name
-     FROM information_schema.columns
-     WHERE table_schema = 'public'
-       AND table_name = 'fallos_tecnicos'
-       AND column_name = ANY($1)
-     ORDER BY column_name`,
-    [REPORTADO_COLUMNS]
-  );
-
-  return rows?.[0]?.column_name ?? null;
-};
-
 const normalizeReportadoClienteFilter = (value) => {
   if (value === undefined || value === null || value === "") {
     return null;
@@ -64,17 +48,8 @@ const normalizeReportadoClienteFilter = (value) => {
   return undefined;
 };
 
-const reportadoBooleanSqlExpression = (alias, columnName) => {
-  if (!columnName) {
-    return "FALSE";
-  }
-
-  return `CASE
-    WHEN ${alias}.${columnName} IS NULL THEN FALSE
-    WHEN LOWER(TRIM(CAST(${alias}.${columnName} AS TEXT))) IN ('true', 't', '1', 'si', 'sí', 's', 'y', 'yes') THEN TRUE
-    ELSE FALSE
-  END`;
-};
+const reportadoBooleanSqlExpression = (alias) =>
+  `COALESCE(${alias}.reportado_al_cliente, FALSE)`;
 
 
 export const getDashboardFallosTecnicosResumen = async (req, res) => {
@@ -180,13 +155,8 @@ export const getDashboardFallosTecnicosResumen = async (req, res) => {
     }
 
     if (reportadoClienteValues !== null) {
-      const reportadoColumn = await resolveReportadoClienteColumn();
-      if (reportadoColumn) {
-        params.push(reportadoClienteValues);
-        filtros.push(
-          `AND ${reportadoBooleanSqlExpression('A', reportadoColumn)} = $${params.length}`
-        );
-      }
+      params.push(reportadoClienteValues);
+      filtros.push(`AND ${reportadoBooleanSqlExpression('A')} = $${params.length}`);
     }
 
     const consolaFilter =

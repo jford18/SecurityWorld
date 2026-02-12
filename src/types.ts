@@ -59,7 +59,8 @@ export interface TechnicalFailure {
   hacienda_nombre?: string | null;
   consola_id?: number | null;
   reportado_cliente?: boolean | null;
-  reportado_al_cliente?: boolean | null;
+  reportado_al_cliente?: boolean;
+  reportadoCliente?: boolean;
 }
 
 export interface FailureDurationResponse {
