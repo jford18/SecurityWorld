@@ -358,6 +358,7 @@ export const createFallo = async (
   const body = {
     ...payload,
     usuarioId,
+    reportado_al_cliente: Boolean(payload.reportadoCliente),
   };
 
   console.log('[fallosService.createFallo] body final que se envía a /fallos:', body);
