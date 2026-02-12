@@ -30,15 +30,28 @@ const normalizeReportadoClienteFilter = (value) => {
   const falsy = ["false", "f", "0", "n", "no"];
 
   if (truthy.includes(normalized)) {
-    return truthy;
+    return true;
   }
 
   if (falsy.includes(normalized)) {
-    return falsy;
+    return false;
   }
 
   return undefined;
 };
+
+const reportadoBooleanSqlExpression = (alias, columnName) => {
+  if (!columnName) {
+    return "FALSE";
+  }
+
+  return `CASE
+    WHEN ${alias}.${columnName} IS NULL THEN FALSE
+    WHEN LOWER(TRIM(CAST(${alias}.${columnName} AS TEXT))) IN ('true', 't', '1', 'si', 'sí', 's', 'y', 'yes') THEN TRUE
+    ELSE FALSE
+  END`;
+};
+
 
 const KPI_QUERY = (reportadoFilterSql = "") => `
 WITH PARAMS AS (
@@ -218,7 +231,7 @@ export const getDashboardUptimeCamarasManual = async (req, res) => {
     }
 
     let reportadoColumn = null;
-    if (reportadoClienteValues) {
+    if (reportadoClienteValues !== null) {
       reportadoColumn = await resolveReportadoClienteColumn();
       if (!reportadoColumn) {
         return res.status(400).json({
@@ -234,8 +247,8 @@ export const getDashboardUptimeCamarasManual = async (req, res) => {
     const kpiParams = [fromTs, toTs, parsedHaciendaId, parsedClienteId];
     const detalleParams = [fromTs, toTs, parsedHaciendaId, parsedClienteId];
     const reportadoFilterSql =
-      reportadoColumn && reportadoClienteValues
-        ? `AND LOWER(CAST(A.${reportadoColumn} AS TEXT)) = ANY($5)`
+      reportadoColumn && reportadoClienteValues !== null
+        ? `AND ${reportadoBooleanSqlExpression('A', reportadoColumn)} = $5`
         : "";
 
     if (reportadoFilterSql) {

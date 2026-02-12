@@ -137,8 +137,9 @@ const mapFalloRowToDto = (row) => ({
   ultimo_usuario_edito_id: row.ultimo_usuario_edito_id ?? null,
   ultimo_usuario_edito_nombre: row.ultimo_usuario_edito_nombre || null,
   ultimo_usuario_edito: row.ultimo_usuario_edito_nombre || undefined,
-  reportado_al_cliente:
-    row.reportado_al_cliente ?? row.reportado_cliente ?? null,
+  reportado_al_cliente: normalizeReportadoClienteStoredValue(
+    row.reportado_al_cliente ?? row.reportado_cliente ?? null
+  ),
   responsable_verificacion_cierre_id:
     row.responsable_verificacion_cierre_id ?? null,
   responsable_verificacion_cierre_nombre:
@@ -188,14 +189,63 @@ const normalizeReportadoClienteFilter = (value) => {
   const falsy = ["false", "f", "0", "n", "no"];
 
   if (truthy.includes(normalized)) {
-    return truthy;
+    return true;
   }
 
   if (falsy.includes(normalized)) {
-    return falsy;
+    return false;
   }
 
   return undefined;
+};
+
+const normalizeReportadoClienteStoredValue = (value) => {
+  if (value === undefined || value === null || value === "") {
+    return false;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  const truthy = ["true", "t", "1", "s", "si", "sí", "y", "yes"];
+  return truthy.includes(normalized);
+};
+
+const parseReportadoClienteFromPayload = (body = {}) => {
+  const candidate =
+    body.reportado_al_cliente ??
+    body.reportado_cliente ??
+    body.reportadoCliente ??
+    body.reportadoAlCliente;
+
+  if (candidate === undefined) {
+    return { value: false, provided: false };
+  }
+
+  const parsed = normalizeReportadoClienteFilter(candidate);
+  if (parsed === undefined) {
+    return { value: null, provided: true, invalid: true };
+  }
+
+  return { value: parsed ?? false, provided: true };
+};
+
+const reportadoBooleanSqlExpression = (alias, columnName) => {
+  if (!columnName) {
+    return "FALSE";
+  }
+
+  return `CASE
+    WHEN ${alias}.${columnName} IS NULL THEN FALSE
+    WHEN LOWER(TRIM(CAST(${alias}.${columnName} AS TEXT))) IN ('true', 't', '1', 'si', 'sí', 's', 'y', 'yes') THEN TRUE
+    ELSE FALSE
+  END`;
 };
 
 const toNullableUserId = (v) => {
@@ -340,7 +390,8 @@ const fetchFalloById = async (client, id) => {
         seguimiento.ultimo_usuario_edito_id,
         COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario) AS ultimo_usuario_edito_nombre,
         seguimiento.responsable_verificacion_cierre_id,
-        COALESCE(responsable_cierre.nombre_completo, responsable_cierre.nombre_usuario) AS responsable_verificacion_cierre_nombre
+        COALESCE(responsable_cierre.nombre_completo, responsable_cierre.nombre_usuario) AS responsable_verificacion_cierre_nombre,
+        COALESCE(ft.reportado_al_cliente, FALSE) AS reportado_al_cliente
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
@@ -413,18 +464,18 @@ export const getFallos = async (req, res) => {
       filtros.push(`AND sitio.hacienda_id = $${params.length}`);
     }
 
-    if (reportadoClienteValues && reportadoColumn) {
+    if (reportadoClienteValues !== null && reportadoColumn) {
       params.push(reportadoClienteValues);
       filtros.push(
-        `AND LOWER(CAST(ft.${reportadoColumn} AS TEXT)) = ANY($${params.length})`
+        `AND ${reportadoBooleanSqlExpression('ft', reportadoColumn)} = $${params.length}`
       );
     }
 
     const whereFilters = filtros.length > 0 ? `WHERE 1 = 1 ${filtros.join(" ")}` : "";
 
     const reportadoSelect = reportadoColumn
-      ? `ft.${reportadoColumn} AS reportado_al_cliente`
-      : "NULL AS reportado_al_cliente";
+      ? `${reportadoBooleanSqlExpression('ft', reportadoColumn)} AS reportado_al_cliente`
+      : "FALSE AS reportado_al_cliente";
 
     const result = await client.query(
       `SELECT
@@ -647,19 +698,19 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       filtros.push(`AND sitio.hacienda_id = $${params.length}`);
     }
 
-    if (reportadoClienteValues && reportadoColumn) {
+    if (reportadoClienteValues !== null && reportadoColumn) {
       params.push(reportadoClienteValues);
       filtros.push(
-        `AND LOWER(CAST(A.${reportadoColumn} AS TEXT)) = ANY($${params.length})`
+        `AND ${reportadoBooleanSqlExpression('A', reportadoColumn)} = $${params.length}`
       );
     }
 
-    const reportadoRawExpression = reportadoColumn ? `A.${reportadoColumn}` : "NULL";
+    const reportadoRawExpression = reportadoColumn
+      ? reportadoBooleanSqlExpression('A', reportadoColumn)
+      : "FALSE";
     const reportadoRawSelect = `${reportadoRawExpression} AS reportado_cliente_raw`;
     const reportadoSelect = `CASE
-        WHEN ${reportadoRawExpression} IS NULL THEN 'NO'
-        WHEN LOWER(TRIM(CAST(${reportadoRawExpression} AS TEXT))) IN ('true', 't', '1', 'si', 's') THEN 'SI'
-        WHEN LOWER(TRIM(CAST(${reportadoRawExpression} AS TEXT))) IN ('false', 'f', '0', 'no', 'n') THEN 'NO'
+        WHEN ${reportadoRawExpression} THEN 'SI'
         ELSE 'NO'
       END AS reportado_al_cliente`;
 
@@ -1248,10 +1299,32 @@ export const createFallo = async (req, res) => {
     ip_speaker_id: ipSpeakerIdSnake,
     alarmInputId,
     alarm_input_id: alarmInputIdSnake,
+    reportadoCliente,
+    reportado_al_cliente: reportadoAlClienteSnake,
+    reportado_cliente: reportadoClienteSnake,
+    reportadoAlCliente,
   } = req.body || {};
 
   console.log("[createFallo] BODY COMPLETO:", JSON.stringify(req.body, null, 2));
   console.log("[createFallo] usuarioId recibido en body:", usuarioId);
+
+  const reportadoClientePayload = parseReportadoClienteFromPayload({
+    reportadoCliente,
+    reportado_al_cliente: reportadoAlClienteSnake,
+    reportado_cliente: reportadoClienteSnake,
+    reportadoAlCliente,
+  });
+
+  if (reportadoClientePayload.invalid) {
+    return res.status(400).json({
+      mensaje: "El campo reportadoCliente/reportado_al_cliente no es válido.",
+    });
+  }
+
+  console.log(
+    "[createFallo] reportado al cliente recibido/parseado:",
+    reportadoClientePayload
+  );
 
   const { fecha: fechaFalloValue, hora: horaFalloValue } = resolveFechaHoraFallo({
     fecha,
@@ -1507,12 +1580,13 @@ export const createFallo = async (req, res) => {
         ip_speaker_id,
         alarm_input_id,
         tipo_afectacion,
+        reportado_al_cliente,
         fecha_resolucion,
         hora_resolucion,
         fecha_creacion,
         fecha_actualizacion
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW(), NOW()
       ) RETURNING id`,
       [
         fechaFalloValue,
@@ -1529,6 +1603,7 @@ export const createFallo = async (req, res) => {
         ipSpeakerIdValue,
         alarmInputIdValue,
         tipoAfectacionValue,
+        reportadoClientePayload.value,
         fechaResolucion || null,
         horaResolucion || null, // FIX: exclude estado so the generated column is calculated by PostgreSQL during inserts.
       ]
@@ -1612,6 +1687,10 @@ export const actualizarFalloSupervisor = async (req, res) => {
     ip_speaker_id: ipSpeakerIdSnake,
     alarmInputId,
     alarm_input_id: alarmInputIdSnake,
+    reportadoCliente,
+    reportado_al_cliente: reportadoAlClienteSnake,
+    reportado_cliente: reportadoClienteSnake,
+    reportadoAlCliente,
   } = req.body || {};
 
   console.log("[actualizarFalloSupervisor] body:", req.body);
@@ -1643,7 +1722,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
     await client.query("BEGIN");
 
     const existingResult = await client.query(
-      "SELECT id, fecha, hora, estado, departamento_id, fecha_resolucion, hora_resolucion, tipo_afectacion FROM fallos_tecnicos WHERE id = $1",
+      "SELECT id, fecha, hora, estado, departamento_id, fecha_resolucion, hora_resolucion, tipo_afectacion, COALESCE(reportado_al_cliente, FALSE) AS reportado_al_cliente FROM fallos_tecnicos WHERE id = $1",
       [id]
     );
 
@@ -1653,6 +1732,25 @@ export const actualizarFalloSupervisor = async (req, res) => {
     }
 
     const existingFallo = existingResult.rows[0];
+
+    const reportadoClientePayload = parseReportadoClienteFromPayload({
+      reportadoCliente,
+      reportado_al_cliente: reportadoAlClienteSnake,
+      reportado_cliente: reportadoClienteSnake,
+      reportadoAlCliente,
+    });
+
+    if (reportadoClientePayload.invalid) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        mensaje: "El campo reportadoCliente/reportado_al_cliente no es válido.",
+      });
+    }
+
+    console.log(
+      "[actualizarFalloSupervisor] reportado al cliente recibido/parseado:",
+      reportadoClientePayload
+    );
 
     if (existingFallo.estado === "CERRADO") {
       await client.query("ROLLBACK");
@@ -1778,8 +1876,9 @@ export const actualizarFalloSupervisor = async (req, res) => {
              encoding_device_id = $6,
              ip_speaker_id = $7,
              alarm_input_id = $8,
+             reportado_al_cliente = $9,
              fecha_actualizacion = NOW()
-       WHERE id = $9`,
+       WHERE id = $10`,
       [
         fechaFalloValue,
         horaFalloValue,
@@ -1789,6 +1888,9 @@ export const actualizarFalloSupervisor = async (req, res) => {
         encodingDeviceIdValue,
         ipSpeakerIdValue,
         alarmInputIdValue,
+        reportadoClientePayload.provided
+          ? reportadoClientePayload.value
+          : normalizeReportadoClienteStoredValue(existingFallo.reportado_al_cliente),
         id,
       ]
     );

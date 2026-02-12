@@ -54,15 +54,28 @@ const normalizeReportadoClienteFilter = (value) => {
   const falsy = ["false", "f", "0", "n", "no"];
 
   if (truthy.includes(normalized)) {
-    return truthy;
+    return true;
   }
 
   if (falsy.includes(normalized)) {
-    return falsy;
+    return false;
   }
 
   return undefined;
 };
+
+const reportadoBooleanSqlExpression = (alias, columnName) => {
+  if (!columnName) {
+    return "FALSE";
+  }
+
+  return `CASE
+    WHEN ${alias}.${columnName} IS NULL THEN FALSE
+    WHEN LOWER(TRIM(CAST(${alias}.${columnName} AS TEXT))) IN ('true', 't', '1', 'si', 'sí', 's', 'y', 'yes') THEN TRUE
+    ELSE FALSE
+  END`;
+};
+
 
 export const getDashboardFallosTecnicosResumen = async (req, res) => {
   try {
@@ -166,12 +179,12 @@ export const getDashboardFallosTecnicosResumen = async (req, res) => {
       filtros.push(`AND A.FECHA::DATE <= $${params.length}`);
     }
 
-    if (reportadoClienteValues) {
+    if (reportadoClienteValues !== null) {
       const reportadoColumn = await resolveReportadoClienteColumn();
       if (reportadoColumn) {
         params.push(reportadoClienteValues);
         filtros.push(
-          `AND LOWER(CAST(A.${reportadoColumn} AS TEXT)) = ANY($${params.length})`
+          `AND ${reportadoBooleanSqlExpression('A', reportadoColumn)} = $${params.length}`
         );
       }
     }
