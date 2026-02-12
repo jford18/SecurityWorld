@@ -1089,7 +1089,7 @@ const TechnicalFailuresOperador: React.FC = () => {
           ? Number(formData.alarmInputId)
           : null,
       consola: session.console,
-      reportadoCliente: formData.reportadoCliente,
+      reportado_al_cliente: formData.reportadoCliente,
       camara: formData.camara,
       cliente: clienteFromConsole || cliente,
     };

@@ -140,6 +140,9 @@ const mapFalloRowToDto = (row) => ({
   reportado_al_cliente: normalizeReportadoClienteStoredValue(
     row.reportado_al_cliente ?? row.reportado_cliente ?? null
   ),
+  reportadoCliente: normalizeReportadoClienteStoredValue(
+    row.reportado_al_cliente ?? row.reportado_cliente ?? null
+  ),
   responsable_verificacion_cierre_id:
     row.responsable_verificacion_cierre_id ?? null,
   responsable_verificacion_cierre_nombre:
@@ -157,22 +160,6 @@ const parseOptionalNumberParam = (value) => {
   }
 
   return parsed;
-};
-
-const REPORTADO_COLUMNS = ["reportado_al_cliente", "reportado_cliente"];
-
-const resolveReportadoClienteColumn = async (client) => {
-  const { rows } = await client.query(
-    `SELECT column_name
-     FROM information_schema.columns
-     WHERE table_schema = 'public'
-       AND lower(table_name) = 'fallos_tecnicos'
-       AND column_name = ANY($1)
-     ORDER BY column_name`,
-    [REPORTADO_COLUMNS]
-  );
-
-  return rows?.[0]?.column_name ?? null;
 };
 
 const normalizeReportadoClienteFilter = (value) => {
@@ -236,17 +223,8 @@ const parseReportadoClienteFromPayload = (body = {}) => {
   return { value: parsed ?? false, provided: true };
 };
 
-const reportadoBooleanSqlExpression = (alias, columnName) => {
-  if (!columnName) {
-    return "FALSE";
-  }
-
-  return `CASE
-    WHEN ${alias}.${columnName} IS NULL THEN FALSE
-    WHEN LOWER(TRIM(CAST(${alias}.${columnName} AS TEXT))) IN ('true', 't', '1', 'si', 'sí', 's', 'y', 'yes') THEN TRUE
-    ELSE FALSE
-  END`;
-};
+const reportadoBooleanSqlExpression = (alias) =>
+  `COALESCE(${alias}.reportado_al_cliente, FALSE)`;
 
 const toNullableUserId = (v) => {
   const n = Number(v);
@@ -426,7 +404,6 @@ export const getFallos = async (req, res) => {
     const consolaId = parseOptionalNumberParam(consolaIdRaw);
     const haciendaId = parseOptionalNumberParam(haciendaIdRaw);
     const reportadoClienteValues = normalizeReportadoClienteFilter(reportadoClienteRaw);
-    const reportadoColumn = await resolveReportadoClienteColumn(client);
 
     if (clienteIdRaw && clienteId === undefined) {
       return res.status(400).json({ message: "El parámetro cliente_id debe ser válido." });
@@ -464,18 +441,14 @@ export const getFallos = async (req, res) => {
       filtros.push(`AND sitio.hacienda_id = $${params.length}`);
     }
 
-    if (reportadoClienteValues !== null && reportadoColumn) {
+    if (reportadoClienteValues !== null) {
       params.push(reportadoClienteValues);
-      filtros.push(
-        `AND ${reportadoBooleanSqlExpression('ft', reportadoColumn)} = $${params.length}`
-      );
+      filtros.push(`AND ${reportadoBooleanSqlExpression('ft')} = $${params.length}`);
     }
 
     const whereFilters = filtros.length > 0 ? `WHERE 1 = 1 ${filtros.join(" ")}` : "";
 
-    const reportadoSelect = reportadoColumn
-      ? `${reportadoBooleanSqlExpression('ft', reportadoColumn)} AS reportado_al_cliente`
-      : "FALSE AS reportado_al_cliente";
+    const reportadoSelect = `${reportadoBooleanSqlExpression('ft')} AS reportado_al_cliente`;
 
     const result = await client.query(
       `SELECT
@@ -621,7 +594,6 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
     const consolaId = parseOptionalNumberParam(consolaIdRaw);
     const haciendaId = parseOptionalNumberParam(haciendaIdRaw);
     const reportadoClienteValues = normalizeReportadoClienteFilter(reportadoClienteRaw);
-    const reportadoColumn = await resolveReportadoClienteColumn(client);
 
     if (clienteIdRaw && clienteId === undefined) {
       return res.status(400).json({ message: "El parámetro cliente_id debe ser válido." });
@@ -698,16 +670,12 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       filtros.push(`AND sitio.hacienda_id = $${params.length}`);
     }
 
-    if (reportadoClienteValues !== null && reportadoColumn) {
+    if (reportadoClienteValues !== null) {
       params.push(reportadoClienteValues);
-      filtros.push(
-        `AND ${reportadoBooleanSqlExpression('A', reportadoColumn)} = $${params.length}`
-      );
+      filtros.push(`AND ${reportadoBooleanSqlExpression('A')} = $${params.length}`);
     }
 
-    const reportadoRawExpression = reportadoColumn
-      ? reportadoBooleanSqlExpression('A', reportadoColumn)
-      : "FALSE";
+    const reportadoRawExpression = reportadoBooleanSqlExpression('A');
     const reportadoRawSelect = `${reportadoRawExpression} AS reportado_cliente_raw`;
     const reportadoSelect = `CASE
         WHEN ${reportadoRawExpression} THEN 'SI'
