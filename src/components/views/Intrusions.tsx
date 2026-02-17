@@ -254,6 +254,9 @@ const Intrusions: React.FC = () => {
   const [clienteNombre, setClienteNombre] = useState('');
   const [personaId, setPersonaId] = useState<number | null>(null);
   const [personasCliente, setPersonasCliente] = useState<PersonaOption[]>([]);
+  const [hasTriedSubmit, setHasTriedSubmit] = useState(false);
+  const [personaError, setPersonaError] = useState('');
+  const personaSelectRef = useRef<HTMLSelectElement | null>(null);
   const [sortField, setSortField] = useState<keyof IntrusionConsolidadoRow | null>(
     'fechaHoraIntrusion'
   );
@@ -334,6 +337,7 @@ const Intrusions: React.FC = () => {
     setClienteNombre('');
     setPersonasCliente([]);
     setPersonaId(null);
+    setPersonaError((prev) => (hasTriedSubmit ? 'Debe seleccionar una persona' : prev));
 
     if (!value) return;
 
@@ -379,7 +383,7 @@ const Intrusions: React.FC = () => {
     } catch (err) {
       console.error('Error al obtener datos del sitio:', err);
     }
-  }, []);
+  }, [hasTriedSubmit]);
 
   const loadIntrusiones = useCallback(async () => {
     if (!consolaIdSeleccionada) {
@@ -1109,6 +1113,7 @@ const Intrusions: React.FC = () => {
     const baseDisabled =
       !formData.fecha_evento ||
       !formData.sitioId ||
+      !personaId ||
       !tipoValue ||
       isSubmitting;
 
@@ -1133,6 +1138,7 @@ const Intrusions: React.FC = () => {
     formData.fecha_reaccion_fuera,
     formData.fuerza_reaccion_id,
     formData.sitioId,
+    personaId,
     hcSeleccionado?.hik_alarm_evento_id,
     isHcMode,
     isSubmitting,
@@ -1322,6 +1328,7 @@ const Intrusions: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    setHasTriedSubmit(true);
 
     setError(null);
 
@@ -1350,6 +1357,16 @@ const Intrusions: React.FC = () => {
       alert('Debe seleccionar un sitio.');
       return;
     }
+
+    if (!personaId) {
+      const personaMessage = 'Debe seleccionar una persona';
+      setPersonaError(personaMessage);
+      setError(personaMessage);
+      personaSelectRef.current?.focus();
+      return;
+    }
+
+    setPersonaError('');
 
     const sitioIdNumber = sitioId ?? Number(formData.sitioId);
     if (!Number.isInteger(sitioIdNumber)) {
@@ -1603,6 +1620,8 @@ const Intrusions: React.FC = () => {
       setTipoDescripcion('');
       setRequiereProtocolo(false);
       setEditingIntrusionId(null);
+      setHasTriedSubmit(false);
+      setPersonaError('');
 
       if (!registroManual && hcSeleccionado?.hik_alarm_evento_id) {
         setHcSeleccionado(null);
@@ -1623,6 +1642,10 @@ const Intrusions: React.FC = () => {
     } catch (err) {
       console.error('Error al registrar intrusión:', err);
       const backendMessage = err instanceof Error && err.message ? err.message : null;
+      if (backendMessage && /persona/i.test(backendMessage)) {
+        setPersonaError('Debe seleccionar una persona');
+        personaSelectRef.current?.focus();
+      }
       setError(
         backendMessage
           ? `No se pudo registrar la intrusión. ${backendMessage}`
@@ -1918,13 +1941,26 @@ const Intrusions: React.FC = () => {
                     Persona
                   </label>
                   <select
+                    ref={personaSelectRef}
                     value={personaId ?? ''}
                     onChange={(event) => {
                       const value = event.target.value;
-                      setPersonaId(value ? Number(value) : null);
+                      const nextPersonaId = value ? Number(value) : null;
+                      setPersonaId(nextPersonaId);
+                      if (nextPersonaId) {
+                        setPersonaError('');
+                      } else if (hasTriedSubmit) {
+                        setPersonaError('Debe seleccionar una persona');
+                      }
                     }}
                     disabled={!clienteId || personasCliente.length === 0}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    aria-invalid={Boolean(personaError)}
+                    aria-describedby={personaError ? 'persona-error' : undefined}
+                    className={`mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 sm:text-sm ${
+                      personaError
+                        ? 'border-red-500 focus:border-red-500'
+                        : 'border-gray-300 focus:border-indigo-500'
+                    }`}
                   >
                     <option value="">
                       {clienteId ? 'Seleccione una persona' : 'Seleccione primero un sitio'}
@@ -1942,6 +1978,11 @@ const Intrusions: React.FC = () => {
                       );
                     })}
                   </select>
+                  {personaError && (
+                    <p id="persona-error" className="text-xs text-red-600">
+                      {personaError}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   <input

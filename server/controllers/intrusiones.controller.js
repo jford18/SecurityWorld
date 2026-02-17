@@ -1122,6 +1122,13 @@ export const createIntrusion = async (req, res) => {
     });
   }
 
+  if (!metadata.personaColumn || personaIdValue === null) {
+    return res.status(400).json({
+      message: "PERSONA ES OBLIGATORIA",
+      details: { field: metadata.personaColumn ?? "persona_id" },
+    });
+  }
+
   if (sitioIdValue === undefined) {
     return res.status(400).json({
       message: "El identificador del sitio no es válido.",
