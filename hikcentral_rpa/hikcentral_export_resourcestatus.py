@@ -25,6 +25,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
+from utils_selenium import cleanup_browser, logout_hikcentral, safe_quit
+
 
 class PerformanceRecorder:
     def __init__(self, start_time: float | None = None):
@@ -1407,6 +1409,15 @@ def export_camera_status_to_excel(driver: webdriver.Chrome, wait: WebDriverWait,
     return export_resource_status_to_excel(driver, wait, download_dir, "Camera")
 
 
+
+def cerrar_sesion(driver):
+    """Cierra sesión de forma tolerante a fallos."""
+
+    cerrado_ok = logout_hikcentral(driver, timeout=8, log_warn=print, log_info=print)
+    if not cerrado_ok:
+        print("[WARN] Logout UI no disponible; se limpiará el navegador antes de cerrar.")
+        cleanup_browser(driver)
+
 def run():
     global step_timer, performance_recorder
     parser = argparse.ArgumentParser(
@@ -1554,7 +1565,10 @@ def run():
             timer.mark("[ERROR] Fin por excepción")
     finally:
         if driver:
-            driver.quit()
+            try:
+                cerrar_sesion(driver)
+            finally:
+                safe_quit(driver, log_warn=print)
 
         final_cpu = psutil.cpu_percent(interval=1)
         final_ram = psutil.virtual_memory().percent
