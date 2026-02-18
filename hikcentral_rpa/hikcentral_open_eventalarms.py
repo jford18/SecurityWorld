@@ -32,6 +32,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
 
+from utils_selenium import cleanup_browser, logout_hikcentral, safe_quit
+
 
 class PerformanceRecorder:
     def __init__(self, start_time: float | None = None):
@@ -2235,38 +2237,13 @@ def crear_driver(download_dir: Path) -> webdriver.Chrome:
     return driver
 
 
-def cerrar_sesion(driver, wait: WebDriverWait):
-    """Intenta cerrar sesión y limpiar las cookies para evitar sesiones pegadas."""
+def cerrar_sesion(driver):
+    """Intenta cerrar sesión y limpiar navegador para evitar sesiones pegadas."""
 
-    try:
-        driver.switch_to.default_content()
-
-        perfil_button = wait.until(
-            EC.element_to_be_clickable(
-                (
-                    By.CSS_SELECTOR,
-                    "div.top-right-area__avatar, div.head-user__wrapper, div.user-avatar",
-                )
-            )
-        )
-        perfil_button.click()
-
-        logout_button = wait.until(
-            EC.element_to_be_clickable(
-                (
-                    By.XPATH,
-                    "//li[.//span[normalize-space()='Log Out'] or normalize-space()='Log Out']"
-                    " | //*[normalize-space(text())='Log Out']",
-                )
-            )
-        )
-        logout_button.click()
-
-        wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, 'input[placeholder="User Name"]'))
-        )
-    except Exception:
-        print("[WARN] No se pudo cerrar sesión limpiamente.")
+    cerrado_ok = logout_hikcentral(driver, timeout=8, log_warn=print, log_info=print)
+    if not cerrado_ok:
+        print("[WARN] Logout UI no disponible; se limpiará el navegador antes de cerrar.")
+        cleanup_browser(driver)
 
 
 def run_for_host(host: str) -> dict:
@@ -2417,11 +2394,9 @@ def run_for_host(host: str) -> dict:
     finally:
         if driver:
             try:
-                if wait:
-                    cerrar_sesion(driver, wait)
-            except Exception:
-                pass
-            driver.quit()
+                cerrar_sesion(driver)
+            finally:
+                safe_quit(driver, log_warn=print)
 
         final_cpu = psutil.cpu_percent(interval=1)
         final_ram = psutil.virtual_memory().percent
