@@ -17,6 +17,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
+from utils_selenium import cleanup_browser, logout_hikcentral, safe_quit
+
 
 # ========================
 # CONFIGURACIÓN GENERAL
@@ -385,43 +387,22 @@ def esperar_tabla_camaras(driver, wait, timeout: int = 30):
     wait.until(tabla_cargada)
 
 
-def cerrar_sesion(driver, wait: WebDriverWait):
+def cerrar_sesion(driver):
     """Intenta cerrar sesión para evitar que quede pegada en el navegador."""
 
-    try:
-        driver.switch_to.default_content()
-
-        perfil_button = wait.until(
-            EC.element_to_be_clickable(
-                (
-                    By.CSS_SELECTOR,
-                    "div.top-right-area__avatar, div.head-user__wrapper, div.user-avatar",
-                )
-            )
-        )
-        perfil_button.click()
-
-        logout_button = wait.until(
-            EC.element_to_be_clickable(
-                (
-                    By.XPATH,
-                    "//li[.//span[normalize-space()='Log Out'] or normalize-space()='Log Out']"
-                    " | //*[normalize-space(text())='Log Out']",
-                )
-            )
-        )
-        logout_button.click()
-
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[placeholder="User Name"]')))
-    except Exception:
-        print("[WARN] No se pudo cerrar sesión limpiamente.")
+    cerrado_ok = logout_hikcentral(driver, timeout=8, log_warn=print, log_info=print)
+    if not cerrado_ok:
+        print("[WARN] Logout UI no disponible; se limpiará el navegador antes de cerrar.")
+        cleanup_browser(driver)
 
 
 def run():
-    driver = crear_driver()
-    wait = WebDriverWait(driver, 30)
+    driver = None
+    wait = None
 
     try:
+        driver = crear_driver()
+        wait = WebDriverWait(driver, 30)
         print(f"[DEBUG] DOWNLOAD_DIR = {DOWNLOAD_DIR}")
         print("[1] Navegando a la URL...")
         driver.get(URL)
@@ -486,10 +467,9 @@ def run():
     finally:
         if driver:
             try:
-                cerrar_sesion(driver, wait)
-            except Exception:
-                pass
-            driver.quit()
+                cerrar_sesion(driver)
+            finally:
+                safe_quit(driver, log_warn=print)
 
 
 if __name__ == "__main__":
