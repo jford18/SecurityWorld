@@ -987,6 +987,84 @@ def wait_loading_end(driver, timeout: int = 15):
         time.sleep(0.5)
 
 
+def wait_overlay_gone(driver, timeout=30):
+    try:
+        WebDriverWait(driver, timeout).until(
+            lambda d: len(d.find_elements(By.CSS_SELECTOR, ".el-loading-mask.is-fullscreen")) == 0
+            or all(
+                not e.is_displayed()
+                for e in d.find_elements(By.CSS_SELECTOR, ".el-loading-mask.is-fullscreen")
+            )
+        )
+    except Exception:
+        pass
+
+
+def is_camera_page(driver):
+    headers = driver.find_elements(
+        By.XPATH,
+        "//*[self::h1 or self::div or self::span][normalize-space()='Camera']",
+    )
+    if any(h.is_displayed() for h in headers):
+        return True
+
+    export_btns = driver.find_elements(
+        By.XPATH,
+        "//*[@title='Export' or contains(@class,'icomoon-common_export') or contains(@class,'icomoon-common_export')]",
+    )
+    if any(b.is_displayed() for b in export_btns):
+        cols = driver.find_elements(
+            By.XPATH,
+            "//*[normalize-space()='Channel Address' or normalize-space()='Device Address' or normalize-space()='Area']",
+        )
+        if any(c.is_displayed() for c in cols):
+            return True
+
+    return False
+
+
+def click_camera_menu(driver, wait):
+    wait_overlay_gone(driver)
+
+    candidates = [
+        (By.XPATH, "//*[normalize-space()='Camera' and (self::span or self::div or self::li or self::a)]"),
+        (By.XPATH, "//*[@title='Camera']"),
+        (
+            By.XPATH,
+            "//*[contains(@class,'el-menu') or contains(@class,'nav') or contains(@class,'menu')]//*[normalize-space()='Camera']",
+        ),
+    ]
+
+    last_exc = None
+    for by, sel in candidates:
+        try:
+            els = driver.find_elements(by, sel)
+            els = [e for e in els if e.is_displayed()]
+            if not els:
+                continue
+
+            el = els[0]
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+            wait_overlay_gone(driver)
+
+            try:
+                WebDriverWait(driver, 10).until(EC.element_to_be_clickable((by, sel)))
+                el.click()
+            except Exception:
+                driver.execute_script("arguments[0].click();", el)
+
+            time.sleep(1)
+            wait_overlay_gone(driver)
+            return True
+        except Exception as exc:
+            last_exc = exc
+
+    if last_exc:
+        raise last_exc
+
+    return False
+
+
 def find_click_by_text(driver, wait, text: str):
     normalized = _normalize_label(text)
     condition = (
@@ -1132,7 +1210,12 @@ def seleccionar_opcion_resource_status(driver, wait, opcion: str) -> None:
         raise Exception(f"Opción de recurso desconocida: {opcion}")
 
     wait_loading_end(driver)
+    wait_overlay_gone(driver)
     _switch_to_resource_iframe(driver)
+
+    if etiqueta_objetivo == "Camera" and is_camera_page(driver):
+        print("[NAV] Ya estoy en pantalla Camera, salto selección de menú.")
+        return
 
     tabla_previa = None
     try:
@@ -1152,6 +1235,14 @@ def seleccionar_opcion_resource_status(driver, wait, opcion: str) -> None:
                 encontrados.append(texto)
 
     try:
+        if etiqueta_objetivo == "Camera":
+            print("[NAV] Intentando seleccionar opción Camera en menú Resource Status...")
+            if click_camera_menu(driver, wait):
+                wait_overlay_gone(driver)
+                if is_camera_page(driver):
+                    print("[6] Recurso seleccionado: Camera")
+                    return
+
         # Estrategia A: tabs/botones visibles
         estrategias_tabs = [
             "//div[contains(@class,'tab') or contains(@class,'tabs')]//div[contains(@class,'tab') or self::button]",
@@ -1243,6 +1334,10 @@ def seleccionar_opcion_resource_status(driver, wait, opcion: str) -> None:
             downloads_dir = DOWNLOAD_DIR
             downloads_dir.mkdir(parents=True, exist_ok=True)
             driver.save_screenshot(str(downloads_dir / "debug_select_resource_error.png"))
+            if etiqueta_objetivo == "Camera":
+                error_nav = downloads_dir / "ERROR_NAV_CAMERA.png"
+                driver.save_screenshot(str(error_nav))
+                print(f"[ERROR] Screenshot navegación Camera: {error_nav}")
         except Exception:
             pass
         raise Exception(
@@ -1345,6 +1440,15 @@ def export_resource_status_to_excel(
 
     abrir_menu_resource_status(driver, wait)
     seleccionar_opcion_resource_status(driver, wait, opcion)
+    wait_overlay_gone(driver)
+
+    if _normalize_label(opcion) == "camera" and not is_camera_page(driver):
+        error_nav = download_dir / "ERROR_NAV_CAMERA.png"
+        download_dir.mkdir(parents=True, exist_ok=True)
+        driver.save_screenshot(str(error_nav))
+        print(f"[ERROR] Screenshot navegación Camera: {error_nav}")
+        raise Exception("No se pudo validar navegación a pantalla Camera antes de exportar.")
+
     esperar_tabla_resource_status(driver, wait, opcion)
 
     print(f"[8] Abriendo panel de exportación desde {opcion}...")
