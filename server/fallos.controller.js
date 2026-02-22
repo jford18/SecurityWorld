@@ -121,6 +121,8 @@ const mapFalloRowToDto = (row) => ({
   tipo_equipo_afectado: row.tipo_equipo_afectado ?? null,
   tipoEquipoAfectado: row.tipo_equipo_afectado ?? null,
   tipo_equipo_afectado_nombre: row.tipo_equipo_afectado_nombre || undefined,
+  nodo_nombre: row.nodo_nombre || undefined,
+  nodoNombre: row.nodo_nombre || undefined,
   tipo_afectacion_detalle: row.tipo_afectacion_detalle || undefined,
   tipoProblemaNombre: row.tipo_problema_descripcion || undefined,
   fechaResolucion: formatDate(row.fecha_resolucion) || undefined,
@@ -369,9 +371,30 @@ const fetchFalloById = async (client, id) => {
           ELSE NULL
         END AS tipo_equipo_afectado,
         CASE
+          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN
+            CASE
+              WHEN ft.camera_id IS NOT NULL THEN 'CÁMARA'
+              WHEN ft.encoding_device_id IS NOT NULL THEN 'GRABADOR'
+              WHEN ft.ip_speaker_id IS NOT NULL THEN 'IP SPEAKER'
+              WHEN ft.alarm_input_id IS NOT NULL THEN 'ALARM INPUT'
+              ELSE TRIM(
+                REGEXP_REPLACE(
+                  SPLIT_PART(ft.equipo_afectado, ' en ', 1),
+                  '\\s*\\(.*\\)$',
+                  ''
+                )
+              )
+            END
+          ELSE NULL
+        END AS tipo_equipo_afectado_nombre,
+        CASE
           WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN ft.equipo_afectado
           ELSE NULL
         END AS nombre_equipo,
+        CASE
+          WHEN UPPER(ft.tipo_afectacion) = 'NODO' THEN NULLIF(ft.equipo_afectado, '')
+          ELSE NULL
+        END AS nodo_nombre,
         ft.fecha_resolucion,
         ft.hora_resolucion,
         ft.estado,
@@ -518,9 +541,30 @@ export const getFallos = async (req, res) => {
           ELSE NULL
         END AS tipo_equipo_afectado,
         CASE
+          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN
+            CASE
+              WHEN ft.camera_id IS NOT NULL THEN 'CÁMARA'
+              WHEN ft.encoding_device_id IS NOT NULL THEN 'GRABADOR'
+              WHEN ft.ip_speaker_id IS NOT NULL THEN 'IP SPEAKER'
+              WHEN ft.alarm_input_id IS NOT NULL THEN 'ALARM INPUT'
+              ELSE TRIM(
+                REGEXP_REPLACE(
+                  SPLIT_PART(ft.equipo_afectado, ' en ', 1),
+                  '\\s*\\(.*\\)$',
+                  ''
+                )
+              )
+            END
+          ELSE NULL
+        END AS tipo_equipo_afectado_nombre,
+        CASE
           WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN ft.equipo_afectado
           ELSE NULL
         END AS nombre_equipo,
+        CASE
+          WHEN UPPER(ft.tipo_afectacion) = 'NODO' THEN NULLIF(ft.equipo_afectado, '')
+          ELSE NULL
+        END AS nodo_nombre,
         ${reportadoSelect},
         ft.fecha_resolucion,
         ft.hora_resolucion,

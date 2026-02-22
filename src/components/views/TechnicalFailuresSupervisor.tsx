@@ -305,6 +305,40 @@ const EditFailureModal: React.FC<{
   }, [editData.fechaHoraFallo, editData.fecha, editData.hora, editData.horaFallo]);
 
   const fechaHoraFalloDisplay = fechaHoraReporte || 'Sin información';
+  const tipoAfectacionUpper = (
+    editData.tipo_afectacion || editData.tipoAfectacion || ''
+  )
+    .toString()
+    .trim()
+    .toUpperCase();
+  const isTipoAfectacionEquipo = tipoAfectacionUpper === 'EQUIPO';
+
+  const tipoEquipoAfectadoNombre = (
+    editData.tipo_equipo_afectado_nombre ||
+    editData.tipo_equipo_afectado ||
+    editData.tipoEquipoAfectado ||
+    ''
+  )
+    .toString()
+    .trim();
+
+  const nombreEquipoAfectado = (
+    editData.nombre_equipo ||
+    editData.nombreEquipo ||
+    editData.equipo_afectado ||
+    editData.equipoAfectado ||
+    ''
+  )
+    .toString()
+    .trim();
+
+  const nodoNombre = (editData as TechnicalFailure & { nodo_nombre?: string; nodoNombre?: string })
+    .nodo_nombre
+    || (editData as TechnicalFailure & { nodo_nombre?: string; nodoNombre?: string }).nodoNombre
+    || '';
+
+  const reportadoAlCliente =
+    editData.reportado_al_cliente ?? editData.reportadoCliente ?? false;
 
   const departamentoResponsableNombre = useMemo(() => {
     return (
@@ -477,6 +511,58 @@ const EditFailureModal: React.FC<{
               disabled
             />
           </div>
+
+          {isTipoAfectacionEquipo && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tipo de equipo afectado
+                </label>
+                <input
+                  type="text"
+                  value={tipoEquipoAfectadoNombre || 'Sin información'}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100"
+                  disabled
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre del equipo
+                </label>
+                <input
+                  type="text"
+                  value={nombreEquipoAfectado || 'Sin información'}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100"
+                  disabled
+                />
+              </div>
+            </>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Reportado al cliente
+            </label>
+            <input
+              type="text"
+              value={reportadoAlCliente ? 'SI' : 'NO'}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100"
+              disabled
+            />
+          </div>
+
+          {nodoNombre && nodoNombre.trim() !== '' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nodo</label>
+              <input
+                type="text"
+                value={nodoNombre}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100"
+                disabled
+              />
+            </div>
+          )}
 
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">
