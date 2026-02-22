@@ -1292,6 +1292,8 @@ export const createFallo = async (req, res) => {
     descripcion_fallo,
     responsable,
     deptResponsable,
+    departamento_id: departamentoIdSnake,
+    departamentoId: departamentoIdCamel,
     tipoProblema,
     tipo_problema_id: tipoProblemaIdSnake,
     tipoProblemaId: tipoProblemaIdCamel,
@@ -1652,7 +1654,29 @@ export const createFallo = async (req, res) => {
       `,
       [
         falloId, // FALLO_ID
-        1, // DEPARTAMENTO_ID (forzado para creación desde /fallos/operador)
+        (() => {
+          const departamentoSource =
+            departamentoIdSnake !== undefined &&
+            departamentoIdSnake !== null &&
+            String(departamentoIdSnake).trim() !== ""
+              ? departamentoIdSnake
+              : departamentoIdCamel;
+
+          const parsed = Number(departamentoSource);
+          const resolvedDepartamentoId =
+            departamentoSource === undefined ||
+            departamentoSource === null ||
+            String(departamentoSource).trim() === "" ||
+            Number.isNaN(parsed)
+              ? 5
+              : parsed;
+
+          console.log(
+            `SeguimientoFallos departamento_id => ${resolvedDepartamentoId}`
+          );
+
+          return resolvedDepartamentoId;
+        })(), // DEPARTAMENTO_ID: respeta payload; si no viene, default 5
         verificacionAperturaId, // VERIFICACION_APERTURA_ID (usuario que registra el fallo)
         null, // VERIFICACION_CIERRE_ID (todavía no aplica)
         novedadDetectada || null, // NOVEDAD_DETECTADA
