@@ -891,6 +891,14 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
               A.ALARM_INPUT_ID,
               ${reportadoRawSelect},
               sitio.nombre AS sitio_nombre,
+              consola.nombre AS nombre_consola,
+              cliente.nombre AS cliente_nombre,
+              hacienda.nombre AS hacienda_nombre,
+              COALESCE(nodo.nombre, CASE
+                WHEN UPPER(A.TIPO_AFECTACION) = 'NODO' THEN NULLIF(TRIM(A.EQUIPO_AFECTADO), '')
+                ELSE NULL
+              END) AS nodo_nombre,
+              COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS nombre_co,
               CASE
                 WHEN A.CAMERA_ID IS NOT NULL THEN 'Cámaras'
                 WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN 'Grabador'
@@ -920,11 +928,21 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
           JOIN MOVS B ON (B.FALLO_ID = A.ID)
           LEFT JOIN DEPARTAMENTOS_RESPONSABLES C ON (C.ID = B.DEPARTAMENTO_ID)
           LEFT JOIN USUARIOS D ON (D.ID = B.ULTIMO_USUARIO_EDITO_ID)
+          LEFT JOIN USUARIOS responsable ON (responsable.ID = A.RESPONSABLE_ID)
           LEFT JOIN DEPARTAMENTOS_RESPONSABLES dept_actual ON (dept_actual.ID = A.DEPARTAMENTO_ID)
           LEFT JOIN CATALOGO_TIPO_PROBLEMA TP ON (TP.ID = A.TIPO_PROBLEMA_ID)
+          LEFT JOIN CONSOLAS consola ON (consola.ID = A.CONSOLA_ID)
           LEFT JOIN SITIOS sitio ON (sitio.ID = A.SITIO_ID)
           LEFT JOIN CLIENTES cliente ON (cliente.ID = sitio.CLIENTE_ID)
           LEFT JOIN HACIENDA hacienda ON (hacienda.ID = sitio.HACIENDA_ID)
+          LEFT JOIN LATERAL (
+            SELECT n.nombre
+            FROM nodos_sitios ns
+            JOIN nodos n ON n.id = ns.nodo_id
+            WHERE ns.sitio_id = sitio.id
+            ORDER BY ns.fecha_asignacion DESC NULLS LAST, ns.nodo_id DESC
+            LIMIT 1
+          ) nodo ON TRUE
           LEFT JOIN hik_camera_resource_status camera ON camera.id = A.camera_id
           LEFT JOIN hik_encoding_device_status encoding_device ON encoding_device.id = A.encoding_device_id
           LEFT JOIN hik_ip_speaker_status ip_speaker ON ip_speaker.id = A.ip_speaker_id
@@ -973,34 +991,22 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       return trimmed === "" ? null : trimmed;
     };
 
-    const excludedColumns = new Set([
-      "sitio_id",
-      "camera_id",
-      "encoding_device_id",
-      "ip_speaker_id",
-      "alarm_input_id",
-      "equipo_afectado",
-      "reportado_al_cliente",
-      "sitio_nombre",
-      "tipo_equipo_afectado_nombre",
-      "nombre_equipo",
-    ]);
-
     const exportRows = rows.map((row) => {
-      const baseRow = Object.fromEntries(
-        Object.entries(row).filter(([key]) => !excludedColumns.has(key))
-      );
       const nombreEquipo =
         normalizeText(row.nombre_equipo) ||
         normalizeText(row.equipo_afectado) ||
         "-";
 
       return {
-        ...baseRow,
         "REPORTADO AL CLIENTE": normalizeReportadoClienteValue(row.reportado_al_cliente),
         SITIO: normalizeText(row.sitio_nombre) || "-",
-        "TIPO DE EQUIPO AFECTADO": normalizeText(row.tipo_equipo_afectado_nombre) || "-",
-        "NOMBRE DE EQUIPO": nombreEquipo,
+        "TIPO EQUIPO AFECTADO": normalizeText(row.tipo_equipo_afectado_nombre) || "-",
+        "NOMBRE DE EQUIPO AF": nombreEquipo,
+        "NOMBRE CONSOLA": normalizeText(row.nombre_consola) || "",
+        CLIENTE: normalizeText(row.cliente_nombre) || "",
+        HACIENDA: normalizeText(row.hacienda_nombre) || "",
+        "NOMBRE CO": normalizeText(row.nombre_co) || "",
+        "NOMBRE DE NODO": normalizeText(row.nodo_nombre) || "",
       };
     });
 
