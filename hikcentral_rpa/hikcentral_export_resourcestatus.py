@@ -737,33 +737,157 @@ def limpiar_descargas(download_dir: Path = DOWNLOAD_DIR):
 
 
 def esperar_descarga(download_dir: Path, archivos_previos, timeout: int = 120) -> str:
-    """Espera hasta detectar un nuevo archivo .xlsx o .xls en download_dir."""
+    """Espera robustamente una descarga nueva, incluyendo .crdownload y tamaño estable."""
 
     print("[9] Esperando archivo descargado...")
+    print(f"[DL] DOWNLOAD_DIR={download_dir}")
+
+    if not download_dir.exists() or not download_dir.is_dir():
+        raise FileNotFoundError(f"El directorio de descarga no existe o no es válido: {download_dir}")
+
     inicio = time.time()
+    vistos_nuevos = set()
+    previos_set = set(archivos_previos)
 
     while True:
         archivos_actuales = os.listdir(download_dir)
-        nuevos = [
-            f
-            for f in archivos_actuales
-            if f not in archivos_previos
-            and not f.endswith(".crdownload")
-            and (f.endswith(".xlsx") or f.endswith(".xls"))
-        ]
+        actuales_set = set(archivos_actuales)
+        nuevos = sorted(actuales_set - previos_set)
+        print(f"[DL] Archivos antes={sorted(previos_set)}, después={sorted(actuales_set)}")
 
         if nuevos:
-            archivo = nuevos[0]
-            ruta = str(download_dir / archivo)
-            print(f"[9] Archivo encontrado: {ruta}")
-            if step_timer:
-                step_timer.mark("[9] Descarga detectada")
-            return ruta
+            print(f"[DL] Archivos nuevos: {nuevos}")
+            vistos_nuevos.update(nuevos)
+
+            crdownloads = [f for f in nuevos if f.endswith(".crdownload")]
+            if crdownloads:
+                print("[DL] Descarga en progreso: .crdownload")
+
+            finales = [
+                f
+                for f in nuevos
+                if not f.endswith(".crdownload")
+            ]
+
+            if finales:
+                final_candidato = max(
+                    finales,
+                    key=lambda f: (download_dir / f).stat().st_mtime,
+                )
+                final_path = download_dir / final_candidato
+                print(f"[DL] Archivo final detectado: {final_path}")
+
+                tam_ultimo = None
+                ciclos_estables = 0
+                while time.time() - inicio <= timeout:
+                    if not final_path.exists():
+                        break
+
+                    tam_actual = final_path.stat().st_size
+                    if tam_ultimo == tam_actual:
+                        ciclos_estables += 1
+                    else:
+                        ciclos_estables = 0
+                    tam_ultimo = tam_actual
+
+                    if ciclos_estables >= 3:
+                        print("[DL] Tamaño estable OK")
+                        if step_timer:
+                            step_timer.mark("[9] Descarga detectada")
+                        return str(final_path)
+
+                    time.sleep(0.5)
 
         if time.time() - inicio > timeout:
             raise TimeoutError("No se detectó ningún archivo descargado en el tiempo esperado.")
 
-        time.sleep(2)
+        time.sleep(0.5)
+
+
+def click_export_drawer(driver, wait):
+    drawer = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, ".drawer .main.main-show")))
+    if drawer:
+        print("[EXPORT] Drawer visible")
+
+    btn = wait.until(
+        EC.element_to_be_clickable(
+            (
+                By.XPATH,
+                "//div[contains(@class,'drawer')]//div[contains(@class,'main') and contains(@class,'main-show')]//button[normalize-space(.)='Export']",
+            )
+        )
+    )
+    print("[EXPORT] Botón Export drawer encontrado")
+    try:
+        btn.click()
+    except ElementClickInterceptedException:
+        driver.execute_script("arguments[0].click();", btn)
+    print("[EXPORT] Click Export drawer OK")
+
+
+def confirmar_export_si_aplica(driver, wait):
+    modal_selectors = [
+        (By.CSS_SELECTOR, "div.el-dialog__wrapper"),
+        (By.CSS_SELECTOR, "div[role='dialog']"),
+        (By.XPATH, "//div[contains(@class,'modal') and not(contains(@style,'display: none'))]"),
+    ]
+
+    modal = None
+    for by, selector in modal_selectors:
+        try:
+            modales = driver.find_elements(by, selector)
+        except Exception:
+            continue
+        visibles = [m for m in modales if m.is_displayed()]
+        if visibles:
+            modal = visibles[-1]
+            break
+
+    if not modal:
+        print("[EXPORT] No se detectó modal export, continuo")
+        return
+
+    print("[EXPORT] Modal export detectado")
+
+    excel_xpath = (
+        ".//*[self::label or self::span or self::div or self::button]"
+        "[contains(translate(normalize-space(.),'excelxlsx','EXCELXLSX'),'EXCEL')"
+        " or contains(translate(normalize-space(.),'excelxlsx','EXCELXLSX'),'XLSX')]"
+    )
+
+    try:
+        excel_candidates = modal.find_elements(By.XPATH, excel_xpath)
+        for elem in excel_candidates:
+            if elem.is_displayed() and elem.is_enabled():
+                try:
+                    elem.click()
+                except ElementClickInterceptedException:
+                    driver.execute_script("arguments[0].click();", elem)
+                print("[EXPORT] Excel seleccionado")
+                break
+    except Exception:
+        pass
+
+    confirm_xpath = (
+        ".//button["
+        "normalize-space(.)='OK'"
+        " or normalize-space(.)='Confirm'"
+        " or normalize-space(.)='Export'"
+        " or normalize-space(.)='Download'"
+        " or .//*[normalize-space(.)='OK' or normalize-space(.)='Confirm' or normalize-space(.)='Export' or normalize-space(.)='Download']"
+        "]"
+    )
+
+    confirm_buttons = [b for b in modal.find_elements(By.XPATH, confirm_xpath) if b.is_displayed() and b.is_enabled()]
+    if not confirm_buttons:
+        raise TimeoutError("[EXPORT] Se detectó modal de export pero no se encontró botón de confirmación.")
+
+    confirm_btn = confirm_buttons[-1]
+    try:
+        confirm_btn.click()
+    except ElementClickInterceptedException:
+        driver.execute_script("arguments[0].click();", confirm_btn)
+    print("[EXPORT] Confirm export OK")
 
 
 def encontrar_ultimo_archivo(
@@ -1496,7 +1620,8 @@ def export_resource_status_to_excel(
         archivos_previos = os.listdir(download_dir)
         export_toolbar_button = encontrar_boton_export_camera(driver, wait)
         click_robusto(driver, export_toolbar_button)
-        print("[EXPORT] Click export ejecutado")
+        click_export_drawer(driver, wait)
+        confirmar_export_si_aplica(driver, wait)
 
         wait_loading_overlays(driver, timeout=60)
         archivo_descargado = esperar_descarga(download_dir, archivos_previos, timeout=180)
@@ -1514,35 +1639,8 @@ def export_resource_status_to_excel(
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", export_toolbar_button)
         driver.execute_script("arguments[0].click();", export_toolbar_button)
 
-        wait.until(
-            EC.visibility_of_element_located(
-                (
-                    By.XPATH,
-                    "//div[contains(@class,'drawer')]//span[contains(@class,'drawer-head-title') and normalize-space()='Export']",
-                )
-            )
-        )
-
-        if step_timer:
-            step_timer.mark(f"[8] Panel exportación abierto ({opcion})")
-
-        excel_options = driver.find_elements(
-            By.XPATH,
-            "//div[contains(@class,'drawer')]//label[contains(@class,'el-radio') and (translate(@title,'excel','EXCEL')='EXCEL' or .//span[normalize-space()='Excel'])]",
-        )
-        if excel_options:
-            excel_option = wait.until(EC.element_to_be_clickable(excel_options[0]))
-            driver.execute_script("arguments[0].click();", excel_option)
-
-        export_confirm_button = wait.until(
-            EC.element_to_be_clickable(
-                (
-                    By.XPATH,
-                    "(//div[contains(@class,'drawer') or contains(@class,'el-dialog__footer')]//button[.//div[normalize-space()='Export']])[last()]",
-                )
-            )
-        )
-        driver.execute_script("arguments[0].click();", export_confirm_button)
+        click_export_drawer(driver, wait)
+        confirmar_export_si_aplica(driver, wait)
 
         if step_timer:
             step_timer.mark(f"[8] Export lanzado ({opcion})")
