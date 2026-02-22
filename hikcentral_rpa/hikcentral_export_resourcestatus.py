@@ -964,12 +964,12 @@ def safe_click(driver, element):
         driver.execute_script("arguments[0].click();", element)
 
 
-def wait_loading_end(driver, timeout: int = 15):
+def wait_loading_overlays(driver, timeout: int = 60):
     overlays = [
+        (By.CSS_SELECTOR, ".el-loading-mask.is-fullscreen"),
         (By.CSS_SELECTOR, ".el-loading-mask"),
-        (By.CSS_SELECTOR, ".el-loading-spinner"),
-        (By.CSS_SELECTOR, "div.loading-mask"),
-        (By.CSS_SELECTOR, "div.hik-loader, div.hik-loading"),
+        (By.CSS_SELECTOR, ".v-modal"),
+        (By.CSS_SELECTOR, ".el-dialog__wrapper"),
     ]
     end_time = time.time() + timeout
     while time.time() < end_time:
@@ -979,12 +979,44 @@ def wait_loading_end(driver, timeout: int = 15):
                 elems = driver.find_elements(by, selector)
             except Exception:
                 continue
-            if any(e.is_displayed() for e in elems):
-                visible = True
+            for elem in elems:
+                try:
+                    if not elem.is_displayed():
+                        continue
+                    if selector == ".el-dialog__wrapper":
+                        # Solo tratar como overlay cuando realmente está visible.
+                        dialogos_visibles = elem.find_elements(By.CSS_SELECTOR, ".el-dialog")
+                        if not any(d.is_displayed() for d in dialogos_visibles):
+                            continue
+                    visible = True
+                    break
+                except Exception:
+                    continue
+            if visible:
                 break
         if not visible:
             return
         time.sleep(0.5)
+
+
+def wait_loading_end(driver, timeout: int = 15):
+    wait_loading_overlays(driver, timeout=timeout)
+
+
+def click_robusto(driver, element, retries: int = 2):
+    for intento in range(retries + 1):
+        try:
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+            element.click()
+            return
+        except ElementClickInterceptedException:
+            wait_loading_overlays(driver, timeout=60)
+            if intento >= retries:
+                driver.execute_script("arguments[0].click();", element)
+                return
+        except Exception:
+            driver.execute_script("arguments[0].click();", element)
+            return
 
 
 def find_click_by_text(driver, wait, text: str):
@@ -1330,6 +1362,55 @@ def encontrar_boton_export(driver, wait):
     return boton
 
 
+def _buscar_export_camera_en_contexto(driver):
+    xpaths = [
+        "//button[@title='Export' and not(@disabled)]",
+        "//button[.//i[contains(@class,'icomoon-common_export')] and not(@disabled)]",
+        "//*[self::button or self::span][@title='Export']",
+        "(//div[contains(@class,'top') or contains(@class,'toolbar') or contains(@class,'tool-bar') or contains(@class,'header')]//*[contains(@class,'export') and (self::button or self::span or self::i or self::div)])[1]",
+    ]
+
+    for xpath in xpaths:
+        try:
+            elems = driver.find_elements(By.XPATH, xpath)
+        except Exception:
+            continue
+        for elem in elems:
+            try:
+                if not elem.is_displayed():
+                    continue
+            except Exception:
+                continue
+            return elem
+    return None
+
+
+def encontrar_boton_export_camera(driver, wait):
+    boton = _buscar_export_camera_en_contexto(driver)
+    if boton:
+        return boton
+
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+
+    boton = _buscar_export_camera_en_contexto(driver)
+    if boton:
+        return boton
+
+    try:
+        _switch_to_resource_iframe(driver)
+    except Exception:
+        pass
+
+    boton = _buscar_export_camera_en_contexto(driver)
+    if boton:
+        return boton
+
+    raise TimeoutException("No se encontró el botón Export para Camera")
+
+
 def export_resource_status_to_excel(
     driver: webdriver.Chrome,
     wait: WebDriverWait,
@@ -1347,53 +1428,82 @@ def export_resource_status_to_excel(
     seleccionar_opcion_resource_status(driver, wait, opcion)
     esperar_tabla_resource_status(driver, wait, opcion)
 
-    print(f"[8] Abriendo panel de exportación desde {opcion}...")
+    if opcion == "Camera":
+        print("[EXPORT] Iniciando export Camera")
+        wait_loading_overlays(driver, timeout=60)
 
-    if step_timer:
-        step_timer.mark(f"[8] Panel exportación ({opcion})")
+        camera_validada = False
+        validacion_xpaths = [
+            "//*[contains(@class,'el-tabs__item') and contains(@class,'is-active') and contains(normalize-space(),'Camera')]",
+            "//*[self::h1 or self::h2 or self::h3 or self::div or self::span][contains(normalize-space(),'Camera')]",
+        ]
+        for xp in validacion_xpaths:
+            try:
+                elems = driver.find_elements(By.XPATH, xp)
+            except Exception:
+                continue
+            if any(e.is_displayed() for e in elems):
+                camera_validada = True
+                break
+        if not camera_validada:
+            print("[EXPORT][WARN] No se pudo validar tab Camera.")
 
-    archivos_previos = os.listdir(download_dir)
-    
-    export_toolbar_button = encontrar_boton_export(driver, wait)
+        archivos_previos = os.listdir(download_dir)
+        export_toolbar_button = encontrar_boton_export_camera(driver, wait)
+        click_robusto(driver, export_toolbar_button)
+        print("[EXPORT] Click export ejecutado")
 
-    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", export_toolbar_button)
-    driver.execute_script("arguments[0].click();", export_toolbar_button)
+        wait_loading_overlays(driver, timeout=60)
+        archivo_descargado = esperar_descarga(download_dir, archivos_previos, timeout=180)
+        print(f"[EXPORT] Archivo detectado: {os.path.basename(archivo_descargado)}")
+    else:
+        print(f"[8] Abriendo panel de exportación desde {opcion}...")
 
-    wait.until(
-        EC.visibility_of_element_located(
-            (
-                By.XPATH,
-                "//div[contains(@class,'drawer')]//span[contains(@class,'drawer-head-title') and normalize-space()='Export']",
+        if step_timer:
+            step_timer.mark(f"[8] Panel exportación ({opcion})")
+
+        archivos_previos = os.listdir(download_dir)
+
+        export_toolbar_button = encontrar_boton_export(driver, wait)
+
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", export_toolbar_button)
+        driver.execute_script("arguments[0].click();", export_toolbar_button)
+
+        wait.until(
+            EC.visibility_of_element_located(
+                (
+                    By.XPATH,
+                    "//div[contains(@class,'drawer')]//span[contains(@class,'drawer-head-title') and normalize-space()='Export']",
+                )
             )
         )
-    )
 
-    if step_timer:
-        step_timer.mark(f"[8] Panel exportación abierto ({opcion})")
+        if step_timer:
+            step_timer.mark(f"[8] Panel exportación abierto ({opcion})")
 
-    excel_options = driver.find_elements(
-        By.XPATH,
-        "//div[contains(@class,'drawer')]//label[contains(@class,'el-radio') and (translate(@title,'excel','EXCEL')='EXCEL' or .//span[normalize-space()='Excel'])]",
-    )
-    if excel_options:
-        excel_option = wait.until(EC.element_to_be_clickable(excel_options[0]))
-        driver.execute_script("arguments[0].click();", excel_option)
+        excel_options = driver.find_elements(
+            By.XPATH,
+            "//div[contains(@class,'drawer')]//label[contains(@class,'el-radio') and (translate(@title,'excel','EXCEL')='EXCEL' or .//span[normalize-space()='Excel'])]",
+        )
+        if excel_options:
+            excel_option = wait.until(EC.element_to_be_clickable(excel_options[0]))
+            driver.execute_script("arguments[0].click();", excel_option)
 
-    export_confirm_button = wait.until(
-        EC.element_to_be_clickable(
-            (
-                By.XPATH,
-                "(//div[contains(@class,'drawer') or contains(@class,'el-dialog__footer')]//button[.//div[normalize-space()='Export']])[last()]",
+        export_confirm_button = wait.until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "(//div[contains(@class,'drawer') or contains(@class,'el-dialog__footer')]//button[.//div[normalize-space()='Export']])[last()]",
+                )
             )
         )
-    )
-    driver.execute_script("arguments[0].click();", export_confirm_button)
+        driver.execute_script("arguments[0].click();", export_confirm_button)
 
-    if step_timer:
-        step_timer.mark(f"[8] Export lanzado ({opcion})")
+        if step_timer:
+            step_timer.mark(f"[8] Export lanzado ({opcion})")
 
-    archivo_descargado = esperar_descarga(download_dir, archivos_previos, timeout=180)
-    print(f"[10] Archivo descargado en: {archivo_descargado}")
+        archivo_descargado = esperar_descarga(download_dir, archivos_previos, timeout=180)
+        print(f"[10] Archivo descargado en: {archivo_descargado}")
 
     if step_timer:
         step_timer.mark("[10] Archivo descargado")
