@@ -155,19 +155,33 @@ def export_camera_status_to_excel(driver: webdriver.Chrome, wait: WebDriverWait,
         driver.execute_script("arguments[0].click();", excel_option)
 
     # 4) Click en el botón Export dentro del panel/drawer (no Export All)
-    export_confirm_button = wait.until(
-        EC.element_to_be_clickable(
-            (
-                By.XPATH,
-                "(//div[contains(@class,'drawer') or contains(@class,'el-dialog__footer')]//button[.//div[normalize-space()='Export']])[last()]",
-            )
-        )
-    )
-    driver.execute_script("arguments[0].click();", export_confirm_button)
+    click_export_drawer(driver, wait)
 
     # 5) Esperar que el archivo termine de descargarse en download_dir
     archivo_descargado = esperar_descarga(DOWNLOAD_DIR, archivos_previos, timeout=180)
     print(f"[10] Archivo descargado en: {archivo_descargado}")
+
+
+def click_export_drawer(driver: webdriver.Chrome, wait: WebDriverWait) -> None:
+    """Hace clic de forma confiable en el botón Export del drawer visible."""
+    drawer_xpath = "//div[contains(@class,'drawer')]//div[contains(@class,'main-show')]"
+    export_xpath = (
+        "//div[contains(@class,'drawer')]//div[contains(@class,'main-show')]"
+        "//button[normalize-space(.)='Export']"
+    )
+
+    wait.until(EC.visibility_of_element_located((By.XPATH, drawer_xpath)))
+    print("Drawer visible")
+
+    export_button = wait.until(EC.element_to_be_clickable((By.XPATH, export_xpath)))
+    print("Botón Export del drawer encontrado")
+
+    try:
+        export_button.click()
+    except ElementClickInterceptedException:
+        driver.execute_script("arguments[0].click();", export_button)
+
+    print("Click Export drawer OK")
 
 
 def click_menu_item_by_title(driver, title: str) -> bool:
