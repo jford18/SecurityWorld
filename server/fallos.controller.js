@@ -96,8 +96,8 @@ const mapFalloRowToDto = (row) => ({
   fechaHoraFallo: row.fecha_hora_fallo || undefined,
   problema: row.problema || row.tipo_problema_descripcion || undefined,
   equipo_afectado: row.equipo_afectado ?? "",
-  nombre_equipo: row.nombre_equipo || undefined,
-  nombreEquipo: row.nombre_equipo || undefined,
+  nombre_equipo: row.nombre_equipo ?? null,
+  nombreEquipo: row.nombre_equipo ?? null,
   descripcion_fallo: row.descripcion_fallo ?? "",
   encoding_device_id: row.encoding_device_id ?? null,
   encodingDeviceId: row.encoding_device_id ?? null,
@@ -118,7 +118,8 @@ const mapFalloRowToDto = (row) => ({
   hacienda_nombre: row.hacienda_nombre || null,
   tipo_problema_id: row.tipo_problema_id ?? null,
   tipo_afectacion: row.tipo_afectacion || "",
-  tipo_equipo_afectado: row.tipo_equipo_afectado || undefined,
+  tipo_equipo_afectado: row.tipo_equipo_afectado ?? null,
+  tipoEquipoAfectado: row.tipo_equipo_afectado ?? null,
   tipo_equipo_afectado_nombre: row.tipo_equipo_afectado_nombre || undefined,
   tipo_equipo_afectado_id: row.tipo_equipo_afectado_id ?? null,
   tipo_afectacion_detalle: row.tipo_afectacion_detalle || undefined,
@@ -357,6 +358,7 @@ const fetchFalloById = async (client, id) => {
         ft.tipo_problema_id,
         tp.descripcion AS tipo_problema_descripcion,
         ft.tipo_afectacion,
+        ft.tipo_equipo_afectado_id,
         ft.fecha_resolucion,
         ft.hora_resolucion,
         ft.estado,
@@ -480,6 +482,7 @@ export const getFallos = async (req, res) => {
         tp.descripcion AS tipo_problema_descripcion,
         tp.descripcion AS problema,
         ft.tipo_afectacion,
+        ft.tipo_equipo_afectado_id,
         CASE
           WHEN ft.tipo_afectacion = 'EQUIPO' THEN
             CASE
@@ -492,27 +495,18 @@ export const getFallos = async (req, res) => {
           ELSE COALESCE(ft.tipo_afectacion, 'SIN INFORMACIÓN')
         END AS tipo_afectacion_detalle,
         CASE
-          WHEN ft.camera_id IS NOT NULL THEN 'Cámaras'
-          WHEN ft.encoding_device_id IS NOT NULL THEN 'Grabador'
-          WHEN ft.ip_speaker_id IS NOT NULL THEN 'Megáfono IP'
-          WHEN ft.alarm_input_id IS NOT NULL THEN 'Alarm Input'
+          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN tipo_equipo_afectado_catalogo.nombre
           ELSE NULL
-        END AS tipo_equipo_afectado_nombre,
+        END AS tipo_equipo_afectado,
         CASE
-          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN COALESCE(
-            NULLIF(TRIM(
-              CASE
-                WHEN ft.camera_id IS NOT NULL THEN (camera.camera_name || ' - ' || camera.ip_address)
-                WHEN ft.encoding_device_id IS NOT NULL THEN encoding_device.name
-                WHEN ft.ip_speaker_id IS NOT NULL THEN ip_speaker.name
-                WHEN ft.alarm_input_id IS NOT NULL THEN alarm_input.name
-                ELSE NULL
-              END
-            ), ''),
-            NULLIF(TRIM(ft.equipo_afectado), ''),
-            '-'
-          )
-          ELSE COALESCE(NULLIF(TRIM(ft.equipo_afectado), ''), '-')
+          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN
+            COALESCE(
+              CASE WHEN ft.camera_id IS NOT NULL THEN (camera.camera_name || ' - ' || camera.ip_address) END,
+              CASE WHEN ft.encoding_device_id IS NOT NULL THEN encoding_device.name END,
+              CASE WHEN ft.ip_speaker_id IS NOT NULL THEN ip_speaker.name END,
+              CASE WHEN ft.alarm_input_id IS NOT NULL THEN alarm_input.name END
+            )
+          ELSE NULL
         END AS nombre_equipo,
         ${reportadoSelect},
         ft.fecha_resolucion,
@@ -541,6 +535,7 @@ export const getFallos = async (req, res) => {
       LEFT JOIN clientes cliente ON cliente.id = sitio.cliente_id
       LEFT JOIN hacienda hacienda ON hacienda.id = sitio.hacienda_id
       LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
+      LEFT JOIN catalogo_tipo_equipo_afectado tipo_equipo_afectado_catalogo ON (tipo_equipo_afectado_catalogo.id = ft.tipo_equipo_afectado_id)
       LEFT JOIN hik_camera_resource_status camera ON camera.id = ft.camera_id
       LEFT JOIN hik_encoding_device_status encoding_device ON encoding_device.id = ft.encoding_device_id
       LEFT JOIN hik_ip_speaker_status ip_speaker ON ip_speaker.id = ft.ip_speaker_id
