@@ -121,7 +121,6 @@ const mapFalloRowToDto = (row) => ({
   tipo_equipo_afectado: row.tipo_equipo_afectado ?? null,
   tipoEquipoAfectado: row.tipo_equipo_afectado ?? null,
   tipo_equipo_afectado_nombre: row.tipo_equipo_afectado_nombre || undefined,
-  tipo_equipo_afectado_id: row.tipo_equipo_afectado_id ?? null,
   tipo_afectacion_detalle: row.tipo_afectacion_detalle || undefined,
   tipoProblemaNombre: row.tipo_problema_descripcion || undefined,
   fechaResolucion: formatDate(row.fecha_resolucion) || undefined,
@@ -358,7 +357,21 @@ const fetchFalloById = async (client, id) => {
         ft.tipo_problema_id,
         tp.descripcion AS tipo_problema_descripcion,
         ft.tipo_afectacion,
-        ft.tipo_equipo_afectado_id,
+        CASE
+          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN
+            TRIM(
+              REGEXP_REPLACE(
+                SPLIT_PART(ft.equipo_afectado, ' en ', 1),
+                '\\s*\\(.*\\)$',
+                ''
+              )
+            )
+          ELSE NULL
+        END AS tipo_equipo_afectado,
+        CASE
+          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN ft.equipo_afectado
+          ELSE NULL
+        END AS nombre_equipo,
         ft.fecha_resolucion,
         ft.hora_resolucion,
         ft.estado,
@@ -482,7 +495,6 @@ export const getFallos = async (req, res) => {
         tp.descripcion AS tipo_problema_descripcion,
         tp.descripcion AS problema,
         ft.tipo_afectacion,
-        ft.tipo_equipo_afectado_id,
         CASE
           WHEN ft.tipo_afectacion = 'EQUIPO' THEN
             CASE
@@ -495,17 +507,18 @@ export const getFallos = async (req, res) => {
           ELSE COALESCE(ft.tipo_afectacion, 'SIN INFORMACIÓN')
         END AS tipo_afectacion_detalle,
         CASE
-          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN tipo_equipo_afectado_catalogo.nombre
+          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN
+            TRIM(
+              REGEXP_REPLACE(
+                SPLIT_PART(ft.equipo_afectado, ' en ', 1),
+                '\\s*\\(.*\\)$',
+                ''
+              )
+            )
           ELSE NULL
         END AS tipo_equipo_afectado,
         CASE
-          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN
-            COALESCE(
-              CASE WHEN ft.camera_id IS NOT NULL THEN (camera.camera_name || ' - ' || camera.ip_address) END,
-              CASE WHEN ft.encoding_device_id IS NOT NULL THEN encoding_device.name END,
-              CASE WHEN ft.ip_speaker_id IS NOT NULL THEN ip_speaker.name END,
-              CASE WHEN ft.alarm_input_id IS NOT NULL THEN alarm_input.name END
-            )
+          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN ft.equipo_afectado
           ELSE NULL
         END AS nombre_equipo,
         ${reportadoSelect},
@@ -535,7 +548,6 @@ export const getFallos = async (req, res) => {
       LEFT JOIN clientes cliente ON cliente.id = sitio.cliente_id
       LEFT JOIN hacienda hacienda ON hacienda.id = sitio.hacienda_id
       LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
-      LEFT JOIN catalogo_tipo_equipo_afectado tipo_equipo_afectado_catalogo ON (tipo_equipo_afectado_catalogo.id = ft.tipo_equipo_afectado_id)
       LEFT JOIN hik_camera_resource_status camera ON camera.id = ft.camera_id
       LEFT JOIN hik_encoding_device_status encoding_device ON encoding_device.id = ft.encoding_device_id
       LEFT JOIN hik_ip_speaker_status ip_speaker ON ip_speaker.id = ft.ip_speaker_id
