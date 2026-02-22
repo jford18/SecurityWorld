@@ -1424,8 +1424,53 @@ def export_resource_status_to_excel(
     Devuelve la ruta final del .xlsx.
     """
 
+    def estamos_en_camera() -> bool:
+        indicadores_camera = [
+            (
+                By.XPATH,
+                "//*[contains(@class,'el-tabs__item') and contains(@class,'is-active') and contains(normalize-space(),'Camera')]",
+            ),
+            (
+                By.XPATH,
+                "//*[self::h1 or self::h2 or self::h3 or self::div or self::span][contains(normalize-space(),'Camera')]",
+            ),
+            (
+                By.XPATH,
+                "//th[contains(normalize-space(),'Channel Address')] | //span[contains(normalize-space(),'Channel Address')]",
+            ),
+            (
+                By.XPATH,
+                "//th[contains(normalize-space(),'Device Address')] | //span[contains(normalize-space(),'Device Address')]",
+            ),
+            (
+                By.XPATH,
+                "//th[contains(normalize-space(),'Area')] | //span[contains(normalize-space(),'Area')]",
+            ),
+            (
+                By.XPATH,
+                "//button[.//*[contains(normalize-space(),'Export')] or contains(normalize-space(),'Export')] | //*[(self::span or self::div) and @title='Export']",
+            ),
+        ]
+
+        for by, locator in indicadores_camera:
+            try:
+                elementos = driver.find_elements(by, locator)
+            except Exception:
+                continue
+
+            for elem in elementos:
+                try:
+                    if elem.is_displayed():
+                        return True
+                except Exception:
+                    continue
+        return False
+
     abrir_menu_resource_status(driver, wait)
-    seleccionar_opcion_resource_status(driver, wait, opcion)
+    if opcion == "Camera" and estamos_en_camera():
+        print("[5] Ya estamos en Camera; se omite re-selección de opción.")
+    else:
+        seleccionar_opcion_resource_status(driver, wait, opcion)
     esperar_tabla_resource_status(driver, wait, opcion)
 
     if opcion == "Camera":
