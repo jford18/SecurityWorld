@@ -1231,7 +1231,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
   );
 };
 
-const EditTechnicalFailureSupervisorModal: React.FC<{
+export interface EditTechnicalFailureSupervisorModalProps {
   failure: TechnicalFailure;
   departamentos: CatalogoDepartamento[];
   responsables: CatalogoResponsable[];
@@ -1248,7 +1248,9 @@ const EditTechnicalFailureSupervisorModal: React.FC<{
   isHistoryLoading?: boolean;
   isAdmin?: boolean;
   readOnly?: boolean;
-}> = ({
+}
+
+export const EditTechnicalFailureSupervisorModal: React.FC<EditTechnicalFailureSupervisorModalProps> = ({
   failure,
   departamentos,
   responsables,

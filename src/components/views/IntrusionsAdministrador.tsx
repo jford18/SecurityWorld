@@ -4,6 +4,19 @@ import { Intrusion, IntrusionConsolidadoRow } from '@/types';
 import { deleteIntrusion, fetchIntrusiones } from '@/services/intrusionesService';
 import { parseDbTimestampToLocal } from '@/utils/datetime';
 
+const formatDateValue = (value?: string | null) => {
+  const parsed = parseDbTimestampToLocal(value ?? null);
+  if (!parsed) return value ?? '—';
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  const hours = String(parsed.getHours()).padStart(2, '0');
+  const minutes = String(parsed.getMinutes()).padStart(2, '0');
+
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+};
+
 const IntrusionsAdministrador: React.FC = () => {
   const [intrusions, setIntrusions] = useState<Intrusion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -13,6 +26,7 @@ const IntrusionsAdministrador: React.FC = () => {
   );
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [viewIntrusion, setViewIntrusion] = useState<Intrusion | null>(null);
 
   const loadIntrusions = useCallback(async () => {
     setLoading(true);
@@ -60,6 +74,11 @@ const IntrusionsAdministrador: React.FC = () => {
         llegoAlerta: intrusion.llego_alerta ?? false,
         personalIdentificado: intrusion.personal_identificado?.trim() || '',
       })),
+    [intrusions],
+  );
+
+  const intrusionsById = useMemo(
+    () => new Map(intrusions.map((intrusion) => [intrusion.id, intrusion])),
     [intrusions],
   );
 
@@ -159,13 +178,21 @@ const IntrusionsAdministrador: React.FC = () => {
                       </td>
                     ))}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                      <button
-                        className="text-red-600 hover:underline font-semibold"
-                        onClick={() => handleDelete(row.id)}
-                        disabled={deletingId === row.id}
-                      >
-                        {deletingId === row.id ? 'Eliminando...' : 'Eliminar'}
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          className="text-blue-600 hover:underline font-semibold"
+                          onClick={() => setViewIntrusion(row.id ? intrusionsById.get(row.id) ?? null : null)}
+                        >
+                          Ver
+                        </button>
+                        <button
+                          className="text-red-600 hover:underline font-semibold"
+                          onClick={() => handleDelete(row.id)}
+                          disabled={deletingId === row.id}
+                        >
+                          {deletingId === row.id ? 'Eliminando...' : 'Eliminar'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -174,6 +201,69 @@ const IntrusionsAdministrador: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {viewIntrusion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-[#1C2E4A] text-xl font-semibold">Ver detalle de intrusión</h4>
+              <button
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                onClick={() => setViewIntrusion(null)}
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="font-semibold text-gray-700">Fecha y hora de intrusión</p>
+                <p className="text-gray-800">{formatDateValue(viewIntrusion.fecha_evento)}</p>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-700">Sitio</p>
+                <p className="text-gray-800">{viewIntrusion.sitio_nombre || viewIntrusion.ubicacion || '—'}</p>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-700">Tipo de intrusión</p>
+                <p className="text-gray-800">{viewIntrusion.tipo || '—'}</p>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-700">Estado</p>
+                <p className="text-gray-800">{viewIntrusion.estado || '—'}</p>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-700">Llegó alerta</p>
+                <p className="text-gray-800">{viewIntrusion.llego_alerta ? 'Sí' : 'No'}</p>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-700">Personal identificado</p>
+                <p className="text-gray-800">{viewIntrusion.personal_identificado || '—'}</p>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-700">Fecha reacción enviada</p>
+                <p className="text-gray-800">{formatDateValue(viewIntrusion.fecha_reaccion_enviada)}</p>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-700">Fecha llegada fuerza reacción</p>
+                <p className="text-gray-800">{formatDateValue(viewIntrusion.fecha_llegada_fuerza_reaccion)}</p>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-700">Medio comunicación</p>
+                <p className="text-gray-800">{viewIntrusion.medio_comunicacion_descripcion || '—'}</p>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-700">Conclusión evento</p>
+                <p className="text-gray-800">{viewIntrusion.conclusion_evento_descripcion || '—'}</p>
+              </div>
+              <div className="md:col-span-2">
+                <p className="font-semibold text-gray-700">Descripción</p>
+                <p className="text-gray-800 whitespace-pre-wrap">{viewIntrusion.descripcion || '—'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
