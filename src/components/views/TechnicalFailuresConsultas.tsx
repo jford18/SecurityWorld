@@ -174,6 +174,15 @@ const TechnicalFailuresConsultas: React.FC = () => {
     setPage(0);
   };
 
+  const renderViewAction = (failure: TechnicalFailure) => (
+    <button
+      onClick={() => handleViewFailure(failure)}
+      className="text-blue-600 hover:underline text-sm font-semibold"
+    >
+      Ver
+    </button>
+  );
+
   return (
     <div className="space-y-6">
       <h3 className="text-3xl font-medium text-[#1C2E4A]">Fallos Técnicos - Consultas</h3>
@@ -189,17 +198,11 @@ const TechnicalFailuresConsultas: React.FC = () => {
           failures={failures}
           isLoading={isLoading}
           activeRole={session.roleName ?? undefined}
+          showActions
           enableExport
           exportFilters={filters}
           withContainer={false}
-          renderActions={(failure) => (
-            <button
-              onClick={() => handleViewFailure(failure)}
-              className="text-blue-600 hover:underline text-sm font-semibold"
-            >
-              Ver
-            </button>
-          )}
+          renderActions={renderViewAction}
         />
       </div>
 
