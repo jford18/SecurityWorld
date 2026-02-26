@@ -77,7 +77,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const actionsEnabled = showActions && Boolean(handleEdit || renderActions);
   const stickyActions = actionsEnabled;
-  const columnsCount = actionsEnabled ? 10 : 9;
+  const columnsCount = actionsEnabled ? 15 : 14;
 
   const getFechaFalloTimestamp = (failure: TechnicalFailure) => {
     const horaFallo = failure.hora ?? failure.horaFallo;
@@ -340,6 +340,17 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     return trimmed;
   };
 
+  const getExtraFieldValue = (failure: TechnicalFailure, keys: string[]) => {
+    const record = failure as Record<string, unknown>;
+    for (const key of keys) {
+      const value = record[key];
+      if (value === null || value === undefined) continue;
+      const normalized = String(value).trim();
+      if (normalized) return normalized;
+    }
+    return '';
+  };
+
   const handleExportToExcel = async () => {
     if (isLoading || isExporting || sortedFailures.length === 0) return;
 
@@ -461,6 +472,21 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Último usuario que editó
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Nombre consola
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Cliente
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Hacienda
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Nombre CO
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Nombre de nodo
+              </th>
               {actionsEnabled && (
                 <th
                   scope="col"
@@ -550,6 +576,11 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               </th>
               <th className="px-6 py-2" />
               <th className="px-6 py-2" />
+              <th className="px-6 py-2" />
+              <th className="px-6 py-2" />
+              <th className="px-6 py-2" />
+              <th className="px-6 py-2" />
+              <th className="px-6 py-2" />
               {actionsEnabled && <th className={`px-6 py-2 ${actionHeaderClasses}`} />}
             </tr>
           </thead>
@@ -623,6 +654,21 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                     {fallo.ultimo_usuario_edito_nombre
                       ?? fallo.ultimo_usuario_edito_id
                       ?? 'Sin información'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {getExtraFieldValue(fallo, ['nombre_consola', 'nombreConsola']) || 'Sin información'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {getExtraFieldValue(fallo, ['cliente_nombre', 'clienteNombre']) || 'Sin información'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {getExtraFieldValue(fallo, ['hacienda_nombre', 'haciendaNombre']) || 'Sin información'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {getExtraFieldValue(fallo, ['nombre_co', 'nombreCo']) || 'Sin información'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {getExtraFieldValue(fallo, ['nodo_nombre', 'nodoNombre']) || 'Sin información'}
                   </td>
                   {actionsEnabled && (
                     <td className={`px-6 py-3 text-left whitespace-nowrap ${actionCellClasses}`}>
