@@ -83,6 +83,10 @@ const EXPORT_COLUMNS: ExportColumn[] = [
   },
 ];
 
+const EXPORT_COLUMNS_FINAL = EXPORT_COLUMNS.filter(
+  (column) => column.HEADER !== 'ID USUARIO APERTURA (REPETIDA)' && column.KEY !== 'responsable_id',
+);
+
 const normalizeFallosExportBlob = async (blob: Blob) => {
   const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
   const sheetName = workbook.SheetNames[0];
@@ -102,7 +106,7 @@ const normalizeFallosExportBlob = async (blob: Blob) => {
   const dataRows = rows.slice(2);
 
   console.log('EXPORT sample row:', dataRows?.[0]);
-  console.log('EXPORT columns:', EXPORT_COLUMNS);
+  console.log('EXPORT columns:', EXPORT_COLUMNS_FINAL);
 
   const normalizedRows = dataRows.map((row) => {
     const record: ExportRecord = {};
@@ -114,7 +118,7 @@ const normalizeFallosExportBlob = async (blob: Blob) => {
       if (businessKey) record[businessKey] = value;
     });
 
-    return EXPORT_COLUMNS.reduce<Record<string, string>>((acc, column) => {
+    return EXPORT_COLUMNS_FINAL.reduce<Record<string, string>>((acc, column) => {
       const value = column.GET ? column.GET(record) : getExportRecordValue(record, [column.KEY]);
       acc[column.HEADER] = value;
       return acc;
@@ -122,7 +126,7 @@ const normalizeFallosExportBlob = async (blob: Blob) => {
   });
 
   const normalizedSheet = XLSX.utils.json_to_sheet(normalizedRows, {
-    header: EXPORT_COLUMNS.map((column) => column.HEADER),
+    header: EXPORT_COLUMNS_FINAL.map((column) => column.HEADER),
   });
   const normalizedWorkbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(normalizedWorkbook, normalizedSheet, 'Fallos');
