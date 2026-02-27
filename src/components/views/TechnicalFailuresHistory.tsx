@@ -1,15 +1,20 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { TechnicalFailure } from '../../types';
 import { calcularEstado } from './TechnicalFailuresUtils';
 import { FallosExportFilters, exportFallosTecnicosConsultasExcel } from '../../services/fallosService';
+import { getAllTipoEquipoAfectado, TipoEquipoAfectado } from '../../services/tipoEquipoAfectadoService';
 
 type ExportRecord = Record<string, string | number | boolean | null | undefined>;
 
 type ExportColumn = {
   HEADER: string;
   KEY: string;
-  GET?: (record: ExportRecord) => string;
+  GET?: (record: ExportRecord, context: ExportContext) => string;
+};
+
+type ExportContext = {
+  tipoEquipoOptions: TipoEquipoAfectado[];
 };
 
 const getExportRecordValue = (record: ExportRecord, keys: string[]) => {
@@ -35,6 +40,39 @@ const getIdBasedUserName = (record: ExportRecord, userMap: Map<string, string>) 
   if (directName) return directName;
 
   return userMap.get(creatorId) ?? '';
+};
+
+const getTipoEquipoAfectadoFromExportRow = (
+  record: ExportRecord,
+  tipoEquipoOptions: TipoEquipoAfectado[],
+) => {
+  const tipoAfectacion = getExportRecordValue(record, ['tipo_afectacion', 'TIPO AFECTACION']);
+  if (tipoAfectacion.toUpperCase() !== 'EQUIPO') return '-';
+
+  const directText = getExportRecordValue(record, [
+    'tipo_equipo_afectado',
+    'tipo_equipo_afectado_descripcion',
+    'tipo_equipo_afectado_nombre',
+    'TIPO DE EQUIPO AFECTADO',
+  ]);
+
+  if (directText && directText !== '-') {
+    return directText;
+  }
+
+  const tipoEquipoId = getExportRecordValue(record, ['tipo_equipo_afectado_id']);
+  if (tipoEquipoId) {
+    const found = tipoEquipoOptions.find((option) => Number(option.id) === Number(tipoEquipoId));
+    if (found?.descripcion?.trim()) return found.descripcion.trim();
+    if (found?.nombre?.trim()) return found.nombre.trim();
+  }
+
+  if (getExportRecordValue(record, ['alarm_input_id', 'ALARM_INPUT_ID'])) return 'Alarm Input';
+  if (getExportRecordValue(record, ['camera_id', 'CAMERA_ID'])) return 'Cámaras';
+  if (getExportRecordValue(record, ['ip_speaker_id', 'IP_SPEAKER_ID'])) return 'Sirena';
+  if (getExportRecordValue(record, ['encoding_device_id', 'ENCODING_DEVICE_ID'])) return 'Grabador';
+
+  return '-';
 };
 
 const EXPORT_COLUMNS: ExportColumn[] = [
@@ -71,7 +109,11 @@ const EXPORT_COLUMNS: ExportColumn[] = [
   { HEADER: 'DURACION TOTAL FALLO (H)', KEY: 'duracion_total_fallo_hhmmss' },
   { HEADER: 'REPORTADO AL CLIENTE', KEY: 'REPORTADO AL CLIENTE' },
   { HEADER: 'SITIO', KEY: 'SITIO' },
-  { HEADER: 'TIPO EQUIPO AFECTADO', KEY: 'TIPO DE EQUIPO AFECTADO' },
+  {
+    HEADER: 'TIPO EQUIPO AFECTADO',
+    KEY: 'TIPO DE EQUIPO AFECTADO',
+    GET: (record, context) => getTipoEquipoAfectadoFromExportRow(record, context.tipoEquipoOptions),
+  },
   { HEADER: 'NOMBRE DE EQUIPO AFECTADO', KEY: 'NOMBRE DE EQUIPO' },
   {
     HEADER: 'NOMBRE CONSOLA',
@@ -132,7 +174,7 @@ const EXPORT_COLUMNS_ORDERED = (() => {
   ];
 })();
 
-const normalizeFallosExportBlob = async (blob: Blob) => {
+const normalizeFallosExportBlob = async (blob: Blob, context: ExportContext) => {
   const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) return blob;
@@ -189,7 +231,7 @@ const normalizeFallosExportBlob = async (blob: Blob) => {
 
   const normalizedRows = records.map((record) => {
     return EXPORT_COLUMNS_ORDERED.reduce<Record<string, string>>((acc, column) => {
-      let value = column.GET ? column.GET(record) : getExportRecordValue(record, [column.KEY]);
+      let value = column.GET ? column.GET(record, context) : getExportRecordValue(record, [column.KEY]);
 
       if (column.HEADER === CREATOR_FULL_NAME_HEADER) {
         value = getIdBasedUserName(record, userMap);
@@ -288,6 +330,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   });
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [tipoEquipoOptions, setTipoEquipoOptions] = useState<TipoEquipoAfectado[]>([]);
   const actionsEnabled = showActions && Boolean(handleEdit || renderActions);
   const stickyActions = actionsEnabled;
   const columnsCount = actionsEnabled ? 15 : 14;
@@ -465,6 +508,27 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     return Array.from(values).sort();
   }, [failures]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadTipoEquipoOptions = async () => {
+      try {
+        const response = await getAllTipoEquipoAfectado({ page: 1, limit: 200 });
+        if (isMounted) {
+          setTipoEquipoOptions(response?.data ?? []);
+        }
+      } catch (error) {
+        console.error('No se pudo cargar el catálogo de tipo de equipo afectado:', error);
+      }
+    };
+
+    loadTipoEquipoOptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleClearFilters = () => {
     setFilters({
       fechaDesde: '',
@@ -581,7 +645,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
         departamento: filters.departamento,
       });
 
-      const normalizedBlob = await normalizeFallosExportBlob(blob);
+      const normalizedBlob = await normalizeFallosExportBlob(blob, { tipoEquipoOptions });
 
       const url = window.URL.createObjectURL(normalizedBlob);
       const link = document.createElement('a');
