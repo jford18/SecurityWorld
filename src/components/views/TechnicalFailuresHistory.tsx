@@ -74,7 +74,12 @@ const EXPORT_COLUMNS: ExportColumn[] = [
   {
     HEADER: 'TIPO EQUIPO AFECTADO',
     KEY: 'tipo_equipo_afectado_nombre',
-    GET: (record) => (record?.tipo_equipo_afectado_nombre ?? ''),
+    GET: (record) =>
+      (record?.tipo_equipo_afectado_nombre
+      ?? record?.TIPO_EQUIPO_AFECTADO_NOMBRE
+      ?? record?.tipo_equipo_afectado
+      ?? record?.TIPO_EQUIPO_AFECTADO
+      ?? ''),
   },
   { HEADER: 'NOMBRE DE EQUIPO AFECTADO', KEY: 'NOMBRE DE EQUIPO' },
   {
@@ -191,11 +196,12 @@ const normalizeFallosExportBlob = async (blob: Blob) => {
   const sampleRecord = records[0];
   console.log('creador id value:', sampleRecord?.verificacion_apertura_id);
 
-  const rows = records;
-  console.log('[EXPORT][SAMPLE RECORD KEYS]', Object.keys(rows?.[0] || {}));
-  console.log('[EXPORT][SAMPLE tipo_equipo_afectado_nombre]', rows?.[0]?.tipo_equipo_afectado_nombre);
+  const rowsToExport = records;
+  console.log('[EXPORT][SAMPLE RECORD]', rowsToExport?.[0]);
+  console.log('[EXPORT][SAMPLE KEYS]', Object.keys(rowsToExport?.[0] || {}));
+  console.log('[EXPORT][SAMPLE tipo_equipo_afectado_nombre]', rowsToExport?.[0]?.tipo_equipo_afectado_nombre);
 
-  const normalizedRows = rows.map((record) => {
+  const normalizedRows = rowsToExport.map((record) => {
     return EXPORT_COLUMNS_ORDERED.reduce<Record<string, string>>((acc, column) => {
       let value = column.GET ? column.GET(record) : getExportRecordValue(record, [column.KEY]);
 
