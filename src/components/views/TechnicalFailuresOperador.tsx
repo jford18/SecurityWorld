@@ -156,6 +156,8 @@ const TechnicalFailuresOperador: React.FC = () => {
   const [tiposEquipoAfectado, setTiposEquipoAfectado] = useState<
     Array<{ id: number; nombre: string }>
   >([]);
+  const [isLoadingTiposEquipoAfectado, setIsLoadingTiposEquipoAfectado] = useState(false);
+  const [tiposEquipoAfectadoError, setTiposEquipoAfectadoError] = useState<string | null>(null);
   const [nodoSitioError, setNodoSitioError] = useState<string | null>(null);
   const [filters, setFilters] = useState<FallosHeaderFilters>({
     clienteId: '',
@@ -192,6 +194,7 @@ const TechnicalFailuresOperador: React.FC = () => {
 
   const isEquipoAfectacion =
     normalizeText(String(formData?.affectationType || '')) === normalizeText('Equipo');
+  const showTipoEquipo = isEquipoAfectacion;
 
   const showIpSpeakerField =
     isEquipoAfectacion &&
@@ -230,6 +233,9 @@ const TechnicalFailuresOperador: React.FC = () => {
   console.log('[GRABADOR] showEncodingDeviceField:', showEncodingDeviceField);
   console.log('[GRABADOR] sitioId:', formData?.sitioId);
   console.log('[GRABADOR] sitiosItems length:', (sitiosItems || []).length);
+  console.log('[FALLOS][FORM] tipo_afectacion:', formData?.affectationType);
+  console.log('[FALLOS][CAT] tipoEquipo options:', tiposEquipoAfectado?.length, tiposEquipoAfectado?.[0]);
+  console.log('[FALLOS][FORM] tipo_equipo_afectado_id:', formData?.tipoEquipoAfectadoId);
 
   const encodingDeviceItems = useMemo(() => {
     return [
@@ -485,6 +491,9 @@ const TechnicalFailuresOperador: React.FC = () => {
     let isMounted = true;
 
     const loadTiposEquipoAfectado = async () => {
+      setIsLoadingTiposEquipoAfectado(true);
+      setTiposEquipoAfectadoError(null);
+
       try {
         const response = await getAllTipoEquipoAfectado({
           page: 0,
@@ -497,18 +506,21 @@ const TechnicalFailuresOperador: React.FC = () => {
         console.error('Error cargando tipos de equipo afectado:', error);
         if (isMounted) {
           setTiposEquipoAfectado([]);
+          setTiposEquipoAfectadoError('No se pudo cargar el catálogo de tipos de equipo afectado.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingTiposEquipoAfectado(false);
         }
       }
     };
 
-    if (formData.affectationType === 'Equipo' && tiposEquipoAfectado.length === 0) {
-      loadTiposEquipoAfectado();
-    }
+    loadTiposEquipoAfectado();
 
     return () => {
       isMounted = false;
     };
-  }, [formData.affectationType, tiposEquipoAfectado.length]);
+  }, []);
 
   const selectedNodo = useMemo(
     () => nodos.find((nodoItem) => String(nodoItem.id) === formData.nodo) ?? null,
@@ -562,7 +574,7 @@ const TechnicalFailuresOperador: React.FC = () => {
       delete tempErrors.sitioId;
     }
 
-    if (fieldValues.affectationType === 'Equipo') {
+    if (normalizeText(String(fieldValues.affectationType || '')) === normalizeText('Equipo')) {
       if (!fieldValues.tipoEquipoAfectadoId) {
         tempErrors.tipoEquipoAfectadoId = 'El tipo de equipo afectado es obligatorio.';
       } else {
@@ -831,14 +843,50 @@ const TechnicalFailuresOperador: React.FC = () => {
   }, [formData.affectationType, selectedSitio]);
 
   useEffect(() => {
-    if (formData.affectationType !== 'Equipo' && formData.tipoEquipoAfectadoId) {
-      setFormData((prev) => ({ ...prev, tipoEquipoAfectadoId: '', tipoEquipoAfectadoNombre: '' }));
-      setErrors((prev) => {
-        const { tipoEquipoAfectadoId, ...rest } = prev;
-        return rest;
-      });
+    if (showTipoEquipo) {
+      return;
     }
-  }, [formData.affectationType, formData.tipoEquipoAfectadoId]);
+
+    setFormData((prev) => {
+      const hasDependentValues =
+        prev.tipoEquipoAfectadoId ||
+        prev.tipoEquipoAfectadoNombre ||
+        prev.camara ||
+        prev.encodingDeviceId ||
+        prev.ipSpeakerId ||
+        prev.alarmInputId ||
+        prev.tipoProblemaEquipo;
+
+      if (!hasDependentValues) return prev;
+
+      return {
+        ...prev,
+        tipoEquipoAfectadoId: '',
+        tipoEquipoAfectadoNombre: '',
+        camara: '',
+        encodingDeviceId: '',
+        ipSpeakerId: '',
+        alarmInputId: '',
+        tipoProblemaEquipo: '',
+      };
+    });
+
+    setErrors((prev) => {
+      const {
+        tipoEquipoAfectadoId,
+        camara,
+        tipoProblemaEquipo,
+        alarmInputId,
+        ...rest
+      } = prev;
+      return rest;
+    });
+    SET_CAMARAS([]);
+    SET_CAMERA_ID(null);
+    setEncodingDevices([]);
+    setIpSpeakers([]);
+    setAlarmInputs([]);
+  }, [showTipoEquipo]);
 
   useEffect(() => {
     if (formData.affectationType === 'Equipo' && equipoEsHC) {
@@ -1384,9 +1432,17 @@ const TechnicalFailuresOperador: React.FC = () => {
                   items={tipoEquipoAfectadoItems}
                   displayField="label"
                   valueField="value"
-                  placeholder="Buscar tipo de equipo afectado..."
+                  placeholder={
+                    isLoadingTiposEquipoAfectado
+                      ? 'Cargando tipos de equipo afectado...'
+                      : 'Buscar tipo de equipo afectado...'
+                  }
+                  disabled={isLoadingTiposEquipoAfectado}
                   error={errors.tipoEquipoAfectadoId}
                 />
+                {tiposEquipoAfectadoError && (
+                  <p className="text-red-500 text-xs mt-1">{tiposEquipoAfectadoError}</p>
+                )}
               </div>
               <div className="flex items-end">
                 <div className="flex items-start">
