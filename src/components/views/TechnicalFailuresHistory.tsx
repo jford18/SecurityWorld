@@ -22,6 +22,21 @@ const getExportRecordValue = (record: ExportRecord, keys: string[]) => {
   return '';
 };
 
+const getIdBasedUserName = (record: ExportRecord, userMap: Map<string, string>) => {
+  const creatorId = getExportRecordValue(record, ['verificacion_apertura_id']);
+  if (!creatorId) return '';
+
+  const directName = getExportRecordValue(record, [
+    'verificacion_apertura_nombre_completo',
+    'usuario_apertura_nombre_completo',
+    'creador_nombre_completo',
+  ]);
+
+  if (directName) return directName;
+
+  return userMap.get(creatorId) ?? '';
+};
+
 const EXPORT_COLUMNS: ExportColumn[] = [
   { HEADER: 'ID FALLO', KEY: 'id_fallo' },
   { HEADER: 'N MODIFICACION', KEY: 'num_evento' },
@@ -73,7 +88,7 @@ const EXPORT_COLUMNS: ExportColumn[] = [
     KEY: 'HACIENDA',
     GET: (record) => getExportRecordValue(record, ['HACIENDA', 'hacienda', 'hacienda_nombre']),
   },
-  { HEADER: 'NOMBRE COMPLETO USUARIO QUE CREÓ EL FALLO', KEY: 'verificacion_cierre_id_usuario' },
+  { HEADER: 'NOMBRE COMPLETO USUARIO QUE CREÓ EL FALLO', KEY: 'verificacion_apertura_nombre_completo' },
   { HEADER: 'NOMBRE COMPLETO USUARIO QUE CERRÓ EL FALLO', KEY: 'NOMBRE CO' },
   { HEADER: 'NOMBRE COMPLETO USUARIOS QUE MODIFICARON EL FALLO MIENTRAS ESTUVO ACTIVO', KEY: 'ultimo_usuario_edito_nombre_completo' },
   {
@@ -108,7 +123,7 @@ const normalizeFallosExportBlob = async (blob: Blob) => {
   console.log('EXPORT sample row:', dataRows?.[0]);
   console.log('EXPORT columns:', EXPORT_COLUMNS_FINAL);
 
-  const normalizedRows = dataRows.map((row) => {
+  const records = dataRows.map((row) => {
     const record: ExportRecord = {};
 
     row.forEach((value, index) => {
@@ -118,8 +133,38 @@ const normalizeFallosExportBlob = async (blob: Blob) => {
       if (businessKey) record[businessKey] = value;
     });
 
+    return record;
+  });
+
+  const userMap = new Map<string, string>();
+
+  records.forEach((record) => {
+    const sources: Array<[string, string]> = [
+      ['ultimo_usuario_edito_id', 'ultimo_usuario_edito_nombre_completo'],
+      ['responsable_id', 'NOMBRE CO'],
+      ['verificacion_apertura_id', 'verificacion_apertura_nombre_completo'],
+    ];
+
+    sources.forEach(([idKey, nameKey]) => {
+      const id = getExportRecordValue(record, [idKey]);
+      const name = getExportRecordValue(record, [nameKey]);
+      if (id && name) {
+        userMap.set(id, name);
+      }
+    });
+  });
+
+  const sampleRecord = records[0];
+  console.log('creador id value:', sampleRecord?.verificacion_apertura_id);
+
+  const normalizedRows = records.map((record) => {
     return EXPORT_COLUMNS_FINAL.reduce<Record<string, string>>((acc, column) => {
-      const value = column.GET ? column.GET(record) : getExportRecordValue(record, [column.KEY]);
+      let value = column.GET ? column.GET(record) : getExportRecordValue(record, [column.KEY]);
+
+      if (column.HEADER === 'NOMBRE COMPLETO USUARIO QUE CREÓ EL FALLO') {
+        value = getIdBasedUserName(record, userMap);
+      }
+
       acc[column.HEADER] = value;
       return acc;
     }, {});
