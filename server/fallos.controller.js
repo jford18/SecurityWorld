@@ -996,6 +996,11 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
         normalizeText(row.nombre_equipo) ||
         normalizeText(row.equipo_afectado) ||
         "-";
+      const tipoAfectacion = normalizeText(row.tipo_afectacion);
+      const sitioValue =
+        tipoAfectacion === "Nodo"
+          ? normalizeText(row.equipo_afectado) || "-"
+          : normalizeText(row.sitio_nombre) || "-";
 
       return {
         id_fallo: row.id_fallo,
@@ -1034,7 +1039,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
         duracion_desde_ultima_modificacion_hhmmss: row.duracion_desde_ultima_modificacion_hhmmss,
         duracion_total_fallo_hhmmss: row.duracion_total_fallo_hhmmss,
         "REPORTADO AL CLIENTE": normalizeReportadoClienteValue(row.reportado_al_cliente),
-        SITIO: normalizeText(row.sitio_nombre) || "-",
+        SITIO: sitioValue,
         "TIPO DE EQUIPO AFECTADO": normalizeText(row.tipo_equipo_afectado_nombre) || "-",
         "NOMBRE DE EQUIPO": nombreEquipo,
         "NOMBRE CONSOLA": normalizeText(row.nombre_consola) || "",
