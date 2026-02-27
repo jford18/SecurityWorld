@@ -1,7 +1,140 @@
 import React, { useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { TechnicalFailure } from '../../types';
 import { calcularEstado } from './TechnicalFailuresUtils';
 import { FallosExportFilters, exportFallosTecnicosConsultasExcel } from '../../services/fallosService';
+
+type ExportRecord = Record<string, string | number | boolean | null | undefined>;
+
+type ExportColumn = {
+  header: string;
+  key: string;
+  valueGetter?: (record: ExportRecord) => string;
+};
+
+const getExportRecordValue = (record: ExportRecord, keys: string[]) => {
+  for (const key of keys) {
+    const value = record[key];
+    if (value === null || value === undefined) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return '';
+};
+
+const EXPORT_COLUMNS: ExportColumn[] = [
+  { header: 'ID FALLO', key: 'id_fallo' },
+  { header: 'N MODIFICACION', key: 'n_modificacion' },
+  { header: 'FECHA Y HORA MODIFICACION', key: 'fecha_hora_modificacion' },
+  { header: 'DURACION ENTRE 2 MODIFICACIONES (SEG)', key: 'duracion_entre_2_modificaciones_seg' },
+  { header: 'DURACION TOTAL DEL FALLO (FECHA Y HORA RESOLUCION-FECHA Y HORA FALLO) (SEG)', key: 'duracion_total_fallo_seg' },
+  { header: 'ID MODIFICACION', key: 'id_modificacion' },
+  { header: 'ID DE DEPARTAMENTO', key: 'id_departamento' },
+  { header: 'NOMBRE DEPARTAMENTO', key: 'nombre_departamento' },
+  { header: 'DETALLE NOVEDAD', key: 'detalle_novedad' },
+  { header: 'ID USUARIOS QUE MODIFICARON', key: 'id_usuarios_que_modificaron' },
+  { header: 'USUARIO DE PERSONA QUE MODIFICO', key: 'usuario_persona_que_modifico' },
+  { header: 'NOMBRE DE USUARIOS QUE EDITARON', key: 'nombre_usuarios_que_editaron' },
+  { header: 'CODIGO USUARIO QUE CREO EL FALLO', key: 'codigo_usuario_que_creo_fallo' },
+  { header: 'CODIGO USUARIO QUE CERRO EL FALLO', key: 'codigo_usuario_que_cerro_fallo' },
+  { header: 'CODIGO USUARIOS QUE MODIFICARON (INTERMEDIOS)', key: 'codigo_usuarios_que_modificaron_intermedios' },
+  { header: 'FECHA FALLO', key: 'fecha_fallo' },
+  { header: 'TIPO PROBLEMA', key: 'tipo_problema' },
+  { header: 'ID USUARIO APERTURA (REPETIDA)', key: 'id_usuario_apertura_repetida' },
+  { header: 'ID DEPARTAMENTO CON EL QUE SE CERRÓ EL FALLO (FINAL)', key: 'id_departamento_cierre_final' },
+  { header: 'NOMBRE DEPARTAMENTO CON EL QUE SE CERRÓ EL FALLO (FINAL)', key: 'nombre_departamento_cierre_final' },
+  { header: 'ID TIPO PROBLEMA', key: 'id_tipo_problema' },
+  { header: 'ID CONSOLA', key: 'id_consola' },
+  { header: 'FECHA SOLUCION', key: 'fecha_solucion' },
+  { header: 'HORA SOLUCION', key: 'hora_solucion' },
+  { header: 'ESTADO', key: 'estado' },
+  { header: 'FECHA Y HORA DE CREACION', key: 'fecha_hora_creacion' },
+  { header: 'FECHA Y HORA DE CIERRE', key: 'fecha_hora_cierre' },
+  { header: 'HORA DE FALLO', key: 'hora_fallo' },
+  { header: 'TIPO AFECTACION', key: 'tipo_afectacion' },
+  { header: 'DURACION POR CADA MODIFICACION (H)', key: 'duracion_por_cada_modificacion_h' },
+  { header: 'DURACION TOTAL FALLO (H)', key: 'duracion_total_fallo_h' },
+  { header: 'REPORTADO AL CLIENTE', key: 'reportado_cliente' },
+  { header: 'SITIO', key: 'sitio' },
+  { header: 'TIPO EQUIPO AFECTADO', key: 'tipo_equipo_afectado' },
+  { header: 'NOMBRE DE EQUIPO AFECTADO', key: 'nombre_equipo_afectado' },
+  {
+    header: 'NOMBRE CONSOLA',
+    key: 'nombre_consola',
+    valueGetter: (record) => getExportRecordValue(record, ['nombre_consola', 'consola_nombre', 'NOMBRE CONSOLA']),
+  },
+  {
+    header: 'CLIENTE',
+    key: 'cliente',
+    valueGetter: (record) => getExportRecordValue(record, ['cliente', 'cliente_nombre', 'CLIENTE']),
+  },
+  {
+    header: 'HACIENDA',
+    key: 'hacienda',
+    valueGetter: (record) => getExportRecordValue(record, ['hacienda', 'hacienda_nombre', 'HACIENDA']),
+  },
+  { header: 'NOMBRE COMPLETO USUARIO QUE CREÓ EL FALLO', key: 'nombre_completo_usuario_que_creo_fallo' },
+  { header: 'NOMBRE COMPLETO USUARIO QUE CERRÓ EL FALLO', key: 'nombre_completo_usuario_que_cerro_fallo' },
+  { header: 'NOMBRE COMPLETO USUARIOS QUE MODIFICARON EL FALLO MIENTRAS ESTUVO ACTIVO', key: 'nombre_completo_usuarios_que_modificaron_fallo_mientras_activo' },
+  {
+    header: 'NODO',
+    key: 'nodo',
+    valueGetter: (record) => getExportRecordValue(record, ['nodo', 'nombre_nodo', 'NODO']),
+  },
+];
+
+const normalizeFallosExportBlob = async (blob: Blob) => {
+  const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) return blob;
+
+  const sourceSheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(sourceSheet, {
+    header: 1,
+    raw: false,
+    defval: '',
+  });
+
+  if (rows.length < 2) return blob;
+
+  const businessHeaders = (rows[0] || []).map((value) => String(value).trim());
+  const technicalHeaders = (rows[1] || []).map((value) => String(value).trim());
+  const dataRows = rows.slice(2);
+
+  const normalizedRows = dataRows.map((row) => {
+    const record: ExportRecord = {};
+
+    row.forEach((value, index) => {
+      const technicalKey = technicalHeaders[index];
+      const businessKey = businessHeaders[index];
+      if (technicalKey) record[technicalKey] = value;
+      if (businessKey) record[businessKey] = value;
+    });
+
+    return EXPORT_COLUMNS.reduce<Record<string, string>>((acc, column) => {
+      const value = column.valueGetter
+        ? column.valueGetter(record)
+        : getExportRecordValue(record, [column.key, column.header]);
+      acc[column.header] = value;
+      return acc;
+    }, {});
+  });
+
+  const normalizedSheet = XLSX.utils.json_to_sheet(normalizedRows, {
+    header: EXPORT_COLUMNS.map((column) => column.header),
+  });
+  const normalizedWorkbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(normalizedWorkbook, normalizedSheet, 'Fallos');
+
+  const normalizedArray = XLSX.write(normalizedWorkbook, {
+    type: 'array',
+    bookType: 'xlsx',
+  });
+
+  return new Blob([normalizedArray], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+};
 
 const formatFechaHoraFallo = (failure: TechnicalFailure) => {
   if (failure.fechaHoraFallo) {
@@ -368,7 +501,9 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
         departamento: filters.departamento,
       });
 
-      const url = window.URL.createObjectURL(blob);
+      const normalizedBlob = await normalizeFallosExportBlob(blob);
+
+      const url = window.URL.createObjectURL(normalizedBlob);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', filename);
