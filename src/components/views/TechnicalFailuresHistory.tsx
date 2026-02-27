@@ -7,9 +7,9 @@ import { FallosExportFilters, exportFallosTecnicosConsultasExcel } from '../../s
 type ExportRecord = Record<string, string | number | boolean | null | undefined>;
 
 type ExportColumn = {
-  header: string;
-  key: string;
-  valueGetter?: (record: ExportRecord) => string;
+  HEADER: string;
+  KEY: string;
+  GET?: (record: ExportRecord) => string;
 };
 
 const getExportRecordValue = (record: ExportRecord, keys: string[]) => {
@@ -23,63 +23,63 @@ const getExportRecordValue = (record: ExportRecord, keys: string[]) => {
 };
 
 const EXPORT_COLUMNS: ExportColumn[] = [
-  { header: 'ID FALLO', key: 'id_fallo' },
-  { header: 'N MODIFICACION', key: 'n_modificacion' },
-  { header: 'FECHA Y HORA MODIFICACION', key: 'fecha_hora_modificacion' },
-  { header: 'DURACION ENTRE 2 MODIFICACIONES (SEG)', key: 'duracion_entre_2_modificaciones_seg' },
-  { header: 'DURACION TOTAL DEL FALLO (FECHA Y HORA RESOLUCION-FECHA Y HORA FALLO) (SEG)', key: 'duracion_total_fallo_seg' },
-  { header: 'ID MODIFICACION', key: 'id_modificacion' },
-  { header: 'ID DE DEPARTAMENTO', key: 'id_departamento' },
-  { header: 'NOMBRE DEPARTAMENTO', key: 'nombre_departamento' },
-  { header: 'DETALLE NOVEDAD', key: 'detalle_novedad' },
-  { header: 'ID USUARIOS QUE MODIFICARON', key: 'id_usuarios_que_modificaron' },
-  { header: 'USUARIO DE PERSONA QUE MODIFICO', key: 'usuario_persona_que_modifico' },
-  { header: 'NOMBRE DE USUARIOS QUE EDITARON', key: 'nombre_usuarios_que_editaron' },
-  { header: 'CODIGO USUARIO QUE CREO EL FALLO', key: 'codigo_usuario_que_creo_fallo' },
-  { header: 'CODIGO USUARIO QUE CERRO EL FALLO', key: 'codigo_usuario_que_cerro_fallo' },
-  { header: 'CODIGO USUARIOS QUE MODIFICARON (INTERMEDIOS)', key: 'codigo_usuarios_que_modificaron_intermedios' },
-  { header: 'FECHA FALLO', key: 'fecha_fallo' },
-  { header: 'TIPO PROBLEMA', key: 'tipo_problema' },
-  { header: 'ID USUARIO APERTURA (REPETIDA)', key: 'id_usuario_apertura_repetida' },
-  { header: 'ID DEPARTAMENTO CON EL QUE SE CERRÓ EL FALLO (FINAL)', key: 'id_departamento_cierre_final' },
-  { header: 'NOMBRE DEPARTAMENTO CON EL QUE SE CERRÓ EL FALLO (FINAL)', key: 'nombre_departamento_cierre_final' },
-  { header: 'ID TIPO PROBLEMA', key: 'id_tipo_problema' },
-  { header: 'ID CONSOLA', key: 'id_consola' },
-  { header: 'FECHA SOLUCION', key: 'fecha_solucion' },
-  { header: 'HORA SOLUCION', key: 'hora_solucion' },
-  { header: 'ESTADO', key: 'estado' },
-  { header: 'FECHA Y HORA DE CREACION', key: 'fecha_hora_creacion' },
-  { header: 'FECHA Y HORA DE CIERRE', key: 'fecha_hora_cierre' },
-  { header: 'HORA DE FALLO', key: 'hora_fallo' },
-  { header: 'TIPO AFECTACION', key: 'tipo_afectacion' },
-  { header: 'DURACION POR CADA MODIFICACION (H)', key: 'duracion_por_cada_modificacion_h' },
-  { header: 'DURACION TOTAL FALLO (H)', key: 'duracion_total_fallo_h' },
-  { header: 'REPORTADO AL CLIENTE', key: 'reportado_cliente' },
-  { header: 'SITIO', key: 'sitio' },
-  { header: 'TIPO EQUIPO AFECTADO', key: 'tipo_equipo_afectado' },
-  { header: 'NOMBRE DE EQUIPO AFECTADO', key: 'nombre_equipo_afectado' },
+  { HEADER: 'ID FALLO', KEY: 'id_fallo' },
+  { HEADER: 'N MODIFICACION', KEY: 'num_evento' },
+  { HEADER: 'FECHA Y HORA MODIFICACION', KEY: 'fecha_evento' },
+  { HEADER: 'DURACION ENTRE 2 MODIFICACIONES (SEG)', KEY: 'duracion_desde_ultima_modificacion_seg' },
+  { HEADER: 'DURACION TOTAL DEL FALLO (FECHA Y HORA RESOLUCION-FECHA Y HORA FALLO) (SEG)', KEY: 'duracion_total_fallo_seg' },
+  { HEADER: 'ID MODIFICACION', KEY: 'id_seguimiento' },
+  { HEADER: 'ID DE DEPARTAMENTO', KEY: 'departamento_id_evento' },
+  { HEADER: 'NOMBRE DEPARTAMENTO', KEY: 'departamento_nombre_evento' },
+  { HEADER: 'DETALLE NOVEDAD', KEY: 'novedad_detectada' },
+  { HEADER: 'ID USUARIOS QUE MODIFICARON', KEY: 'ultimo_usuario_edito_id' },
+  { HEADER: 'USUARIO DE PERSONA QUE MODIFICO', KEY: 'ultimo_usuario_edito_usuario' },
+  { HEADER: 'NOMBRE DE USUARIOS QUE EDITARON', KEY: 'ultimo_usuario_edito_nombre_completo' },
+  { HEADER: 'CODIGO USUARIO QUE CREO EL FALLO', KEY: 'verificacion_apertura_id' },
+  { HEADER: 'CODIGO USUARIO QUE CERRO EL FALLO', KEY: 'verificacion_cierre_id' },
+  { HEADER: 'CODIGO USUARIOS QUE MODIFICARON (INTERMEDIOS)', KEY: 'responsable_verificacion_cierre_id' },
+  { HEADER: 'FECHA FALLO', KEY: 'fecha' },
+  { HEADER: 'TIPO PROBLEMA', KEY: 'descripcion_fallo' },
+  { HEADER: 'ID USUARIO APERTURA (REPETIDA)', KEY: 'responsable_id' },
+  { HEADER: 'ID DEPARTAMENTO CON EL QUE SE CERRÓ EL FALLO (FINAL)', KEY: 'departamento_id_actual' },
+  { HEADER: 'NOMBRE DEPARTAMENTO CON EL QUE SE CERRÓ EL FALLO (FINAL)', KEY: 'departamento_nombre_actual' },
+  { HEADER: 'ID TIPO PROBLEMA', KEY: 'tipo_problema_id' },
+  { HEADER: 'ID CONSOLA', KEY: 'consola_id' },
+  { HEADER: 'FECHA SOLUCION', KEY: 'fecha_resolucion' },
+  { HEADER: 'HORA SOLUCION', KEY: 'hora_resolucion' },
+  { HEADER: 'ESTADO', KEY: 'estado' },
+  { HEADER: 'FECHA Y HORA DE CREACION', KEY: 'fecha_creacion' },
+  { HEADER: 'FECHA Y HORA DE CIERRE', KEY: 'fecha_actualizacion' },
+  { HEADER: 'HORA DE FALLO', KEY: 'hora' },
+  { HEADER: 'TIPO AFECTACION', KEY: 'tipo_afectacion' },
+  { HEADER: 'DURACION POR CADA MODIFICACION (H)', KEY: 'duracion_desde_ultima_modificacion_hhmmss' },
+  { HEADER: 'DURACION TOTAL FALLO (H)', KEY: 'duracion_total_fallo_hhmmss' },
+  { HEADER: 'REPORTADO AL CLIENTE', KEY: 'REPORTADO AL CLIENTE' },
+  { HEADER: 'SITIO', KEY: 'SITIO' },
+  { HEADER: 'TIPO EQUIPO AFECTADO', KEY: 'TIPO DE EQUIPO AFECTADO' },
+  { HEADER: 'NOMBRE DE EQUIPO AFECTADO', KEY: 'NOMBRE DE EQUIPO' },
   {
-    header: 'NOMBRE CONSOLA',
-    key: 'nombre_consola',
-    valueGetter: (record) => getExportRecordValue(record, ['nombre_consola', 'consola_nombre', 'NOMBRE CONSOLA']),
+    HEADER: 'NOMBRE CONSOLA',
+    KEY: 'NOMBRE CONSOLA',
+    GET: (record) => getExportRecordValue(record, ['NOMBRE CONSOLA', 'nombre_consola', 'consola_nombre']),
   },
   {
-    header: 'CLIENTE',
-    key: 'cliente',
-    valueGetter: (record) => getExportRecordValue(record, ['cliente', 'cliente_nombre', 'CLIENTE']),
+    HEADER: 'CLIENTE',
+    KEY: 'CLIENTE',
+    GET: (record) => getExportRecordValue(record, ['CLIENTE', 'cliente', 'cliente_nombre']),
   },
   {
-    header: 'HACIENDA',
-    key: 'hacienda',
-    valueGetter: (record) => getExportRecordValue(record, ['hacienda', 'hacienda_nombre', 'HACIENDA']),
+    HEADER: 'HACIENDA',
+    KEY: 'HACIENDA',
+    GET: (record) => getExportRecordValue(record, ['HACIENDA', 'hacienda', 'hacienda_nombre']),
   },
-  { header: 'NOMBRE COMPLETO USUARIO QUE CREÓ EL FALLO', key: 'nombre_completo_usuario_que_creo_fallo' },
-  { header: 'NOMBRE COMPLETO USUARIO QUE CERRÓ EL FALLO', key: 'nombre_completo_usuario_que_cerro_fallo' },
-  { header: 'NOMBRE COMPLETO USUARIOS QUE MODIFICARON EL FALLO MIENTRAS ESTUVO ACTIVO', key: 'nombre_completo_usuarios_que_modificaron_fallo_mientras_activo' },
+  { HEADER: 'NOMBRE COMPLETO USUARIO QUE CREÓ EL FALLO', KEY: 'verificacion_cierre_id_usuario' },
+  { HEADER: 'NOMBRE COMPLETO USUARIO QUE CERRÓ EL FALLO', KEY: 'NOMBRE CO' },
+  { HEADER: 'NOMBRE COMPLETO USUARIOS QUE MODIFICARON EL FALLO MIENTRAS ESTUVO ACTIVO', KEY: 'ultimo_usuario_edito_nombre_completo' },
   {
-    header: 'NODO',
-    key: 'nodo',
-    valueGetter: (record) => getExportRecordValue(record, ['nodo', 'nombre_nodo', 'NODO']),
+    HEADER: 'NODO',
+    KEY: 'NOMBRE DE NODO',
+    GET: (record) => getExportRecordValue(record, ['NOMBRE DE NODO', 'nodo', 'nombre_nodo']),
   },
 ];
 
@@ -101,6 +101,9 @@ const normalizeFallosExportBlob = async (blob: Blob) => {
   const technicalHeaders = (rows[1] || []).map((value) => String(value).trim());
   const dataRows = rows.slice(2);
 
+  console.log('EXPORT sample row:', dataRows?.[0]);
+  console.log('EXPORT columns:', EXPORT_COLUMNS);
+
   const normalizedRows = dataRows.map((row) => {
     const record: ExportRecord = {};
 
@@ -112,16 +115,14 @@ const normalizeFallosExportBlob = async (blob: Blob) => {
     });
 
     return EXPORT_COLUMNS.reduce<Record<string, string>>((acc, column) => {
-      const value = column.valueGetter
-        ? column.valueGetter(record)
-        : getExportRecordValue(record, [column.key, column.header]);
-      acc[column.header] = value;
+      const value = column.GET ? column.GET(record) : getExportRecordValue(record, [column.KEY]);
+      acc[column.HEADER] = value;
       return acc;
     }, {});
   });
 
   const normalizedSheet = XLSX.utils.json_to_sheet(normalizedRows, {
-    header: EXPORT_COLUMNS.map((column) => column.header),
+    header: EXPORT_COLUMNS.map((column) => column.HEADER),
   });
   const normalizedWorkbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(normalizedWorkbook, normalizedSheet, 'Fallos');
