@@ -102,6 +102,36 @@ const EXPORT_COLUMNS_FINAL = EXPORT_COLUMNS.filter(
   (column) => column.HEADER !== 'ID USUARIO APERTURA (REPETIDA)' && column.KEY !== 'responsable_id',
 );
 
+const CREATOR_CODE_HEADER = 'CODIGO USUARIO QUE CREO EL FALLO';
+const CREATOR_FULL_NAME_HEADER = 'NOMBRE COMPLETO USUARIO QUE CREÓ EL FALLO';
+const INSERT_AFTER_HEADER = 'NOMBRE DE USUARIOS QUE EDITARON';
+
+const creatorCodeColumn = EXPORT_COLUMNS_FINAL.find((column) => column.HEADER === CREATOR_CODE_HEADER);
+const creatorNameColumn = EXPORT_COLUMNS_FINAL.find((column) => column.HEADER === CREATOR_FULL_NAME_HEADER);
+
+const EXPORT_COLUMNS_ORDERED = (() => {
+  const columnsWithoutCreatorData = EXPORT_COLUMNS_FINAL.filter(
+    (column) => column.HEADER !== CREATOR_CODE_HEADER && column.HEADER !== CREATOR_FULL_NAME_HEADER,
+  );
+
+  const insertIndex = columnsWithoutCreatorData.findIndex((column) => column.HEADER === INSERT_AFTER_HEADER);
+
+  if (insertIndex < 0) {
+    return [
+      ...columnsWithoutCreatorData,
+      ...(creatorCodeColumn ? [creatorCodeColumn] : []),
+      ...(creatorNameColumn ? [creatorNameColumn] : []),
+    ];
+  }
+
+  return [
+    ...columnsWithoutCreatorData.slice(0, insertIndex + 1),
+    ...(creatorCodeColumn ? [creatorCodeColumn] : []),
+    ...(creatorNameColumn ? [creatorNameColumn] : []),
+    ...columnsWithoutCreatorData.slice(insertIndex + 1),
+  ];
+})();
+
 const normalizeFallosExportBlob = async (blob: Blob) => {
   const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
   const sheetName = workbook.SheetNames[0];
@@ -121,7 +151,7 @@ const normalizeFallosExportBlob = async (blob: Blob) => {
   const dataRows = rows.slice(2);
 
   console.log('EXPORT sample row:', dataRows?.[0]);
-  console.log('EXPORT columns:', EXPORT_COLUMNS_FINAL);
+  console.log('EXPORT columns:', EXPORT_COLUMNS_ORDERED);
 
   const records = dataRows.map((row) => {
     const record: ExportRecord = {};
@@ -158,10 +188,10 @@ const normalizeFallosExportBlob = async (blob: Blob) => {
   console.log('creador id value:', sampleRecord?.verificacion_apertura_id);
 
   const normalizedRows = records.map((record) => {
-    return EXPORT_COLUMNS_FINAL.reduce<Record<string, string>>((acc, column) => {
+    return EXPORT_COLUMNS_ORDERED.reduce<Record<string, string>>((acc, column) => {
       let value = column.GET ? column.GET(record) : getExportRecordValue(record, [column.KEY]);
 
-      if (column.HEADER === 'NOMBRE COMPLETO USUARIO QUE CREÓ EL FALLO') {
+      if (column.HEADER === CREATOR_FULL_NAME_HEADER) {
         value = getIdBasedUserName(record, userMap);
       }
 
@@ -171,7 +201,7 @@ const normalizeFallosExportBlob = async (blob: Blob) => {
   });
 
   const normalizedSheet = XLSX.utils.json_to_sheet(normalizedRows, {
-    header: EXPORT_COLUMNS_FINAL.map((column) => column.HEADER),
+    header: EXPORT_COLUMNS_ORDERED.map((column) => column.HEADER),
   });
   const normalizedWorkbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(normalizedWorkbook, normalizedSheet, 'Fallos');
