@@ -1,5 +1,6 @@
 import XLSX from "xlsx";
 import { pool } from "./db.js";
+import { logSql } from "./utils/sqlLogger.js";
 import {
   nodos,
   nodoCliente,
@@ -488,8 +489,7 @@ export const getFallos = async (req, res) => {
 
     const reportadoSelect = `${reportadoBooleanSqlExpression('ft')} AS reportado_al_cliente`;
 
-    const result = await client.query(
-      `SELECT
+    const sql = `SELECT
         ft.id,
         ft.fecha,
         ft.hora,
@@ -607,9 +607,10 @@ export const getFallos = async (req, res) => {
         ORDER BY sf.fallo_id, sf.fecha_creacion DESC
       ) seguimiento_ultimo ON seguimiento_ultimo.fallo_id = ft.id
       ${whereFilters}
-      ORDER BY ft.fecha DESC, ft.id DESC`,
-      params
-    ); // FIX: rewritten query uses LEFT JOINs only with existing lookup tables to avoid failing when optional relations are missing and to provide the consola name.
+      ORDER BY ft.fecha DESC, ft.id DESC`;
+
+    logSql("FALLOS_CONSULTAS_DATA", sql, params);
+    const result = await client.query(sql, params); // FIX: rewritten query uses LEFT JOINs only with existing lookup tables to avoid failing when optional relations are missing and to provide the consola name.
 
     const fallos = result.rows.map(mapFalloRowToDto);
 
@@ -954,6 +955,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       ORDER BY ID_FALLO, NUM_EVENTO;
     `;
 
+    logSql("FALLOS_CONSULTAS_EXPORT", query, params);
     const result = await client.query(query, params);
 
     const rows = result.rows.map((row) => ({
