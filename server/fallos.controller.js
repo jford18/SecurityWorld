@@ -901,10 +901,23 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
               END) AS nodo_nombre,
               COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS nombre_co,
               CASE
-                WHEN A.CAMERA_ID IS NOT NULL THEN 'Cámaras'
-                WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN 'Grabador'
-                WHEN A.IP_SPEAKER_ID IS NOT NULL THEN 'Megáfono IP'
-                WHEN A.ALARM_INPUT_ID IS NOT NULL THEN 'Alarm Input'
+                WHEN UPPER(A.TIPO_AFECTACION) = 'EQUIPO' THEN
+                  CASE
+                    WHEN A.CAMERA_ID IS NOT NULL THEN 'Cámaras'
+                    WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN 'Grabador'
+                    WHEN A.IP_SPEAKER_ID IS NOT NULL THEN 'Megáfono IP'
+                    WHEN A.ALARM_INPUT_ID IS NOT NULL THEN 'Alarm Input'
+                    ELSE NULLIF(
+                      TRIM(
+                        REGEXP_REPLACE(
+                          SPLIT_PART(A.EQUIPO_AFECTADO, ' en ', 1),
+                          '\\s*\\(.*\\)$',
+                          ''
+                        )
+                      ),
+                      ''
+                    )
+                  END
                 ELSE NULL
               END AS tipo_equipo_afectado_nombre,
               CASE
@@ -960,6 +973,12 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
 
     console.log('[EXPORT][DB rows length]', result.rows?.length);
     console.log('[EXPORT][DB sample row]', result.rows?.[0]);
+    console.log('[EXPORT][SAMPLE tipo_equipo_afectado_nombre]', result.rows?.slice(0, 10).map(r => ({
+      id_fallo: r.id_fallo,
+      equipo_afectado: r.equipo_afectado,
+      tipo_afectacion: r.tipo_afectacion,
+      tipo_equipo_afectado_nombre: r.tipo_equipo_afectado_nombre
+    })));
     console.log(
       '[EXPORT][DB sample tipo_equipo_afectado_nombre]',
       result.rows?.[0]?.tipo_equipo_afectado_nombre
