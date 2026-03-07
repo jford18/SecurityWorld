@@ -99,6 +99,11 @@ const EXPORT_COLUMNS: ExportColumn[] = [
     KEY: 'NOMBRE DE NODO',
     GET: (record) => getExportRecordValue(record, ['NOMBRE DE NODO', 'nodo', 'nombre_nodo']),
   },
+  {
+    HEADER: 'TIPO_EQUIPO_AFECTADO_NOMBRE',
+    KEY: 'tipo_equipo_afectado_nombre',
+    GET: (record) => record?.tipo_equipo_afectado_nombre == null ? '' : String(record.tipo_equipo_afectado_nombre),
+  },
 ];
 
 const EXPORT_COLUMNS_FINAL = EXPORT_COLUMNS.filter(
@@ -194,6 +199,7 @@ const normalizeFallosExportBlob = async (blob: Blob) => {
   console.log('[EXPORT] rowsToExport.length =', rowsToExport.length);
   console.log('[EXPORT] sample row =', rowsToExport[0]);
   console.log('[EXPORT] sample tipo_equipo_afectado_nombre =', rowsToExport[0]?.tipo_equipo_afectado_nombre);
+  console.log('[EXPORT][DEBUG tipo_equipo_afectado_nombre]', rowsToExport?.[0]?.tipo_equipo_afectado_nombre);
 
   const excelRows = rowsToExport.map((record, index) => {
     const row: Record<string, string> = {};
