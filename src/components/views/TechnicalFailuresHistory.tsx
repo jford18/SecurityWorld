@@ -74,12 +74,6 @@ const EXPORT_COLUMNS: ExportColumn[] = [
   {
     HEADER: 'TIPO EQUIPO AFECTADO',
     KEY: 'tipo_equipo_afectado_nombre',
-    GET: (record) =>
-      (record?.tipo_equipo_afectado_nombre
-      ?? record?.TIPO_EQUIPO_AFECTADO_NOMBRE
-      ?? record?.tipo_equipo_afectado
-      ?? record?.TIPO_EQUIPO_AFECTADO
-      ?? ''),
   },
   { HEADER: 'NOMBRE DE EQUIPO AFECTADO', KEY: 'NOMBRE DE EQUIPO' },
   {
@@ -197,24 +191,48 @@ const normalizeFallosExportBlob = async (blob: Blob) => {
   console.log('creador id value:', sampleRecord?.verificacion_apertura_id);
 
   const rowsToExport = records;
-  console.log('[EXPORT][SAMPLE RECORD]', rowsToExport?.[0]);
-  console.log('[EXPORT][SAMPLE KEYS]', Object.keys(rowsToExport?.[0] || {}));
-  console.log('[EXPORT][SAMPLE tipo_equipo_afectado_nombre]', rowsToExport?.[0]?.tipo_equipo_afectado_nombre);
+  console.log('[EXPORT] rowsToExport.length =', rowsToExport.length);
+  console.log('[EXPORT] sample row =', rowsToExport[0]);
+  console.log('[EXPORT] sample tipo_equipo_afectado_nombre =', rowsToExport[0]?.tipo_equipo_afectado_nombre);
 
-  const normalizedRows = rowsToExport.map((record) => {
-    return EXPORT_COLUMNS_ORDERED.reduce<Record<string, string>>((acc, column) => {
-      let value = column.GET ? column.GET(record) : getExportRecordValue(record, [column.KEY]);
+  const excelRows = rowsToExport.map((record, index) => {
+    const row: Record<string, string> = {};
 
-      if (column.HEADER === CREATOR_FULL_NAME_HEADER) {
+    EXPORT_COLUMNS_ORDERED.forEach((col) => {
+      let value = typeof col.GET === 'function'
+        ? col.GET(record)
+        : (col.KEY ? record?.[col.KEY] : '');
+
+      if (col.HEADER === CREATOR_FULL_NAME_HEADER) {
         value = getIdBasedUserName(record, userMap);
       }
 
-      acc[column.HEADER] = value;
-      return acc;
-    }, {});
+      row[col.HEADER] = value == null ? '' : String(value);
+
+      if (index === 0) {
+        console.log(`[EXPORT][COL] ${col.HEADER}`, {
+          key: col.KEY,
+          value,
+          raw: col.KEY ? record?.[col.KEY] : undefined,
+        });
+      }
+    });
+
+    row['TIPO EQUIPO AFECTADO'] = record?.tipo_equipo_afectado_nombre == null
+      ? ''
+      : String(record.tipo_equipo_afectado_nombre);
+
+    if (index === 0) {
+      console.log('[EXPORT][ROW FINAL SAMPLE]', row);
+    }
+
+    return row;
   });
 
-  const normalizedSheet = XLSX.utils.json_to_sheet(normalizedRows, {
+  console.log('[EXPORT][EXCEL ROW 0 BEFORE SHEET]', excelRows[0]);
+
+  const normalizedSheet = XLSX.utils.json_to_sheet(excelRows, {
+    skipHeader: false,
     header: EXPORT_COLUMNS_ORDERED.map((column) => column.HEADER),
   });
   const normalizedWorkbook = XLSX.utils.book_new();
