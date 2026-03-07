@@ -958,7 +958,15 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
     logSql("FALLOS_CONSULTAS_EXPORT", query, params);
     const result = await client.query(query, params);
 
-    const rows = result.rows.map((row) => ({
+    console.log('[EXPORT][DB rows length]', result.rows?.length);
+    console.log('[EXPORT][DB sample row]', result.rows?.[0]);
+    console.log(
+      '[EXPORT][DB sample tipo_equipo_afectado_nombre]',
+      result.rows?.[0]?.tipo_equipo_afectado_nombre
+    );
+    console.log('[EXPORT][DB sample keys]', Object.keys(result.rows?.[0] || {}));
+
+    const rowsToSend = result.rows.map((row) => ({
       ...row,
       duracion_desde_ultima_modificacion_hhmmss: formatDurationSeconds(
         row.duracion_desde_ultima_modificacion_seg
@@ -966,112 +974,13 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       duracion_total_fallo_hhmmss: formatDurationSeconds(row.duracion_total_fallo_seg),
     }));
 
-    const normalizeReportadoClienteValue = (value) => {
-      if (value === null || value === undefined) {
-        return "NO";
-      }
-      if (typeof value === "boolean") {
-        return value ? "SI" : "NO";
-      }
-      if (typeof value === "number") {
-        if (value === 1) return "SI";
-        if (value === 0) return "NO";
-      }
-      const normalized = String(value).trim().toLowerCase();
-      if (["si", "sí", "s", "true", "t", "1", "yes", "y"].includes(normalized)) {
-        return "SI";
-      }
-      if (["no", "n", "false", "f", "0"].includes(normalized)) {
-        return "NO";
-      }
-      return "NO";
-    };
-
-    const normalizeText = (value) => {
-      if (value === null || value === undefined) return null;
-      const trimmed = String(value).trim();
-      return trimmed === "" ? null : trimmed;
-    };
-
-    const exportRows = rows.map((row) => {
-      const nombreEquipo =
-        normalizeText(row.nombre_equipo) ||
-        normalizeText(row.equipo_afectado) ||
-        "-";
-      const tipoAfectacion = normalizeText(row.tipo_afectacion);
-      const sitioValue =
-        tipoAfectacion === "Nodo"
-          ? normalizeText(row.equipo_afectado) || "-"
-          : normalizeText(row.sitio_nombre) || "-";
-
-      return {
-        id_fallo: row.id_fallo,
-        num_evento: row.num_evento,
-        fecha_evento: row.fecha_evento,
-        duracion_desde_ultima_modificacion_seg: row.duracion_desde_ultima_modificacion_seg,
-        duracion_total_fallo_seg: row.duracion_total_fallo_seg,
-        id_seguimiento: row.id_seguimiento,
-        departamento_id_evento: row.departamento_id_evento,
-        departamento_nombre_evento: row.departamento_nombre_evento,
-        novedad_detectada: row.novedad_detectada,
-        ultimo_usuario_edito_id: row.ultimo_usuario_edito_id,
-        ultimo_usuario_edito_usuario: row.ultimo_usuario_edito_usuario,
-        ultimo_usuario_edito_nombre_completo: row.ultimo_usuario_edito_nombre_completo,
-        verificacion_apertura_id: row.verificacion_apertura_id,
-        verificacion_cierre_id: row.verificacion_cierre_id,
-        responsable_verificacion_cierre_id: row.responsable_verificacion_cierre_id,
-        verificacion_supervisor_id: row.verificacion_supervisor_id,
-        verificacion_cierre_id_usuario: row.verificacion_cierre_id_usuario,
-        fecha_actualizacion_seguimiento: row.fecha_actualizacion_seguimiento,
-        fecha: row.fecha,
-        descripcion_fallo: row.descripcion_fallo,
-        responsable_id: row.responsable_id,
-        departamento_id_actual: row.departamento_id_actual,
-        departamento_nombre_actual: row.departamento_nombre_actual,
-        tipo_problema_id: row.tipo_problema_id,
-        consola_id: row.consola_id,
-        fecha_resolucion: row.fecha_resolucion,
-        hora_resolucion: row.hora_resolucion,
-        estado: row.estado,
-        fecha_creacion: row.fecha_creacion,
-        fecha_actualizacion: row.fecha_actualizacion,
-        hora: row.hora,
-        tipo_afectacion: row.tipo_afectacion,
-        reportado_cliente_raw: row.reportado_cliente_raw,
-        duracion_desde_ultima_modificacion_hhmmss: row.duracion_desde_ultima_modificacion_hhmmss,
-        duracion_total_fallo_hhmmss: row.duracion_total_fallo_hhmmss,
-        "REPORTADO AL CLIENTE": normalizeReportadoClienteValue(row.reportado_al_cliente),
-        SITIO: sitioValue,
-        "TIPO DE EQUIPO AFECTADO": normalizeText(row.tipo_equipo_afectado_nombre) || "-",
-        "NOMBRE DE EQUIPO": nombreEquipo,
-        "NOMBRE CONSOLA": normalizeText(row.nombre_consola) || "",
-        CLIENTE: normalizeText(row.cliente_nombre) || "",
-        HACIENDA: normalizeText(row.hacienda_nombre) || "",
-        "NOMBRE CO": normalizeText(row.nombre_co) || "",
-        "NOMBRE DE NODO": normalizeText(row.nodo_nombre) || "",
-      };
-    });
-
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Fallos");
-
-    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
-    const timestamp = formatTimestampForFilename();
-    const filename = `fallos_tecnicos_detallado_${timestamp}.xlsx`;
-
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    console.log('[EXPORT][RESPONSE sample row]', rowsToSend?.[0] || result.rows?.[0]);
+    console.log(
+      '[EXPORT][RESPONSE sample tipo_equipo_afectado_nombre]',
+      (rowsToSend?.[0] || result.rows?.[0])?.tipo_equipo_afectado_nombre
     );
-    res.setHeader("Content-Disposition", `attachment; filename=\"${filename}\"`);
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
-    res.setHeader("Surrogate-Control", "no-store");
-    res.removeHeader("ETag");
 
-    return res.status(200).send(buffer);
+    return res.status(200).json(rowsToSend);
   } catch (error) {
     console.error("Error al exportar fallos técnicos:", error);
     return res.status(500).json({

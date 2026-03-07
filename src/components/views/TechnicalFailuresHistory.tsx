@@ -2,13 +2,14 @@ import React, { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { TechnicalFailure } from '../../types';
 import { calcularEstado } from './TechnicalFailuresUtils';
-import { FallosExportFilters, exportFallosTecnicosConsultasExcel } from '../../services/fallosService';
+import { FallosExportFilters } from '../../services/fallosService';
+import api from '../../services/api';
 
 type ExportRecord = Record<string, string | number | boolean | null | undefined>;
 
 type ExportColumn = {
   HEADER: string;
-  KEY: string;
+  KEY?: string;
   GET?: (record: ExportRecord) => string;
 };
 
@@ -20,21 +21,6 @@ const getExportRecordValue = (record: ExportRecord, keys: string[]) => {
     if (text) return text;
   }
   return '';
-};
-
-const getIdBasedUserName = (record: ExportRecord, userMap: Map<string, string>) => {
-  const creatorId = getExportRecordValue(record, ['verificacion_apertura_id']);
-  if (!creatorId) return '';
-
-  const directName = getExportRecordValue(record, [
-    'verificacion_apertura_nombre_completo',
-    'usuario_apertura_nombre_completo',
-    'creador_nombre_completo',
-  ]);
-
-  if (directName) return directName;
-
-  return userMap.get(creatorId) ?? '';
 };
 
 const EXPORT_COLUMNS: ExportColumn[] = [
@@ -55,7 +41,6 @@ const EXPORT_COLUMNS: ExportColumn[] = [
   { HEADER: 'CODIGO USUARIOS QUE MODIFICARON (INTERMEDIOS)', KEY: 'responsable_verificacion_cierre_id' },
   { HEADER: 'FECHA FALLO', KEY: 'fecha' },
   { HEADER: 'TIPO PROBLEMA', KEY: 'descripcion_fallo' },
-  { HEADER: 'ID USUARIO APERTURA (REPETIDA)', KEY: 'responsable_id' },
   { HEADER: 'ID DEPARTAMENTO CON EL QUE SE CERRÓ EL FALLO (FINAL)', KEY: 'departamento_id_actual' },
   { HEADER: 'NOMBRE DEPARTAMENTO CON EL QUE SE CERRÓ EL FALLO (FINAL)', KEY: 'departamento_nombre_actual' },
   { HEADER: 'ID TIPO PROBLEMA', KEY: 'tipo_problema_id' },
@@ -69,190 +54,37 @@ const EXPORT_COLUMNS: ExportColumn[] = [
   { HEADER: 'TIPO AFECTACION', KEY: 'tipo_afectacion' },
   { HEADER: 'DURACION POR CADA MODIFICACION (H)', KEY: 'duracion_desde_ultima_modificacion_hhmmss' },
   { HEADER: 'DURACION TOTAL FALLO (H)', KEY: 'duracion_total_fallo_hhmmss' },
-  { HEADER: 'REPORTADO AL CLIENTE', KEY: 'REPORTADO AL CLIENTE' },
-  { HEADER: 'SITIO', KEY: 'SITIO' },
+  { HEADER: 'REPORTADO AL CLIENTE', KEY: 'reportado_al_cliente' },
+  { HEADER: 'SITIO', KEY: 'sitio_nombre' },
   {
     HEADER: 'TIPO EQUIPO AFECTADO',
     KEY: 'tipo_equipo_afectado_nombre',
   },
-  { HEADER: 'NOMBRE DE EQUIPO AFECTADO', KEY: 'NOMBRE DE EQUIPO' },
+  { HEADER: 'NOMBRE DE EQUIPO AFECTADO', KEY: 'nombre_equipo' },
   {
     HEADER: 'NOMBRE CONSOLA',
-    KEY: 'NOMBRE CONSOLA',
     GET: (record) => getExportRecordValue(record, ['NOMBRE CONSOLA', 'nombre_consola', 'consola_nombre']),
   },
   {
     HEADER: 'CLIENTE',
-    KEY: 'CLIENTE',
     GET: (record) => getExportRecordValue(record, ['CLIENTE', 'cliente', 'cliente_nombre']),
   },
   {
     HEADER: 'HACIENDA',
-    KEY: 'HACIENDA',
     GET: (record) => getExportRecordValue(record, ['HACIENDA', 'hacienda', 'hacienda_nombre']),
   },
   { HEADER: 'NOMBRE COMPLETO USUARIO QUE CREÓ EL FALLO', KEY: 'verificacion_apertura_nombre_completo' },
-  { HEADER: 'NOMBRE COMPLETO USUARIO QUE CERRÓ EL FALLO', KEY: 'NOMBRE CO' },
+  { HEADER: 'NOMBRE COMPLETO USUARIO QUE CERRÓ EL FALLO', KEY: 'nombre_co' },
   { HEADER: 'NOMBRE COMPLETO USUARIOS QUE MODIFICARON EL FALLO MIENTRAS ESTUVO ACTIVO', KEY: 'ultimo_usuario_edito_nombre_completo' },
   {
     HEADER: 'NODO',
-    KEY: 'NOMBRE DE NODO',
-    GET: (record) => getExportRecordValue(record, ['NOMBRE DE NODO', 'nodo', 'nombre_nodo']),
+    GET: (record) => getExportRecordValue(record, ['NOMBRE DE NODO', 'nodo', 'nodo_nombre']),
   },
   {
     HEADER: 'TIPO_EQUIPO_AFECTADO_NOMBRE',
     KEY: 'tipo_equipo_afectado_nombre',
-    GET: (record) => record?.tipo_equipo_afectado_nombre == null ? '' : String(record.tipo_equipo_afectado_nombre),
   },
 ];
-
-const EXPORT_COLUMNS_FINAL = EXPORT_COLUMNS.filter(
-  (column) => column.HEADER !== 'ID USUARIO APERTURA (REPETIDA)' && column.KEY !== 'responsable_id',
-);
-
-const CREATOR_CODE_HEADER = 'CODIGO USUARIO QUE CREO EL FALLO';
-const CREATOR_FULL_NAME_HEADER = 'NOMBRE COMPLETO USUARIO QUE CREÓ EL FALLO';
-const INSERT_AFTER_HEADER = 'NOMBRE DE USUARIOS QUE EDITARON';
-
-const creatorCodeColumn = EXPORT_COLUMNS_FINAL.find((column) => column.HEADER === CREATOR_CODE_HEADER);
-const creatorNameColumn = EXPORT_COLUMNS_FINAL.find((column) => column.HEADER === CREATOR_FULL_NAME_HEADER);
-
-const EXPORT_COLUMNS_ORDERED = (() => {
-  const columnsWithoutCreatorData = EXPORT_COLUMNS_FINAL.filter(
-    (column) => column.HEADER !== CREATOR_CODE_HEADER && column.HEADER !== CREATOR_FULL_NAME_HEADER,
-  );
-
-  const insertIndex = columnsWithoutCreatorData.findIndex((column) => column.HEADER === INSERT_AFTER_HEADER);
-
-  if (insertIndex < 0) {
-    return [
-      ...columnsWithoutCreatorData,
-      ...(creatorCodeColumn ? [creatorCodeColumn] : []),
-      ...(creatorNameColumn ? [creatorNameColumn] : []),
-    ];
-  }
-
-  return [
-    ...columnsWithoutCreatorData.slice(0, insertIndex + 1),
-    ...(creatorCodeColumn ? [creatorCodeColumn] : []),
-    ...(creatorNameColumn ? [creatorNameColumn] : []),
-    ...columnsWithoutCreatorData.slice(insertIndex + 1),
-  ];
-})();
-
-const normalizeFallosExportBlob = async (blob: Blob) => {
-  const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) return blob;
-
-  const sourceSheet = workbook.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(sourceSheet, {
-    header: 1,
-    raw: false,
-    defval: '',
-  });
-
-  if (rows.length < 2) return blob;
-
-  const businessHeaders = (rows[0] || []).map((value) => String(value).trim());
-  const technicalHeaders = (rows[1] || []).map((value) => String(value).trim());
-  const dataRows = rows.slice(2);
-
-  console.log('EXPORT sample row:', dataRows?.[0]);
-  console.log('EXPORT columns:', EXPORT_COLUMNS_ORDERED);
-
-  const records = dataRows.map((row) => {
-    const record: ExportRecord = {};
-
-    row.forEach((value, index) => {
-      const technicalKey = technicalHeaders[index];
-      const businessKey = businessHeaders[index];
-      if (technicalKey) record[technicalKey] = value;
-      if (businessKey) record[businessKey] = value;
-    });
-
-    return record;
-  });
-
-  const userMap = new Map<string, string>();
-
-  records.forEach((record) => {
-    const sources: Array<[string, string]> = [
-      ['ultimo_usuario_edito_id', 'ultimo_usuario_edito_nombre_completo'],
-      ['responsable_id', 'NOMBRE CO'],
-      ['verificacion_apertura_id', 'verificacion_apertura_nombre_completo'],
-    ];
-
-    sources.forEach(([idKey, nameKey]) => {
-      const id = getExportRecordValue(record, [idKey]);
-      const name = getExportRecordValue(record, [nameKey]);
-      if (id && name) {
-        userMap.set(id, name);
-      }
-    });
-  });
-
-  const sampleRecord = records[0];
-  console.log('creador id value:', sampleRecord?.verificacion_apertura_id);
-
-  const rowsToExport = records;
-  console.log('[EXPORT] rowsToExport.length =', rowsToExport.length);
-  console.log('[EXPORT] sample row =', rowsToExport[0]);
-  console.log('[EXPORT] sample tipo_equipo_afectado_nombre =', rowsToExport[0]?.tipo_equipo_afectado_nombre);
-  console.log('[EXPORT][DEBUG tipo_equipo_afectado_nombre]', rowsToExport?.[0]?.tipo_equipo_afectado_nombre);
-
-  const excelRows = rowsToExport.map((record, index) => {
-    const row: Record<string, string> = {};
-
-    EXPORT_COLUMNS_ORDERED.forEach((col) => {
-      let value = typeof col.GET === 'function'
-        ? col.GET(record)
-        : (col.KEY ? record?.[col.KEY] : '');
-
-      if (col.HEADER === CREATOR_FULL_NAME_HEADER) {
-        value = getIdBasedUserName(record, userMap);
-      }
-
-      row[col.HEADER] = value == null ? '' : String(value);
-
-      if (index === 0) {
-        console.log(`[EXPORT][COL] ${col.HEADER}`, {
-          key: col.KEY,
-          value,
-          raw: col.KEY ? record?.[col.KEY] : undefined,
-        });
-      }
-    });
-
-    row['TIPO EQUIPO AFECTADO'] = record?.tipo_equipo_afectado_nombre == null
-      ? ''
-      : String(record.tipo_equipo_afectado_nombre);
-
-    if (index === 0) {
-      console.log('[EXPORT][ROW FINAL SAMPLE]', row);
-    }
-
-    return row;
-  });
-
-  console.log('[EXPORT][EXCEL ROW 0 BEFORE SHEET]', excelRows[0]);
-
-  const normalizedSheet = XLSX.utils.json_to_sheet(excelRows, {
-    skipHeader: false,
-    header: EXPORT_COLUMNS_ORDERED.map((column) => column.HEADER),
-  });
-  const normalizedWorkbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(normalizedWorkbook, normalizedSheet, 'Fallos');
-
-  const normalizedArray = XLSX.write(normalizedWorkbook, {
-    type: 'array',
-    bookType: 'xlsx',
-  });
-
-  return new Blob([normalizedArray], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-};
 
 const formatFechaHoraFallo = (failure: TechnicalFailure) => {
   if (failure.fechaHoraFallo) {
@@ -608,7 +440,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     setIsExporting(true);
 
     try {
-      const { blob, filename } = await exportFallosTecnicosConsultasExcel({
+      const params = {
         ...exportFilters,
         fechaDesde: filters.fechaDesde,
         fechaHasta: filters.fechaHasta,
@@ -617,14 +449,50 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
         sitio: filters.sitio,
         estado: filters.estado,
         departamento: filters.departamento,
+      };
+
+      const resp = await api.get('/fallos-tecnicos-consultas/export-excel', { params });
+      const rowsToExport = Array.isArray(resp.data) ? resp.data : (resp.data?.data ?? []);
+
+      console.log('[FRONT EXPORT] rowsToExport length', rowsToExport.length);
+      console.log('[FRONT EXPORT] sample row', rowsToExport[0]);
+      console.log('[FRONT EXPORT] sample keys', Object.keys(rowsToExport[0] || {}));
+      console.log('[FRONT EXPORT] sample tipo_equipo_afectado_nombre', rowsToExport[0]?.tipo_equipo_afectado_nombre);
+
+      const excelRows = rowsToExport.map((record: ExportRecord) => {
+        const row: Record<string, any> = {};
+
+        EXPORT_COLUMNS.forEach((col) => {
+          row[col.HEADER] =
+            typeof col.GET === 'function'
+              ? col.GET(record)
+              : (col.KEY ? record?.[col.KEY] ?? '' : '');
+        });
+
+        return row;
       });
 
-      const normalizedBlob = await normalizeFallosExportBlob(blob);
+      console.log('[FRONT EXPORT] excelRows sample', excelRows[0]);
+      console.log('[FRONT EXPORT] excelRows sample TIPO_EQUIPO_AFECTADO_NOMBRE', excelRows[0]?.['TIPO_EQUIPO_AFECTADO_NOMBRE']);
 
-      const url = window.URL.createObjectURL(normalizedBlob);
+      const worksheet = XLSX.utils.json_to_sheet(excelRows, { skipHeader: false });
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Fallos');
+
+      const excelArray = XLSX.write(workbook, {
+        type: 'array',
+        bookType: 'xlsx',
+      });
+
+      const blob = new Blob([excelArray], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+
+      const fileName = `fallos_tecnicos_detallado_${Date.now()}.xlsx`;
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', filename);
+      link.setAttribute('download', fileName);
       document.body.appendChild(link);
       link.click();
       link.remove();
