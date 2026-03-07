@@ -60,7 +60,27 @@ const EXPORT_COLUMNS: ExportColumn[] = [
     HEADER: 'TIPO EQUIPO AFECTADO',
     KEY: 'tipo_equipo_afectado_nombre',
   },
-  { HEADER: 'NOMBRE DE EQUIPO AFECTADO', KEY: 'nombre_equipo' },
+  {
+    HEADER: 'NOMBRE DE EQUIPO AFECTADO',
+    KEY: 'nombre_equipo',
+    GET: (record) => {
+      const tipoEquipo = getExportRecordValue(record, ['tipo_equipo_afectado_nombre', 'tipo_equipo_afectado']);
+      const nombreEquipo = (record?.nombre_equipo ?? '').toString().trim();
+
+      if (!tipoEquipo) {
+        return '';
+      }
+
+      const separador = ' en ';
+      const idx = nombreEquipo.indexOf(separador);
+
+      if (idx >= 0) {
+        return nombreEquipo.substring(idx + separador.length).trim();
+      }
+
+      return nombreEquipo;
+    },
+  },
   {
     HEADER: 'NOMBRE CONSOLA',
     GET: (record) => getExportRecordValue(record, ['NOMBRE CONSOLA', 'nombre_consola', 'consola_nombre']),
