@@ -64,18 +64,23 @@ const EXPORT_COLUMNS: ExportColumn[] = [
     HEADER: 'NOMBRE DE EQUIPO AFECTADO',
     KEY: 'nombre_equipo',
     GET: (record) => {
-      const tipoEquipo = getExportRecordValue(record, ['tipo_equipo_afectado_nombre', 'tipo_equipo_afectado']);
+      const tipoEquipo = (
+        record?.tipo_equipo_afectado_nombre
+        ?? record?.tipo_equipo_afectado
+        ?? ''
+      ).toString().trim().toUpperCase();
       const nombreEquipo = (record?.nombre_equipo ?? '').toString().trim();
 
-      if (!tipoEquipo) {
+      const tiposPermitidos = new Set([
+        'CÁMARAS',
+        'ALARM INPUT',
+        'GRABADOR',
+        'MEGÁFONO IP',
+        'MEGAFONO IP',
+      ]);
+
+      if (!tiposPermitidos.has(tipoEquipo)) {
         return '';
-      }
-
-      const separador = ' en ';
-      const idx = nombreEquipo.indexOf(separador);
-
-      if (idx >= 0) {
-        return nombreEquipo.substring(idx + separador.length).trim();
       }
 
       return nombreEquipo;
