@@ -894,7 +894,7 @@ def ir_a_pestana_maintenance(driver, wait):
 
 
 def abrir_menu_resource_status(driver, wait):
-    print("[5] Abriendo menú Resource Status...")
+    print("[NAV] Abriendo Resource Status")
 
     locators = [
         (By.ID, "subMenuTitle1"),  # Nuevo ambiente
@@ -936,10 +936,168 @@ def abrir_menu_resource_status(driver, wait):
 
     try:
         local_wait.until(intentar_click_resource_status)
+        local_wait.until(
+            lambda d: len(_obtener_items_submenu_resource_status(d, solo_visibles=True)) > 0
+        )
+        print("[NAV] Submenú Resource Status visible")
         if step_timer:
             step_timer.mark("[5] Menú Resource Status")
     except TimeoutException:
         raise Exception("No se pudo hacer clic en el menú 'Resource Status'")
+
+
+def _texto_normalizado_elemento(element) -> str:
+    textos = [
+        element.text,
+        element.get_attribute("title"),
+        element.get_attribute("aria-label"),
+        element.get_attribute("innerText"),
+    ]
+    for t in textos:
+        nt = _normalize_label(t)
+        if nt:
+            return nt
+    return ""
+
+
+def _obtener_items_submenu_resource_status(driver, solo_visibles: bool = True):
+    xpaths = [
+        "//li[contains(@class,'el-menu-item')]",
+        "//li[contains(@class,'menu-item')]",
+        "//div[contains(@class,'el-menu-item') and not(contains(@class,'el-submenu__title'))]",
+    ]
+    items = []
+    vistos = set()
+    for xp in xpaths:
+        try:
+            elementos = driver.find_elements(By.XPATH, xp)
+        except Exception:
+            continue
+        for elem in elementos:
+            try:
+                if solo_visibles and not elem.is_displayed():
+                    continue
+                key = elem.id
+                if key in vistos:
+                    continue
+                vistos.add(key)
+                items.append(elem)
+            except Exception:
+                continue
+    return items
+
+
+def item_menu_esta_activo(driver, opcion: str = "Camera") -> bool:
+    opcion_normalizada = _normalize_label(opcion)
+    señales_activas = ("active", "selected", "current", "focus", "is-active", "is-selected")
+    attrs = ("class", "aria-selected", "aria-current", "tabindex", "data-active", "data-selected")
+
+    for item in _obtener_items_submenu_resource_status(driver, solo_visibles=True):
+        try:
+            if _texto_normalizado_elemento(item) != opcion_normalizada:
+                continue
+
+            nodos_a_validar = [item]
+            for _ in range(3):
+                nodo = nodos_a_validar[-1]
+                try:
+                    parent = nodo.find_element(By.XPATH, "./..")
+                    nodos_a_validar.append(parent)
+                except Exception:
+                    break
+
+            for nodo in nodos_a_validar:
+                try:
+                    clase = (nodo.get_attribute("class") or "").lower()
+                    if any(flag in clase for flag in señales_activas):
+                        return True
+
+                    aria_selected = (nodo.get_attribute("aria-selected") or "").strip().lower()
+                    aria_current = (nodo.get_attribute("aria-current") or "").strip().lower()
+                    if aria_selected == "true" or aria_current in {"true", "page", "step", "location"}:
+                        return True
+
+                    data_active = (nodo.get_attribute("data-active") or "").strip().lower()
+                    data_selected = (nodo.get_attribute("data-selected") or "").strip().lower()
+                    if data_active in {"true", "1", "active"} or data_selected in {"true", "1", "selected"}:
+                        return True
+                except Exception:
+                    continue
+
+            firmas = []
+            for menu_item in _obtener_items_submenu_resource_status(driver, solo_visibles=True):
+                try:
+                    texto = _texto_normalizado_elemento(menu_item)
+                    if not texto:
+                        continue
+                    firma = "|".join((menu_item.get_attribute(a) or "").strip().lower() for a in attrs)
+                    firmas.append((texto, firma))
+                except Exception:
+                    continue
+
+            firma_objetivo = next((f for t, f in firmas if t == opcion_normalizada), "")
+            if not firma_objetivo:
+                continue
+
+            otras = [f for t, f in firmas if t != opcion_normalizada]
+            if any(flag in firma_objetivo for flag in señales_activas) and all(
+                not any(flag in f for flag in señales_activas) for f in otras
+            ):
+                return True
+        except Exception:
+            continue
+
+    return False
+
+
+def _buscar_item_submenu_resource_status(driver, opcion: str):
+    objetivo = _normalize_label(opcion)
+    for item in _obtener_items_submenu_resource_status(driver, solo_visibles=True):
+        try:
+            if _texto_normalizado_elemento(item) == objetivo:
+                return item
+        except Exception:
+            continue
+    return None
+
+
+def abrir_opcion_resource_status(driver, wait, opcion: str):
+    print(f"[NAV] Buscando opción {opcion}")
+    abrir_menu_resource_status(driver, wait)
+
+    for intento in range(1, 4):
+        opcion_elem = _buscar_item_submenu_resource_status(driver, opcion)
+        if opcion_elem is None:
+            raise Exception(f"No se encontró la opción exacta '{opcion}' en el submenú Resource Status")
+
+        print(f"[NAV] Click en opción {opcion}")
+        try:
+            click_robusto(driver, opcion_elem, retries=2)
+        except Exception:
+            driver.execute_script("arguments[0].click();", opcion_elem)
+
+        wait_loading_end(driver)
+        print(f"[NAV] Validando que {opcion} quedó activa")
+        confirmada = False
+        try:
+            confirmada = WebDriverWait(driver, 4).until(
+                lambda d: item_menu_esta_activo(d, opcion=opcion)
+            )
+        except TimeoutException:
+            confirmada = False
+
+        if confirmada:
+            print(f"[NAV] {opcion} activa confirmada")
+            return
+
+        if intento < 3:
+            print(f"[NAV] {opcion} aún no activa, reintentando ({intento}/2)...")
+            time.sleep(0.4)
+
+    print(f"[NAV][ERROR] {opcion} no quedó activa; se aborta flujo")
+    raise Exception(
+        f"No se pudo confirmar que Resource Status -> {opcion} quedó seleccionado; se aborta exportación."
+    )
 
 
 def _normalize_label(text: str) -> str:
@@ -1534,6 +1692,8 @@ def abrir_y_confirmar_exportacion_resource_status(driver, wait, opcion: str | No
     print(f"[EXPORT] Opción detectada: {opcion or 'N/A'}")
     wait_loading_overlays(driver, timeout=60)
 
+    print(f"[EXPORT] Buscando botón Export de la vista {opcion or 'actual'}")
+
     try:
         export_toolbar_button = (
             encontrar_boton_export_camera(driver, wait)
@@ -1570,53 +1730,9 @@ def export_resource_status_to_excel(
     Devuelve la ruta final del .xlsx.
     """
 
-    def estamos_en_camera() -> bool:
-        indicadores_camera = [
-            (
-                By.XPATH,
-                "//*[contains(@class,'el-tabs__item') and contains(@class,'is-active') and contains(normalize-space(),'Camera')]",
-            ),
-            (
-                By.XPATH,
-                "//*[self::h1 or self::h2 or self::h3 or self::div or self::span][contains(normalize-space(),'Camera')]",
-            ),
-            (
-                By.XPATH,
-                "//th[contains(normalize-space(),'Channel Address')] | //span[contains(normalize-space(),'Channel Address')]",
-            ),
-            (
-                By.XPATH,
-                "//th[contains(normalize-space(),'Device Address')] | //span[contains(normalize-space(),'Device Address')]",
-            ),
-            (
-                By.XPATH,
-                "//th[contains(normalize-space(),'Area')] | //span[contains(normalize-space(),'Area')]",
-            ),
-            (
-                By.XPATH,
-                "//button[.//*[contains(normalize-space(),'Export')] or contains(normalize-space(),'Export')] | //*[(self::span or self::div) and @title='Export']",
-            ),
-        ]
-
-        for by, locator in indicadores_camera:
-            try:
-                elementos = driver.find_elements(by, locator)
-            except Exception:
-                continue
-
-            for elem in elementos:
-                try:
-                    if elem.is_displayed():
-                        return True
-                except Exception:
-                    continue
-        return False
-
-    abrir_menu_resource_status(driver, wait)
-    if opcion == "Camera" and estamos_en_camera():
-        print("[5] Ya estamos en Camera; se omite re-selección de opción.")
-    else:
-        seleccionar_opcion_resource_status(driver, wait, opcion)
+    print("[NAV] Abriendo Maintenance")
+    ir_a_pestana_maintenance(driver, wait)
+    abrir_opcion_resource_status(driver, wait, opcion)
     esperar_tabla_resource_status(driver, wait, opcion)
 
     archivos_previos = os.listdir(download_dir)
