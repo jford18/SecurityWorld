@@ -1411,6 +1411,152 @@ def encontrar_boton_export_camera(driver, wait):
     raise TimeoutException("No se encontró el botón Export para Camera")
 
 
+def _buscar_modal_export_visible(driver):
+    candidatos = []
+    selectores_modal = [
+        "//div[contains(@class,'el-drawer__wrapper') or contains(@class,'drawer')]",
+        "//div[contains(@class,'el-dialog__wrapper') or contains(@class,'el-dialog')]",
+        "//*[contains(@class,'drawer') or contains(@class,'dialog')][.//*[normalize-space()='Export' or contains(normalize-space(),'Export')]]",
+    ]
+
+    for xp in selectores_modal:
+        try:
+            elementos = driver.find_elements(By.XPATH, xp)
+        except Exception:
+            continue
+        for elem in elementos:
+            try:
+                if not elem.is_displayed():
+                    continue
+                if not elem.find_elements(
+                    By.XPATH,
+                    ".//*[contains(@class,'drawer-head-title') or contains(@class,'el-dialog__title') or self::h1 or self::h2 or self::h3 or self::span][contains(normalize-space(),'Export')]",
+                ):
+                    continue
+                candidatos.append(elem)
+            except Exception:
+                continue
+
+    if candidatos:
+        return candidatos[-1]
+    return None
+
+
+def _asegurar_checkbox_exception_data(driver, modal_export):
+    checkbox_xpath = (
+        ".//label[contains(@class,'el-checkbox') and .//*[contains(normalize-space(),'Export Exception Data')]]"
+        "| .//*[contains(@class,'el-checkbox') and .//*[contains(normalize-space(),'Export Exception Data')]]"
+    )
+    try:
+        candidatos = modal_export.find_elements(By.XPATH, checkbox_xpath)
+    except Exception:
+        candidatos = []
+
+    if not candidatos:
+        print("[EXPORT] Checkbox Export Exception Data no visible; se continúa.")
+        return
+
+    checkbox = candidatos[0]
+    marcado = False
+    try:
+        clases = checkbox.get_attribute("class") or ""
+        marcado = "is-checked" in clases
+    except Exception:
+        marcado = False
+
+    if not marcado:
+        try:
+            input_box = checkbox.find_element(By.XPATH, ".//input[@type='checkbox']")
+            marcado = input_box.is_selected() or (input_box.get_attribute("checked") is not None)
+        except Exception:
+            marcado = False
+
+    if marcado:
+        print("[EXPORT] Checkbox Export Exception Data ya marcado")
+        return
+
+    click_robusto(driver, checkbox)
+    print("[EXPORT] Checkbox Export Exception Data marcado")
+
+
+def _asegurar_excel_en_modal_export(driver, modal_export):
+    excel_xpath = (
+        ".//label[contains(@class,'el-radio') and (.//span[normalize-space()='Excel'] or contains(@title,'Excel'))]"
+        "| .//*[contains(@class,'el-radio') and (.//span[normalize-space()='Excel'] or contains(normalize-space(),'Excel'))]"
+    )
+    try:
+        radios_excel = modal_export.find_elements(By.XPATH, excel_xpath)
+    except Exception:
+        radios_excel = []
+
+    if not radios_excel:
+        raise TimeoutException("No se encontró opción Excel en el modal Export")
+
+    radio_excel = radios_excel[0]
+    seleccionado = False
+    try:
+        clases = radio_excel.get_attribute("class") or ""
+        seleccionado = "is-checked" in clases
+    except Exception:
+        seleccionado = False
+
+    if not seleccionado:
+        try:
+            radio_input = radio_excel.find_element(By.XPATH, ".//input[@type='radio']")
+            seleccionado = radio_input.is_selected() or (radio_input.get_attribute("checked") is not None)
+        except Exception:
+            seleccionado = False
+
+    if seleccionado:
+        print("[EXPORT] Excel ya seleccionado")
+        return
+
+    click_robusto(driver, radio_excel)
+    print("[EXPORT] Excel seleccionado")
+
+
+def _click_boton_final_export_modal(driver, modal_export):
+    boton_xpath = (
+        "(.//button[.//div[normalize-space()='Export'] or .//span[normalize-space()='Export'] or normalize-space()='Export'])[last()]"
+        "| (.//*[contains(@class,'el-dialog__footer') or contains(@class,'drawer-footer')]"
+        "//button[.//div[normalize-space()='Export'] or .//span[normalize-space()='Export'] or normalize-space()='Export'])[last()]"
+    )
+    botones = modal_export.find_elements(By.XPATH, boton_xpath)
+    botones = [b for b in botones if b.is_displayed()]
+    if not botones:
+        raise TimeoutException("No se encontró el botón final Export dentro del modal")
+
+    click_robusto(driver, botones[-1])
+    print("[EXPORT] Click en botón final Export")
+
+
+def abrir_y_confirmar_exportacion_resource_status(driver, wait, opcion: str | None = None):
+    print(f"[EXPORT] Opción detectada: {opcion or 'N/A'}")
+    wait_loading_overlays(driver, timeout=60)
+
+    try:
+        export_toolbar_button = (
+            encontrar_boton_export_camera(driver, wait)
+            if opcion == "Camera"
+            else encontrar_boton_export(driver, wait)
+        )
+    except Exception:
+        export_toolbar_button = encontrar_boton_export(driver, wait)
+
+    click_robusto(driver, export_toolbar_button)
+    print("[EXPORT] Click en toolbar export")
+
+    wait_loading_overlays(driver, timeout=60)
+    modal_export = wait.until(lambda d: _buscar_modal_export_visible(d))
+    print("[EXPORT] Modal Export visible")
+
+    _asegurar_checkbox_exception_data(driver, modal_export)
+    _asegurar_excel_en_modal_export(driver, modal_export)
+    wait_loading_overlays(driver, timeout=30)
+    _click_boton_final_export_modal(driver, modal_export)
+    wait_loading_overlays(driver, timeout=60)
+
+
 def export_resource_status_to_excel(
     driver: webdriver.Chrome,
     wait: WebDriverWait,
@@ -1473,82 +1619,15 @@ def export_resource_status_to_excel(
         seleccionar_opcion_resource_status(driver, wait, opcion)
     esperar_tabla_resource_status(driver, wait, opcion)
 
-    if opcion == "Camera":
-        print("[EXPORT] Iniciando export Camera")
-        wait_loading_overlays(driver, timeout=60)
+    archivos_previos = os.listdir(download_dir)
+    abrir_y_confirmar_exportacion_resource_status(driver, wait, opcion=opcion)
 
-        camera_validada = False
-        validacion_xpaths = [
-            "//*[contains(@class,'el-tabs__item') and contains(@class,'is-active') and contains(normalize-space(),'Camera')]",
-            "//*[self::h1 or self::h2 or self::h3 or self::div or self::span][contains(normalize-space(),'Camera')]",
-        ]
-        for xp in validacion_xpaths:
-            try:
-                elems = driver.find_elements(By.XPATH, xp)
-            except Exception:
-                continue
-            if any(e.is_displayed() for e in elems):
-                camera_validada = True
-                break
-        if not camera_validada:
-            print("[EXPORT][WARN] No se pudo validar tab Camera.")
+    if step_timer:
+        step_timer.mark(f"[8] Export confirmado ({opcion})")
 
-        archivos_previos = os.listdir(download_dir)
-        export_toolbar_button = encontrar_boton_export_camera(driver, wait)
-        click_robusto(driver, export_toolbar_button)
-        print("[EXPORT] Click export ejecutado")
-
-        wait_loading_overlays(driver, timeout=60)
-        archivo_descargado = esperar_descarga(download_dir, archivos_previos, timeout=180)
-        print(f"[EXPORT] Archivo detectado: {os.path.basename(archivo_descargado)}")
-    else:
-        print(f"[8] Abriendo panel de exportación desde {opcion}...")
-
-        if step_timer:
-            step_timer.mark(f"[8] Panel exportación ({opcion})")
-
-        archivos_previos = os.listdir(download_dir)
-
-        export_toolbar_button = encontrar_boton_export(driver, wait)
-
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", export_toolbar_button)
-        driver.execute_script("arguments[0].click();", export_toolbar_button)
-
-        wait.until(
-            EC.visibility_of_element_located(
-                (
-                    By.XPATH,
-                    "//div[contains(@class,'drawer')]//span[contains(@class,'drawer-head-title') and normalize-space()='Export']",
-                )
-            )
-        )
-
-        if step_timer:
-            step_timer.mark(f"[8] Panel exportación abierto ({opcion})")
-
-        excel_options = driver.find_elements(
-            By.XPATH,
-            "//div[contains(@class,'drawer')]//label[contains(@class,'el-radio') and (translate(@title,'excel','EXCEL')='EXCEL' or .//span[normalize-space()='Excel'])]",
-        )
-        if excel_options:
-            excel_option = wait.until(EC.element_to_be_clickable(excel_options[0]))
-            driver.execute_script("arguments[0].click();", excel_option)
-
-        export_confirm_button = wait.until(
-            EC.element_to_be_clickable(
-                (
-                    By.XPATH,
-                    "(//div[contains(@class,'drawer') or contains(@class,'el-dialog__footer')]//button[.//div[normalize-space()='Export']])[last()]",
-                )
-            )
-        )
-        driver.execute_script("arguments[0].click();", export_confirm_button)
-
-        if step_timer:
-            step_timer.mark(f"[8] Export lanzado ({opcion})")
-
-        archivo_descargado = esperar_descarga(download_dir, archivos_previos, timeout=180)
-        print(f"[10] Archivo descargado en: {archivo_descargado}")
+    print("[EXPORT] Esperando descarga")
+    archivo_descargado = esperar_descarga(download_dir, archivos_previos, timeout=180)
+    print(f"[EXPORT] Archivo detectado: {os.path.basename(archivo_descargado)}")
 
     if step_timer:
         step_timer.mark("[10] Archivo descargado")
