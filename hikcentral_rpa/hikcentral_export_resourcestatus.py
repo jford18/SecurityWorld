@@ -909,48 +909,92 @@ def obtener_popup_colapsado_por_titulo(driver, titulo: str):
     return None
 
 
+def esperar_popup_resource_status_visible(driver, timeout: int = 6):
+    print("[NAV] Esperando popup visible de Resource Status")
+
+    def _buscar_popup(d):
+        popups = d.find_elements(By.CSS_SELECTOR, "div.el-menu-collapse-wrap")
+        for popup in popups:
+            try:
+                if not popup.is_displayed():
+                    continue
+
+                titulos = popup.find_elements(
+                    By.CSS_SELECTOR,
+                    "li.el-submenu__collpase-title, li.el-submenu__collapse-title, li[class*='submenu'][class*='title']",
+                )
+
+                for titulo_elem in titulos:
+                    if _normalize_label(titulo_elem.text) == "resource status":
+                        return popup
+            except Exception:
+                continue
+        return False
+
+    try:
+        popup = WebDriverWait(driver, timeout).until(_buscar_popup)
+        print("[NAV] Popup de Resource Status visible")
+        return popup
+    except TimeoutException as exc:
+        raise Exception("[NAV][ERROR] No se pudo abrir el popup de Resource Status") from exc
+
+
 def abrir_popup_resource_status(driver, wait):
     print("[NAV] Buscando menú lateral Resource Status")
-    submenu = wait.until(
-        EC.presence_of_element_located(
-            (
-                By.XPATH,
-                "//section[@id='maintenance']//div[contains(@class,'nav-base')]"
-                "//li[contains(@class,'el-submenu')][.//span[contains(@class,'first-level-weight') and @title='Resource Status']]",
+    try:
+        submenu = wait.until(
+            EC.presence_of_element_located(
+                (
+                    By.XPATH,
+                    "//section[@id='maintenance']//div[contains(@class,'nav-base')]"
+                    "//li[contains(@class,'el-submenu')][.//span[contains(@class,'first-level-weight') and @title='Resource Status']]",
+                )
             )
         )
-    )
+    except TimeoutException as exc:
+        raise Exception("[NAV][ERROR] No se encontró el menú lateral Resource Status") from exc
 
-    print("[NAV] Abriendo popup colapsado de Resource Status")
-    estrategias = ("click", "hover", "click_hover")
-    for estrategia in estrategias:
-        try:
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", submenu)
-        except Exception:
-            pass
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", submenu)
+    except Exception:
+        pass
 
-        try:
-            if estrategia == "click":
-                click_robusto(driver, submenu, retries=2)
-            elif estrategia == "hover":
-                ActionChains(driver).move_to_element(submenu).pause(0.2).perform()
-            else:
-                click_robusto(driver, submenu, retries=1)
-                ActionChains(driver).move_to_element(submenu).pause(0.2).perform()
-        except Exception:
-            continue
+    print("[NAV] Intentando abrir popup de Resource Status por hover")
+    try:
+        ActionChains(driver).move_to_element(submenu).pause(0.25).perform()
+    except Exception:
+        pass
 
-        try:
-            popup = WebDriverWait(driver, 4).until(
-                lambda d: obtener_popup_colapsado_por_titulo(d, "Resource Status")
-            )
-            if popup:
-                print("[NAV] Popup Resource Status visible")
-                return popup
-        except TimeoutException:
-            continue
+    try:
+        return esperar_popup_resource_status_visible(driver, timeout=3)
+    except Exception:
+        print("[NAV] Popup de Resource Status no apareció con hover, intentando click")
 
-    raise Exception("No se pudo abrir el popup colapsado de 'Resource Status'")
+    try:
+        click_robusto(driver, submenu, retries=1)
+        ActionChains(driver).move_to_element(submenu).pause(0.25).perform()
+    except Exception:
+        pass
+
+    try:
+        return esperar_popup_resource_status_visible(driver, timeout=3)
+    except Exception:
+        print("[NAV] Popup no apareció con click+hover, intentando eventos JS")
+
+    try:
+        driver.execute_script(
+            """
+            const el = arguments[0];
+            ['mouseenter', 'mouseover'].forEach(type => {
+                el.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window}));
+            });
+            """,
+            submenu,
+        )
+    except Exception:
+        pass
+
+    return esperar_popup_resource_status_visible(driver, timeout=4)
 
 
 def _texto_normalizado_elemento(element) -> str:
@@ -967,9 +1011,8 @@ def _texto_normalizado_elemento(element) -> str:
     return ""
 
 
-def click_opcion_popup_resource_status(driver, wait, opcion: str):
-    print(f"[NAV] Buscando opción {opcion} dentro del popup")
-    popup = abrir_popup_resource_status(driver, wait)
+def click_opcion_en_popup_resource_status(driver, popup, opcion: str):
+    print(f"[NAV] Buscando opción {opcion} dentro del popup ya abierto")
     opcion_xpath = ".//li[contains(@class,'el-menu-item') and @title=%s]"
     opcion_elem = None
     try:
@@ -978,13 +1021,13 @@ def click_opcion_popup_resource_status(driver, wait, opcion: str):
         opcion_elem = None
 
     if opcion_elem is None:
-        raise Exception(f"No se encontró la opción '{opcion}' dentro del popup de Resource Status")
+        raise Exception(f"[NAV][ERROR] No se pudo encontrar {opcion} dentro del popup abierto")
 
-    print(f"[NAV] Click en {opcion} dentro del popup")
+    print(f"[NAV] Click en {opcion}")
     for intento in range(1, 4):
         try:
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", opcion_elem)
-            opcion_elem.click()
+            ActionChains(driver).move_to_element(opcion_elem).click().perform()
             return
         except ElementClickInterceptedException:
             wait_loading_overlays(driver, timeout=20)
@@ -992,13 +1035,13 @@ def click_opcion_popup_resource_status(driver, wait, opcion: str):
             pass
 
         try:
-            ActionChains(driver).move_to_element(opcion_elem).click().perform()
+            driver.execute_script("arguments[0].click();", opcion_elem)
             return
         except Exception:
             pass
 
         try:
-            driver.execute_script("arguments[0].click();", opcion_elem)
+            opcion_elem.click()
             return
         except Exception:
             if intento >= 3:
@@ -1007,7 +1050,7 @@ def click_opcion_popup_resource_status(driver, wait, opcion: str):
 
 
 def confirmar_vista_camera_activa(driver, wait):
-    print("[NAV] Validando apertura real de vista Camera")
+    print("[NAV] Validando vista Camera")
 
     def _vista_camera_lista(d):
         real_time_activa = d.find_elements(
@@ -1034,7 +1077,8 @@ def confirmar_vista_camera_activa(driver, wait):
 
 
 def abrir_opcion_resource_status(driver, wait, opcion: str):
-    click_opcion_popup_resource_status(driver, wait, opcion)
+    popup = abrir_popup_resource_status(driver, wait)
+    click_opcion_en_popup_resource_status(driver, popup, opcion)
     wait_loading_end(driver)
 
     if _normalize_label(opcion) == "camera":
