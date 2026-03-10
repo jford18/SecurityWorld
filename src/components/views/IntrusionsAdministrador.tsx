@@ -17,6 +17,23 @@ const formatDateValue = (value?: string | null) => {
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 };
 
+const formatProtocolDateValue = (value?: string | null) => {
+  const formatted = formatDateValue(value);
+  if (!value) return 'No registrado';
+  return formatted || 'No registrado';
+};
+
+const formatProtocolTextValue = (value?: string | null) => value?.trim() || 'No registrado';
+
+const hasSustraccionMaterial = (intrusion: Intrusion) => {
+  if (intrusion.material_sustraido_id != null) return true;
+
+  const material = intrusion.material_sustraido?.trim().toLowerCase();
+  if (!material) return false;
+
+  return material !== 'no' && material !== 'false';
+};
+
 const IntrusionsAdministrador: React.FC = () => {
   const [intrusions, setIntrusions] = useState<Intrusion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -241,26 +258,65 @@ const IntrusionsAdministrador: React.FC = () => {
                 <p className="text-gray-800">{viewIntrusion.personal_identificado || '—'}</p>
               </div>
               <div>
-                <p className="font-semibold text-gray-700">Fecha reacción enviada</p>
-                <p className="text-gray-800">{formatDateValue(viewIntrusion.fecha_reaccion_enviada)}</p>
-              </div>
-              <div>
-                <p className="font-semibold text-gray-700">Fecha llegada fuerza reacción</p>
-                <p className="text-gray-800">{formatDateValue(viewIntrusion.fecha_llegada_fuerza_reaccion)}</p>
-              </div>
-              <div>
                 <p className="font-semibold text-gray-700">Medio comunicación</p>
                 <p className="text-gray-800">{viewIntrusion.medio_comunicacion_descripcion || '—'}</p>
-              </div>
-              <div>
-                <p className="font-semibold text-gray-700">Conclusión evento</p>
-                <p className="text-gray-800">{viewIntrusion.conclusion_evento_descripcion || '—'}</p>
               </div>
               <div className="md:col-span-2">
                 <p className="font-semibold text-gray-700">Descripción</p>
                 <p className="text-gray-800 whitespace-pre-wrap">{viewIntrusion.descripcion || '—'}</p>
               </div>
             </div>
+
+            {viewIntrusion.necesita_protocolo && (
+              <div className="mt-6 border-l-4 border-yellow-400 bg-yellow-50 rounded-lg p-4">
+                <h5 className="text-[#1C2E4A] text-base font-semibold">Protocolo de reacción</h5>
+                <p className="text-xs text-gray-600 mt-1 mb-4">
+                  Campos requeridos para tipos de evento que activan protocolo
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="font-semibold text-gray-700">Fecha y hora de reacción enviada</p>
+                    <p className="text-gray-800">{formatProtocolDateValue(viewIntrusion.fecha_reaccion_enviada)}</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-700">Conclusión del evento</p>
+                    <p className="text-gray-800">
+                      {formatProtocolTextValue(viewIntrusion.conclusion_evento_descripcion)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-700">Fecha y hora de llegada fuerza de reacción</p>
+                    <p className="text-gray-800">
+                      {formatProtocolDateValue(viewIntrusion.fecha_llegada_fuerza_reaccion)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-700">Fuerza de reacción enviada</p>
+                    <p className="text-gray-800">
+                      {formatProtocolTextValue(viewIntrusion.fuerza_reaccion_descripcion)}
+                    </p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="inline-flex items-center gap-2 text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={hasSustraccionMaterial(viewIntrusion)}
+                        disabled
+                        readOnly
+                        className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A] disabled:opacity-100"
+                      />
+                      <span className="font-semibold">Sustracción de material</span>
+                    </label>
+                    {hasSustraccionMaterial(viewIntrusion) && (
+                      <p className="text-gray-800 mt-2">
+                        {formatProtocolTextValue(viewIntrusion.material_sustraido)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
