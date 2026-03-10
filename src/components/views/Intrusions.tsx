@@ -1110,8 +1110,13 @@ const Intrusions: React.FC = () => {
 
   const isSubmitDisabled = useMemo(() => {
     const tipoValue = tipoDescripcion.trim();
+    const fechaReaccionValida =
+      Boolean(formData.fecha_reaccion) &&
+      !Number.isNaN(new Date(formData.fecha_reaccion).getTime());
     const baseDisabled =
       !formData.fecha_evento ||
+      !fechaReaccionValida ||
+      !formData.medio_comunicacion_id ||
       !formData.sitioId ||
       !personaId ||
       !tipoValue ||
@@ -1136,6 +1141,7 @@ const Intrusions: React.FC = () => {
     formData.fecha_evento,
     formData.fecha_reaccion,
     formData.fecha_reaccion_fuera,
+    formData.medio_comunicacion_id,
     formData.fuerza_reaccion_id,
     formData.sitioId,
     personaId,
