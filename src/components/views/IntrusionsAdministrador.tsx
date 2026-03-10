@@ -241,21 +241,39 @@ const IntrusionsAdministrador: React.FC = () => {
                 <p className="text-gray-800">{viewIntrusion.personal_identificado || '—'}</p>
               </div>
               <div>
-                <p className="font-semibold text-gray-700">Fecha reacción enviada</p>
-                <p className="text-gray-800">{formatDateValue(viewIntrusion.fecha_reaccion_enviada)}</p>
-              </div>
-              <div>
-                <p className="font-semibold text-gray-700">Fecha llegada fuerza reacción</p>
-                <p className="text-gray-800">{formatDateValue(viewIntrusion.fecha_llegada_fuerza_reaccion)}</p>
-              </div>
-              <div>
                 <p className="font-semibold text-gray-700">Medio comunicación</p>
                 <p className="text-gray-800">{viewIntrusion.medio_comunicacion_descripcion || '—'}</p>
               </div>
-              <div>
-                <p className="font-semibold text-gray-700">Conclusión evento</p>
-                <p className="text-gray-800">{viewIntrusion.conclusion_evento_descripcion || '—'}</p>
-              </div>
+              {viewIntrusion.necesita_protocolo && (
+                <>
+                  <div>
+                    <p className="font-semibold text-gray-700">Fecha reacción enviada</p>
+                    <p className="text-gray-800">{formatDateValue(viewIntrusion.fecha_reaccion_enviada)}</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-700">Fecha llegada fuerza reacción</p>
+                    <p className="text-gray-800">{formatDateValue(viewIntrusion.fecha_llegada_fuerza_reaccion)}</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-700">Conclusión evento</p>
+                    <p className="text-gray-800">{viewIntrusion.conclusion_evento_descripcion || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-700">Fuerza de reacción enviada</p>
+                    <p className="text-gray-800">{viewIntrusion.fuerza_reaccion_descripcion || 'No registrado'}</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-700">Sustracción de material</p>
+                    <p className="text-gray-800">
+                      {viewIntrusion.material_sustraido_id == null
+                        ? 'No registrado'
+                        : viewIntrusion.material_sustraido_id
+                        ? 'Sí'
+                        : 'No'}
+                    </p>
+                  </div>
+                </>
+              )}
               <div className="md:col-span-2">
                 <p className="font-semibold text-gray-700">Descripción</p>
                 <p className="text-gray-800 whitespace-pre-wrap">{viewIntrusion.descripcion || '—'}</p>
