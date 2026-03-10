@@ -61,6 +61,8 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     id?: unknown;
     fecha_evento?: unknown;
     fecha_reaccion?: unknown;
+    fecha_reaccion_enviada?: unknown;
+    fecha_llegada_fuerza_reaccion?: unknown;
     fecha_reaccion_fuera?: unknown;
     ubicacion?: unknown;
     sitio_id?: unknown;
@@ -69,6 +71,12 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     estado?: unknown;
     descripcion?: unknown;
     llego_alerta?: unknown;
+    no_llego_alerta?: unknown;
+    completado?: unknown;
+    fecha_completado?: unknown;
+    necesita_protocolo?: unknown;
+    origen?: unknown;
+    hik_alarm_evento_id?: unknown;
     medio_comunicacion_id?: unknown;
     medio_comunicacion_descripcion?: unknown;
     conclusion_evento_id?: unknown;

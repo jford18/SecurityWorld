@@ -84,6 +84,10 @@ const mapIntrusionRow = (row) => {
       : false;
 
   const completado = Boolean(row?.completado);
+  const necesitaProtocolo =
+    typeof row?.necesita_protocolo === "boolean"
+      ? row.necesita_protocolo
+      : Boolean(row?.necesita_protocolo);
   const fechaCompletado = row?.fecha_completado
     ? formatDateTimeString(row.fecha_completado)
     : null;
@@ -149,6 +153,7 @@ const mapIntrusionRow = (row) => {
       : null,
     no_llego_alerta: noLlegoAlerta,
     completado,
+    necesita_protocolo: necesitaProtocolo,
     fecha_completado: fechaCompletado,
     medio_comunicacion_id:
       medioId === null || Number.isNaN(medioId) ? null : Number(medioId),
