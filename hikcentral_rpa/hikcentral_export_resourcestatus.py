@@ -837,7 +837,7 @@ def ir_a_pestana_maintenance(driver, wait):
             "//section[@id='maintenance']//div[contains(@class,'nav-base') and not(contains(@style,'display: none'))]",
         )
         if tab_activa or any(elem.is_displayed() for elem in rail_visible):
-            print("[NAV] Maintenance ya activo; continúo con rail lateral")
+            print("[NAV] Maintenance ya activo; continúo")
             if step_timer:
                 step_timer.mark("[4] Pestaña Maintenance")
             return
@@ -1051,37 +1051,143 @@ def esperar_popup_resource_status_visible(driver, timeout: int = 6):
         raise Exception("[NAV][ERROR] No se pudo abrir el popup de Resource Status") from exc
 
 
-def abrir_popup_resource_status(driver, wait):
-    submenu = obtener_item_resource_status(driver, wait)
-
+def _texto_debug_elemento(element) -> str:
     try:
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", submenu)
+        html = element.get_attribute("outerHTML") or ""
+    except Exception:
+        html = ""
+    try:
+        texto = element.text or ""
+    except Exception:
+        texto = ""
+    return f"texto={texto.strip()!r} | html={html[:400]!r}"
+
+
+def _click_con_prioridad(driver, element, descripcion: str):
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
     except Exception:
         pass
 
-    print("[NAV] Abriendo Resource Status")
-    for intento in range(1, 4):
+    wait_loading_overlays(driver, timeout=10)
+
+    try:
+        ActionChains(driver).move_to_element(element).pause(0.12).perform()
+    except Exception:
+        pass
+
+    try:
+        ActionChains(driver).move_to_element(element).click().perform()
+        return
+    except Exception:
+        pass
+
+    try:
+        driver.execute_script("arguments[0].click();", element)
+        return
+    except Exception:
+        pass
+
+    try:
+        element.click()
+        return
+    except Exception as exc:
+        raise Exception(f"[NAV][ERROR] No se pudo hacer click en {descripcion}: {exc}") from exc
+
+
+def _esperar_popup_hijo_visible(driver, submenu, timeout: int = 6):
+    print("[NAV] Esperando popup hijo de Resource Status visible")
+
+    def _popup_visible(_driver):
         try:
-            ActionChains(driver).move_to_element(submenu).pause(0.15).perform()
+            popup = submenu.find_element(By.CSS_SELECTOR, "div.el-menu-collapse-wrap")
+        except Exception:
+            return False
+
+        style = (popup.get_attribute("style") or "").replace(" ", "").lower()
+        oculto_por_style = "display:none" in style
+        try:
+            visible = popup.is_displayed()
+        except Exception:
+            visible = False
+
+        if visible or not oculto_por_style:
+            return popup
+        return False
+
+    try:
+        return WebDriverWait(driver, timeout).until(_popup_visible)
+    except TimeoutException as exc:
+        popup = submenu.find_element(By.CSS_SELECTOR, "div.el-menu-collapse-wrap")
+        print(f"[NAV][DEBUG] style del popup: {popup.get_attribute('style')}")
+        print(f"[NAV][DEBUG] html/texto del submenu: {_texto_debug_elemento(submenu)}")
+        raise Exception("[NAV][ERROR] No se pudo hacer visible el popup hijo de Resource Status") from exc
+
+
+def obtener_submenu_resource_status(driver, wait):
+    print("[NAV] Buscando li.el-submenu de Resource Status")
+    xpath = (
+        "//li[contains(@class,'el-submenu')]"
+        "[.//span[contains(@class,'first-level-weight') and @title='Resource Status']]"
+    )
+    try:
+        submenu = WebDriverWait(driver, 12).until(
+            lambda _d: next((el for el in _d.find_elements(By.XPATH, xpath) if el.is_displayed()), None) or False
+        )
+        print("[NAV] Submenu Resource Status encontrado")
+        return submenu
+    except TimeoutException as exc:
+        raise Exception(
+            "[NAV][ERROR] No se encontró li.el-submenu de Resource Status dentro de Maintenance"
+        ) from exc
+
+
+def confirmar_maintenance_activo(driver):
+    tab_activa = driver.find_elements(
+        By.XPATH,
+        "//div[contains(@class,'el-tabs__item') and contains(@class,'is-active') and normalize-space()='Maintenance']",
+    )
+    if tab_activa:
+        print("[NAV] Maintenance ya activo; continúo")
+        return
+
+    raise Exception("[NAV][ERROR] Maintenance no está activo antes de abrir Resource Status")
+
+
+def _xpath_literal(value: str) -> str:
+    if "'" not in value:
+        return f"'{value}'"
+    if '"' not in value:
+        return f'"{value}"'
+    parts = value.split("'")
+    return "concat(" + ", \"'\", ".join([f"'{p}'" for p in parts]) + ")"
+
+
+def abrir_popup_resource_status(driver, wait):
+    submenu = obtener_submenu_resource_status(driver, wait)
+    print("[NAV] Intentando abrir popup hijo de Resource Status")
+    titulo_submenu = submenu.find_element(By.CSS_SELECTOR, "div.el-submenu__title")
+
+    for intento in range(1, 5):
+        try:
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", titulo_submenu)
         except Exception:
             pass
 
-        try:
-            click_robusto(driver, submenu, retries=0)
-        except Exception:
-            pass
+        _click_con_prioridad(driver, titulo_submenu, "título de Resource Status")
 
         try:
-            return esperar_popup_resource_status_visible(driver, timeout=2)
-        except Exception:
-            if intento == 2:
-                try:
-                    driver.execute_script("arguments[0].click();", submenu)
-                except Exception:
-                    pass
-            time.sleep(0.2)
+            popup = _esperar_popup_hijo_visible(driver, submenu, timeout=4)
+            print("[NAV] Popup de Resource Status visible")
+            return popup
+        except Exception as exc:
+            print(f"[NAV][DEBUG] Intento {intento}: popup aún no visible ({exc})")
+            time.sleep(0.25)
 
-    return esperar_popup_resource_status_visible(driver, timeout=2)
+    popup_hijo = submenu.find_element(By.CSS_SELECTOR, "div.el-menu-collapse-wrap")
+    print(f"[NAV][DEBUG] style del popup: {popup_hijo.get_attribute('style')}")
+    print(f"[NAV][DEBUG] html/texto del submenu: {_texto_debug_elemento(submenu)}")
+    raise Exception("[NAV][ERROR] No se pudo hacer visible el popup hijo de Resource Status")
 
 
 def _texto_normalizado_elemento(element) -> str:
@@ -1099,41 +1205,49 @@ def _texto_normalizado_elemento(element) -> str:
 
 
 def click_opcion_en_popup_resource_status(driver, popup, opcion: str):
-    print(f"[NAV] Buscando {opcion} dentro de la rama/popup de Resource Status")
-    opcion_xpath = ".//li[contains(@class,'el-menu-item') and @title=%s]"
-    opcion_elem = None
-    try:
-        opcion_elem = popup.find_element(By.XPATH, opcion_xpath % repr(opcion))
-    except Exception:
-        opcion_elem = None
+    print(f"[NAV] Buscando opción {opcion} dentro del popup hijo")
+    xpath_opcion = (
+        ".//li[contains(@class,'el-menu-item') and @title="
+        + _xpath_literal(opcion)
+        + "]"
+    )
 
-    if opcion_elem is None:
-        raise Exception(f"[NAV][ERROR] No se pudo encontrar {opcion} dentro del popup abierto")
+    try:
+        opcion_elem = WebDriverWait(driver, 8).until(
+            lambda _d: popup.find_element(By.XPATH, xpath_opcion)
+        )
+    except TimeoutException as exc:
+        print(f"[NAV][DEBUG] style del popup: {popup.get_attribute('style')}")
+        print(f"[NAV][DEBUG] html/texto del submenu: {_texto_debug_elemento(popup)}")
+        raise Exception(
+            f"[NAV][ERROR] No se encontró {opcion} dentro del popup hijo de Resource Status"
+        ) from exc
 
     print(f"[NAV] Click en {opcion}")
-    for intento in range(1, 4):
-        try:
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", opcion_elem)
-            ActionChains(driver).move_to_element(opcion_elem).click().perform()
-            return
-        except ElementClickInterceptedException:
-            wait_loading_overlays(driver, timeout=20)
-        except Exception:
-            pass
+    _click_con_prioridad(driver, opcion_elem, f"opción {opcion}")
 
-        try:
-            driver.execute_script("arguments[0].click();", opcion_elem)
-            return
-        except Exception:
-            pass
 
-        try:
-            opcion_elem.click()
-            return
-        except Exception:
-            if intento >= 3:
-                raise
-            time.sleep(0.3)
+def confirmar_vista_resource_status_activa(driver, wait, opcion: str):
+    opcion_norm = _normalize_label(opcion)
+
+    def _vista_lista(d):
+        marcadores = d.find_elements(
+            By.XPATH,
+            "//div[contains(@class,'el-tabs__item') and contains(@class,'is-active')]"
+            "| //li[contains(@class,'el-menu-item') and contains(@class,'is-active')]"
+            "| //*[self::h1 or self::h2 or self::h3 or self::span or self::div][normalize-space()]",
+        )
+        for elemento in marcadores:
+            if _texto_normalizado_elemento(elemento) == opcion_norm:
+                return True
+        return False
+
+    try:
+        WebDriverWait(driver, 12).until(_vista_lista)
+    except TimeoutException as exc:
+        raise Exception(
+            f"[NAV][ERROR] No se pudo confirmar apertura de la vista {opcion} después del clic"
+        ) from exc
 
 
 def confirmar_vista_camera_activa(driver, wait):
@@ -1164,13 +1278,14 @@ def confirmar_vista_camera_activa(driver, wait):
 
 
 def abrir_opcion_resource_status(driver, wait, opcion: str):
+    confirmar_maintenance_activo(driver)
+    obtener_submenu_resource_status(driver, wait)
     popup = abrir_popup_resource_status(driver, wait)
-    print(f"[NAV] Buscando {opcion} dentro de la rama/popup de Resource Status")
     click_opcion_en_popup_resource_status(driver, popup, opcion)
     wait_loading_end(driver)
 
-    if _normalize_label(opcion) == "camera":
-        confirmar_vista_camera_activa(driver, wait)
+    print(f"[NAV] Validando apertura de vista {opcion}")
+    confirmar_vista_resource_status_activa(driver, wait, opcion)
 
 
 def _normalize_label(text: str) -> str:
