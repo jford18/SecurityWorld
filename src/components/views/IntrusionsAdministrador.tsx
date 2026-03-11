@@ -255,10 +255,6 @@ const IntrusionsAdministrador: React.FC = () => {
                 <p className="text-gray-800">{viewIntrusion.tipo || '—'}</p>
               </div>
               <div>
-                <p className="font-semibold text-gray-700">Estado</p>
-                <p className="text-gray-800">{viewIntrusion.estado || '—'}</p>
-              </div>
-              <div>
                 <p className="font-semibold text-gray-700">Llegó alerta</p>
                 <p className="text-gray-800">{viewIntrusion.llego_alerta ? 'Sí' : 'No'}</p>
               </div>
@@ -269,10 +265,6 @@ const IntrusionsAdministrador: React.FC = () => {
               <div>
                 <p className="font-semibold text-gray-700">Medio comunicación</p>
                 <p className="text-gray-800">{viewIntrusion.medio_comunicacion_descripcion || '—'}</p>
-              </div>
-              <div className="md:col-span-2">
-                <p className="font-semibold text-gray-700">Descripción</p>
-                <p className="text-gray-800 whitespace-pre-wrap">{viewIntrusion.descripcion || '—'}</p>
               </div>
             </div>
 
