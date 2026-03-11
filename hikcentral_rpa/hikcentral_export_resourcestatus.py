@@ -826,6 +826,24 @@ def click_menu_item_by_title(driver, title: str) -> bool:
 def ir_a_pestana_maintenance(driver, wait):
     print("[4] Abriendo pestaña Maintenance...")
 
+    # 0) Si ya estamos en Maintenance, no reabrir menús superiores.
+    try:
+        tab_activa = driver.find_elements(
+            By.XPATH,
+            "//div[contains(@class,'el-tabs__item') and contains(@class,'is-active') and normalize-space()='Maintenance']",
+        )
+        rail_visible = driver.find_elements(
+            By.XPATH,
+            "//section[@id='maintenance']//div[contains(@class,'nav-base') and not(contains(@style,'display: none'))]",
+        )
+        if tab_activa or any(elem.is_displayed() for elem in rail_visible):
+            print("[NAV] Maintenance ya activo; continúo con rail lateral")
+            if step_timer:
+                step_timer.mark("[4] Pestaña Maintenance")
+            return
+    except Exception:
+        pass
+
     # 1) Intentar botón "Go to Maintenance" del panel Device Statistics
     try:
         boton_go = wait.until(
@@ -909,6 +927,100 @@ def obtener_popup_colapsado_por_titulo(driver, titulo: str):
     return None
 
 
+def obtener_rail_lateral_maintenance(driver, wait):
+    print("[NAV] Buscando rail lateral de Maintenance")
+    candidatos_xpath = [
+        "//section[@id='maintenance']//div[contains(@class,'nav-base')]",
+        "//section[@id='maintenance']//aside[contains(@class,'left') or contains(@class,'nav')]",
+        "//section[@id='maintenance']//ul[contains(@class,'el-menu')]",
+    ]
+
+    def _buscar_rail(_driver):
+        for xpath in candidatos_xpath:
+            rails = _driver.find_elements(By.XPATH, xpath)
+            for rail in rails:
+                try:
+                    if not rail.is_displayed():
+                        continue
+                    iconos_visibles = [
+                        icon
+                        for icon in rail.find_elements(By.CSS_SELECTOR, "i.el-menu-icon")
+                        if icon.is_displayed()
+                    ]
+                    if iconos_visibles:
+                        return rail
+                except Exception:
+                    continue
+        return False
+
+    return wait.until(_buscar_rail)
+
+
+def debug_dump_rail_lateral(rail):
+    iconos_debug: list[str] = []
+    contenedores_debug: list[str] = []
+    try:
+        for icono in rail.find_elements(By.CSS_SELECTOR, "i"):
+            try:
+                if not icono.is_displayed():
+                    continue
+                clases = (icono.get_attribute("class") or "").strip()
+                if clases:
+                    iconos_debug.append(clases)
+
+                padre = icono.find_element(
+                    By.XPATH,
+                    "ancestor::*[self::li or self::div][1]",
+                )
+                texto_padre = (padre.text or padre.get_attribute("title") or "").strip()
+                if texto_padre:
+                    contenedores_debug.append(f"{clases} => {texto_padre}")
+                else:
+                    contenedores_debug.append(clases)
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    resumen_iconos = ", ".join(dict.fromkeys(iconos_debug)) if iconos_debug else "(sin íconos visibles)"
+    resumen_contenedores = ", ".join(dict.fromkeys(contenedores_debug)) if contenedores_debug else "(sin contenedores visibles)"
+    print(f"[NAV][DEBUG] Íconos visibles en rail: {resumen_iconos}")
+    print(f"[NAV][DEBUG] Contenedores visibles del rail: {resumen_contenedores}")
+
+
+def obtener_item_resource_status(driver, wait):
+    print("[NAV] Buscando Resource Status por ícono icon-svg-nav_realtime_status_resources")
+    rail = obtener_rail_lateral_maintenance(driver, wait)
+
+    def _buscar_item(_driver):
+        try:
+            iconos = rail.find_elements(By.XPATH, ".//i[contains(@class,'icon-svg-nav_realtime_status_resources')]")
+        except Exception:
+            return False
+
+        for icono in iconos:
+            try:
+                if not icono.is_displayed():
+                    continue
+                item = icono.find_element(
+                    By.XPATH,
+                    "ancestor::*[(self::li or self::div) and (contains(@class,'el-submenu') or contains(@class,'el-menu-item') or @role='menuitem')][1]",
+                )
+                if item.is_displayed():
+                    return item
+            except Exception:
+                continue
+        return False
+
+    try:
+        item = WebDriverWait(driver, 4).until(_buscar_item)
+        print("[NAV] Item Resource Status encontrado")
+        return item
+    except TimeoutException as exc:
+        debug_dump_rail_lateral(rail)
+        raise Exception("[NAV][ERROR] No se encontró Resource Status por ícono en el rail lateral visible") from exc
+
+
 def esperar_popup_resource_status_visible(driver, timeout: int = 6):
     print("[NAV] Esperando popup visible de Resource Status")
 
@@ -940,61 +1052,36 @@ def esperar_popup_resource_status_visible(driver, timeout: int = 6):
 
 
 def abrir_popup_resource_status(driver, wait):
-    print("[NAV] Buscando menú lateral Resource Status")
-    try:
-        submenu = wait.until(
-            EC.presence_of_element_located(
-                (
-                    By.XPATH,
-                    "//section[@id='maintenance']//div[contains(@class,'nav-base')]"
-                    "//li[contains(@class,'el-submenu')][.//span[contains(@class,'first-level-weight') and @title='Resource Status']]",
-                )
-            )
-        )
-    except TimeoutException as exc:
-        raise Exception("[NAV][ERROR] No se encontró el menú lateral Resource Status") from exc
+    submenu = obtener_item_resource_status(driver, wait)
 
     try:
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", submenu)
     except Exception:
         pass
 
-    print("[NAV] Intentando abrir popup de Resource Status por hover")
-    try:
-        ActionChains(driver).move_to_element(submenu).pause(0.25).perform()
-    except Exception:
-        pass
+    print("[NAV] Abriendo Resource Status")
+    for intento in range(1, 4):
+        try:
+            ActionChains(driver).move_to_element(submenu).pause(0.15).perform()
+        except Exception:
+            pass
 
-    try:
-        return esperar_popup_resource_status_visible(driver, timeout=3)
-    except Exception:
-        print("[NAV] Popup de Resource Status no apareció con hover, intentando click")
+        try:
+            click_robusto(driver, submenu, retries=0)
+        except Exception:
+            pass
 
-    try:
-        click_robusto(driver, submenu, retries=1)
-        ActionChains(driver).move_to_element(submenu).pause(0.25).perform()
-    except Exception:
-        pass
+        try:
+            return esperar_popup_resource_status_visible(driver, timeout=2)
+        except Exception:
+            if intento == 2:
+                try:
+                    driver.execute_script("arguments[0].click();", submenu)
+                except Exception:
+                    pass
+            time.sleep(0.2)
 
-    try:
-        return esperar_popup_resource_status_visible(driver, timeout=3)
-    except Exception:
-        print("[NAV] Popup no apareció con click+hover, intentando eventos JS")
-
-    try:
-        driver.execute_script(
-            """
-            const el = arguments[0];
-            ['mouseenter', 'mouseover'].forEach(type => {
-                el.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window}));
-            });
-            """,
-            submenu,
-        )
-    except Exception:
-        pass
-
-    return esperar_popup_resource_status_visible(driver, timeout=4)
+    return esperar_popup_resource_status_visible(driver, timeout=2)
 
 
 def _texto_normalizado_elemento(element) -> str:
@@ -1012,7 +1099,7 @@ def _texto_normalizado_elemento(element) -> str:
 
 
 def click_opcion_en_popup_resource_status(driver, popup, opcion: str):
-    print(f"[NAV] Buscando opción {opcion} dentro del popup ya abierto")
+    print(f"[NAV] Buscando {opcion} dentro de la rama/popup de Resource Status")
     opcion_xpath = ".//li[contains(@class,'el-menu-item') and @title=%s]"
     opcion_elem = None
     try:
@@ -1078,6 +1165,7 @@ def confirmar_vista_camera_activa(driver, wait):
 
 def abrir_opcion_resource_status(driver, wait, opcion: str):
     popup = abrir_popup_resource_status(driver, wait)
+    print(f"[NAV] Buscando {opcion} dentro de la rama/popup de Resource Status")
     click_opcion_en_popup_resource_status(driver, popup, opcion)
     wait_loading_end(driver)
 
