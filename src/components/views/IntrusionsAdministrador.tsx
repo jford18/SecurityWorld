@@ -25,6 +25,11 @@ const formatProtocolDateValue = (value?: string | null) => {
 
 const formatProtocolTextValue = (value?: string | null) => value?.trim() || 'No registrado';
 
+const formatGeneralDateValue = (value?: string | null) => {
+  if (!value) return 'No registrado';
+  return formatDateValue(value) || 'No registrado';
+};
+
 const hasSustraccionMaterial = (intrusion: Intrusion) => {
   if (intrusion.material_sustraido_id != null) return true;
 
@@ -236,6 +241,10 @@ const IntrusionsAdministrador: React.FC = () => {
               <div>
                 <p className="font-semibold text-gray-700">Fecha y hora de intrusión</p>
                 <p className="text-gray-800">{formatDateValue(viewIntrusion.fecha_evento)}</p>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-700">Fecha y hora de reacción</p>
+                <p className="text-gray-800">{formatGeneralDateValue(viewIntrusion.fecha_reaccion)}</p>
               </div>
               <div>
                 <p className="font-semibold text-gray-700">Sitio</p>
