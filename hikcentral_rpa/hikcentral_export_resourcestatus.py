@@ -1212,94 +1212,35 @@ def _popup_sigue_visible(popup) -> bool:
 
 
 def click_opcion_en_popup_resource_status(driver, wait, popup, opcion: str):
-    if not _popup_sigue_visible(popup):
-        raise Exception("[NAV][ERROR] El popup de Resource Status no está visible antes del clic")
-
-    print("[NAV] Popup Resource Status sigue visible")
-    print(f"[NAV] Buscando opción {opcion} dentro del popup ya abierto")
-
-    xpath_items = ".//li[contains(@class,'el-menu-item')]"
-    items_popup = [item for item in popup.find_elements(By.XPATH, xpath_items) if item.is_displayed()]
-    titulos = []
-    for item in items_popup:
-        titulo = (item.get_attribute("title") or "").strip()
-        if not titulo:
-            titulo = re.sub(r"\s+", " ", item.text or "").strip()
-        if titulo:
-            titulos.append(titulo)
-
-    print(f"[NAV][DEBUG] Cantidad de items en popup: {len(items_popup)}")
-    print(f"[NAV][DEBUG] Títulos encontrados en popup: {', '.join(titulos)}")
-
+    print(f"[NAV] Buscando opción {opcion} dentro del popup")
     xpath_opcion = (
         ".//li[contains(@class,'el-menu-item') and @title="
         + _xpath_literal(opcion)
         + "]"
     )
+    candidatos = popup.find_elements(By.XPATH, xpath_opcion)
+    visibles = [el for el in candidatos if el.is_displayed()]
+    print(f"[NAV][DEBUG] Items encontrados en popup para {opcion}: {len(visibles)}")
 
-    try:
-        candidatos = popup.find_elements(By.XPATH, xpath_opcion)
-        opcion_elem = next(
-            (
-                el
-                for el in candidatos
-                if el.is_displayed() and el.is_enabled()
-            ),
-            None,
-        )
-        if not opcion_elem:
-            raise TimeoutException("No se encontró opción visible/interactuable")
-    except Exception as exc:
-        print(f"[NAV][DEBUG] style del popup: {popup.get_attribute('style')}")
-        print(f"[NAV][DEBUG] html/texto del submenu: {_texto_debug_elemento(popup)}")
-        raise Exception(
-            f"[NAV][ERROR] No se encontró {opcion} dentro del popup hijo de Resource Status"
-        ) from exc
+    if not visibles:
+        raise Exception(f"[NAV][ERROR] No se encontró {opcion} dentro del popup de Resource Status")
 
-    if not _popup_sigue_visible(popup):
-        raise Exception("[NAV][ERROR] El popup de Resource Status dejó de estar visible antes del clic")
-    if not opcion_elem.is_displayed():
-        raise Exception(f"[NAV][ERROR] La opción {opcion} no está visible antes del clic")
-
-    wait_loading_overlays(driver, timeout=3)
+    opcion_elem = visibles[0]
 
     try:
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", opcion_elem)
     except Exception:
         pass
 
-    click_ok = False
     try:
         ActionChains(driver).move_to_element(opcion_elem).pause(0.1).click().perform()
-        click_ok = True
     except Exception:
-        pass
-
-    if not click_ok:
         try:
             driver.execute_script("arguments[0].click();", opcion_elem)
-            click_ok = True
         except Exception:
-            pass
-
-    if not click_ok:
-        try:
             opcion_elem.click()
-            click_ok = True
-        except Exception:
-            pass
 
-    if not click_ok:
-        raise Exception(f"[NAV][ERROR] No se pudo hacer clic en {opcion} dentro del popup")
-
-    print(f"[NAV] Click en {opcion} dentro del popup")
-
-    print(f"[NAV] Validando cierre del popup tras clic en {opcion}")
-    try:
-        WebDriverWait(driver, 4).until(lambda _d: not _popup_sigue_visible(popup))
-        print("[NAV] Popup cerrado correctamente")
-    except TimeoutException as exc:
-        raise Exception("[NAV][ERROR] El popup no se cerró tras clic en Camera") from exc
+    print(f"[NAV] Click en {opcion}")
 
 
 def confirmar_vista_resource_status_activa(driver, wait, opcion: str):
