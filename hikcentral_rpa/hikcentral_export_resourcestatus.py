@@ -1245,11 +1245,10 @@ def click_opcion_en_popup_resource_status(driver, wait, popup, opcion: str):
         visibles = [el for el in encontrados if el.is_displayed()]
         return encontrados, visibles
 
-    items_popup, _ = _debug_items_visibles()
-    candidatos, visibles = _buscar_camera()
+    def _intentar_revelar(items_popup, candidatos):
+        if candidatos:
+            print(f"[NAV][DEBUG] {opcion} encontrada pero no visible; intentando revelarla")
 
-    if not visibles and candidatos:
-        print(f"[NAV][DEBUG] {opcion} encontrada pero no visible; intentando revelarla")
         for objetivo in candidatos:
             try:
                 driver.execute_script("arguments[0].scrollIntoView({block: 'nearest'});", objetivo)
@@ -1257,11 +1256,20 @@ def click_opcion_en_popup_resource_status(driver, wait, popup, opcion: str):
                 pass
 
         try:
+            driver.execute_script(
+                "arguments[0].scrollTop = Math.max(0, arguments[0].scrollTop - 80);",
+                popup,
+            )
+            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollTop + 180;", popup)
+        except Exception:
+            pass
+
+        try:
             ActionChains(driver).move_to_element(popup).pause(0.1).perform()
         except Exception:
             pass
 
-        for vecino in items_popup[:5]:
+        for vecino in items_popup[:6]:
             try:
                 ActionChains(driver).move_to_element(vecino).pause(0.05).perform()
             except Exception:
@@ -1272,8 +1280,13 @@ def click_opcion_en_popup_resource_status(driver, wait, popup, opcion: str):
         except Exception:
             pass
 
+    items_popup, _ = _debug_items_visibles()
+    candidatos, visibles = _buscar_camera()
+
+    if not visibles:
+        _intentar_revelar(items_popup, candidatos)
         print(f"[NAV][DEBUG] Reintentando búsqueda de {opcion} dentro del popup")
-        _debug_items_visibles()
+        items_popup, _ = _debug_items_visibles()
         candidatos, visibles = _buscar_camera()
 
     if not visibles:
