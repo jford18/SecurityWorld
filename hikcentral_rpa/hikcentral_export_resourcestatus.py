@@ -1163,35 +1163,59 @@ def _xpath_literal(value: str) -> str:
 
 
 def abrir_popup_resource_status(driver, wait):
-    print("[NAV] Intentando abrir popup hijo de Resource Status por hover")
-    xpath_resource_status = "//span[@title='Resource Status']"
+    print("[NAV] Intentando abrir popup hijo de Resource Status por JS")
+    xpath_submenu = (
+        "//li[contains(@class,'el-submenu')]"
+        "[.//span[@title='Resource Status' or normalize-space()='Resource Status']]"
+    )
     ultimo_error = None
 
     for intento in range(1, 6):
         try:
-            resource_status = wait.until(EC.visibility_of_element_located((By.XPATH, xpath_resource_status)))
-            submenu = resource_status.find_element(By.XPATH, "./ancestor::li[contains(@class,'el-submenu')][1]")
+            submenu = wait.until(EC.presence_of_element_located((By.XPATH, xpath_submenu)))
+            ul_popup = driver.execute_script(
+                """
+                const submenu = arguments[0];
+                submenu.classList.add('is-opened');
+                const wrap = submenu.querySelector('div.el-menu-collapse-wrap');
+                if (wrap) {
+                    wrap.style.display = 'block';
+                    wrap.style.visibility = 'visible';
+                    wrap.style.opacity = '1';
+                    wrap.style.height = 'auto';
+                    wrap.style.maxHeight = 'none';
+                    wrap.style.overflow = 'visible';
+                }
+                const ul = (wrap && wrap.querySelector('ul')) || submenu.querySelector('ul');
+                if (ul) {
+                    ul.style.display = 'block';
+                    ul.style.visibility = 'visible';
+                    ul.style.opacity = '1';
+                    ul.style.height = 'auto';
+                    ul.style.maxHeight = 'none';
+                    ul.style.overflow = 'visible';
+                }
+                return ul;
+                """,
+                submenu,
+            )
 
-            try:
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", resource_status)
-            except Exception:
-                pass
+            if ul_popup and ul_popup.is_displayed():
+                print("[NAV] Popup de Resource Status visible")
+                return ul_popup
 
-            ActionChains(driver).move_to_element(resource_status).pause(0.2).perform()
-            popup = _esperar_popup_hijo_visible(driver, submenu, timeout=4)
-            print("[NAV] Popup de Resource Status visible")
-            return popup
+            raise Exception("[NAV][DEBUG] El <ul> de Resource Status no quedó visible")
 
         except StaleElementReferenceException as exc:
             ultimo_error = exc
-            print(f"[NAV][DEBUG] Intento {intento}: elemento stale al hacer hover ({exc})")
+            print(f"[NAV][DEBUG] Intento {intento}: elemento stale al abrir Resource Status ({exc})")
             time.sleep(0.2)
         except Exception as exc:
             ultimo_error = exc
-            print(f"[NAV][DEBUG] Intento {intento}: popup aún no visible tras hover ({exc})")
+            print(f"[NAV][DEBUG] Intento {intento}: popup aún no visible por JS ({exc})")
             time.sleep(0.25)
 
-    raise Exception("[NAV][ERROR] No se pudo hacer visible el popup hijo de Resource Status") from ultimo_error
+    raise Exception("[NAV][ERROR] No se pudo forzar la apertura de Resource Status") from ultimo_error
 
 
 def _texto_normalizado_elemento(element) -> str:
