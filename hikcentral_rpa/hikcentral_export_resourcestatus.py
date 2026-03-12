@@ -16,6 +16,7 @@ from selenium import webdriver
 from selenium.common.exceptions import (
     ElementClickInterceptedException,
     NoSuchElementException,
+    StaleElementReferenceException,
     TimeoutException,
 )
 from selenium.webdriver.chrome.service import Service
@@ -1209,62 +1210,60 @@ def _popup_sigue_visible(popup) -> bool:
         return False
 
 
+def click_estable(driver, wait, xpath: str, descripcion: str):
+    """
+    Click robusto para DOM dinámico (Vue/Element UI).
+    Estrategia:
+    1) Re-localiza el elemento en cada intento.
+    2) Hace scroll al centro.
+    3) Ejecuta click con ActionChains.
+    4) Reintenta ante StaleElementReferenceException o ElementClickInterceptedException.
+    """
+    ultimo_error = None
+    for intento in range(1, 6):
+        try:
+            elemento = wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
+            wait.until(lambda _d: elemento.is_displayed())
+
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", elemento)
+            wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+            ActionChains(driver).move_to_element(elemento).pause(0.05).click().perform()
+
+            print(f"[NAV] Click estable en {descripcion} (intento {intento})")
+            return
+        except (StaleElementReferenceException, ElementClickInterceptedException, TimeoutException) as exc:
+            ultimo_error = exc
+            print(
+                f"[NAV][DEBUG] Reintento {intento}/5 para {descripcion} "
+                f"por {type(exc).__name__}: {exc}"
+            )
+            time.sleep(0.2)
+
+    raise Exception(
+        f"[NAV][ERROR] No se pudo hacer click en {descripcion} tras 5 intentos"
+    ) from ultimo_error
+
+
 def click_opcion_en_popup_resource_status(driver, wait, popup, opcion: str):
     print(f"[NAV] Buscando opción {opcion} dentro del popup")
+    opcion_literal = _xpath_literal(opcion)
+    xpaths = [
+        f"//li[@title={opcion_literal}]//span[normalize-space()={opcion_literal}]",
+        f"//li[@title={opcion_literal}]",
+    ]
 
-    xpath_span = ".//li[@title=" + _xpath_literal(opcion) + "]//span[normalize-space()=" + _xpath_literal(opcion) + "]"
-    xpath_li = ".//li[@title=" + _xpath_literal(opcion) + "]"
-
-    target = None
-
-    try:
-        elementos = popup.find_elements(By.XPATH, xpath_span)
-        print(f"[NAV][DEBUG] Candidatos span para {opcion}: {len(elementos)}")
-        for el in elementos:
-            if el.is_displayed():
-                target = el
-                break
-    except Exception as exc:
-        print(f"[NAV][DEBUG] Error buscando span de {opcion}: {exc}")
-
-    if not target:
+    ultimo_error = None
+    for xpath in xpaths:
         try:
-            elementos = popup.find_elements(By.XPATH, xpath_li)
-            print(f"[NAV][DEBUG] Candidatos li para {opcion}: {len(elementos)}")
-            for el in elementos:
-                if el.is_displayed():
-                    target = el
-                    break
+            click_estable(driver, wait, xpath, f"{opcion} en popup Resource Status")
+            return
         except Exception as exc:
-            print(f"[NAV][DEBUG] Error buscando li de {opcion}: {exc}")
+            ultimo_error = exc
+            print(f"[NAV][DEBUG] XPath no exitoso para {opcion}: {xpath} -> {exc}")
 
-    if not target:
-        raise Exception(f"[NAV][ERROR] No se encontró {opcion} dentro del popup Resource Status")
-
-    try:
-        html = target.get_attribute("outerHTML")
-        print(f"[NAV][DEBUG] outerHTML Camera: {html[:500]}")
-    except Exception:
-        pass
-
-    try:
-        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", target)
-    except Exception:
-        pass
-
-    try:
-        driver.execute_script("arguments[0].click();", target)
-        print(f"[NAV] Click en {opcion} usando JS")
-        return
-    except Exception:
-        pass
-
-    try:
-        target.click()
-        print(f"[NAV] Click en {opcion} normal")
-        return
-    except Exception as exc:
-        raise Exception(f"[NAV][ERROR] No se pudo hacer clic en {opcion}: {exc}")
+    raise Exception(
+        f"[NAV][ERROR] No se pudo hacer clic en {opcion} dentro del popup Resource Status"
+    ) from ultimo_error
 
 
 def confirmar_vista_resource_status_activa(driver, wait, opcion: str):
@@ -1320,7 +1319,21 @@ def confirmar_vista_camera_activa(driver, wait):
 def abrir_opcion_resource_status(driver, wait, opcion: str):
     confirmar_maintenance_activo(driver)
     obtener_submenu_resource_status(driver, wait)
-    popup = abrir_popup_resource_status(driver, wait)
+    popup = None
+    ultimo_error = None
+    for intento in range(1, 6):
+        try:
+            popup = abrir_popup_resource_status(driver, wait)
+            break
+        except StaleElementReferenceException as exc:
+            ultimo_error = exc
+            print(
+                f"[NAV][DEBUG] Stale al abrir Resource Status (intento {intento}/5). Reintentando..."
+            )
+            time.sleep(0.25)
+    if not popup:
+        raise Exception("[NAV][ERROR] No se pudo abrir popup Resource Status por referencias stale") from ultimo_error
+
     click_opcion_en_popup_resource_status(driver, wait, popup, opcion)
     wait_loading_end(driver)
 
