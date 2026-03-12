@@ -1232,29 +1232,49 @@ def click_opcion_en_popup_resource_status(driver, wait, popup, opcion: str):
 
     print(f"[NAV][DEBUG] Títulos visibles en popup: {titulos_debug}")
 
-    xpath_opcion = (
-        ".//li[contains(@class,'el-menu-item') "
-        "and contains(@class,'el-menu-item-group') "
-        "and @title=" + _xpath_literal(opcion) + "]"
-    )
+    literal_opcion = _xpath_literal(opcion)
+    selectores_prioridad = [
+        (
+            "span interno por título de li",
+            ".//li[@title=" + literal_opcion + "]//span[normalize-space()=" + literal_opcion + "]",
+        ),
+        (
+            "span interno en item visible",
+            ".//li[contains(@class,'el-menu-item') and @title=" + literal_opcion + "]//span[normalize-space()=" + literal_opcion + "]",
+        ),
+        (
+            "li por título",
+            ".//li[contains(@class,'el-menu-item') and @title=" + literal_opcion + "]",
+        ),
+        (
+            "li grupo por título",
+            ".//li[contains(@class,'el-menu-item') and contains(@class,'el-menu-item-group') and @title=" + literal_opcion + "]",
+        ),
+    ]
 
-    candidatos = popup.find_elements(By.XPATH, xpath_opcion)
+    objetivo = None
+    descripcion_objetivo = None
+    for descripcion, xpath_selector in selectores_prioridad:
+        candidatos = popup.find_elements(By.XPATH, xpath_selector)
+        for el in candidatos:
+            try:
+                if el.is_displayed() and el.is_enabled():
+                    objetivo = el
+                    descripcion_objetivo = descripcion
+                    break
+            except Exception:
+                continue
+        if objetivo is not None:
+            break
 
-    visibles = []
-    for el in candidatos:
-        try:
-            if el.is_displayed() and el.is_enabled():
-                visibles.append(el)
-        except Exception:
-            continue
-
-    if not visibles:
+    if objetivo is None:
         raise Exception(
             f"[NAV][ERROR] No se encontró {opcion} visible dentro del popup de Resource Status. "
             f"Títulos visibles: {titulos_debug}"
         )
 
-    opcion_elem = visibles[0]
+    opcion_elem = objetivo
+    print(f"[NAV][DEBUG] Objetivo seleccionado ({descripcion_objetivo})")
 
     try:
         outer_html = opcion_elem.get_attribute("outerHTML") or ""
@@ -1269,7 +1289,7 @@ def click_opcion_en_popup_resource_status(driver, wait, popup, opcion: str):
 
     try:
         driver.execute_script("arguments[0].click();", opcion_elem)
-        print(f"[NAV] Click en {opcion} por JS")
+        print(f"[NAV] Click en {opcion} por JS ({descripcion_objetivo})")
         return
     except Exception:
         pass
