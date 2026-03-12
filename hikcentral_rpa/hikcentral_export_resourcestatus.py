@@ -1072,24 +1072,22 @@ def _click_con_prioridad(driver, element, descripcion: str):
     wait_loading_overlays(driver, timeout=10)
 
     try:
-        ActionChains(driver).move_to_element(element).pause(0.12).perform()
-    except Exception:
-        pass
-
-    try:
-        ActionChains(driver).move_to_element(element).click().perform()
-        return
-    except Exception:
-        pass
-
-    try:
         driver.execute_script("arguments[0].click();", element)
+        print(f"[NAV] Click en {descripcion} por JS")
         return
     except Exception:
         pass
 
     try:
         element.click()
+        print(f"[NAV] Click en {descripcion} directo")
+        return
+    except Exception:
+        pass
+
+    try:
+        ActionChains(driver).move_to_element(element).pause(0.1).click().perform()
+        print(f"[NAV] Click en {descripcion} por ActionChains")
         return
     except Exception as exc:
         raise Exception(f"[NAV][ERROR] No se pudo hacer click en {descripcion}: {exc}") from exc
