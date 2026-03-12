@@ -1212,101 +1212,59 @@ def _popup_sigue_visible(popup) -> bool:
 def click_opcion_en_popup_resource_status(driver, wait, popup, opcion: str):
     print(f"[NAV] Buscando opción {opcion} dentro del popup")
 
-    items_popup = popup.find_elements(
-        By.XPATH,
-        ".//li[contains(@class,'el-menu-item')]"
-    )
+    xpath_span = ".//li[@title=" + _xpath_literal(opcion) + "]//span[normalize-space()=" + _xpath_literal(opcion) + "]"
+    xpath_li = ".//li[@title=" + _xpath_literal(opcion) + "]"
 
-    titulos_debug = []
-    for item in items_popup:
+    target = None
+
+    try:
+        elementos = popup.find_elements(By.XPATH, xpath_span)
+        print(f"[NAV][DEBUG] Candidatos span para {opcion}: {len(elementos)}")
+        for el in elementos:
+            if el.is_displayed():
+                target = el
+                break
+    except Exception as exc:
+        print(f"[NAV][DEBUG] Error buscando span de {opcion}: {exc}")
+
+    if not target:
         try:
-            if not item.is_displayed():
-                continue
-            titulo = (item.get_attribute("title") or "").strip()
-            if not titulo:
-                titulo = re.sub(r"\\s+", " ", item.text or "").strip()
-            if titulo:
-                titulos_debug.append(titulo)
-        except Exception:
-            continue
-
-    print(f"[NAV][DEBUG] Títulos visibles en popup: {titulos_debug}")
-
-    literal_opcion = _xpath_literal(opcion)
-    selectores_prioridad = [
-        (
-            "span interno por título de li",
-            ".//li[@title=" + literal_opcion + "]//span[normalize-space()=" + literal_opcion + "]",
-        ),
-        (
-            "span interno en item visible",
-            ".//li[contains(@class,'el-menu-item') and @title=" + literal_opcion + "]//span[normalize-space()=" + literal_opcion + "]",
-        ),
-        (
-            "li por título",
-            ".//li[contains(@class,'el-menu-item') and @title=" + literal_opcion + "]",
-        ),
-        (
-            "li grupo por título",
-            ".//li[contains(@class,'el-menu-item') and contains(@class,'el-menu-item-group') and @title=" + literal_opcion + "]",
-        ),
-    ]
-
-    objetivo = None
-    descripcion_objetivo = None
-    for descripcion, xpath_selector in selectores_prioridad:
-        candidatos = popup.find_elements(By.XPATH, xpath_selector)
-        for el in candidatos:
-            try:
-                if el.is_displayed() and el.is_enabled():
-                    objetivo = el
-                    descripcion_objetivo = descripcion
+            elementos = popup.find_elements(By.XPATH, xpath_li)
+            print(f"[NAV][DEBUG] Candidatos li para {opcion}: {len(elementos)}")
+            for el in elementos:
+                if el.is_displayed():
+                    target = el
                     break
-            except Exception:
-                continue
-        if objetivo is not None:
-            break
+        except Exception as exc:
+            print(f"[NAV][DEBUG] Error buscando li de {opcion}: {exc}")
 
-    if objetivo is None:
-        raise Exception(
-            f"[NAV][ERROR] No se encontró {opcion} visible dentro del popup de Resource Status. "
-            f"Títulos visibles: {titulos_debug}"
-        )
-
-    opcion_elem = objetivo
-    print(f"[NAV][DEBUG] Objetivo seleccionado ({descripcion_objetivo})")
+    if not target:
+        raise Exception(f"[NAV][ERROR] No se encontró {opcion} dentro del popup Resource Status")
 
     try:
-        outer_html = opcion_elem.get_attribute("outerHTML") or ""
-    except Exception:
-        outer_html = ""
-    print(f"[NAV][DEBUG] outerHTML {opcion}: {outer_html[:1000]}")
-
-    try:
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", opcion_elem)
+        html = target.get_attribute("outerHTML")
+        print(f"[NAV][DEBUG] outerHTML Camera: {html[:500]}")
     except Exception:
         pass
 
     try:
-        driver.execute_script("arguments[0].click();", opcion_elem)
-        print(f"[NAV] Click en {opcion} por JS ({descripcion_objetivo})")
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", target)
+    except Exception:
+        pass
+
+    try:
+        driver.execute_script("arguments[0].click();", target)
+        print(f"[NAV] Click en {opcion} usando JS")
         return
     except Exception:
         pass
 
     try:
-        opcion_elem.click()
-        print(f"[NAV] Click en {opcion} directo")
-        return
-    except Exception:
-        pass
-
-    try:
-        ActionChains(driver).move_to_element(opcion_elem).pause(0.1).click().perform()
-        print(f"[NAV] Click en {opcion} por ActionChains")
+        target.click()
+        print(f"[NAV] Click en {opcion} normal")
         return
     except Exception as exc:
-        raise Exception(f"[NAV][ERROR] No se pudo hacer clic en {opcion} dentro del popup: {exc}") from exc
+        raise Exception(f"[NAV][ERROR] No se pudo hacer clic en {opcion}: {exc}")
 
 
 def confirmar_vista_resource_status_activa(driver, wait, opcion: str):
