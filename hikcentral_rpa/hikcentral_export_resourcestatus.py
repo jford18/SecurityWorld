@@ -1214,99 +1214,81 @@ def _popup_sigue_visible(popup) -> bool:
 def click_opcion_en_popup_resource_status(driver, wait, popup, opcion: str):
     print(f"[NAV] Buscando opción {opcion} dentro del popup")
 
-    all_items_xpath = ".//li[contains(@class,'el-menu-item')]"
-    opcion_xpaths = [
-        ".//li[contains(@class,'el-menu-item') and @title=" + _xpath_literal(opcion) + "]",
-        ".//li[contains(@class,'el-menu-item')][normalize-space()=" + _xpath_literal(opcion) + "]",
-        ".//*[self::li or self::div or self::span][@title="
-        + _xpath_literal(opcion)
-        + " or normalize-space()="
-        + _xpath_literal(opcion)
-        + "]",
-    ]
+    items_popup = popup.find_elements(
+        By.XPATH,
+        ".//li[contains(@class,'el-menu-item')]"
+    )
 
-    def _debug_items_visibles():
-        items_popup = popup.find_elements(By.XPATH, all_items_xpath)
-        items_visibles = [el for el in items_popup if el.is_displayed()]
-        textos_visibles = [
-            _texto_normalizado_elemento(el) or "<sin texto>"
-            for el in items_visibles
-        ]
-        print(f"[NAV][DEBUG] Items visibles en popup: {len(items_visibles)}")
-        print(f"[NAV][DEBUG] Títulos/textos visibles en popup: {textos_visibles}")
-        return items_popup, items_visibles
-
-    def _buscar_camera():
-        encontrados = []
-        for xpath in opcion_xpaths:
-            for el in popup.find_elements(By.XPATH, xpath):
-                if el not in encontrados:
-                    encontrados.append(el)
-        visibles = [el for el in encontrados if el.is_displayed()]
-        return encontrados, visibles
-
-    def _intentar_revelar(items_popup, candidatos):
-        if candidatos:
-            print(f"[NAV][DEBUG] {opcion} encontrada pero no visible; intentando revelarla")
-
-        for objetivo in candidatos:
-            try:
-                driver.execute_script("arguments[0].scrollIntoView({block: 'nearest'});", objetivo)
-            except Exception:
-                pass
-
+    titulos_debug = []
+    for item in items_popup:
         try:
-            driver.execute_script(
-                "arguments[0].scrollTop = Math.max(0, arguments[0].scrollTop - 80);",
-                popup,
-            )
-            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollTop + 180;", popup)
-        except Exception:
-            pass
-
-        try:
-            ActionChains(driver).move_to_element(popup).pause(0.1).perform()
-        except Exception:
-            pass
-
-        for vecino in items_popup[:6]:
-            try:
-                ActionChains(driver).move_to_element(vecino).pause(0.05).perform()
-            except Exception:
+            if not item.is_displayed():
                 continue
-
-        try:
-            ActionChains(driver).move_to_element_with_offset(popup, 10, 10).pause(0.1).perform()
+            titulo = (item.get_attribute("title") or "").strip()
+            if not titulo:
+                titulo = re.sub(r"\\s+", " ", item.text or "").strip()
+            if titulo:
+                titulos_debug.append(titulo)
         except Exception:
-            pass
+            continue
 
-    items_popup, _ = _debug_items_visibles()
-    candidatos, visibles = _buscar_camera()
+    print(f"[NAV][DEBUG] Títulos visibles en popup: {titulos_debug}")
+
+    xpath_opcion = (
+        ".//li[contains(@class,'el-menu-item') "
+        "and contains(@class,'el-menu-item-group') "
+        "and @title=" + _xpath_literal(opcion) + "]"
+    )
+
+    candidatos = popup.find_elements(By.XPATH, xpath_opcion)
+
+    visibles = []
+    for el in candidatos:
+        try:
+            if el.is_displayed() and el.is_enabled():
+                visibles.append(el)
+        except Exception:
+            continue
 
     if not visibles:
-        _intentar_revelar(items_popup, candidatos)
-        print(f"[NAV][DEBUG] Reintentando búsqueda de {opcion} dentro del popup")
-        items_popup, _ = _debug_items_visibles()
-        candidatos, visibles = _buscar_camera()
-
-    if not visibles:
-        if candidatos:
-            raise Exception(
-                f"[NAV][ERROR] {opcion} existe pero no pudo hacerse visible dentro del popup de Resource Status"
-            )
-        raise Exception(f"[NAV][ERROR] No se encontró {opcion} dentro del popup de Resource Status")
+        raise Exception(
+            f"[NAV][ERROR] No se encontró {opcion} visible dentro del popup de Resource Status. "
+            f"Títulos visibles: {titulos_debug}"
+        )
 
     opcion_elem = visibles[0]
 
     try:
-        ActionChains(driver).move_to_element(opcion_elem).pause(0.1).click().perform()
+        outer_html = opcion_elem.get_attribute("outerHTML") or ""
     except Exception:
-        try:
-            driver.execute_script("arguments[0].click();", opcion_elem)
-        except Exception:
-            opcion_elem.click()
+        outer_html = ""
+    print(f"[NAV][DEBUG] outerHTML {opcion}: {outer_html[:1000]}")
 
-    print(f"[NAV] Click en {opcion}")
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", opcion_elem)
+    except Exception:
+        pass
+
+    try:
+        driver.execute_script("arguments[0].click();", opcion_elem)
+        print(f"[NAV] Click en {opcion} por JS")
+        return
+    except Exception:
+        pass
+
+    try:
+        opcion_elem.click()
+        print(f"[NAV] Click en {opcion} directo")
+        return
+    except Exception:
+        pass
+
+    try:
+        ActionChains(driver).move_to_element(opcion_elem).pause(0.1).click().perform()
+        print(f"[NAV] Click en {opcion} por ActionChains")
+        return
+    except Exception as exc:
+        raise Exception(f"[NAV][ERROR] No se pudo hacer clic en {opcion} dentro del popup: {exc}") from exc
 
 
 def confirmar_vista_resource_status_activa(driver, wait, opcion: str):
