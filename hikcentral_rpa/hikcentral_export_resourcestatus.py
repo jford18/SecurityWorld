@@ -1163,30 +1163,35 @@ def _xpath_literal(value: str) -> str:
 
 
 def abrir_popup_resource_status(driver, wait):
-    submenu = obtener_submenu_resource_status(driver, wait)
-    print("[NAV] Intentando abrir popup hijo de Resource Status")
-    titulo_submenu = submenu.find_element(By.CSS_SELECTOR, "div.el-submenu__title")
+    print("[NAV] Intentando abrir popup hijo de Resource Status por hover")
+    xpath_resource_status = "//span[@title='Resource Status']"
+    ultimo_error = None
 
-    for intento in range(1, 5):
+    for intento in range(1, 6):
         try:
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", titulo_submenu)
-        except Exception:
-            pass
+            resource_status = wait.until(EC.visibility_of_element_located((By.XPATH, xpath_resource_status)))
+            submenu = resource_status.find_element(By.XPATH, "./ancestor::li[contains(@class,'el-submenu')][1]")
 
-        _click_con_prioridad(driver, titulo_submenu, "título de Resource Status")
+            try:
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", resource_status)
+            except Exception:
+                pass
 
-        try:
+            ActionChains(driver).move_to_element(resource_status).pause(0.2).perform()
             popup = _esperar_popup_hijo_visible(driver, submenu, timeout=4)
             print("[NAV] Popup de Resource Status visible")
             return popup
+
+        except StaleElementReferenceException as exc:
+            ultimo_error = exc
+            print(f"[NAV][DEBUG] Intento {intento}: elemento stale al hacer hover ({exc})")
+            time.sleep(0.2)
         except Exception as exc:
-            print(f"[NAV][DEBUG] Intento {intento}: popup aún no visible ({exc})")
+            ultimo_error = exc
+            print(f"[NAV][DEBUG] Intento {intento}: popup aún no visible tras hover ({exc})")
             time.sleep(0.25)
 
-    popup_hijo = submenu.find_element(By.CSS_SELECTOR, "div.el-menu-collapse-wrap")
-    print(f"[NAV][DEBUG] style del popup: {popup_hijo.get_attribute('style')}")
-    print(f"[NAV][DEBUG] html/texto del submenu: {_texto_debug_elemento(submenu)}")
-    raise Exception("[NAV][ERROR] No se pudo hacer visible el popup hijo de Resource Status")
+    raise Exception("[NAV][ERROR] No se pudo hacer visible el popup hijo de Resource Status") from ultimo_error
 
 
 def _texto_normalizado_elemento(element) -> str:
