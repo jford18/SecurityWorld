@@ -2222,27 +2222,14 @@ ORDER BY A.FECHA_EVENTO DESC;`;
         "HACIENDA",
         "UBICACION",
         "TIPO",
-        "ESTADO",
-        "DESCRIPCION",
         "FECHA_EVENTO",
-        "FECHA_REACCION",
-        "MEDIO_COMUNICACION_ID",
+        "FECHA_REACCION_SW",
         "LLEGO_ALERTA",
-        "FECHA_REACCION_FUERA",
-        "CONCLUSION_EVENTO_ID",
-        "MATERIAL_SUSTRAIDO_ID",
-        "FUERZA_REACCION_ID",
         "MATERIAL_SUSTRAIDO",
-        "SITIO_ID",
         "SITIO_NOMBRE",
         "SITIO_DESCRIPCION",
-        "PERSONA_ID",
         "ORIGEN",
-        "HIK_ALARM_EVENTO_ID",
-        "NO_LLEGO_ALERTA",
-        "COMPLETADO",
-        "FECHA_COMPLETADO",
-        "MEDIO_COMUNICACION",
+        "LLEGO_ALERTA",
         "NECESITA_PROTOCOLO",
         "FECHA_REACCION_ENVIADA",
         "FECHA_LLEGADA_FUERZA_REACCION",
@@ -2259,39 +2246,22 @@ ORDER BY A.FECHA_EVENTO DESC;`;
           row?.hacienda ?? "",
           row?.ubicacion ?? "",
           row?.tipo ?? "",
-          row?.estado ?? "",
-          row?.descripcion ?? "",
           formatFechaHoraPortal(row?.fecha_evento),
           formatFechaHoraPortal(row?.fecha_reaccion),
-          row?.medio_comunicacion_id ?? "",
           row?.llego_alerta === null || row?.llego_alerta === undefined
             ? ""
             : row.llego_alerta
             ? "Sí"
             : "No",
-          formatFechaHoraPortal(row?.fecha_reaccion_fuera),
-          row?.conclusion_evento_id ?? "",
-          row?.material_sustraido_id ?? "",
-          row?.fuerza_reaccion_id ?? "",
           row?.material_sustraido ?? "",
-          row?.sitio_id ?? "",
           row?.sitio_nombre ?? "",
           row?.sitio_descripcion ?? "",
-          row?.persona_id ?? "",
           row?.origen ?? "",
-          row?.hik_alarm_evento_id ?? "",
           row?.no_llego_alerta === null || row?.no_llego_alerta === undefined
             ? ""
-            : row.no_llego_alerta
+            : !row.no_llego_alerta
             ? "Sí"
             : "No",
-          row?.completado === null || row?.completado === undefined
-            ? ""
-            : row.completado
-            ? "Sí"
-            : "No",
-          formatFechaHoraPortal(row?.fecha_completado),
-          row?.medio_comunicacion ?? "",
           row?.necesita_protocolo === null || row?.necesita_protocolo === undefined
             ? ""
             : row.necesita_protocolo
