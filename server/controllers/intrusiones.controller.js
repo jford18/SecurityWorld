@@ -2204,6 +2204,11 @@ WHERE 1=1${filterClause}
 ORDER BY A.FECHA_EVENTO DESC;`;
 
   try {
+    console.log("=================================");
+    console.log("QUERY EXPORT CONSOLIDADO INTRUSIONES");
+    console.log(query);
+    console.log("PARAMETROS:", values);
+    console.log("=================================");
     const result = await pool.query(query, values);
 
     const worksheetData = [
