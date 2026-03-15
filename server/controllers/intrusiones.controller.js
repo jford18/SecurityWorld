@@ -2128,6 +2128,8 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
 
   const selectColumns = [
     "A.ID",
+    "G.NOMBRE AS CLIENTE",
+    "H.NOMBRE AS HACIENDA",
     "A.UBICACION",
     "A.TIPO",
     "A.ESTADO",
@@ -2185,6 +2187,8 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
 
   const joins = [
     "LEFT JOIN PUBLIC.SITIOS B ON (B.ID = A.SITIO_ID)",
+    "LEFT JOIN PUBLIC.CLIENTES G ON (G.ID = B.CLIENTE_ID)",
+    "LEFT JOIN PUBLIC.HACIENDAS H ON (H.ID = B.HACIENDA_ID)",
     "LEFT JOIN PUBLIC.CATALOGO_MEDIO_COMUNICACION D ON (D.ID = A.MEDIO_COMUNICACION_ID)",
     "LEFT JOIN PUBLIC.MATERIAL_SUSTRAIDO E ON (E.ID = A.MATERIAL_SUSTRAIDO_ID)",
   ];
@@ -2214,6 +2218,8 @@ ORDER BY A.FECHA_EVENTO DESC;`;
     const worksheetData = [
       [
         "ID",
+        "CLIENTE",
+        "HACIENDA",
         "UBICACION",
         "TIPO",
         "ESTADO",
@@ -2249,6 +2255,8 @@ ORDER BY A.FECHA_EVENTO DESC;`;
       ...result.rows.map((row) => {
         return [
           row?.id ?? "",
+          row?.cliente ?? "",
+          row?.hacienda ?? "",
           row?.ubicacion ?? "",
           row?.tipo ?? "",
           row?.estado ?? "",
