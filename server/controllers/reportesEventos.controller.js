@@ -79,21 +79,15 @@ const normalizeReportesFilters = (query) => ({
   fechaHasta: query?.fechaHasta ?? query?.fechaFin,
 });
 
-const buildBaseIntrusionesCTE = (metadata, whereClause) => {
-  const tipoIntrusionExpression = metadata.hasTipoIntrusionId
-    ? "COALESCE(cti.descripcion, CAST(i.tipo_intrusion_id AS TEXT))"
-    : "i.tipo";
-  const protocoloExpression = metadata.hasTipoIntrusionId
-    ? "NULLIF(TRIM(cti.protocolo), '')"
-    : "NULL";
+const buildBaseIntrusionesCTE = (_metadata, whereClause) => {
+  const tipoIntrusionExpression = "COALESCE(cti.descripcion, i.tipo)";
 
   const sitioNombreExpression = "COALESCE(NULLIF(TRIM(s.descripcion), ''), s.nombre)";
 
-  const joins = ["LEFT JOIN public.sitios AS s ON s.id = i.sitio_id"];
-
-  if (metadata.hasTipoIntrusionId) {
-    joins.push("LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.id = i.tipo_intrusion_id");
-  }
+  const joins = [
+    "LEFT JOIN public.sitios AS s ON s.id = i.sitio_id",
+    "LEFT JOIN public.catalogo_tipo_intrusion AS cti ON cti.descripcion = i.tipo",
+  ];
 
   return `WITH base_intrusiones AS (
     SELECT
@@ -108,8 +102,14 @@ const buildBaseIntrusionesCTE = (metadata, whereClause) => {
         (i.fecha_evento AT TIME ZONE 'UTC')::DATE             AS fecha,
         EXTRACT(ISODOW FROM i.fecha_evento)                   AS dia_semana,
         EXTRACT(HOUR   FROM i.fecha_evento)                   AS hora,
-        CASE WHEN ${protocoloExpression} IS NULL THEN 1 ELSE 0 END AS es_autorizado,
-        CASE WHEN ${protocoloExpression} IS NOT NULL THEN 1 ELSE 0 END AS es_no_autorizado,
+        CASE
+            WHEN cti.necesita_protocolo = true THEN 1
+            ELSE 0
+        END AS es_no_autorizado,
+        CASE
+            WHEN cti.necesita_protocolo = false THEN 1
+            ELSE 0
+        END AS es_autorizado,
         CASE
             WHEN i.fecha_evento IS NOT NULL
              AND i.fecha_reaccion IS NOT NULL
@@ -141,10 +141,16 @@ export const getInformeMensualEventos = async (req, res) => {
 /* Este reporte usa únicamente datos de INTRUSIONES, no incluye fallos técnicos. */
 SELECT
     COUNT(*)                                           AS total_eventos,
-    SUM(ES_AUTORIZADO)                                 AS eventos_autorizados,
-    SUM(ES_NO_AUTORIZADO)                              AS eventos_no_autorizados,
-    COALESCE(ROUND(100.0 * SUM(ES_AUTORIZADO) / NULLIF(COUNT(*),0), 2), 0)    AS porc_autorizados,
-    COALESCE(ROUND(100.0 * SUM(ES_NO_AUTORIZADO) / NULLIF(COUNT(*),0), 2), 0) AS porc_no_autorizados,
+    SUM(es_autorizado)                                 AS eventos_autorizados,
+    SUM(es_no_autorizado)                              AS eventos_no_autorizados,
+    ROUND(
+        (SUM(es_autorizado)::numeric / COUNT(*)) * 100,
+        2
+    )                                                  AS porcentaje_autorizados,
+    ROUND(
+        (SUM(es_no_autorizado)::numeric / COUNT(*)) * 100,
+        2
+    )                                                  AS porcentaje_no_autorizados,
     COUNT(DISTINCT SITIO_ID)                          AS sitios_con_eventos,
     COALESCE(ROUND(AVG(MINUTOS_REACCION)::NUMERIC, 2), 0) AS t_prom_reaccion_min
 FROM base_intrusiones;`;
