@@ -11,7 +11,6 @@ export interface IntrusionPayload {
   fecha_reaccion_enviada?: string | null;
   fecha_llegada_fuerza_reaccion?: string | null;
   fecha_reaccion_fuera?: string | null;
-  no_llego_alerta?: boolean;
   completado?: boolean;
   fecha_completado?: string | null;
   necesita_protocolo?: boolean;
@@ -73,7 +72,6 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     estado?: unknown;
     descripcion?: unknown;
     llego_alerta?: unknown;
-    no_llego_alerta?: unknown;
     completado?: unknown;
     fecha_completado?: unknown;
     necesita_protocolo?: unknown;
@@ -146,12 +144,6 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     hikAlarmEventoIdValue === null || Number.isNaN(hikAlarmEventoIdValue)
       ? null
       : hikAlarmEventoIdValue;
-  const noLlegoAlerta =
-    typeof (base as { no_llego_alerta?: unknown }).no_llego_alerta === 'boolean'
-      ? (base as { no_llego_alerta: boolean }).no_llego_alerta
-      : (base as { llego_alerta?: unknown }).llego_alerta !== undefined
-      ? !Boolean((base as { llego_alerta?: unknown }).llego_alerta)
-      : false;
   const completado = typeof (base as { completado?: unknown }).completado === 'boolean'
     ? (base as { completado: boolean }).completado
     : Boolean((base as { completado?: unknown }).completado);
@@ -174,7 +166,6 @@ const normalizeIntrusion = (payload: unknown): Intrusion | null => {
     fecha_reaccion_enviada: fechaReaccionEnviada,
     fecha_llegada_fuerza_reaccion: fechaLlegadaFuerzaReaccion,
     fecha_reaccion_fuera: fechaLlegadaFuerzaReaccion,
-    no_llego_alerta: noLlegoAlerta,
     completado,
     fecha_completado: normalizeFechaValue((base as { fecha_completado?: unknown }).fecha_completado),
     necesita_protocolo: typeof (base as { necesita_protocolo?: unknown }).necesita_protocolo === 'boolean'
@@ -613,7 +604,6 @@ export const createIntrusion = async (
       payload.hik_alarm_evento_id !== undefined && payload.hik_alarm_evento_id !== null;
 
     if (hasHikAlarmEventoId) {
-      payloadToSend.no_llego_alerta = false;
       payloadToSend.origen = payloadToSend.origen ?? 'HC';
     }
 
