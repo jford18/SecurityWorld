@@ -2272,6 +2272,18 @@ ORDER BY A.FECHA_EVENTO DESC;`;
         "UBICACION",
       ],
       ...result.rows.map((row) => {
+        const hasNoLlegoAlerta = row?.no_llego_alerta !== null && row?.no_llego_alerta !== undefined;
+        const hasLlegoAlerta = row?.llego_alerta !== null && row?.llego_alerta !== undefined;
+
+        const noLlegoAlerta = hasNoLlegoAlerta
+          ? parseBooleanValue(row.no_llego_alerta, false)
+          : hasLlegoAlerta
+          ? !parseBooleanValue(row.llego_alerta, false)
+          : null;
+
+        const llegoAlertaTexto =
+          noLlegoAlerta === null ? "" : noLlegoAlerta ? "No" : "Sí";
+
         return [
           row?.id ?? "",
           row?.cliente ?? "",
@@ -2291,11 +2303,7 @@ ORDER BY A.FECHA_EVENTO DESC;`;
           row?.conclusion_evento ?? "",
           row?.material_sustraido ?? "",
           row?.origen ?? "",
-          row?.llego_alerta === null || row?.llego_alerta === undefined
-            ? ""
-            : row.llego_alerta
-            ? "Sí"
-            : "No",
+          llegoAlertaTexto,
           row?.necesita_protocolo === null || row?.necesita_protocolo === undefined
             ? ""
             : row.necesita_protocolo
