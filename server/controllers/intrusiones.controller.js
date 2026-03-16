@@ -186,6 +186,14 @@ const parseIntegerOrNull = (value) => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
+const toNullableUserId = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const getAuthenticatedUserId = (req) =>
+  toNullableUserId(req.usuario?.id || req.user?.id || req.session?.usuario_id);
+
 const normalizeDateParam = (value) => {
   if (!value) return null;
 
@@ -591,6 +599,7 @@ const getIntrusionesMetadata = async () => {
     hasMaterialSustraidoId: columnNames.has("material_sustraido_id"),
     hasNoLlegoAlerta: columnNames.has("no_llego_alerta"),
     hasHikAlarmEventoId: columnNames.has("hik_alarm_evento_id"),
+    hasUsuarioId: columnNames.has("usuario_id"),
     hasOrigen: columnNames.has("origen"),
     hasCompletado: columnNames.has("completado"),
     hasFechaCompletado: columnNames.has("fecha_completado"),
@@ -965,6 +974,7 @@ export const openIntrusionDesdeHc = async (req, res) => {
 };
 
 export const createIntrusion = async (req, res) => {
+  const usuarioId = getAuthenticatedUserId(req);
   const body = req.body || {};
   const medio_comunicacion_id =
     body.medio_comunicacion_id ?? body.medio_comunicacion?.medio_comunicacion_id ?? null;
@@ -1334,6 +1344,11 @@ export const createIntrusion = async (req, res) => {
     if (metadata.personaColumn) {
       columns.push(metadata.personaColumn);
       values.push(personaIdValue);
+    }
+
+    if (metadata.hasUsuarioId) {
+      columns.push("usuario_id");
+      values.push(usuarioId);
     }
 
     const placeholders = columns.map((_, index) => `$${index + 1}`);
