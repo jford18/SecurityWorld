@@ -1,5 +1,6 @@
 import apiClient from './apiClient';
 import { Intrusion, IntrusionConsolidadoRow, IntrusionHcQueueRow } from '../types';
+import { getCurrentUserIdFromStorage } from '../utils/currentUser';
 
 export interface IntrusionPayload {
   origen?: string;
@@ -25,6 +26,7 @@ export interface IntrusionPayload {
   sitio_id?: number | null;
   fuerza_reaccion_id?: number | null;
   persona_id?: number | null;
+  usuarioId?: number | null;
 }
 
 const normalizeFechaValue = (value: unknown): string | null => {
@@ -605,7 +607,8 @@ export const createIntrusion = async (
   payload: IntrusionPayload
 ): Promise<Intrusion> => {
   try {
-    const payloadToSend: IntrusionPayload = { ...payload };
+    const usuarioId = getCurrentUserIdFromStorage();
+    const payloadToSend: IntrusionPayload = { ...payload, usuarioId };
     const hasHikAlarmEventoId =
       payload.hik_alarm_evento_id !== undefined && payload.hik_alarm_evento_id !== null;
 

@@ -974,7 +974,8 @@ export const openIntrusionDesdeHc = async (req, res) => {
 };
 
 export const createIntrusion = async (req, res) => {
-  const usuarioId = getAuthenticatedUserId(req);
+  const usuarioIdBody = toNullableUserId(req.body?.usuarioId);
+  const usuarioId = usuarioIdBody || getAuthenticatedUserId(req);
   const body = req.body || {};
   const medio_comunicacion_id =
     body.medio_comunicacion_id ?? body.medio_comunicacion?.medio_comunicacion_id ?? null;
