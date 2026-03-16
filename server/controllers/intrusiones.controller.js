@@ -2180,6 +2180,7 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
     "TA.NOMBRE AS TIPO_AREA",
     "B.LONGITUD",
     "B.LATITUD",
+    "U.NOMBRE_COMPLETO AS NOMBRE_USUARIO",
   ];
 
   if (metadata.personaColumn) {
@@ -2212,6 +2213,7 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
     "LEFT JOIN PUBLIC.HACIENDA H ON (H.ID = B.HACIENDA_ID)",
     "LEFT JOIN PUBLIC.CONSOLAS CO ON (CO.ID = B.CONSOLA_ID)",
     "LEFT JOIN PUBLIC.TIPO_AREA TA ON (TA.ID = B.TIPO_AREA_ID)",
+    "LEFT JOIN PUBLIC.USUARIOS U ON (U.ID = A.USUARIO_ID)",
     "LEFT JOIN PUBLIC.CATALOGO_MEDIO_COMUNICACION D ON (D.ID = A.MEDIO_COMUNICACION_ID)",
     "LEFT JOIN PUBLIC.MATERIAL_SUSTRAIDO E ON (E.ID = A.MATERIAL_SUSTRAIDO_ID)",
     "LEFT JOIN PUBLIC.CATALOGO_FUERZA_REACCION FR ON (FR.ID = A.FUERZA_REACCION_ID)",
@@ -2267,6 +2269,7 @@ ORDER BY A.FECHA_EVENTO DESC;`;
         "TIPO_AREA",
         "LONGITUD",
         "LATITUD",
+        "NOMBRE_USUARIO",
       ],
       ...result.rows.map((row) => {
         return [
@@ -2308,6 +2311,7 @@ ORDER BY A.FECHA_EVENTO DESC;`;
           row?.tipo_area ?? "",
           row?.longitud ?? "",
           row?.latitud ?? "",
+          row?.nombre_usuario ?? "",
         ];
       }),
     ];
