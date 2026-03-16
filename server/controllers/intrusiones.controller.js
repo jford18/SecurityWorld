@@ -2160,6 +2160,10 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
     "A.MATERIAL_SUSTRAIDO_ID",
     "E.DESCRIPCION AS MATERIAL_SUSTRAIDO",
     "FR.DESCRIPCION AS FUERZA_REACCION_DESCRIPCION",
+    "CO.NOMBRE AS NOMBRE_CONSOLA",
+    "TA.NOMBRE AS TIPO_AREA",
+    "B.LONGITUD",
+    "B.LATITUD",
   ];
 
   if (metadata.personaColumn) {
@@ -2190,6 +2194,8 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
     "LEFT JOIN PUBLIC.SITIOS B ON (B.ID = A.SITIO_ID)",
     "LEFT JOIN PUBLIC.CLIENTES G ON (G.ID = B.CLIENTE_ID)",
     "LEFT JOIN PUBLIC.HACIENDA H ON (H.ID = B.HACIENDA_ID)",
+    "LEFT JOIN PUBLIC.CONSOLAS CO ON (CO.ID = B.CONSOLA_ID)",
+    "LEFT JOIN PUBLIC.TIPO_AREA TA ON (TA.ID = B.TIPO_AREA_ID)",
     "LEFT JOIN PUBLIC.CATALOGO_MEDIO_COMUNICACION D ON (D.ID = A.MEDIO_COMUNICACION_ID)",
     "LEFT JOIN PUBLIC.MATERIAL_SUSTRAIDO E ON (E.ID = A.MATERIAL_SUSTRAIDO_ID)",
     "LEFT JOIN PUBLIC.CATALOGO_FUERZA_REACCION FR ON (FR.ID = A.FUERZA_REACCION_ID)",
@@ -2241,6 +2247,10 @@ ORDER BY A.FECHA_EVENTO DESC;`;
         "PERSONAL_IDENTIFICADO_CARGO",
         "PERSONAL_IDENTIFICADO_PERSONA",
         "FUERZA_REACCION_DESCRIPCION",
+        "NOMBRE_CONSOLA",
+        "TIPO_AREA",
+        "LONGITUD",
+        "LATITUD",
       ],
       ...result.rows.map((row) => {
         return [
@@ -2278,6 +2288,10 @@ ORDER BY A.FECHA_EVENTO DESC;`;
           row?.personal_identificado_cargo ?? "",
           row?.personal_identificado_persona ?? "",
           row?.fuerza_reaccion_descripcion ?? "",
+          row?.nombre_consola ?? "",
+          row?.tipo_area ?? "",
+          row?.longitud ?? "",
+          row?.latitud ?? "",
         ];
       }),
     ];
