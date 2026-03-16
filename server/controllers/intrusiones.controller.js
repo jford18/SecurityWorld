@@ -2235,11 +2235,6 @@ ORDER BY A.FECHA_EVENTO DESC;`;
         "UBICACION",
       ],
       ...result.rows.map((row) => {
-        const hasLlegoAlerta = row?.llego_alerta !== null && row?.llego_alerta !== undefined;
-
-        const llegoAlertaTexto =
-          hasLlegoAlerta ? (parseBooleanValue(row.llego_alerta, false) ? "Sí" : "No") : "";
-
         return [
           row?.id ?? "",
           row?.cliente ?? "",
@@ -2259,7 +2254,7 @@ ORDER BY A.FECHA_EVENTO DESC;`;
           row?.conclusion_evento ?? "",
           row?.material_sustraido ?? "",
           row?.origen ?? "",
-          llegoAlertaTexto,
+          row?.llego_alerta ? "Sí" : "No",
           row?.necesita_protocolo === null || row?.necesita_protocolo === undefined
             ? ""
             : row.necesita_protocolo
