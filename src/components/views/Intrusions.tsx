@@ -55,8 +55,6 @@ const toBoolean = (value: unknown, defaultValue = false): boolean => {
   return Boolean(value);
 };
 
-const NO_DEFINIDO_VALUE = 'NO_DEFINIDO';
-const NO_DEFINIDO_OPTION_LABEL = 'Tipo de evento no definido';
 const DEBUG_ENCOLADOS = false;
 
 type TipoIntrusionCatalogItem = {
@@ -291,28 +289,6 @@ const Intrusions: React.FC = () => {
     },
     [sitios]
   );
-
-  const tiposIntrusionConFallback = useMemo(() => {
-    const hasNoDefinidoOption = tiposIntrusion.some(
-      (item) =>
-        String(item.id) === NO_DEFINIDO_VALUE ||
-        item.descripcion.trim().toLowerCase() === NO_DEFINIDO_OPTION_LABEL.trim().toLowerCase()
-    );
-
-    const normalizedList = tiposIntrusion.map((item) => ({
-      ...item,
-      id: item.id,
-    }));
-
-    if (hasNoDefinidoOption) {
-      return normalizedList;
-    }
-
-    return [
-      ...normalizedList,
-      { id: NO_DEFINIDO_VALUE, descripcion: NO_DEFINIDO_OPTION_LABEL, necesita_protocolo: false },
-    ];
-  }, [tiposIntrusion]);
 
   const isLlegoAlertaDisabled = (intrusion?: Partial<IntrusionFormData> | null) =>
     String(intrusion?.origen || '').toUpperCase() === 'HC' ||
@@ -770,8 +746,8 @@ const Intrusions: React.FC = () => {
   const applyTipoIntrusionSelection = useCallback(
     (option: TipoIntrusionCatalogItem | null) => {
       if (!option) {
-        setTipoIntrusionId(NO_DEFINIDO_VALUE);
-        setTipoDescripcion(NO_DEFINIDO_OPTION_LABEL);
+        setTipoIntrusionId('');
+        setTipoDescripcion('');
         setRequiereProtocolo(false);
         setFormData((prev) => ({ ...prev, necesita_protocolo: false }));
         resetProtocoloFields();
@@ -843,7 +819,7 @@ const Intrusions: React.FC = () => {
     };
 
     const targetLabel = map[hcCategory] || hcSeleccionado.alarm_category || '';
-    const matchedOption = findTipoIntrusionByLabel(targetLabel, tiposIntrusionConFallback);
+    const matchedOption = findTipoIntrusionByLabel(targetLabel, tiposIntrusion);
 
     if (matchedOption) {
       applyTipoIntrusionSelection(matchedOption);
@@ -855,7 +831,7 @@ const Intrusions: React.FC = () => {
     applyTipoIntrusionSelection,
     findTipoIntrusionByLabel,
     hcSeleccionado,
-    tiposIntrusionConFallback,
+    tiposIntrusion,
   ]);
 
   useEffect(() => {
@@ -894,7 +870,7 @@ const Intrusions: React.FC = () => {
       return;
     }
 
-    const selected = tiposIntrusionConFallback.find(
+    const selected = tiposIntrusion.find(
       (tipo) => String(tipo.id) === String(value)
     );
     applyTipoIntrusionSelection(selected ?? null);
@@ -1882,7 +1858,7 @@ const Intrusions: React.FC = () => {
                         disabled={isHcMode}
                       >
                         <option value="">Seleccione...</option>
-                        {tiposIntrusionConFallback.map((tipoIntrusion) => (
+                        {tiposIntrusion.map((tipoIntrusion) => (
                           <option key={tipoIntrusion.id} value={tipoIntrusion.id}>
                             {tipoIntrusion.descripcion}
                           </option>
@@ -1894,11 +1870,6 @@ const Intrusions: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    {String(tipoIntrusionId) === NO_DEFINIDO_VALUE && (
-                      <p className="text-xs text-gray-500">
-                        No se encontró coincidencia con el evento de HC. Seleccione manualmente.
-                      </p>
-                    )}
                   </div>
                 </div>
                 <div className="space-y-1">
