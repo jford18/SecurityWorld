@@ -76,12 +76,8 @@ const mapIntrusionRow = (row) => {
       ? null
       : Number(hikAlarmEventoIdRaw);
 
-  const noLlegoAlerta =
-    typeof row?.no_llego_alerta === "boolean"
-      ? row.no_llego_alerta
-      : row?.llego_alerta !== undefined
-      ? !row.llego_alerta
-      : false;
+  const llegoAlerta =
+    typeof row?.llego_alerta === "boolean" ? row.llego_alerta : Boolean(row?.llego_alerta);
 
   const completado = Boolean(row?.completado);
   const necesitaProtocolo =
@@ -151,7 +147,7 @@ const mapIntrusionRow = (row) => {
       : row?.fecha_reaccion_fuera
       ? formatDateTimeString(row.fecha_reaccion_fuera)
       : null,
-    no_llego_alerta: noLlegoAlerta,
+    llego_alerta: llegoAlerta,
     completado,
     necesita_protocolo: necesitaProtocolo,
     fecha_completado: fechaCompletado,
@@ -597,7 +593,6 @@ const getIntrusionesMetadata = async () => {
     hasFechaReaccionEnviada: columnNames.has("fecha_reaccion_enviada"),
     hasSustraccionPersonal: columnNames.has("sustraccion_personal"),
     hasMaterialSustraidoId: columnNames.has("material_sustraido_id"),
-    hasNoLlegoAlerta: columnNames.has("no_llego_alerta"),
     hasHikAlarmEventoId: columnNames.has("hik_alarm_evento_id"),
     hasUsuarioId: columnNames.has("usuario_id"),
     hasOrigen: columnNames.has("origen"),
@@ -714,7 +709,7 @@ export const listIntrusiones = async (req, res) => {
       metadata.hasFechaLlegadaFuerzaReaccion
         ? "i.fecha_llegada_fuerza_reaccion"
         : "i.fecha_reaccion_fuera",
-      metadata.hasNoLlegoAlerta ? "i.no_llego_alerta" : "i.llego_alerta",
+      "i.llego_alerta",
       metadata.hasFechaReaccionEnviada ? "i.fecha_reaccion_enviada" : null,
       metadata.hasCompletado ? "i.completado" : null,
       metadata.hasFechaCompletado ? "i.fecha_completado" : null,
@@ -938,13 +933,8 @@ export const openIntrusionDesdeHc = async (req, res) => {
       values.push(parsedId);
     }
 
-    if (metadata.hasNoLlegoAlerta) {
-      columns.push("no_llego_alerta");
-      values.push(false);
-    } else {
-      columns.push("llego_alerta");
-      values.push(true);
-    }
+    columns.push("llego_alerta");
+    values.push(true);
 
     if (metadata.hasCompletado) {
       columns.push("completado");
@@ -1083,15 +1073,8 @@ export const createIntrusion = async (req, res) => {
     body.llego_alerta ?? body.LLEGO_ALERTA,
     true
   );
-  const noLlegoAlertaBodyValue = parseBooleanValue(
-    body.no_llego_alerta ?? body.NO_LLEGO_ALERTA,
-    !llegoAlertaBodyValue
-  );
-  const noLlegoAlertaValue = metadata.hasNoLlegoAlerta
-    ? hikAlarmEventoValue || origenValue === "HC"
-      ? false
-      : noLlegoAlertaBodyValue
-    : false;
+  const llegoAlertaValue =
+    hikAlarmEventoValue || origenValue === "HC" ? true : llegoAlertaBodyValue;
   const completadoValue = Boolean(rawCompletado);
   const necesitaProtocoloValue = metadata.hasNecesitaProtocolo
     ? Boolean(rawNecesitaProtocolo)
@@ -1301,13 +1284,8 @@ export const createIntrusion = async (req, res) => {
       values.push(fechaReaccionEnviadaValue);
     }
 
-    if (metadata.hasNoLlegoAlerta) {
-      columns.push("no_llego_alerta");
-      values.push(noLlegoAlertaValue);
-    } else {
-      columns.push("llego_alerta");
-      values.push(!noLlegoAlertaValue);
-    }
+    columns.push("llego_alerta");
+    values.push(llegoAlertaValue);
 
     columns.push(
       "medio_comunicacion_id",
@@ -1364,7 +1342,7 @@ export const createIntrusion = async (req, res) => {
       "fecha_evento",
       "fecha_reaccion",
       metadata.hasFechaLlegadaFuerzaReaccion ? "fecha_llegada_fuerza_reaccion" : "fecha_reaccion_fuera",
-      metadata.hasNoLlegoAlerta ? "no_llego_alerta" : "llego_alerta",
+      "llego_alerta",
       metadata.hasFechaReaccionEnviada ? "fecha_reaccion_enviada" : null,
       metadata.hasCompletado ? "completado" : null,
       metadata.hasFechaCompletado ? "fecha_completado" : null,
@@ -1422,7 +1400,7 @@ export const createIntrusion = async (req, res) => {
     if (error?.code === "23514") {
       return res.status(400).json({
         message:
-          "No se puede marcar 'No llegó alerta' para eventos provenientes de HikCentral. Verifique el origen del evento.",
+          "No se puede marcar 'Llegó alerta' como 'No' para eventos provenientes de HikCentral. Verifique el origen del evento.",
       });
     }
 
@@ -1469,7 +1447,7 @@ export const updateIntrusion = async (req, res) => {
       "fecha_reaccion",
       metadata.hasFechaLlegadaFuerzaReaccion ? "fecha_llegada_fuerza_reaccion" : "fecha_reaccion_fuera",
       metadata.hasFechaReaccionEnviada ? "fecha_reaccion_enviada" : null,
-      metadata.hasNoLlegoAlerta ? "no_llego_alerta" : "llego_alerta",
+      "llego_alerta",
       metadata.hasCompletado ? "completado" : null,
       metadata.hasNecesitaProtocolo ? "necesita_protocolo" : null,
       metadata.hasOrigen ? "origen" : null,
@@ -1498,7 +1476,7 @@ export const updateIntrusion = async (req, res) => {
 
   const rawOrigen = body.origen ?? body.ORIGEN ?? currentRow?.origen;
   const rawHikAlarm = body.hik_alarm_evento_id ?? body.HIK_ALARM_EVENTO_ID ?? currentRow?.hik_alarm_evento_id;
-  const rawNoLlego = body.no_llego_alerta ?? body.NO_LLEGO_ALERTA ?? body.llego_alerta ?? body.LLEGO_ALERTA;
+  const rawLlegoAlerta = body.llego_alerta ?? body.LLEGO_ALERTA;
   const rawCompletado = body.completado ?? body.COMPLETADO ?? currentRow?.completado;
   const rawNecesitaProtocolo = body.necesita_protocolo ?? body.NECESITA_PROTOCOLO ?? currentRow?.necesita_protocolo;
   const rawFechaEventoHc = body.fecha_evento_hc ?? body.FECHA_EVENTO_HC;
@@ -1713,10 +1691,7 @@ export const updateIntrusion = async (req, res) => {
     body.llego_alerta ?? body.LLEGO_ALERTA,
     true
   );
-  const noLlegoAlertaBodyValue = parseBooleanValue(
-    body.no_llego_alerta ?? body.NO_LLEGO_ALERTA,
-    !llegoAlertaBodyValue
-  );
+
   if (metadata.personaColumn && body[metadata.personaColumn] !== undefined && personaValue === undefined) {
     return res.status(400).json({ mensaje: "El identificador de la persona no es válido." });
   }
@@ -1740,26 +1715,15 @@ export const updateIntrusion = async (req, res) => {
     pushUpdate("origen", origenValue);
   }
 
-  const noLlegoValue = metadata.hasNoLlegoAlerta
-    ? hikValue || origenValue === "HC" || currentRow?.origen === "HC"
-      ? false
-      : rawNoLlego === undefined
-      ? parseBooleanValue(currentRow?.no_llego_alerta, false)
-      : noLlegoAlertaBodyValue
-    : false;
-  if (metadata.hasNoLlegoAlerta) {
-    pushUpdate("no_llego_alerta", noLlegoValue);
-  } else {
-    const shouldForceLlego = hikValue || origenValue === "HC" || currentRow?.origen === "HC";
-    const llegoValue =
-      shouldForceLlego
-        ? true
-        : body.llego_alerta !== undefined || body.LLEGO_ALERTA !== undefined
-        ? llegoAlertaBodyValue
-        : parseBooleanValue(currentRow?.llego_alerta, true);
-    if (body.llego_alerta !== undefined || body.LLEGO_ALERTA !== undefined || shouldForceLlego) {
-      pushUpdate("llego_alerta", llegoValue);
-    }
+  const shouldForceLlego = hikValue || origenValue === "HC" || currentRow?.origen === "HC";
+  const llegoValue =
+    shouldForceLlego
+      ? true
+      : rawLlegoAlerta === undefined
+      ? parseBooleanValue(currentRow?.llego_alerta, true)
+      : llegoAlertaBodyValue;
+  if (rawLlegoAlerta !== undefined || shouldForceLlego) {
+    pushUpdate("llego_alerta", llegoValue);
   }
 
   const completadoValue = metadata.hasCompletado
@@ -1818,7 +1782,7 @@ export const updateIntrusion = async (req, res) => {
     const result = await pool.query(
       `UPDATE public.intrusiones SET ${updates.join(", ")} WHERE id = $${values.length} RETURNING id, ubicacion, sitio_id, tipo, estado, descripcion, fecha_evento, fecha_reaccion, ${
         metadata.hasFechaLlegadaFuerzaReaccion ? "fecha_llegada_fuerza_reaccion" : "fecha_reaccion_fuera"
-      }, ${metadata.hasNoLlegoAlerta ? "no_llego_alerta" : "llego_alerta"}, ${
+      }, llego_alerta, ${
         metadata.hasFechaReaccionEnviada ? "fecha_reaccion_enviada" : "NULL"
       } AS fecha_reaccion_enviada, ${metadata.hasCompletado ? "completado" : "FALSE"} AS completado, ${
         metadata.hasNecesitaProtocolo ? "necesita_protocolo" : "FALSE"
@@ -1844,7 +1808,7 @@ export const updateIntrusion = async (req, res) => {
     if (error?.code === "23514") {
       return res.status(400).json({
         message:
-          "No se puede marcar 'No llegó alerta' para eventos provenientes de HikCentral. Verifique el origen del evento.",
+          "No se puede marcar 'Llegó alerta' como 'No' para eventos provenientes de HikCentral. Verifique el origen del evento.",
       });
     }
 
@@ -2164,7 +2128,6 @@ export const exportConsolidadoIntrusiones = async (req, res) => {
     metadata.personaColumn ? `A.${metadata.personaColumn} AS PERSONA_ID` : "NULL AS PERSONA_ID",
     "A.ORIGEN",
     "A.HIK_ALARM_EVENTO_ID",
-    "A.NO_LLEGO_ALERTA",
     "A.COMPLETADO",
     "A.FECHA_COMPLETADO",
     "A.MEDIO_COMUNICACION",
@@ -2272,17 +2235,10 @@ ORDER BY A.FECHA_EVENTO DESC;`;
         "UBICACION",
       ],
       ...result.rows.map((row) => {
-        const hasNoLlegoAlerta = row?.no_llego_alerta !== null && row?.no_llego_alerta !== undefined;
         const hasLlegoAlerta = row?.llego_alerta !== null && row?.llego_alerta !== undefined;
 
-        const noLlegoAlerta = hasNoLlegoAlerta
-          ? parseBooleanValue(row.no_llego_alerta, false)
-          : hasLlegoAlerta
-          ? !parseBooleanValue(row.llego_alerta, false)
-          : null;
-
         const llegoAlertaTexto =
-          noLlegoAlerta === null ? "" : noLlegoAlerta ? "No" : "Sí";
+          hasLlegoAlerta ? (parseBooleanValue(row.llego_alerta, false) ? "Sí" : "No") : "";
 
         return [
           row?.id ?? "",

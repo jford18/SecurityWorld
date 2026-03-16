@@ -166,7 +166,6 @@ export interface Intrusion {
   fecha_reaccion_enviada?: string | null;
   fecha_llegada_fuerza_reaccion?: string | null;
   fecha_reaccion_fuera: string | null;
-  no_llego_alerta?: boolean;
   completado?: boolean;
   fecha_completado?: string | null;
   necesita_protocolo?: boolean;

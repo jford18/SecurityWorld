@@ -137,7 +137,7 @@ type IntrusionFormData = {
   sitioId: string;
   estado: string;
   descripcion: string;
-  no_llego_alerta: boolean;
+  llego_alerta: boolean;
   medio_comunicacion_id: string;
   conclusion_evento_id: string;
   material_sustraido_id: string;
@@ -205,7 +205,7 @@ const buildInitialFormData = (origen: 'HC' | 'MANUAL' = 'HC'): IntrusionFormData
     sitioId: '',
     estado: '',
     descripcion: '',
-    no_llego_alerta: false,
+    llego_alerta: true,
     medio_comunicacion_id: '',
     conclusion_evento_id: '',
     material_sustraido_id: '',
@@ -314,7 +314,7 @@ const Intrusions: React.FC = () => {
     ];
   }, [tiposIntrusion]);
 
-  const isNoLlegoDisabled = (intrusion?: Partial<IntrusionFormData> | null) =>
+  const isLlegoAlertaDisabled = (intrusion?: Partial<IntrusionFormData> | null) =>
     String(intrusion?.origen || '').toUpperCase() === 'HC' ||
     intrusion?.hik_alarm_evento_id != null;
 
@@ -716,13 +716,13 @@ const Intrusions: React.FC = () => {
     }));
   };
 
-  const handleNoLlegoAlertaChange = (
+  const handleLlegoAlertaChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const { checked } = event.target;
     setFormData((prev) => ({
       ...prev,
-      no_llego_alerta: checked,
+      llego_alerta: checked,
     }));
   };
 
@@ -814,7 +814,7 @@ const Intrusions: React.FC = () => {
       trigger_event_hc: hcSeleccionado?.trigger_event ?? null,
       fecha_evento: fechaEventoValue,
       fecha_evento_hc: fechaEventoValue,
-      no_llego_alerta: false,
+      llego_alerta: true,
       sitioId: sitioIdValue ? String(sitioIdValue) : '',
     });
 
@@ -937,9 +937,7 @@ const Intrusions: React.FC = () => {
       sitioId: intrusion.sitio_id ? String(intrusion.sitio_id) : '',
       estado: intrusion.estado ?? '',
       descripcion: intrusion.descripcion ?? '',
-      no_llego_alerta:
-        intrusion.no_llego_alerta ??
-        (typeof intrusion.llego_alerta === 'boolean' ? !intrusion.llego_alerta : false),
+      llego_alerta: typeof intrusion.llego_alerta === 'boolean' ? intrusion.llego_alerta : false,
       medio_comunicacion_id: intrusion.medio_comunicacion_id
         ? String(intrusion.medio_comunicacion_id)
         : '',
@@ -1035,7 +1033,7 @@ const Intrusions: React.FC = () => {
           String(intrusion.origen || '').toUpperCase() === 'HC' ||
           intrusion.hik_alarm_evento_id != null
             ? true
-            : !(intrusion.no_llego_alerta ?? false),
+            : Boolean(intrusion.llego_alerta),
         personalIdentificado: intrusion.personal_identificado?.trim() || '',
       })),
     [intrusions]
@@ -1152,16 +1150,16 @@ const Intrusions: React.FC = () => {
     tipoDescripcion,
   ]);
 
-  const noLlegoDisabled = useMemo(
-    () => isNoLlegoDisabled(formData),
+  const llegoAlertaDisabled = useMemo(
+    () => isLlegoAlertaDisabled(formData),
     [formData.hik_alarm_evento_id, formData.origen]
   );
 
   useEffect(() => {
-    if (noLlegoDisabled && formData.no_llego_alerta) {
-      setFormData((prev) => ({ ...prev, no_llego_alerta: false }));
+    if (llegoAlertaDisabled && !formData.llego_alerta) {
+      setFormData((prev) => ({ ...prev, llego_alerta: true }));
     }
-  }, [formData.no_llego_alerta, noLlegoDisabled]);
+  }, [formData.llego_alerta, llegoAlertaDisabled]);
 
   useEffect(() => {
     if (requiereProtocolo) {
@@ -1595,10 +1593,8 @@ const Intrusions: React.FC = () => {
       tipo: tipoValue,
       estado: formData.estado || '',
       descripcion: formData.descripcion?.trim() || '',
-      no_llego_alerta:
-        origenValue === 'HC' || hikAlarmEventoIdValue ? false : formData.no_llego_alerta,
       llego_alerta:
-        origenValue === 'HC' || hikAlarmEventoIdValue ? true : !formData.no_llego_alerta,
+        origenValue === 'HC' || hikAlarmEventoIdValue ? true : formData.llego_alerta,
       medio_comunicacion_id: medioComunicacionValue,
       conclusion_evento_id: necesitaProtocolo ? conclusionEventoValue : null,
       material_sustraido_id:
@@ -1993,15 +1989,15 @@ const Intrusions: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <input
                     type="checkbox"
-                    id="no_llego_alerta"
-                    name="no_llego_alerta"
-                    checked={noLlegoDisabled ? false : formData.no_llego_alerta}
-                    onChange={handleNoLlegoAlertaChange}
-                    disabled={noLlegoDisabled}
+                    id="llego_alerta"
+                    name="llego_alerta"
+                    checked={llegoAlertaDisabled ? true : formData.llego_alerta}
+                    onChange={handleLlegoAlertaChange}
+                    disabled={llegoAlertaDisabled}
                     className="h-4 w-4 rounded border-gray-300 text-[#1C2E4A] focus:ring-[#1C2E4A] disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
-                  <label htmlFor="no_llego_alerta" className="text-sm font-medium text-gray-700">
-                    No llegó alerta
+                  <label htmlFor="llego_alerta" className="text-sm font-medium text-gray-700">
+                    Llegó alerta
                   </label>
                 </div>
               </div>
