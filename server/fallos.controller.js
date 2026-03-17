@@ -2140,7 +2140,16 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
 
   try {
     const falloResult = await client.query(
-      "SELECT id, fecha, fecha_resolucion, hora_resolucion, estado FROM fallos_tecnicos WHERE id = $1",
+      `SELECT
+         id,
+         fecha,
+         hora,
+         fecha_creacion,
+         fecha_resolucion,
+         hora_resolucion,
+         estado
+       FROM fallos_tecnicos
+       WHERE id = $1`,
       [id]
     );
 
@@ -2149,14 +2158,21 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
     }
 
     const fallo = falloResult.rows[0];
-    console.log("Fecha fallo usada:", fallo.fecha);
+    const fechaInicioRealPrimerRegistro = fallo.hora
+      ? `${fallo.fecha} ${fallo.hora}`
+      : fallo.fecha_creacion || fallo.fecha;
+    console.log("Fecha real usada en primer registro:", fechaInicioRealPrimerRegistro);
 
     const timelineResult = await client.query(
       `
       WITH fallo_base AS (
         SELECT
           f.id,
-          f.fecha AS fecha_inicio_fallo,
+          CASE
+            WHEN f.hora IS NOT NULL THEN f.fecha + f.hora
+            WHEN f.fecha_creacion IS NOT NULL THEN f.fecha_creacion
+            ELSE f.fecha::timestamp
+          END AS fecha_inicio_fallo,
           f.departamento_id AS departamento_inicial_id,
           dept_inicial.nombre AS departamento_inicial_nombre,
           CASE
