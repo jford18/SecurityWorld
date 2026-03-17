@@ -2154,13 +2154,22 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
         SELECT
           ft.id,
           ft.fecha AS fecha_inicio_fallo,
+          ft.departamento_id AS departamento_inicial_id,
+          dept_inicial.nombre AS departamento_inicial_nombre,
           CASE
             WHEN ft.fecha_resolucion IS NOT NULL THEN
               ft.fecha_resolucion + COALESCE(ft.hora_resolucion, '00:00'::time)
             ELSE NOW()
           END AS fecha_fin_fallo
         FROM fallos_tecnicos ft
+        LEFT JOIN departamentos_responsables dept_inicial
+          ON dept_inicial.id = ft.departamento_id
         WHERE ft.id = $1
+      ),
+      primer_seguimiento AS (
+        SELECT MIN(sf.fecha_creacion) AS fecha_primer_seguimiento
+        FROM seguimiento_fallos sf
+        WHERE sf.fallo_id = $1
       ),
       seguimiento_timeline AS (
         SELECT
@@ -2181,11 +2190,15 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
         LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = sf.ultimo_usuario_edito_id
         WHERE sf.fallo_id = $1
           AND sf.departamento_id IS NOT NULL
+          AND sf.fecha_creacion > (
+            SELECT ps.fecha_primer_seguimiento
+            FROM primer_seguimiento ps
+          )
       ),
       historial_union AS (
         SELECT
-          NULL::INTEGER AS departamento_id,
-          'Monitoreo'::TEXT AS departamento,
+          fb.departamento_inicial_id AS departamento_id,
+          COALESCE(fb.departamento_inicial_nombre, 'Monitoreo')::TEXT AS departamento,
           fb.fecha_inicio_fallo AS fecha_inicio,
           COALESCE(
             (SELECT st.fecha_inicio
@@ -2232,6 +2245,7 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
       [id]
     );
 
+    console.log("Primer seguimiento excluido correctamente");
     console.log("Historial con nueva lógica:", timelineResult.rows);
 
     const duracionTotalResult = await client.query(
