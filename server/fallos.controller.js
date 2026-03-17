@@ -2167,7 +2167,7 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
         SELECT
           sf.fallo_id,
           sf.departamento_id,
-          dept.nombre AS departamento_nombre,
+          COALESCE(dept.nombre, 'CIERRE') AS departamento_nombre,
           sf.fecha_creacion AS fecha_inicio,
           sf.novedad_detectada,
           sf.ultimo_usuario_edito_id,
@@ -2175,13 +2175,12 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
             AS ultimo_usuario_edito_nombre,
           LEAD(sf.fecha_creacion) OVER (
             PARTITION BY sf.fallo_id
-            ORDER BY sf.fecha_creacion
+            ORDER BY sf.fecha_creacion ASC
           ) AS siguiente_fecha
         FROM seguimiento_fallos sf
         LEFT JOIN departamentos_responsables dept ON dept.id = sf.departamento_id
         LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = sf.ultimo_usuario_edito_id
         WHERE sf.fallo_id = $1
-          AND sf.departamento_id IS NOT NULL
           AND sf.fecha_creacion > (
             SELECT ps.fecha_primer_seguimiento
             FROM primer_seguimiento ps
@@ -2232,12 +2231,13 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
         hu.ultimo_usuario_edito_id
       FROM historial_union hu
       WHERE hu.fecha_inicio IS NOT NULL
-      ORDER BY hu.fecha_inicio
+      ORDER BY hu.fecha_inicio ASC
       `,
       [id]
     );
 
     console.log("Primer seguimiento excluido correctamente");
+    console.log("Cierre incluido correctamente en historial");
     console.log("Historial con nueva lógica:", timelineResult.rows);
 
     const duracionTotalResult = await client.query(
