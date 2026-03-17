@@ -2148,23 +2148,26 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
       return res.status(404).json({ mensaje: "El fallo técnico no existe." });
     }
 
+    const fallo = falloResult.rows[0];
+    console.log("Fecha fallo usada:", fallo.fecha);
+
     const timelineResult = await client.query(
       `
       WITH fallo_base AS (
         SELECT
-          ft.id,
-          ft.fecha AS fecha_inicio_fallo,
-          ft.departamento_id AS departamento_inicial_id,
+          f.id,
+          f.fecha AS fecha_inicio_fallo,
+          f.departamento_id AS departamento_inicial_id,
           dept_inicial.nombre AS departamento_inicial_nombre,
           CASE
-            WHEN ft.fecha_resolucion IS NOT NULL THEN
-              ft.fecha_resolucion + COALESCE(ft.hora_resolucion, '00:00'::time)
+            WHEN f.fecha_resolucion IS NOT NULL THEN
+              f.fecha_resolucion + COALESCE(f.hora_resolucion, '00:00'::time)
             ELSE NOW()
           END AS fecha_fin_fallo
-        FROM fallos_tecnicos ft
+        FROM fallos_tecnicos f
         LEFT JOIN departamentos_responsables dept_inicial
-          ON dept_inicial.id = ft.departamento_id
-        WHERE ft.id = $1
+          ON dept_inicial.id = f.departamento_id
+        WHERE f.id = $1
       ),
       primer_seguimiento AS (
         SELECT MIN(sf.fecha_creacion) AS fecha_primer_seguimiento
