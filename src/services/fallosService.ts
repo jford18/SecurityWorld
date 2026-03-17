@@ -516,13 +516,19 @@ export const getFalloHistorialDepartamentos = async (
   id: string,
   context?: RequestContext,
 ): Promise<FailureDepartmentTimelineEntry[]> => {
-  const { data } = await apiClient.get<FailureDepartmentTimelineEntry[]>(
+  const { data } = await apiClient.get<
+    FailureDepartmentTimelineEntry[] | { historial?: FailureDepartmentTimelineEntry[] }
+  >(
     `/fallos/${id}/historial-departamentos`,
     {
       headers: buildRoleHeaders(context),
     },
   );
-  return data;
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  return Array.isArray(data?.historial) ? data.historial : [];
 };
 
 export const deleteFallo = async (id: string, context?: RequestContext) => {

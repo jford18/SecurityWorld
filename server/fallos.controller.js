@@ -1129,22 +1129,10 @@ export const cerrarFalloTecnico = async (req, res) => {
     });
   }
 
-  if (!departamentoResponsableId || Number(departamentoResponsableId) <= 0) {
-    return res.status(400).json({
-      mensaje: "Debe seleccionar el departamento responsable.",
-    });
-  }
-
   const novedad =
     typeof novedadDetectada === "string"
       ? novedadDetectada.trim()
       : "";
-
-  if (!novedad) {
-    return res.status(400).json({
-      mensaje: "Debe ingresar la novedad detectada.",
-    });
-  }
 
   const client = await pool.connect();
 
@@ -1177,7 +1165,7 @@ export const cerrarFalloTecnico = async (req, res) => {
       `UPDATE fallos_tecnicos
           SET fecha_resolucion = $1,
               hora_resolucion = $2,
-              departamento_id = $3,
+              departamento_id = COALESCE($3, departamento_id),
               fecha_actualizacion = NOW()
         WHERE id = $4
           AND (estado IS NULL OR estado <> 'CERRADO')`,
@@ -1224,15 +1212,14 @@ export const cerrarFalloTecnico = async (req, res) => {
       ]
     );
 
-    const seguimientoDepartamentoInsertado = await insertSeguimientoDepartamento(
-      client,
-      {
-        falloId: id,
-        departamentoId: departamentoIdValue,
-        novedadDetectada: novedadNormalized,
-        usuarioId: usuarioCierreId,
-      }
-    );
+    const seguimientoDepartamentoInsertado = departamentoIdValue
+      ? await insertSeguimientoDepartamento(client, {
+          falloId: id,
+          departamentoId: departamentoIdValue,
+          novedadDetectada: novedadNormalized,
+          usuarioId: usuarioCierreId,
+        })
+      : false;
 
     console.log(
       "[cerrarFalloTecnico] seguimiento_fallos insertado para fallo_id:",
@@ -2153,7 +2140,7 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
 
   try {
     const falloResult = await client.query(
-      "SELECT id, fecha_resolucion, hora_resolucion, estado FROM fallos_tecnicos WHERE id = $1",
+      "SELECT id, fecha, fecha_resolucion, hora_resolucion, estado FROM fallos_tecnicos WHERE id = $1",
       [id]
     );
 
@@ -2163,8 +2150,21 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
 
     const timelineResult = await client.query(
       `
-      WITH timeline AS (
+      WITH fallo_base AS (
         SELECT
+          ft.id,
+          ft.fecha AS fecha_inicio_fallo,
+          CASE
+            WHEN ft.fecha_resolucion IS NOT NULL THEN
+              ft.fecha_resolucion + COALESCE(ft.hora_resolucion, '00:00'::time)
+            ELSE NOW()
+          END AS fecha_fin_fallo
+        FROM fallos_tecnicos ft
+        WHERE ft.id = $1
+      ),
+      seguimiento_timeline AS (
+        SELECT
+          sf.fallo_id,
           sf.departamento_id,
           dept.nombre AS departamento_nombre,
           sf.fecha_creacion AS fecha_inicio,
@@ -2181,43 +2181,76 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
         LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = sf.ultimo_usuario_edito_id
         WHERE sf.fallo_id = $1
           AND sf.departamento_id IS NOT NULL
+      ),
+      historial_union AS (
+        SELECT
+          NULL::INTEGER AS departamento_id,
+          'Monitoreo'::TEXT AS departamento,
+          fb.fecha_inicio_fallo AS fecha_inicio,
+          COALESCE(
+            (SELECT st.fecha_inicio
+               FROM seguimiento_timeline st
+              ORDER BY st.fecha_inicio
+              LIMIT 1),
+            fb.fecha_fin_fallo
+          ) AS fecha_fin,
+          NULL::TEXT AS novedad_detectada,
+          NULL::INTEGER AS ultimo_usuario_edito_id,
+          NULL::TEXT AS usuario
+        FROM fallo_base fb
+
+        UNION ALL
+
+        SELECT
+          st.departamento_id,
+          st.departamento_nombre AS departamento,
+          st.fecha_inicio,
+          COALESCE(st.siguiente_fecha, fb.fecha_fin_fallo) AS fecha_fin,
+          st.novedad_detectada,
+          st.ultimo_usuario_edito_id,
+          st.ultimo_usuario_edito_nombre AS usuario
+        FROM seguimiento_timeline st
+        CROSS JOIN fallo_base fb
       )
       SELECT
-        timeline.departamento_id,
-        timeline.departamento_nombre,
-        timeline.fecha_inicio,
-        timeline.novedad_detectada,
-        timeline.ultimo_usuario_edito_id,
-        timeline.ultimo_usuario_edito_nombre,
-        COALESCE(
-          timeline.siguiente_fecha,
-          CASE
-            WHEN ft.fecha_resolucion IS NOT NULL THEN
-              ft.fecha_resolucion + COALESCE(ft.hora_resolucion, '00:00'::time)
-            ELSE NOW()
-          END
-        ) AS fecha_fin,
+        hu.departamento,
+        hu.departamento AS departamento_nombre,
+        hu.fecha_inicio,
+        hu.fecha_fin,
         EXTRACT(
-          EPOCH FROM (
-            COALESCE(
-              timeline.siguiente_fecha,
-              CASE
-                WHEN ft.fecha_resolucion IS NOT NULL THEN
-                  ft.fecha_resolucion + COALESCE(ft.hora_resolucion, '00:00'::time)
-                ELSE NOW()
-              END
-            ) - timeline.fecha_inicio
-          )
-        )::BIGINT AS duracion_seg
-      FROM timeline
-      CROSS JOIN fallos_tecnicos ft
-      WHERE ft.id = $1
-      ORDER BY timeline.fecha_inicio
+          EPOCH FROM (hu.fecha_fin - hu.fecha_inicio)
+        )::BIGINT AS duracion_seg,
+        hu.usuario,
+        hu.usuario AS ultimo_usuario_edito_nombre,
+        hu.novedad_detectada,
+        hu.departamento_id,
+        hu.ultimo_usuario_edito_id
+      FROM historial_union hu
+      WHERE hu.fecha_inicio IS NOT NULL
+      ORDER BY hu.fecha_inicio
       `,
       [id]
     );
 
-    return res.json(timelineResult.rows);
+    console.log("Historial con nueva lógica:", timelineResult.rows);
+
+    const duracionTotalResult = await client.query(
+      `SELECT EXTRACT(EPOCH FROM (
+          (CASE
+            WHEN ft.fecha_resolucion IS NOT NULL THEN
+              ft.fecha_resolucion + COALESCE(ft.hora_resolucion, '00:00'::time)
+            ELSE NOW()
+          END) - ft.fecha
+        ))::BIGINT AS duracion_total_seg
+       FROM fallos_tecnicos ft
+       WHERE ft.id = $1`,
+      [id]
+    );
+
+    return res.json({
+      historial: timelineResult.rows,
+      duracion_total_seg: duracionTotalResult.rows[0]?.duracion_total_seg ?? 0,
+    });
   } catch (error) {
     console.error("Error al obtener historial por departamento:", error);
     return res.status(500).json({
