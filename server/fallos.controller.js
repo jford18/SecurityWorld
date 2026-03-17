@@ -1111,7 +1111,6 @@ export const cerrarFalloTecnico = async (req, res) => {
     fecha_resolucion: fechaResolucion,
     hora_resolucion: horaResolucion,
     departamento_id: departamentoResponsableId,
-    novedad_detectada: novedadDetectada,
     responsable_verificacion_cierre_id: responsableVerificacionCierreIdRaw,
   } = req.body || {};
 
@@ -1128,11 +1127,6 @@ export const cerrarFalloTecnico = async (req, res) => {
       mensaje: "Debe ingresar la fecha y hora de resolución para cerrar el fallo.",
     });
   }
-
-  const novedad =
-    typeof novedadDetectada === "string"
-      ? novedadDetectada.trim()
-      : "";
 
   const client = await pool.connect();
 
@@ -1153,8 +1147,6 @@ export const cerrarFalloTecnico = async (req, res) => {
       await client.query("ROLLBACK");
       return res.status(400).json({ mensaje: "Ya está cerrado." });
     }
-
-    const novedadNormalized = novedad || null;
 
     const departamentoIdValue = (() => {
       const parsed = Number(departamentoResponsableId);
@@ -1195,31 +1187,14 @@ export const cerrarFalloTecnico = async (req, res) => {
     await client.query(
       `INSERT INTO seguimiento_fallos (
          fallo_id,
-         departamento_id,
-         verificacion_apertura_id,
          verificacion_cierre_id,
          novedad_detectada,
-         fecha_creacion,
-         ultimo_usuario_edito_id,
-         responsable_verificacion_cierre_id,
-         verificacion_supervisor_id
-       ) VALUES ($1, NULL, NULL, $2, $3, NOW(), $2, $4, NULL)`,
-      [
-        id,
-        usuarioCierreId,
-        novedadNormalized,
-        responsableVerificacionCierreId,
-      ]
+         fecha_creacion
+       ) VALUES ($1, $2, NULL, NOW())`,
+      [id, usuarioCierreId]
     );
 
-    const seguimientoDepartamentoInsertado = departamentoIdValue
-      ? await insertSeguimientoDepartamento(client, {
-          falloId: id,
-          departamentoId: departamentoIdValue,
-          novedadDetectada: novedadNormalized,
-          usuarioId: usuarioCierreId,
-        })
-      : false;
+    console.log("Registro de cierre insertado en seguimiento_fallos");
 
     console.log(
       "[cerrarFalloTecnico] seguimiento_fallos insertado para fallo_id:",
@@ -1227,9 +1202,7 @@ export const cerrarFalloTecnico = async (req, res) => {
       "con verificacion_cierre_id:",
       usuarioCierreId,
       "y responsable_verificacion_cierre_id:",
-      responsableVerificacionCierreId,
-      "seguimiento_departamento_insertado:",
-      seguimientoDepartamentoInsertado
+      responsableVerificacionCierreId
     );
 
     await client.query("COMMIT");
@@ -2177,7 +2150,7 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
           dept_inicial.nombre AS departamento_inicial_nombre,
           CASE
             WHEN f.fecha_resolucion IS NOT NULL THEN
-              f.fecha_resolucion + COALESCE(f.hora_resolucion, '00:00'::time)
+              f.fecha_resolucion + f.hora_resolucion
             ELSE NOW()
           END AS fecha_fin_fallo
         FROM fallos_tecnicos f
@@ -2271,7 +2244,7 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
       `SELECT EXTRACT(EPOCH FROM (
           (CASE
             WHEN ft.fecha_resolucion IS NOT NULL THEN
-              ft.fecha_resolucion + COALESCE(ft.hora_resolucion, '00:00'::time)
+              ft.fecha_resolucion + ft.hora_resolucion
             ELSE NOW()
           END) - ft.fecha
         ))::BIGINT AS duracion_total_seg
