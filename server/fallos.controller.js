@@ -2146,16 +2146,12 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
             WHEN f.fecha_creacion IS NOT NULL THEN f.fecha_creacion
             ELSE f.fecha::timestamp
           END AS fecha_inicio_fallo,
-          f.departamento_id AS departamento_inicial_id,
-          dept_inicial.nombre AS departamento_inicial_nombre,
           CASE
             WHEN f.fecha_resolucion IS NOT NULL THEN
               f.fecha_resolucion + f.hora_resolucion
             ELSE NOW()
           END AS fecha_fin_fallo
         FROM fallos_tecnicos f
-        LEFT JOIN departamentos_responsables dept_inicial
-          ON dept_inicial.id = f.departamento_id
         WHERE f.id = $1
       ),
       primer_seguimiento AS (
@@ -2167,7 +2163,7 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
         SELECT
           sf.fallo_id,
           sf.departamento_id,
-          COALESCE(dept.nombre, 'CIERRE') AS departamento_nombre,
+          COALESCE(d.nombre, 'CIERRE') AS departamento_nombre,
           sf.fecha_creacion AS fecha_inicio,
           sf.novedad_detectada,
           sf.ultimo_usuario_edito_id,
@@ -2178,7 +2174,7 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
             ORDER BY sf.fecha_creacion ASC
           ) AS siguiente_fecha
         FROM seguimiento_fallos sf
-        LEFT JOIN departamentos_responsables dept ON dept.id = sf.departamento_id
+        LEFT JOIN departamentos_responsables d ON d.id = sf.departamento_id
         LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = sf.ultimo_usuario_edito_id
         WHERE sf.fallo_id = $1
           AND sf.fecha_creacion > (
@@ -2188,8 +2184,8 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
       ),
       historial_union AS (
         SELECT
-          fb.departamento_inicial_id AS departamento_id,
-          COALESCE(fb.departamento_inicial_nombre, 'Monitoreo')::TEXT AS departamento,
+          NULL::INTEGER AS departamento_id,
+          'Monitoreo'::TEXT AS departamento,
           fb.fecha_inicio_fallo AS fecha_inicio,
           COALESCE(
             (SELECT st.fecha_inicio
@@ -2228,6 +2224,8 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
         hu.usuario AS ultimo_usuario_edito_nombre,
         hu.novedad_detectada,
         hu.departamento_id,
+        hu.departamento_id AS departamento_id_evento,
+        hu.departamento AS departamento_nombre_evento,
         hu.ultimo_usuario_edito_id
       FROM historial_union hu
       WHERE hu.fecha_inicio IS NOT NULL
