@@ -2163,7 +2163,17 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
         SELECT
           sf.fallo_id,
           sf.departamento_id,
-          COALESCE(d.nombre, 'CIERRE') AS departamento_nombre,
+          CASE
+            WHEN d.nombre IS NOT NULL THEN d.nombre
+            ELSE LAG(d.nombre) OVER (
+              PARTITION BY sf.fallo_id
+              ORDER BY sf.fecha_creacion ASC
+            )
+          END AS departamento_nombre,
+          LAG(d.nombre) OVER (
+            PARTITION BY sf.fallo_id
+            ORDER BY sf.fecha_creacion ASC
+          ) AS departamento_anterior,
           sf.fecha_creacion AS fecha_inicio,
           sf.novedad_detectada,
           sf.ultimo_usuario_edito_id,
