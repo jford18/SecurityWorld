@@ -88,6 +88,32 @@ const findUserId = (users, nameOrUsername) => {
   return user ? user.id : null;
 };
 
+const normalizeDepartamentoId = (value) => {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  if (parsed === 0) {
+    return null;
+  }
+
+  return parsed;
+};
+
+const validateDepartamentoId = (departamentoId) => {
+  if (departamentoId !== null && departamentoId <= 0) {
+    throw new Error("departamento_id inválido");
+  }
+
+  return departamentoId;
+};
+
 const mapFalloRowToDto = (row) => ({
   id: String(row.id),
   fecha: formatDate(row.fecha) || "",
@@ -1060,10 +1086,10 @@ export const guardarCambiosFallo = async (req, res) => {
         .json({ mensaje: "Fallo cerrado, no editable." });
     }
 
-    const departamentoId = (() => {
-      const parsed = Number(departamento_id);
-      return Number.isFinite(parsed) ? parsed : null;
-    })();
+    let departamentoId = normalizeDepartamentoId(departamento_id);
+    departamentoId = validateDepartamentoId(departamentoId);
+
+    console.log("departamento_id final:", departamentoId);
 
     const novedad =
       typeof novedad_detectada === "string"
@@ -1174,16 +1200,16 @@ export const cerrarFalloTecnico = async (req, res) => {
       return res.status(400).json({ mensaje: "Ya está cerrado." });
     }
 
-    const departamentoIdValue = (() => {
-      const parsed = Number(departamentoResponsableId);
-      return Number.isFinite(parsed) ? parsed : null;
-    })();
+    let departamentoIdValue = normalizeDepartamentoId(departamentoResponsableId);
+    departamentoIdValue = validateDepartamentoId(departamentoIdValue);
+
+    console.log("departamento_id final:", departamentoIdValue);
 
     const updateResult = await client.query(
       `UPDATE fallos_tecnicos
           SET fecha_resolucion = $1,
               hora_resolucion = $2,
-              departamento_id = COALESCE($3, departamento_id),
+              departamento_id = $3,
               fecha_actualizacion = NOW()
         WHERE id = $4
           AND (estado IS NULL OR estado <> 'CERRADO')`,
@@ -1490,10 +1516,17 @@ export const createFallo = async (req, res) => {
     );
     const dept = deptResult.rows;
 
-    const departamentoId = dept.find((d) => {
-      return String(d.nombre).trim().toLowerCase() ===
-        String(deptResponsable || "").trim().toLowerCase();
-    })?.id ?? null;
+    const departamentoIdFromPayload = validateDepartamentoId(
+      normalizeDepartamentoId(departamentoIdSnake ?? departamentoIdCamel)
+    );
+    const departamentoId =
+      departamentoIdFromPayload ??
+      dept.find((d) => {
+        return String(d.nombre).trim().toLowerCase() ===
+          String(deptResponsable || "").trim().toLowerCase();
+      })?.id ?? null;
+
+    console.log("departamento_id final:", departamentoId);
 
     const tiposProblemaResult = await client.query(
       "SELECT id, descripcion FROM catalogo_tipo_problema"
@@ -1617,28 +1650,14 @@ export const createFallo = async (req, res) => {
       [
         falloId, // FALLO_ID
         (() => {
-          const departamentoSource =
-            departamentoIdSnake !== undefined &&
-            departamentoIdSnake !== null &&
-            String(departamentoIdSnake).trim() !== ""
-              ? departamentoIdSnake
-              : departamentoIdCamel;
-
-          const parsed = Number(departamentoSource);
-          const resolvedDepartamentoId =
-            departamentoSource === undefined ||
-            departamentoSource === null ||
-            String(departamentoSource).trim() === "" ||
-            Number.isNaN(parsed)
-              ? 5
-              : parsed;
+          const resolvedDepartamentoId = validateDepartamentoId(departamentoId);
 
           console.log(
             `SeguimientoFallos departamento_id => ${resolvedDepartamentoId}`
           );
 
           return resolvedDepartamentoId;
-        })(), // DEPARTAMENTO_ID: respeta payload; si no viene, default 5
+        })(), // DEPARTAMENTO_ID: usa NULL cuando el payload no trae un id válido
         verificacionAperturaId, // VERIFICACION_APERTURA_ID (usuario que registra el fallo)
         null, // VERIFICACION_CIERRE_ID (todavía no aplica)
         novedadDetectada || null, // NOVEDAD_DETECTADA
@@ -1772,10 +1791,11 @@ export const actualizarFalloSupervisor = async (req, res) => {
     );
     const dept = deptResult.rows;
 
-    const departamentoIdFromPayload = (() => {
-      const parsed = Number(departamentoResponsableId);
-      return Number.isFinite(parsed) ? parsed : null;
-    })();
+    const departamentoIdFromPayload = validateDepartamentoId(
+      normalizeDepartamentoId(departamentoResponsableId)
+    );
+
+    console.log("departamento_id final:", departamentoIdFromPayload);
 
     const departamentoId =
       departamentoIdFromPayload ??
@@ -1797,8 +1817,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
       fechaFalloPayload || formatDate(existingFallo?.fecha) || null;
     const horaFalloValue = horaFalloPayload || existingFallo?.hora || null;
 
-  const departamentoFinalId =
-    departamentoId ?? existingFallo.departamento_id ?? null;
+    const departamentoFinalId = departamentoId;
 
     const fechaResolucionValue =
       fechaResolucion ?? existingFallo.fecha_resolucion ?? null;

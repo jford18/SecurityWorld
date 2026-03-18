@@ -1063,6 +1063,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
   const handleUpdateFailure = useCallback(
     async (updatedFailure: TechnicalFailure) => {
       const departamentoId = resolveDepartamentoId(updatedFailure);
+      const normalizedDepartamentoId = departamentoId ?? null;
       const novedad = updatedFailure.novedadDetectada?.trim() || null;
 
       try {
@@ -1081,13 +1082,13 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         );
         setIsSubmitting(true);
         console.log("[Supervisor] Guardar cambios, payload enviado:", {
-          departamento_id: departamentoId,
+          departamento_id: normalizedDepartamentoId,
           novedad_detectada: novedad,
         });
         const saved = await guardarCambiosFallo(
           updatedFailure.id,
           {
-            departamento_id: departamentoId,
+            departamento_id: normalizedDepartamentoId,
             novedad_detectada: novedad,
           },
           roleContext,
@@ -1128,6 +1129,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       }
 
       const departamentoId = resolveDepartamentoId(updatedFailure);
+      const normalizedDepartamentoId = departamentoId ?? null;
       const novedad = updatedFailure.novedadDetectada?.trim() || null;
       const responsableVerificacionCierreId =
         updatedFailure.responsable_verificacion_cierre_id ??
@@ -1152,7 +1154,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         console.log("[Supervisor] Payload cerrar fallo:", {
           fecha_resolucion: resolutionDate,
           hora_resolucion: resolutionTime,
-          departamento_id: departamentoId,
+          departamento_id: normalizedDepartamentoId,
           novedad_detectada: novedad,
           responsable_verificacion_cierre_id: responsableVerificacionCierreId,
         });
@@ -1161,7 +1163,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
           {
             fecha_resolucion: resolutionDate,
             hora_resolucion: resolutionTime,
-            departamento_id: departamentoId,
+            departamento_id: normalizedDepartamentoId,
             novedad_detectada: novedad,
             responsable_verificacion_cierre_id: responsableVerificacionCierreId,
           },
