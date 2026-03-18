@@ -366,6 +366,58 @@ const insertSeguimientoDepartamento = async (
   return true;
 };
 
+const cerrarSeguimientoActivo = async (
+  client,
+  {
+    falloId,
+    usuarioCierreId,
+    responsableVerificacionCierreId,
+    novedadDetectada,
+  }
+) => {
+  const seguimientosAbiertosResult = await client.query(
+    `SELECT id
+       FROM seguimiento_fallos
+      WHERE fallo_id = $1
+        AND hasta IS NULL
+      ORDER BY fecha_creacion DESC NULLS LAST, id DESC`,
+    [falloId]
+  );
+
+  if (!seguimientosAbiertosResult.rowCount) {
+    return { updated: false, multiplesAbiertos: false };
+  }
+
+  const seguimientoActivoId = seguimientosAbiertosResult.rows[0].id;
+  const multiplesAbiertos = seguimientosAbiertosResult.rowCount > 1;
+
+  await client.query(
+    `UPDATE seguimiento_fallos sf
+        SET hasta = (ft.fecha_resolucion::timestamp + ft.hora_resolucion),
+            verificacion_cierre_id = COALESCE($2, sf.verificacion_cierre_id),
+            responsable_verificacion_cierre_id = COALESCE(
+              $3,
+              sf.responsable_verificacion_cierre_id
+            ),
+            novedad_detectada = COALESCE($4, sf.novedad_detectada),
+            ultimo_usuario_edito_id = COALESCE($2, sf.ultimo_usuario_edito_id),
+            fecha_actualizacion = NOW()
+       FROM fallos_tecnicos ft
+      WHERE sf.id = $1
+        AND ft.id = sf.fallo_id
+        AND ft.fecha_resolucion IS NOT NULL
+        AND ft.hora_resolucion IS NOT NULL`,
+    [
+      seguimientoActivoId,
+      usuarioCierreId ?? null,
+      responsableVerificacionCierreId ?? null,
+      novedadDetectada ?? null,
+    ]
+  );
+
+  return { updated: true, multiplesAbiertos };
+};
+
 const formatDurationFromMs = (durationMs) => {
   const totalMinutes = Math.floor(durationMs / 60000);
   const days = Math.floor(totalMinutes / 1440);
@@ -1236,21 +1288,23 @@ export const cerrarFalloTecnico = async (req, res) => {
       responsableVerificacionCierreId
     );
 
-    await client.query(
-      `INSERT INTO seguimiento_fallos (
-         fallo_id,
-         verificacion_cierre_id,
-         novedad_detectada,
-         fecha_creacion
-       ) VALUES ($1, $2, NULL, NOW())`,
-      [id, usuarioCierreId]
-    );
-
-    console.log("Registro de cierre insertado en seguimiento_fallos");
+    const seguimientoCerrado = await cerrarSeguimientoActivo(client, {
+      falloId: id,
+      usuarioCierreId,
+      responsableVerificacionCierreId,
+      novedadDetectada:
+        typeof novedad_detectada === "string"
+          ? novedad_detectada.trim() || null
+          : null,
+    });
 
     console.log(
-      "[cerrarFalloTecnico] seguimiento_fallos insertado para fallo_id:",
+      "[cerrarFalloTecnico] seguimiento_fallos cerrado para fallo_id:",
       id,
+      "actualizado:",
+      seguimientoCerrado.updated,
+      "multiples_abiertos:",
+      seguimientoCerrado.multiplesAbiertos,
       "con verificacion_cierre_id:",
       usuarioCierreId,
       "y responsable_verificacion_cierre_id:",
@@ -2227,6 +2281,7 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
           COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario)
             AS ultimo_usuario_edito_nombre,
           CASE
+            WHEN sf.hasta IS NOT NULL THEN sf.hasta
             WHEN LEAD(sf.fecha_creacion) OVER (
               PARTITION BY sf.fallo_id
               ORDER BY sf.fecha_creacion
