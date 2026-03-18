@@ -48,3 +48,20 @@ ORDER BY table_schema, table_name;
 ```
 
 Recomendación: construir un catálogo técnico por tabla con columnas, tipo, PK/FK, índices y dueño funcional.
+
+## Cambio aplicado · `seguimiento_fallos.hasta`
+
+Para completar el modelo histórico de departamentos en fallos técnicos, se agregó la migración `server/data/20260318_add_hasta_to_seguimiento_fallos.sql`, que:
+
+- crea la columna `hasta` en `seguimiento_fallos`,
+- rellena `hasta` con el siguiente `fecha_creacion` cuando existe cambio de departamento,
+- cierra seguimientos todavía abiertos con `fecha_resolucion + hora_resolucion` cuando el fallo ya fue resuelto,
+- deja una consulta de validación para comprobar que exista como máximo un seguimiento abierto por fallo.
+
+Ejecutar la validación mínima:
+
+```sql
+SELECT *
+FROM public.seguimiento_fallos
+WHERE hasta IS NULL;
+```

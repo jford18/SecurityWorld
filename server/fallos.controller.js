@@ -352,14 +352,25 @@ const insertSeguimientoDepartamento = async (
   }
 
   await client.query(
+    `UPDATE seguimiento_fallos
+        SET hasta = NOW(),
+            ultimo_usuario_edito_id = COALESCE($2, ultimo_usuario_edito_id),
+            fecha_actualizacion = NOW()
+      WHERE fallo_id = $1
+        AND hasta IS NULL`,
+    [falloId, usuarioId || null]
+  );
+
+  await client.query(
     `INSERT INTO seguimiento_fallos (
        fallo_id,
        departamento_id,
        novedad_detectada,
        verificacion_supervisor_id,
        ultimo_usuario_edito_id,
-       fecha_creacion
-     ) VALUES ($1, $2, $3, $4, $4, NOW())`,
+       fecha_creacion,
+       fecha_actualizacion
+     ) VALUES ($1, $2, $3, $4, $4, NOW(), NOW())`,
     [falloId, departamentoId, novedadDetectada || null, usuarioId || null]
   );
 
@@ -383,24 +394,25 @@ const cerrarSeguimientoActivo = async (
     return { updated: false, multiplesAbiertos: false };
   }
 
-  const seguimientoActivoId = seguimientosAbiertosResult.rows[0].id;
   const multiplesAbiertos = seguimientosAbiertosResult.rowCount > 1;
 
-  await client.query(
+  const updateResult = await client.query(
     `UPDATE seguimiento_fallos sf
         SET hasta = (ft.fecha_resolucion::timestamp + ft.hora_resolucion),
             verificacion_cierre_id = COALESCE($2, sf.verificacion_cierre_id),
             novedad_detectada = COALESCE($3, sf.novedad_detectada),
-            ultimo_usuario_edito_id = COALESCE($2, sf.ultimo_usuario_edito_id)
+            ultimo_usuario_edito_id = COALESCE($2, sf.ultimo_usuario_edito_id),
+            fecha_actualizacion = NOW()
        FROM fallos_tecnicos ft
-      WHERE sf.id = $1
+      WHERE sf.fallo_id = $1
+        AND sf.hasta IS NULL
         AND ft.id = sf.fallo_id
         AND ft.fecha_resolucion IS NOT NULL
         AND ft.hora_resolucion IS NOT NULL`,
-    [seguimientoActivoId, usuarioCierreId ?? null, novedadDetectada ?? null]
+    [falloId, usuarioCierreId ?? null, novedadDetectada ?? null]
   );
 
-  return { updated: true, multiplesAbiertos };
+  return { updated: updateResult.rowCount > 0, multiplesAbiertos };
 };
 
 const formatDurationFromMs = (durationMs) => {
