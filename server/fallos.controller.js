@@ -2195,7 +2195,14 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
           END AS fecha_inicio_fallo,
           CASE
             WHEN f.fecha_resolucion IS NOT NULL AND f.hora_resolucion IS NOT NULL THEN
-              f.fecha_resolucion + f.hora_resolucion
+              MAKE_TIMESTAMP(
+                EXTRACT(YEAR FROM f.fecha_resolucion)::INTEGER,
+                EXTRACT(MONTH FROM f.fecha_resolucion)::INTEGER,
+                EXTRACT(DAY FROM f.fecha_resolucion)::INTEGER,
+                EXTRACT(HOUR FROM f.hora_resolucion)::INTEGER,
+                EXTRACT(MINUTE FROM f.hora_resolucion)::INTEGER,
+                EXTRACT(SECOND FROM f.hora_resolucion)
+              )
             ELSE NOW()
           END AS fecha_fin_fallo
         FROM fallos_tecnicos f
@@ -2239,7 +2246,14 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
             -- Solo el último tramo cierra con la fecha/hora real de resolución; si no existe, queda abierto hasta NOW()
             WHEN ft.fecha_resolucion IS NOT NULL
                  AND ft.hora_resolucion IS NOT NULL
-            THEN (ft.fecha_resolucion::timestamp + ft.hora_resolucion)
+            THEN MAKE_TIMESTAMP(
+              EXTRACT(YEAR FROM ft.fecha_resolucion)::INTEGER,
+              EXTRACT(MONTH FROM ft.fecha_resolucion)::INTEGER,
+              EXTRACT(DAY FROM ft.fecha_resolucion)::INTEGER,
+              EXTRACT(HOUR FROM ft.hora_resolucion)::INTEGER,
+              EXTRACT(MINUTE FROM ft.hora_resolucion)::INTEGER,
+              EXTRACT(SECOND FROM ft.hora_resolucion)
+            )
             ELSE NOW()
           END AS fecha_fin
         FROM seguimiento_fallos sf
@@ -2331,8 +2345,15 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
     const duracionTotalResult = await client.query(
       `SELECT EXTRACT(EPOCH FROM (
           (CASE
-            WHEN ft.fecha_resolucion IS NOT NULL THEN
-              ft.fecha_resolucion + ft.hora_resolucion
+            WHEN ft.fecha_resolucion IS NOT NULL AND ft.hora_resolucion IS NOT NULL THEN
+              MAKE_TIMESTAMP(
+                EXTRACT(YEAR FROM ft.fecha_resolucion)::INTEGER,
+                EXTRACT(MONTH FROM ft.fecha_resolucion)::INTEGER,
+                EXTRACT(DAY FROM ft.fecha_resolucion)::INTEGER,
+                EXTRACT(HOUR FROM ft.hora_resolucion)::INTEGER,
+                EXTRACT(MINUTE FROM ft.hora_resolucion)::INTEGER,
+                EXTRACT(SECOND FROM ft.hora_resolucion)
+              )
             ELSE NOW()
           END) - ft.fecha
         ))::BIGINT AS duracion_total_seg
