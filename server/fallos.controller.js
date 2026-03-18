@@ -368,12 +368,7 @@ const insertSeguimientoDepartamento = async (
 
 const cerrarSeguimientoActivo = async (
   client,
-  {
-    falloId,
-    usuarioCierreId,
-    responsableVerificacionCierreId,
-    novedadDetectada,
-  }
+  { falloId, usuarioCierreId, novedadDetectada }
 ) => {
   const seguimientosAbiertosResult = await client.query(
     `SELECT id
@@ -395,24 +390,14 @@ const cerrarSeguimientoActivo = async (
     `UPDATE seguimiento_fallos sf
         SET hasta = (ft.fecha_resolucion::timestamp + ft.hora_resolucion),
             verificacion_cierre_id = COALESCE($2, sf.verificacion_cierre_id),
-            responsable_verificacion_cierre_id = COALESCE(
-              $3,
-              sf.responsable_verificacion_cierre_id
-            ),
-            novedad_detectada = COALESCE($4, sf.novedad_detectada),
-            ultimo_usuario_edito_id = COALESCE($2, sf.ultimo_usuario_edito_id),
-            fecha_actualizacion = NOW()
+            novedad_detectada = COALESCE($3, sf.novedad_detectada),
+            ultimo_usuario_edito_id = COALESCE($2, sf.ultimo_usuario_edito_id)
        FROM fallos_tecnicos ft
       WHERE sf.id = $1
         AND ft.id = sf.fallo_id
         AND ft.fecha_resolucion IS NOT NULL
         AND ft.hora_resolucion IS NOT NULL`,
-    [
-      seguimientoActivoId,
-      usuarioCierreId ?? null,
-      responsableVerificacionCierreId ?? null,
-      novedadDetectada ?? null,
-    ]
+    [seguimientoActivoId, usuarioCierreId ?? null, novedadDetectada ?? null]
   );
 
   return { updated: true, multiplesAbiertos };
@@ -1204,7 +1189,6 @@ export const cerrarFalloTecnico = async (req, res) => {
     fecha_resolucion: fechaResolucion,
     hora_resolucion: horaResolucion,
     departamento_id: departamentoResponsableId,
-    responsable_verificacion_cierre_id: responsableVerificacionCierreIdRaw,
   } = req.body || {};
 
   console.log("[cerrarFalloTecnico] BODY COMPLETO:", req.body);
@@ -1274,27 +1258,15 @@ export const cerrarFalloTecnico = async (req, res) => {
     }
 
     const usuarioCierreId = getAuthenticatedUserId(req);
-    const responsableVerificacionCierreId = toNullableUserId(
-      responsableVerificacionCierreIdRaw
-    );
 
     console.log("[cerrarFalloTecnico] usuarioCierreId:", usuarioCierreId);
-    console.log(
-      "[cerrarFalloTecnico] responsableVerificacionCierreIdRaw:",
-      responsableVerificacionCierreIdRaw
-    );
-    console.log(
-      "[cerrarFalloTecnico] responsableVerificacionCierreId (normalizado):",
-      responsableVerificacionCierreId
-    );
 
     const seguimientoCerrado = await cerrarSeguimientoActivo(client, {
       falloId: id,
       usuarioCierreId,
-      responsableVerificacionCierreId,
       novedadDetectada:
-        typeof novedad_detectada === "string"
-          ? novedad_detectada.trim() || null
+        typeof req.body?.novedad_detectada === "string"
+          ? req.body.novedad_detectada.trim() || null
           : null,
     });
 
@@ -1306,9 +1278,7 @@ export const cerrarFalloTecnico = async (req, res) => {
       "multiples_abiertos:",
       seguimientoCerrado.multiplesAbiertos,
       "con verificacion_cierre_id:",
-      usuarioCierreId,
-      "y responsable_verificacion_cierre_id:",
-      responsableVerificacionCierreId
+      usuarioCierreId
     );
 
     await client.query("COMMIT");
