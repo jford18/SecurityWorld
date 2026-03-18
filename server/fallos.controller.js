@@ -284,6 +284,21 @@ const buildDateTime = (dateValue, timeValue) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+const validateResolutionDateNotFuture = (fechaResolucion, horaResolucion) => {
+  if (!fechaResolucion || !horaResolucion) {
+    return null;
+  }
+
+  const resolutionDateTime = buildDateTime(fechaResolucion, horaResolucion);
+  if (!resolutionDateTime) {
+    return null;
+  }
+
+  return resolutionDateTime.getTime() > Date.now()
+    ? "La fecha y hora de resolución no puede ser futura."
+    : null;
+};
+
 const insertSeguimientoDepartamento = async (
   client,
   { falloId, departamentoId, novedadDetectada, usuarioId }
@@ -1128,6 +1143,17 @@ export const cerrarFalloTecnico = async (req, res) => {
     });
   }
 
+  const futureResolutionError = validateResolutionDateNotFuture(
+    fechaResolucion,
+    horaResolucion
+  );
+
+  if (futureResolutionError) {
+    return res.status(400).json({
+      mensaje: futureResolutionError,
+    });
+  }
+
   const client = await pool.connect();
 
   try {
@@ -1680,13 +1706,15 @@ export const actualizarFalloSupervisor = async (req, res) => {
       .json({ mensaje: "El identificador del fallo es obligatorio." });
   }
 
-  if (fechaResolucion && horaResolucion) {
-    const cierre = new Date(`${fechaResolucion}T${horaResolucion}`);
-    if (!Number.isNaN(cierre.getTime()) && cierre.getTime() > Date.now()) {
-      return res.status(400).json({
-        message: "La fecha y hora de resolución no puede ser futura.",
-      });
-    }
+  const futureResolutionError = validateResolutionDateNotFuture(
+    fechaResolucion,
+    horaResolucion
+  );
+
+  if (futureResolutionError) {
+    return res.status(400).json({
+      mensaje: futureResolutionError,
+    });
   }
 
   const client = await pool.connect();
