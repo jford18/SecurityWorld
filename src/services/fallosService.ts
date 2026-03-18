@@ -347,6 +347,11 @@ const buildRoleHeaders = (context?: RequestContext) => {
   return headers;
 };
 
+const normalizeDepartamentoId = (value?: number | string | null) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
 export const createFallo = async (
   payload: TechnicalFailurePayload,
   context?: RequestContext,
@@ -365,6 +370,8 @@ export const createFallo = async (
     ...payload,
     usuarioId,
     reportado_al_cliente: reportadoAlCliente,
+    departamento_id: normalizeDepartamentoId((payload as any).departamento_id),
+    departamentoResponsableId: normalizeDepartamentoId(payload.departamentoResponsableId),
   };
 
   delete (body as Partial<TechnicalFailurePayload>).reportadoCliente;
@@ -396,6 +403,7 @@ export const updateFallo = async (
 
   const body: TechnicalFailurePayload = {
     ...payload,
+    departamentoResponsableId: normalizeDepartamentoId(payload.departamentoResponsableId),
   };
 
   if (reportadoAlCliente !== undefined) {
@@ -422,6 +430,7 @@ export const guardarCambiosFallo = async (
   const body = {
     ...payload,
     ultimoUsuarioEditoId,
+    departamento_id: normalizeDepartamentoId(payload.departamento_id),
   };
 
   console.log(
@@ -460,6 +469,7 @@ export const cerrarFallo = async (
   const body = {
     ...payload,
     ultimoUsuarioEditoId,
+    departamento_id: normalizeDepartamentoId(payload.departamento_id),
     responsable_verificacion_cierre_id:
       (payload as any).responsable_verificacion_cierre_id ??
       (payload as any).responsableVerificacionCierreId ??
