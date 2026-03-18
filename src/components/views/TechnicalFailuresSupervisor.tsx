@@ -409,16 +409,19 @@ const EditFailureModal: React.FC<{
       novedadDetectada?: string;
       fechaHoraResolucion?: string;
     } = {};
+    const tieneResolucion = Boolean(editData.fechaHoraResolucion);
     const departamentoId = toPositiveIntegerOrNull(editData.departamentoResponsableId);
     const novedad = editData.novedadDetectada?.trim() ?? '';
     const resolutionError = validateResolutionDateTime(editData.fechaHoraResolucion);
 
-    if (!departamentoId) {
-      errors.departamentoResponsableId = 'Debe seleccionar el departamento responsable.';
-    }
+    if (!tieneResolucion) {
+      if (!departamentoId) {
+        errors.departamentoResponsableId = 'Debe seleccionar el departamento responsable.';
+      }
 
-    if (!novedad) {
-      errors.novedadDetectada = 'Debe ingresar la novedad detectada.';
+      if (!novedad) {
+        errors.novedadDetectada = 'Debe ingresar la novedad detectada.';
+      }
     }
 
     if (resolutionError) {
@@ -1165,8 +1168,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
           roleContext,
         );
         setFailures((prev) => prev.map((f) => (f.id === saved.id ? saved : f)));
-        setCurrentFailure(saved);
-        await loadHistory(saved.id);
+        handleCloseModal();
         alert('Fallo cerrado correctamente.');
       } catch (error) {
         console.error('Error al cerrar el fallo técnico:', error);
@@ -1176,7 +1178,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         setIsSubmitting(false);
       }
     },
-    [loadHistory, resolveResolutionDateTime, roleContext],
+    [handleCloseModal, resolveResolutionDateTime, roleContext],
   );
 
   const handleDeleteFailure = async (failureId: string) => {
