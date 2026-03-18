@@ -2194,7 +2194,7 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
             ELSE f.fecha::timestamp
           END AS fecha_inicio_fallo,
           CASE
-            WHEN f.fecha_resolucion IS NOT NULL THEN
+            WHEN f.fecha_resolucion IS NOT NULL AND f.hora_resolucion IS NOT NULL THEN
               f.fecha_resolucion + f.hora_resolucion
             ELSE NOW()
           END AS fecha_fin_fallo
@@ -2226,11 +2226,19 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
           sf.ultimo_usuario_edito_id,
           COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario)
             AS ultimo_usuario_edito_nombre,
-          LEAD(sf.fecha_creacion) OVER (
-            PARTITION BY sf.fallo_id
-            ORDER BY sf.fecha_creacion ASC
-          ) AS siguiente_fecha
+          COALESCE(
+            LEAD(sf.fecha_creacion) OVER (
+              PARTITION BY sf.fallo_id
+              ORDER BY sf.fecha_creacion ASC
+            ),
+            CASE
+              WHEN ft.fecha_resolucion IS NOT NULL AND ft.hora_resolucion IS NOT NULL THEN
+                ft.fecha_resolucion + ft.hora_resolucion
+              ELSE NOW()
+            END
+          ) AS fecha_fin
         FROM seguimiento_fallos sf
+        JOIN fallos_tecnicos ft ON ft.id = sf.fallo_id
         LEFT JOIN departamentos_responsables d ON d.id = sf.departamento_id
         LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = sf.ultimo_usuario_edito_id
         WHERE sf.fallo_id = $1
@@ -2262,16 +2270,11 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
           st.departamento_id,
           st.departamento_nombre AS departamento,
           st.fecha_inicio,
-          CASE
-            WHEN st.siguiente_fecha IS NOT NULL THEN st.siguiente_fecha
-            WHEN fb.fecha_fin_fallo IS NOT NULL THEN fb.fecha_fin_fallo
-            ELSE NOW()
-          END AS fecha_fin,
+          st.fecha_fin,
           st.novedad_detectada,
           st.ultimo_usuario_edito_id,
           st.ultimo_usuario_edito_nombre AS usuario
         FROM seguimiento_timeline st
-        CROSS JOIN fallo_base fb
       ),
       historial AS (
         SELECT
