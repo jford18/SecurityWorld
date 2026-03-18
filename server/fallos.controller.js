@@ -2227,6 +2227,7 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
           COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario)
             AS ultimo_usuario_edito_nombre,
           CASE
+            -- Mantiene el timeline dinámico con LEAD() para todos los tramos intermedios
             WHEN LEAD(sf.fecha_creacion) OVER (
               PARTITION BY sf.fallo_id
               ORDER BY sf.fecha_creacion
@@ -2235,6 +2236,7 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
               PARTITION BY sf.fallo_id
               ORDER BY sf.fecha_creacion
             )
+            -- Solo el último tramo cierra con la fecha/hora real de resolución; si no existe, queda abierto hasta NOW()
             WHEN ft.fecha_resolucion IS NOT NULL
                  AND ft.hora_resolucion IS NOT NULL
             THEN (ft.fecha_resolucion::timestamp + ft.hora_resolucion)
