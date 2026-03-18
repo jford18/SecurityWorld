@@ -2221,25 +2221,42 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
           st.ultimo_usuario_edito_nombre AS usuario
         FROM seguimiento_timeline st
         CROSS JOIN fallo_base fb
+      ),
+      historial AS (
+        SELECT
+          hu.departamento,
+          hu.departamento AS departamento_nombre,
+          hu.fecha_inicio,
+          hu.fecha_fin,
+          EXTRACT(
+            EPOCH FROM (hu.fecha_fin - hu.fecha_inicio)
+          )::BIGINT AS duracion_seg,
+          hu.usuario,
+          hu.usuario AS ultimo_usuario_edito_nombre,
+          hu.novedad_detectada,
+          hu.departamento_id,
+          hu.departamento_id AS departamento_id_evento,
+          hu.departamento AS departamento_nombre_evento,
+          hu.ultimo_usuario_edito_id
+        FROM historial_union hu
+        WHERE hu.fecha_inicio IS NOT NULL
       )
       SELECT
-        hu.departamento,
-        hu.departamento AS departamento_nombre,
-        hu.fecha_inicio,
-        hu.fecha_fin,
-        EXTRACT(
-          EPOCH FROM (hu.fecha_fin - hu.fecha_inicio)
-        )::BIGINT AS duracion_seg,
-        hu.usuario,
-        hu.usuario AS ultimo_usuario_edito_nombre,
-        hu.novedad_detectada,
-        hu.departamento_id,
-        hu.departamento_id AS departamento_id_evento,
-        hu.departamento AS departamento_nombre_evento,
-        hu.ultimo_usuario_edito_id
-      FROM historial_union hu
-      WHERE hu.fecha_inicio IS NOT NULL
-      ORDER BY hu.fecha_inicio ASC
+        h.departamento,
+        h.departamento_nombre,
+        h.fecha_inicio,
+        h.fecha_fin,
+        h.duracion_seg,
+        h.usuario,
+        h.ultimo_usuario_edito_nombre,
+        h.novedad_detectada,
+        h.departamento_id,
+        h.departamento_id_evento,
+        h.departamento_nombre_evento,
+        h.ultimo_usuario_edito_id
+      FROM historial h
+      WHERE h.duracion_seg > 0
+      ORDER BY h.fecha_inicio ASC
       `,
       [id]
     );
