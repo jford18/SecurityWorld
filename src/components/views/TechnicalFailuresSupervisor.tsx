@@ -133,6 +133,24 @@ const formatDurationFromSeconds = (duration?: number | null) => {
   ).padStart(2, '0')}`;
 };
 
+const RESOLUTION_FUTURE_ERROR =
+  'La fecha de resolución no puede ser mayor a la fecha actual';
+
+const validateResolutionDateTime = (value?: string | null) => {
+  if (!value) {
+    return undefined;
+  }
+
+  const selectedDate = new Date(value);
+  if (Number.isNaN(selectedDate.getTime())) {
+    return undefined;
+  }
+
+  return selectedDate.getTime() > Date.now()
+    ? RESOLUTION_FUTURE_ERROR
+    : undefined;
+};
+
 const EditFailureModal: React.FC<{
   failure: TechnicalFailure;
   departamentos: CatalogoDepartamento[];
@@ -232,6 +250,7 @@ const EditFailureModal: React.FC<{
   const [formErrors, setFormErrors] = useState<{
     departamentoResponsableId?: string;
     novedadDetectada?: string;
+    fechaHoraResolucion?: string;
   }>({});
   const [activeTab, setActiveTab] = useState<
     'general' | 'supervisor' | 'cierre'
@@ -250,7 +269,11 @@ const EditFailureModal: React.FC<{
   const updateField = (name: keyof TechnicalFailure, value: string | undefined) => {
     if (isReadOnly) return;
     setEditData((prev) => ({ ...prev, [name]: value }));
-    if (name === 'departamentoResponsableId' || name === 'novedadDetectada') {
+    if (
+      name === 'departamentoResponsableId' ||
+      name === 'novedadDetectada' ||
+      name === 'fechaHoraResolucion'
+    ) {
       setFormErrors((prev) => ({ ...prev, [name]: undefined }));
     }
   };
@@ -271,12 +294,23 @@ const EditFailureModal: React.FC<{
   ) => {
     if (isReadOnly) return;
     const updatedValue = value ?? '';
+    const resolutionError = validateResolutionDateTime(updatedValue);
+
+    if (resolutionError) {
+      setFormErrors((prev) => ({
+        ...prev,
+        fechaHoraResolucion: resolutionError,
+      }));
+      return;
+    }
+
     const parsedDateTime = helpers.dateValue ?? (updatedValue ? new Date(updatedValue) : null);
     const normalizedValue =
       normalizeDateTimeLocalString(updatedValue) ||
       (parsedDateTime && !Number.isNaN(parsedDateTime.getTime())
         ? normalizeDateTimeLocalString(parsedDateTime.toISOString())
         : '');
+    setFormErrors((prev) => ({ ...prev, fechaHoraResolucion: undefined }));
     const { date, time } = splitDateTimeLocalValue(normalizedValue || updatedValue);
     setEditData((prev) => ({
       ...prev,
@@ -290,10 +324,7 @@ const EditFailureModal: React.FC<{
     }));
   };
 
-  const nowForInput = useMemo(
-    () => normalizeDateTimeLocalString(new Date().toISOString()),
-    [],
-  );
+  const nowForInput = normalizeDateTimeLocalString(new Date().toISOString());
 
   const fechaHoraReporte = useMemo(() => {
     const combined = buildFailureDateTimeValue(editData);
@@ -376,9 +407,11 @@ const EditFailureModal: React.FC<{
     const errors: {
       departamentoResponsableId?: string;
       novedadDetectada?: string;
+      fechaHoraResolucion?: string;
     } = {};
     const departamentoId = toPositiveIntegerOrNull(editData.departamentoResponsableId);
     const novedad = editData.novedadDetectada?.trim() ?? '';
+    const resolutionError = validateResolutionDateTime(editData.fechaHoraResolucion);
 
     if (!departamentoId) {
       errors.departamentoResponsableId = 'Debe seleccionar el departamento responsable.';
@@ -388,9 +421,13 @@ const EditFailureModal: React.FC<{
       errors.novedadDetectada = 'Debe ingresar la novedad detectada.';
     }
 
+    if (resolutionError) {
+      errors.fechaHoraResolucion = resolutionError;
+    }
+
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-      setActiveTab('supervisor');
+      setActiveTab(errors.fechaHoraResolucion ? 'cierre' : 'supervisor');
       return;
     }
 
@@ -665,6 +702,7 @@ const EditFailureModal: React.FC<{
               name="fechaHoraResolucion"
               value={editData.fechaHoraResolucion || ''}
               onChange={handleResolutionChange}
+              error={formErrors.fechaHoraResolucion}
               max={nowForInput}
               disabled={isReadOnly}
               className="disabled:bg-gray-100 disabled:text-gray-500"
@@ -1070,9 +1108,20 @@ const TechnicalFailuresSupervisor: React.FC = () => {
     async (updatedFailure: TechnicalFailure) => {
       const { date: resolutionDate, time: resolutionTime } =
         resolveResolutionDateTime(updatedFailure);
+      const resolutionError = validateResolutionDateTime(
+        updatedFailure.fechaHoraResolucion ||
+          (resolutionDate && resolutionTime
+            ? `${resolutionDate}T${resolutionTime}`
+            : undefined),
+      );
 
       if (!resolutionDate || !resolutionTime) {
         alert('Debe ingresar la fecha y hora de resolución antes de cerrar el fallo.');
+        return;
+      }
+
+      if (resolutionError) {
+        alert(resolutionError);
         return;
       }
 
