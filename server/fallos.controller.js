@@ -2215,7 +2215,11 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
           st.departamento_id,
           st.departamento_nombre AS departamento,
           st.fecha_inicio,
-          COALESCE(st.siguiente_fecha, fb.fecha_fin_fallo) AS fecha_fin,
+          CASE
+            WHEN st.siguiente_fecha IS NOT NULL THEN st.siguiente_fecha
+            WHEN fb.fecha_fin_fallo IS NOT NULL THEN fb.fecha_fin_fallo
+            ELSE NOW()
+          END AS fecha_fin,
           st.novedad_detectada,
           st.ultimo_usuario_edito_id,
           st.ultimo_usuario_edito_nombre AS usuario
@@ -2264,6 +2268,7 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
     console.log("Primer seguimiento excluido correctamente");
     console.log("Cierre incluido correctamente en historial");
     console.log("Historial con nueva lógica:", timelineResult.rows);
+    console.log("Fecha final corregida:", timelineResult.rows.at(-1)?.fecha_fin ?? null);
 
     const duracionTotalResult = await client.query(
       `SELECT EXTRACT(EPOCH FROM (
