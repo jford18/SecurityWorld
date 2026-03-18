@@ -1090,8 +1090,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
           roleContext,
         );
         setFailures((prev) => prev.map((f) => (f.id === saved.id ? saved : f)));
-        setCurrentFailure(saved);
-        await loadHistory(saved.id);
+        handleCloseModal();
         alert('Reporte actualizado correctamente.');
       } catch (error) {
         console.error('Error al actualizar el fallo técnico:', error);
@@ -1101,7 +1100,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         setIsSubmitting(false);
       }
     },
-    [loadHistory, resolveDepartamentoId, roleContext],
+    [handleCloseModal, resolveDepartamentoId, roleContext],
   );
 
   const handleCloseFailure = useCallback(
