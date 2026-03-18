@@ -2226,17 +2226,20 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
           sf.ultimo_usuario_edito_id,
           COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario)
             AS ultimo_usuario_edito_nombre,
-          COALESCE(
-            LEAD(sf.fecha_creacion) OVER (
+          CASE
+            WHEN LEAD(sf.fecha_creacion) OVER (
               PARTITION BY sf.fallo_id
-              ORDER BY sf.fecha_creacion ASC
-            ),
-            CASE
-              WHEN ft.fecha_resolucion IS NOT NULL AND ft.hora_resolucion IS NOT NULL THEN
-                ft.fecha_resolucion + ft.hora_resolucion
-              ELSE NOW()
-            END
-          ) AS fecha_fin
+              ORDER BY sf.fecha_creacion
+            ) IS NOT NULL
+            THEN LEAD(sf.fecha_creacion) OVER (
+              PARTITION BY sf.fallo_id
+              ORDER BY sf.fecha_creacion
+            )
+            WHEN ft.fecha_resolucion IS NOT NULL
+                 AND ft.hora_resolucion IS NOT NULL
+            THEN (ft.fecha_resolucion::timestamp + ft.hora_resolucion)
+            ELSE NOW()
+          END AS fecha_fin
         FROM seguimiento_fallos sf
         JOIN fallos_tecnicos ft ON ft.id = sf.fallo_id
         LEFT JOIN departamentos_responsables d ON d.id = sf.departamento_id
@@ -2318,6 +2321,9 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
     console.log("Primer seguimiento excluido correctamente");
     console.log("Cierre incluido correctamente en historial");
     console.log("Historial con nueva lógica:", timelineResult.rows);
+    console.log("fecha_resolucion:", fallo.fecha_resolucion);
+    console.log("hora_resolucion:", fallo.hora_resolucion);
+    console.log("fecha_fin calculada:", timelineResult.rows.at(-1)?.fecha_fin ?? null);
     console.log("Fecha final corregida:", timelineResult.rows.at(-1)?.fecha_fin ?? null);
 
     const duracionTotalResult = await client.query(
