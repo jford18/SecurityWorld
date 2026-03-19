@@ -85,8 +85,10 @@ export interface FailureDepartmentTimelineEntry {
   departamento_id: number;
   departamento_nombre: string | null;
   fecha_inicio: string | null;
+  fecha_hasta?: string | null;
   fecha_fin: string | null;
   duracion_seg: number | null;
+  paso?: 'INICIO' | 'CAMBIO' | 'CIERRE' | null;
   novedad_detectada?: string | null;
   ultimo_usuario_edito_id?: number | null;
   ultimo_usuario_edito_nombre?: string | null;

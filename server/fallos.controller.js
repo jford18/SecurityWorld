@@ -338,29 +338,66 @@ const validateResolutionDateNotFuture = (fechaResolucion, horaResolucion) => {
     : null;
 };
 
-const insertSeguimientoDepartamento = async (
-  client,
-  { falloId, departamentoId, novedadDetectada, usuarioId }
-) => {
-  if (!departamentoId) {
-    return false;
-  }
+const PASO_SEGUIMIENTO = {
+  INICIO: "INICIO",
+  CAMBIO: "CAMBIO",
+  CIERRE: "CIERRE",
+};
 
-  const ultimoDepartamentoResult = await client.query(
-    `SELECT departamento_id
+const DEPARTAMENTO_MONITOREO_ID = 5;
+
+const getSeguimientoAbierto = async (client, falloId) => {
+  const result = await client.query(
+    `SELECT id, departamento_id, fecha_inicio, fecha_hasta, paso
        FROM seguimiento_fallos
       WHERE fallo_id = $1
-        AND departamento_id IS NOT NULL
-      ORDER BY fecha_creacion DESC
+        AND fecha_hasta IS NULL
+      ORDER BY COALESCE(fecha_inicio, fecha_creacion) DESC, id DESC
       LIMIT 1`,
     [falloId]
   );
 
-  const ultimoDepartamentoId = ultimoDepartamentoResult.rows[0]?.departamento_id;
-  if (
-    ultimoDepartamentoId &&
-    Number(ultimoDepartamentoId) === Number(departamentoId)
-  ) {
+  return result.rows[0] || null;
+};
+
+const cerrarSeguimientoAbierto = async (
+  client,
+  { seguimientoId, fechaHasta, usuarioId }
+) => {
+  if (!seguimientoId || !fechaHasta) {
+    return false;
+  }
+
+  const result = await client.query(
+    `UPDATE seguimiento_fallos
+        SET fecha_hasta = $1,
+            fecha_actualizacion = NOW(),
+            ultimo_usuario_edito_id = COALESCE($2, ultimo_usuario_edito_id)
+      WHERE id = $3
+        AND fecha_hasta IS NULL`,
+    [fechaHasta, usuarioId || null, seguimientoId]
+  );
+
+  return result.rowCount > 0;
+};
+
+const insertSeguimientoPersistido = async (
+  client,
+  {
+    falloId,
+    departamentoId,
+    paso,
+    fechaInicio,
+    fechaHasta = null,
+    novedadDetectada = null,
+    usuarioId = null,
+    verificacionAperturaId = null,
+    verificacionCierreId = null,
+    responsableVerificacionCierreId = null,
+    verificacionSupervisorId = null,
+  }
+) => {
+  if (!falloId || !departamentoId || !paso || !fechaInicio) {
     return false;
   }
 
@@ -368,13 +405,74 @@ const insertSeguimientoDepartamento = async (
     `INSERT INTO seguimiento_fallos (
        fallo_id,
        departamento_id,
+       fecha_inicio,
+       fecha_hasta,
+       paso,
+       verificacion_apertura_id,
+       verificacion_cierre_id,
        novedad_detectada,
-       verificacion_supervisor_id,
+       fecha_creacion,
+       fecha_actualizacion,
        ultimo_usuario_edito_id,
-       fecha_creacion
-     ) VALUES ($1, $2, $3, $4, $4, NOW())`,
-    [falloId, departamentoId, novedadDetectada || null, usuarioId || null]
+       responsable_verificacion_cierre_id,
+       verificacion_supervisor_id
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW(), $9, $10, $11
+     )`,
+    [
+      falloId,
+      departamentoId,
+      fechaInicio,
+      fechaHasta,
+      paso,
+      verificacionAperturaId,
+      verificacionCierreId,
+      novedadDetectada,
+      usuarioId,
+      responsableVerificacionCierreId,
+      verificacionSupervisorId,
+    ]
   );
+
+  return true;
+};
+
+const insertSeguimientoDepartamento = async (
+  client,
+  { falloId, departamentoId, novedadDetectada, usuarioId, fechaHasta = new Date() }
+) => {
+  if (!departamentoId) {
+    return false;
+  }
+
+  const seguimientoAbierto = await getSeguimientoAbierto(client, falloId);
+  const ultimoDepartamentoId = seguimientoAbierto?.departamento_id;
+
+  if (
+    ultimoDepartamentoId &&
+    Number(ultimoDepartamentoId) === Number(departamentoId)
+  ) {
+    return false;
+  }
+
+  if (seguimientoAbierto?.id) {
+    await cerrarSeguimientoAbierto(client, {
+      seguimientoId: seguimientoAbierto.id,
+      fechaHasta,
+      usuarioId,
+    });
+  }
+
+  await insertSeguimientoPersistido(client, {
+    falloId,
+    departamentoId,
+    paso: PASO_SEGUIMIENTO.CAMBIO,
+    fechaInicio: fechaHasta,
+    fechaHasta: null,
+    novedadDetectada: novedadDetectada || null,
+    usuarioId: usuarioId || null,
+    verificacionSupervisorId: usuarioId || null,
+  });
 
   return true;
 };
@@ -1249,17 +1347,39 @@ export const cerrarFalloTecnico = async (req, res) => {
       responsableVerificacionCierreId
     );
 
-    await client.query(
-      `INSERT INTO seguimiento_fallos (
-         fallo_id,
-         verificacion_cierre_id,
-         novedad_detectada,
-         fecha_creacion
-       ) VALUES ($1, $2, NULL, NOW())`,
-      [id, usuarioCierreId]
-    );
+    const seguimientoAbierto = await getSeguimientoAbierto(client, id);
+    const fechaCierreSeguimiento = buildDateTime(fechaResolucion, horaResolucion);
 
-    console.log("Registro de cierre insertado en seguimiento_fallos");
+    if (!fechaCierreSeguimiento) {
+      throw new Error(
+        "No fue posible construir la fecha de cierre para seguimiento_fallos"
+      );
+    }
+
+    if (seguimientoAbierto?.id) {
+      await cerrarSeguimientoAbierto(client, {
+        seguimientoId: seguimientoAbierto.id,
+        fechaHasta: fechaCierreSeguimiento,
+        usuarioId: usuarioCierreId,
+      });
+    }
+
+    await insertSeguimientoPersistido(client, {
+      falloId: id,
+      departamentoId:
+        departamentoIdValue ??
+        seguimientoAbierto?.departamento_id ??
+        DEPARTAMENTO_MONITOREO_ID,
+      paso: PASO_SEGUIMIENTO.CIERRE,
+      fechaInicio: fechaCierreSeguimiento,
+      fechaHasta: fechaCierreSeguimiento,
+      usuarioId: usuarioCierreId,
+      verificacionCierreId: usuarioCierreId,
+      responsableVerificacionCierreId,
+      verificacionSupervisorId: usuarioCierreId,
+    });
+
+    console.log("Registro de cierre persistido en seguimiento_fallos");
 
     console.log(
       "[cerrarFalloTecnico] seguimiento_fallos insertado para fallo_id:",
@@ -1646,43 +1766,25 @@ export const createFallo = async (req, res) => {
       throw new Error("No se pudo crear el fallo técnico.");
     }
 
-    const seguimientoInsert = await client.query(
-      `
-      INSERT INTO seguimiento_fallos (
-          fallo_id,
-          departamento_id,
-          verificacion_apertura_id,
-          verificacion_cierre_id,
-          novedad_detectada,
-          fecha_creacion,
-          ultimo_usuario_edito_id,
-          responsable_verificacion_cierre_id,
-          verificacion_supervisor_id
-      ) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8)
-      `,
-      [
-        falloId, // FALLO_ID
-        (() => {
-          const resolvedDepartamentoId = validateDepartamentoId(departamentoId);
-
-          console.log(
-            `SeguimientoFallos departamento_id => ${resolvedDepartamentoId}`
-          );
-
-          return resolvedDepartamentoId;
-        })(), // DEPARTAMENTO_ID: usa NULL cuando el payload no trae un id válido
-        verificacionAperturaId, // VERIFICACION_APERTURA_ID (usuario que registra el fallo)
-        null, // VERIFICACION_CIERRE_ID (todavía no aplica)
-        novedadDetectada || null, // NOVEDAD_DETECTADA
-        verificacionAperturaId, // ULTIMO_USUARIO_EDITO_ID
-        null, // RESPONSABLE_VERIFICACION_CIERRE_ID
-        null, // VERIFICACION_SUPERVISOR_ID
-      ]
+    const fechaInicioSeguimiento = buildDateTime(
+      fechaFalloValue,
+      horaFalloValue || null
     );
 
+    const seguimientoInsertado = await insertSeguimientoPersistido(client, {
+      falloId,
+      departamentoId: DEPARTAMENTO_MONITOREO_ID,
+      paso: PASO_SEGUIMIENTO.INICIO,
+      fechaInicio: fechaInicioSeguimiento,
+      fechaHasta: null,
+      novedadDetectada: novedadDetectada || null,
+      usuarioId: verificacionAperturaId,
+      verificacionAperturaId,
+    });
+
     console.log(
-      "[createFallo] seguimiento_fallos INSERT rowCount:",
-      seguimientoInsert.rowCount
+      "[createFallo] seguimiento_fallos INSERT realizado:",
+      seguimientoInsertado
     );
 
     await client.query("COMMIT");
@@ -1949,80 +2051,93 @@ export const actualizarFalloSupervisor = async (req, res) => {
       verificacionCierreId
     );
 
-    const seguimientoResult = await client.query(
-      "SELECT id FROM seguimiento_fallos WHERE fallo_id = $1",
-      [id]
-    );
+    const seguimientoAbierto = await getSeguimientoAbierto(client, id);
 
-    if (seguimientoResult.rowCount) {
+    if (seguimientoAbierto?.id) {
       await client.query(
         `UPDATE seguimiento_fallos
-           SET verificacion_apertura_id = $1,
-               verificacion_cierre_id = $2,
+           SET verificacion_apertura_id = COALESCE($1, verificacion_apertura_id),
+               verificacion_cierre_id = COALESCE($2, verificacion_cierre_id),
                novedad_detectada = $3,
                ultimo_usuario_edito_id = $4,
                responsable_verificacion_cierre_id = COALESCE($5, responsable_verificacion_cierre_id),
                verificacion_supervisor_id = COALESCE($6, verificacion_supervisor_id),
                fecha_actualizacion = NOW()
-         WHERE fallo_id = $7`,
+         WHERE id = $7`,
         [
           verificacionAperturaId || null,
           verificacionCierreId || null,
           novedadDetectada || null,
           usuarioAutenticadoId,
           responsableVerificacionCierreId,
-          usuarioAutenticadoId, // supervisor actual
-          id,
-        ]
-      );
-      console.log(
-        "[actualizarFalloSupervisor] seguimiento_fallos actualizado/insertado para fallo_id:",
-        id
-      );
-    } else {
-      await client.query(
-        `INSERT INTO seguimiento_fallos (
-          fallo_id,
-          departamento_id,
-          verificacion_apertura_id,
-          verificacion_cierre_id,
-          novedad_detectada,
-          fecha_creacion,
-          fecha_actualizacion,
-          ultimo_usuario_edito_id,
-          responsable_verificacion_cierre_id,
-          verificacion_supervisor_id
-        ) VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), $6, $7, $8)`,
-        [
-          id,
-          departamentoFinalId,
-          verificacionAperturaId || null,
-          verificacionCierreId || null,
-          novedadDetectada || null,
           usuarioAutenticadoId,
-          responsableVerificacionCierreId,
-          usuarioAutenticadoId, // supervisor
+          seguimientoAbierto.id,
         ]
       );
       console.log(
-        "[actualizarFalloSupervisor] seguimiento_fallos actualizado/insertado para fallo_id:",
+        "[actualizarFalloSupervisor] seguimiento abierto actualizado para fallo_id:",
         id
       );
     }
 
-    const seguimientoDepartamentoInsertado = await insertSeguimientoDepartamento(
-      client,
-      {
-        falloId: id,
-        departamentoId: departamentoFinalId,
-        novedadDetectada,
-        usuarioId: usuarioAutenticadoId,
+    const departamentoSeguimientoId =
+      departamentoFinalId ??
+      seguimientoAbierto?.departamento_id ??
+      existingFallo.departamento_id ??
+      DEPARTAMENTO_MONITOREO_ID;
+
+    let seguimientoDepartamentoInsertado = false;
+
+    if (fechaResolucionValue && horaResolucionValue) {
+      const fechaCierreSeguimiento = buildDateTime(
+        fechaResolucionValue,
+        horaResolucionValue
+      );
+
+      if (!fechaCierreSeguimiento) {
+        throw new Error(
+          "No fue posible construir la fecha de cierre para seguimiento_fallos"
+        );
       }
-    );
+
+      if (seguimientoAbierto?.id) {
+        await cerrarSeguimientoAbierto(client, {
+          seguimientoId: seguimientoAbierto.id,
+          fechaHasta: fechaCierreSeguimiento,
+          usuarioId: usuarioAutenticadoId,
+        });
+      }
+
+      await insertSeguimientoPersistido(client, {
+        falloId: id,
+        departamentoId: departamentoSeguimientoId,
+        paso: PASO_SEGUIMIENTO.CIERRE,
+        fechaInicio: fechaCierreSeguimiento,
+        fechaHasta: fechaCierreSeguimiento,
+        novedadDetectada: novedadDetectada || null,
+        usuarioId: usuarioAutenticadoId,
+        verificacionAperturaId: verificacionAperturaId || null,
+        verificacionCierreId: verificacionCierreId || usuarioAutenticadoId || null,
+        responsableVerificacionCierreId,
+        verificacionSupervisorId: usuarioAutenticadoId,
+      });
+
+      seguimientoDepartamentoInsertado = true;
+    } else {
+      seguimientoDepartamentoInsertado = await insertSeguimientoDepartamento(
+        client,
+        {
+          falloId: id,
+          departamentoId: departamentoSeguimientoId,
+          novedadDetectada,
+          usuarioId: usuarioAutenticadoId,
+        }
+      );
+    }
 
     if (seguimientoDepartamentoInsertado) {
       console.log(
-        "[actualizarFalloSupervisor] seguimiento_fallos departamento insertado para fallo_id:",
+        "[actualizarFalloSupervisor] seguimiento_fallos persistido para fallo_id:",
         id
       );
     }
@@ -2186,16 +2301,9 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
 
   try {
     const falloResult = await client.query(
-      `SELECT
-         id,
-         fecha,
-         hora,
-         fecha_creacion,
-         fecha_resolucion,
-         hora_resolucion,
-         estado
-       FROM fallos_tecnicos
-       WHERE id = $1`,
+      `SELECT id, fecha_resolucion, hora_resolucion
+         FROM fallos_tecnicos
+        WHERE id = $1`,
       [id]
     );
 
@@ -2203,170 +2311,35 @@ export const getHistorialDepartamentosFallo = async (req, res) => {
       return res.status(404).json({ mensaje: "El fallo técnico no existe." });
     }
 
-    const fallo = falloResult.rows[0];
-    const fechaInicioRealPrimerRegistro = fallo.hora
-      ? `${fallo.fecha} ${fallo.hora}`
-      : fallo.fecha_creacion || fallo.fecha;
-    console.log("Fecha real usada en primer registro:", fechaInicioRealPrimerRegistro);
-
     const timelineResult = await client.query(
-      `
-      WITH fallo_base AS (
-        SELECT
-          f.id,
-          CASE
-            WHEN f.hora IS NOT NULL THEN f.fecha + f.hora
-            WHEN f.fecha_creacion IS NOT NULL THEN f.fecha_creacion
-            ELSE f.fecha::timestamp
-          END AS fecha_inicio_fallo,
-          CASE
-            WHEN f.fecha_resolucion IS NOT NULL AND f.hora_resolucion IS NOT NULL THEN
-              MAKE_TIMESTAMP(
-                EXTRACT(YEAR FROM f.fecha_resolucion)::INTEGER,
-                EXTRACT(MONTH FROM f.fecha_resolucion)::INTEGER,
-                EXTRACT(DAY FROM f.fecha_resolucion)::INTEGER,
-                EXTRACT(HOUR FROM f.hora_resolucion)::INTEGER,
-                EXTRACT(MINUTE FROM f.hora_resolucion)::INTEGER,
-                EXTRACT(SECOND FROM f.hora_resolucion)
-              )
-            ELSE NOW()
-          END AS fecha_fin_fallo
-        FROM fallos_tecnicos f
-        WHERE f.id = $1
-      ),
-      primer_seguimiento AS (
-        SELECT MIN(sf.fecha_creacion) AS fecha_primer_seguimiento
-        FROM seguimiento_fallos sf
-        WHERE sf.fallo_id = $1
-      ),
-      seguimiento_timeline AS (
-        SELECT
-          sf.fallo_id,
-          sf.departamento_id,
-          CASE
-            WHEN d.nombre IS NOT NULL THEN d.nombre
-            ELSE LAG(d.nombre) OVER (
-              PARTITION BY sf.fallo_id
-              ORDER BY sf.fecha_creacion ASC
-            )
-          END AS departamento_nombre,
-          LAG(d.nombre) OVER (
-            PARTITION BY sf.fallo_id
-            ORDER BY sf.fecha_creacion ASC
-          ) AS departamento_anterior,
-          sf.fecha_creacion AS fecha_inicio,
-          sf.novedad_detectada,
-          sf.ultimo_usuario_edito_id,
-          COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario)
-            AS ultimo_usuario_edito_nombre,
-          CASE
-            -- Mantiene el timeline dinámico con LEAD() para todos los tramos intermedios
-            WHEN LEAD(sf.fecha_creacion) OVER (
-              PARTITION BY sf.fallo_id
-              ORDER BY sf.fecha_creacion
-            ) IS NOT NULL
-            THEN LEAD(sf.fecha_creacion) OVER (
-              PARTITION BY sf.fallo_id
-              ORDER BY sf.fecha_creacion
-            )
-            -- Solo el último tramo cierra con la fecha/hora real de resolución; si no existe, queda abierto hasta NOW()
-            WHEN ft.fecha_resolucion IS NOT NULL
-                 AND ft.hora_resolucion IS NOT NULL
-            THEN MAKE_TIMESTAMP(
-              EXTRACT(YEAR FROM ft.fecha_resolucion)::INTEGER,
-              EXTRACT(MONTH FROM ft.fecha_resolucion)::INTEGER,
-              EXTRACT(DAY FROM ft.fecha_resolucion)::INTEGER,
-              EXTRACT(HOUR FROM ft.hora_resolucion)::INTEGER,
-              EXTRACT(MINUTE FROM ft.hora_resolucion)::INTEGER,
-              EXTRACT(SECOND FROM ft.hora_resolucion)
-            )
-            ELSE NOW()
-          END AS fecha_fin
-        FROM seguimiento_fallos sf
-        JOIN fallos_tecnicos ft ON ft.id = sf.fallo_id
-        LEFT JOIN departamentos_responsables d ON d.id = sf.departamento_id
-        LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = sf.ultimo_usuario_edito_id
-        WHERE sf.fallo_id = $1
-          AND sf.fecha_creacion > (
-            SELECT ps.fecha_primer_seguimiento
-            FROM primer_seguimiento ps
-          )
-      ),
-      historial_union AS (
-        SELECT
-          NULL::INTEGER AS departamento_id,
-          'Monitoreo'::TEXT AS departamento,
-          fb.fecha_inicio_fallo AS fecha_inicio,
-          COALESCE(
-            (SELECT st.fecha_inicio
-               FROM seguimiento_timeline st
-              ORDER BY st.fecha_inicio
-              LIMIT 1),
-            fb.fecha_fin_fallo
-          ) AS fecha_fin,
-          NULL::TEXT AS novedad_detectada,
-          NULL::INTEGER AS ultimo_usuario_edito_id,
-          NULL::TEXT AS usuario
-        FROM fallo_base fb
-
-        UNION ALL
-
-        SELECT
-          st.departamento_id,
-          st.departamento_nombre AS departamento,
-          st.fecha_inicio,
-          st.fecha_fin,
-          st.novedad_detectada,
-          st.ultimo_usuario_edito_id,
-          st.ultimo_usuario_edito_nombre AS usuario
-        FROM seguimiento_timeline st
-      ),
-      historial AS (
-        SELECT
-          hu.departamento,
-          hu.departamento AS departamento_nombre,
-          hu.fecha_inicio,
-          hu.fecha_fin,
-          EXTRACT(
-            EPOCH FROM (hu.fecha_fin - hu.fecha_inicio)
-          )::BIGINT AS duracion_seg,
-          hu.usuario,
-          hu.usuario AS ultimo_usuario_edito_nombre,
-          hu.novedad_detectada,
-          hu.departamento_id,
-          hu.departamento_id AS departamento_id_evento,
-          hu.departamento AS departamento_nombre_evento,
-          hu.ultimo_usuario_edito_id
-        FROM historial_union hu
-        WHERE hu.fecha_inicio IS NOT NULL
-      )
-      SELECT
-        h.departamento,
-        h.departamento_nombre,
-        h.fecha_inicio,
-        h.fecha_fin,
-        h.duracion_seg,
-        h.usuario,
-        h.ultimo_usuario_edito_nombre,
-        h.novedad_detectada,
-        h.departamento_id,
-        h.departamento_id_evento,
-        h.departamento_nombre_evento,
-        h.ultimo_usuario_edito_id
-      FROM historial h
-      WHERE h.duracion_seg > 0
-      ORDER BY h.fecha_inicio ASC
-      `,
+      `SELECT
+         sf.departamento_id,
+         d.nombre AS departamento,
+         d.nombre AS departamento_nombre,
+         sf.fecha_inicio,
+         COALESCE(sf.fecha_hasta, NOW()) AS fecha_hasta,
+         COALESCE(sf.fecha_hasta, NOW()) AS fecha_fin,
+         EXTRACT(
+           EPOCH FROM (COALESCE(sf.fecha_hasta, NOW()) - sf.fecha_inicio)
+         )::BIGINT AS duracion_seg,
+         sf.paso,
+         sf.novedad_detectada,
+         sf.ultimo_usuario_edito_id,
+         COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario)
+           AS ultimo_usuario_edito_nombre,
+         COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario)
+           AS usuario,
+         sf.departamento_id AS departamento_id_evento,
+         d.nombre AS departamento_nombre_evento
+       FROM seguimiento_fallos sf
+       LEFT JOIN departamentos_responsables d ON d.id = sf.departamento_id
+       LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = sf.ultimo_usuario_edito_id
+       WHERE sf.fallo_id = $1
+       ORDER BY sf.fecha_inicio ASC, sf.id ASC`,
       [id]
     );
 
-    console.log("Primer seguimiento excluido correctamente");
-    console.log("Cierre incluido correctamente en historial");
-    console.log("Historial con nueva lógica:", timelineResult.rows);
-    console.log("fecha_resolucion:", fallo.fecha_resolucion);
-    console.log("hora_resolucion:", fallo.hora_resolucion);
-    console.log("fecha_fin calculada:", timelineResult.rows.at(-1)?.fecha_fin ?? null);
-    console.log("Fecha final corregida:", timelineResult.rows.at(-1)?.fecha_fin ?? null);
+    console.log("Historial persistido por departamento:", timelineResult.rows);
 
     const duracionTotalResult = await client.query(
       `SELECT EXTRACT(EPOCH FROM (
