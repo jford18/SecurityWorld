@@ -446,14 +446,6 @@ const insertSeguimientoDepartamento = async (
   }
 
   const seguimientoAbierto = await getSeguimientoAbierto(client, falloId);
-  const ultimoDepartamentoId = seguimientoAbierto?.departamento_id;
-
-  if (
-    ultimoDepartamentoId &&
-    Number(ultimoDepartamentoId) === Number(departamentoId)
-  ) {
-    return false;
-  }
 
   if (seguimientoAbierto?.id) {
     await cerrarSeguimientoAbierto(client, {
@@ -466,6 +458,7 @@ const insertSeguimientoDepartamento = async (
   await insertSeguimientoPersistido(client, {
     falloId,
     departamentoId,
+    // Registrar cada acción del usuario como un evento, aunque el departamento no cambie.
     paso: PASO_SEGUIMIENTO.CAMBIO,
     fechaInicio: fechaHasta,
     fechaHasta: null,
