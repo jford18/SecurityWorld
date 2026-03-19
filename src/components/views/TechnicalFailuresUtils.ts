@@ -1,4 +1,5 @@
 import { TechnicalFailure } from '../../types';
+import { parseDbTimestampToLocal } from '../../utils/datetime';
 
 export const calcularEstado = (reporte: TechnicalFailure): { texto: string; color: string } => {
   const {
@@ -41,7 +42,11 @@ export const calcularEstado = (reporte: TechnicalFailure): { texto: string; colo
     fechaHoraFallo
     || (fecha ? `${fecha}${hora || horaFallo ? `T${(hora || horaFallo)}` : ''}` : undefined);
 
-  const fechaFallo = dateCandidate ? new Date(dateCandidate) : fecha ? new Date(fecha) : null;
+  const fechaFallo = dateCandidate
+    ? parseDbTimestampToLocal(dateCandidate)
+    : fecha
+      ? parseDbTimestampToLocal(fecha)
+      : null;
   const hoy = new Date();
 
   let dias = 0;

@@ -4,6 +4,7 @@ import { TechnicalFailure } from '../../types';
 import { calcularEstado } from './TechnicalFailuresUtils';
 import { FallosExportFilters } from '../../services/fallosService';
 import api from '../../services/api';
+import { getLocalDateTimestamp, parseDbTimestampToLocal } from '../../utils/datetime';
 
 type ExportRecord = Record<string, string | number | boolean | null | undefined>;
 
@@ -113,6 +114,10 @@ const EXPORT_COLUMNS: ExportColumn[] = [
 
 const formatFechaHoraFallo = (failure: TechnicalFailure) => {
   if (failure.fechaHoraFallo) {
+    const parsedFailureDateTime = parseDbTimestampToLocal(failure.fechaHoraFallo);
+    if (parsedFailureDateTime) {
+      return parsedFailureDateTime.toLocaleString();
+    }
     return failure.fechaHoraFallo;
   }
 
@@ -135,19 +140,13 @@ const formatFechaHoraFallo = (failure: TechnicalFailure) => {
     return dateTimeCandidate;
   }
 
-  const parsed = new Date(dateTimeCandidate);
+  const parsed = parseDbTimestampToLocal(dateTimeCandidate);
 
-  if (Number.isNaN(parsed.getTime())) {
+  if (!parsed || Number.isNaN(parsed.getTime())) {
     return dateTimeCandidate.replace('T', ' ').replace('Z', '');
   }
 
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.getDate()).padStart(2, '0');
-  const hours = String(parsed.getHours()).padStart(2, '0');
-  const minutes = String(parsed.getMinutes()).padStart(2, '0');
-
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
+  return parsed.toLocaleString();
 };
 
 interface TechnicalFailuresHistoryProps {
@@ -191,22 +190,19 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     const horaFallo = failure.hora ?? failure.horaFallo;
 
     if (failure.fecha && horaFallo) {
-      const timestamp = new Date(`${failure.fecha}T${horaFallo}`).getTime();
-      if (!Number.isNaN(timestamp)) return timestamp;
+      const timestamp = getLocalDateTimestamp(`${failure.fecha} ${horaFallo}`);
+      if (timestamp !== null) return timestamp;
     }
 
     if (failure.fecha) {
-      const timestamp = new Date(failure.fecha).getTime();
-      if (!Number.isNaN(timestamp)) return timestamp;
+      const timestamp = getLocalDateTimestamp(failure.fecha);
+      if (timestamp !== null) return timestamp;
     }
 
     const dateTimeCandidate = failure.fechaHoraFallo;
     if (dateTimeCandidate) {
-      const normalized = dateTimeCandidate.includes('T')
-        ? dateTimeCandidate
-        : dateTimeCandidate.replace(' ', 'T');
-      const timestamp = new Date(normalized).getTime();
-      if (!Number.isNaN(timestamp)) return timestamp;
+      const timestamp = getLocalDateTimestamp(dateTimeCandidate);
+      if (timestamp !== null) return timestamp;
     }
 
     return 0;
