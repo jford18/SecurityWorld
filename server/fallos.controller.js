@@ -553,12 +553,12 @@ const fetchFalloById = async (client, id) => {
         ft.estado,
         ft.fecha_creacion,
         ft.fecha_actualizacion,
+        ft.responsable_verificacion_cierre_id,
         seguimiento.novedad_detectada,
         COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
         COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre,
         seguimiento.ultimo_usuario_edito_id,
         COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario) AS ultimo_usuario_edito_nombre,
-        seguimiento.responsable_verificacion_cierre_id,
         COALESCE(responsable_cierre.nombre_completo, responsable_cierre.nombre_usuario) AS responsable_verificacion_cierre_nombre,
         COALESCE(ft.reportado_al_cliente, FALSE) AS reportado_al_cliente
       FROM fallos_tecnicos ft
@@ -566,11 +566,21 @@ const fetchFalloById = async (client, id) => {
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
       LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
       LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
-      LEFT JOIN seguimiento_fallos seguimiento ON seguimiento.fallo_id = ft.id
+      LEFT JOIN LATERAL (
+        SELECT
+          sf.novedad_detectada,
+          sf.verificacion_apertura_id,
+          sf.verificacion_cierre_id,
+          sf.ultimo_usuario_edito_id
+        FROM seguimiento_fallos sf
+        WHERE sf.fallo_id = ft.id
+        ORDER BY sf.fecha_creacion DESC, sf.fecha_actualizacion DESC, sf.id DESC
+        LIMIT 1
+      ) seguimiento ON TRUE
       LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
       LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
       LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = seguimiento.ultimo_usuario_edito_id
-      LEFT JOIN usuarios responsable_cierre ON responsable_cierre.id = seguimiento.responsable_verificacion_cierre_id
+      LEFT JOIN usuarios responsable_cierre ON responsable_cierre.id = ft.responsable_verificacion_cierre_id
       WHERE ft.id = $1`,
     [id]
   );
@@ -580,6 +590,33 @@ const fetchFalloById = async (client, id) => {
   }
 
   return mapFalloRowToDto(result.rows[0]);
+};
+
+export const getFalloById = async (req, res) => {
+  const { id } = req.params;
+
+  if (!id) {
+    return res.status(400).json({ mensaje: "El identificador del fallo es obligatorio." });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    const fallo = await fetchFalloById(client, id);
+
+    if (!fallo) {
+      return res.status(404).json({ mensaje: "El fallo técnico no existe." });
+    }
+
+    return res.json(fallo);
+  } catch (error) {
+    console.error("Error al obtener el detalle del fallo técnico:", error);
+    return res.status(500).json({
+      mensaje: "Ocurrió un error al obtener el detalle del fallo.",
+    });
+  } finally {
+    client.release();
+  }
 };
 
 export const getFallos = async (req, res) => {
@@ -733,11 +770,14 @@ export const getFallos = async (req, res) => {
         seguimiento_ultimo.novedad_detectada,
         seguimiento_ultimo.ultimo_usuario_edito_id,
         seguimiento_ultimo.ultimo_usuario_edito_nombre,
+        ft.responsable_verificacion_cierre_id,
+        COALESCE(responsable_cierre.nombre_completo, responsable_cierre.nombre_usuario) AS responsable_verificacion_cierre_nombre,
         dept.nombre AS departamento_responsable,
         ft.fecha_creacion,
         ft.fecha_actualizacion
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
+      LEFT JOIN usuarios responsable_cierre ON responsable_cierre.id = ft.responsable_verificacion_cierre_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
       LEFT JOIN consolas consola ON consola.id = ft.consola_id
       LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
@@ -1321,10 +1361,17 @@ export const cerrarFalloTecnico = async (req, res) => {
           SET fecha_resolucion = $1,
               hora_resolucion = $2,
               departamento_id = $3,
+              responsable_verificacion_cierre_id = $4,
               fecha_actualizacion = NOW()
-        WHERE id = $4
+        WHERE id = $5
           AND (estado IS NULL OR estado <> 'CERRADO')`,
-      [fechaResolucion, horaResolucion, departamentoIdValue, id]
+      [
+        fechaResolucion,
+        horaResolucion,
+        departamentoIdValue,
+        toNullableUserId(responsableVerificacionCierreIdRaw),
+        id,
+      ]
     );
 
     if (!updateResult.rowCount) {
@@ -2018,8 +2065,9 @@ export const actualizarFalloSupervisor = async (req, res) => {
              ip_speaker_id = $7,
              alarm_input_id = $8,
              reportado_al_cliente = $9,
+             responsable_verificacion_cierre_id = $10,
              fecha_actualizacion = NOW()
-       WHERE id = $10`,
+       WHERE id = $11`,
       [
         fechaFalloValue,
         horaFalloValue,
@@ -2032,6 +2080,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
         reportadoClientePayload.provided
           ? reportadoClientePayload.value
           : normalizeReportadoClienteStoredValue(existingFallo.reportado_al_cliente),
+        responsableVerificacionCierreId,
         id,
       ]
     );

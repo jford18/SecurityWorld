@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getFallos,
+  getFalloById,
   createFallo,
   actualizarFalloSupervisor,
   getDuracionFallo,
@@ -18,6 +19,7 @@ router.post("/", createFallo);
 router.get("/:id/duracion", getDuracionFallo);
 router.get("/:id/historial", getHistorialFallo);
 router.get("/:id/historial-departamentos", getHistorialDepartamentosFallo);
+router.get("/:id", getFalloById);
 router.patch("/:id/guardar-cambios", guardarCambiosFallo);
 router.post("/:id/cerrar", cerrarFalloTecnico);
 router.put("/:id", actualizarFalloSupervisor);

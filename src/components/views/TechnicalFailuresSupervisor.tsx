@@ -720,12 +720,7 @@ const EditFailureModal: React.FC<{
               readOnly
               disabled
               className="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 px-3 py-2 text-gray-700"
-              value={
-                editData.responsable_verificacion_cierre_nombre &&
-                editData.responsable_verificacion_cierre_nombre.trim()
-                  ? editData.responsable_verificacion_cierre_nombre
-                  : 'Sin información'
-              }
+              value={editData.responsable_verificacion_cierre_nombre || 'Sin información'}
             />
           </div>
         </div>
