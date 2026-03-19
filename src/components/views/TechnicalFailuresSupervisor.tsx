@@ -787,32 +787,35 @@ const EditFailureModal: React.FC<{
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {departmentTimeline.map((entry, index) => (
-                        <tr key={`${entry.departamento_id}-${entry.fecha_inicio}-${index}`}>
-                          <td className="px-3 py-2 text-gray-700">
-                            {entry.departamento_nombre || 'Sin información'}
-                          </td>
-                          <td className="px-3 py-2 text-gray-700">
-                            {formatFechaHoraDisplay(entry.fecha_inicio || undefined) || '—'}
-                          </td>
-                          <td className="px-3 py-2 text-gray-700">
-                            {formatFechaHoraDisplay(
-                              entry.fecha_fin || entry.fecha_hasta || undefined,
-                            ) || '—'}
-                          </td>
-                          <td className="px-3 py-2 text-gray-700">
-                            {formatDurationFromSeconds(entry.duracion_seg)}
-                          </td>
-                          <td className="px-3 py-2 text-gray-700">
-                            {entry.novedad_detectada || '—'}
-                          </td>
-                          <td className="px-3 py-2 text-gray-700">
-                            {entry.ultimo_usuario_edito_nombre ??
-                              entry.ultimo_usuario_edito_id ??
-                              '—'}
-                          </td>
-                        </tr>
-                      ))}
+                      {departmentTimeline.map((entry, index) => {
+                        const fechaInicio = parseDbTimestampToLocal(entry.fecha_inicio);
+                        const fechaHasta = parseDbTimestampToLocal(
+                          entry.fecha_fin || entry.fecha_hasta || undefined,
+                        );
+                        const fechaInicioStr = fechaInicio ? fechaInicio.toLocaleString() : '—';
+                        const fechaHastaStr = fechaHasta ? fechaHasta.toLocaleString() : '—';
+
+                        return (
+                          <tr key={`${entry.departamento_id}-${entry.fecha_inicio}-${index}`}>
+                            <td className="px-3 py-2 text-gray-700">
+                              {entry.departamento_nombre || 'Sin información'}
+                            </td>
+                            <td className="px-3 py-2 text-gray-700">{fechaInicioStr}</td>
+                            <td className="px-3 py-2 text-gray-700">{fechaHastaStr}</td>
+                            <td className="px-3 py-2 text-gray-700">
+                              {formatDurationFromSeconds(entry.duracion_seg)}
+                            </td>
+                            <td className="px-3 py-2 text-gray-700">
+                              {entry.novedad_detectada || '—'}
+                            </td>
+                            <td className="px-3 py-2 text-gray-700">
+                              {entry.ultimo_usuario_edito_nombre ??
+                                entry.ultimo_usuario_edito_id ??
+                                '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
