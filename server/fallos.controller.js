@@ -1309,14 +1309,17 @@ export const guardarCambiosFallo = async (req, res) => {
 export const cerrarFalloTecnico = async (req, res) => {
   const { id } = req.params;
   const body = req.body || {};
+
+  console.log("[CIERRE BODY]", req.body);
+
   const {
     fecha_resolucion: fechaResolucion,
     hora_resolucion: horaResolucion,
     departamento_id: departamentoResponsableId,
   } = body;
-  const responsableVerificacionCierreIdRaw =
-    body.responsable_verificacion_cierre_id ??
-    body.responsableVerificacionCierreId ??
+  const responsable_verificacion_cierre_id =
+    body.responsable_verificacion_cierre_id ||
+    body.responsableVerificacionCierreId ||
     null;
 
   console.log("[cerrarFalloTecnico] BODY COMPLETO:", body);
@@ -1387,7 +1390,7 @@ export const cerrarFalloTecnico = async (req, res) => {
 
     const usuarioCierreId = getAuthenticatedUserId(req);
     const responsableVerificacionCierreId = toNullableUserId(
-      responsableVerificacionCierreIdRaw
+      responsable_verificacion_cierre_id
     );
 
     console.log(
@@ -1396,13 +1399,13 @@ export const cerrarFalloTecnico = async (req, res) => {
     );
 
     if (!responsableVerificacionCierreId) {
-      console.warn("No se envió responsable_verificacion_cierre_id");
+      console.warn("⚠️ verificacion_cierre_id viene NULL");
     }
 
     console.log("[cerrarFalloTecnico] usuarioCierreId:", usuarioCierreId);
     console.log(
-      "[cerrarFalloTecnico] responsableVerificacionCierreIdRaw:",
-      responsableVerificacionCierreIdRaw
+      "[cerrarFalloTecnico] responsable_verificacion_cierre_id raw:",
+      responsable_verificacion_cierre_id
     );
     console.log(
       "[cerrarFalloTecnico] responsableVerificacionCierreId (normalizado):",
@@ -1426,17 +1429,28 @@ export const cerrarFalloTecnico = async (req, res) => {
       });
     }
 
-    await insertSeguimientoPersistido(client, {
-      falloId: id,
-      departamentoId:
-        departamentoIdValue ??
+    const seguimientoCierreValues = [
+      id,
+      departamentoIdValue ??
         seguimientoAbierto?.departamento_id ??
         DEPARTAMENTO_MONITOREO_ID,
-      paso: PASO_SEGUIMIENTO.CIERRE,
-      fechaInicio: fechaCierreSeguimiento,
-      fechaHasta: fechaCierreSeguimiento,
-      usuarioId: usuarioCierreId,
-      verificacionCierreId: responsableVerificacionCierreId,
+      fechaCierreSeguimiento,
+      fechaCierreSeguimiento,
+      PASO_SEGUIMIENTO.CIERRE,
+      responsableVerificacionCierreId,
+      usuarioCierreId,
+    ];
+
+    console.log("[INSERT CIERRE]", seguimientoCierreValues);
+
+    await insertSeguimientoPersistido(client, {
+      falloId: seguimientoCierreValues[0],
+      departamentoId: seguimientoCierreValues[1],
+      fechaInicio: seguimientoCierreValues[2],
+      fechaHasta: seguimientoCierreValues[3],
+      paso: seguimientoCierreValues[4],
+      verificacionCierreId: seguimientoCierreValues[5],
+      usuarioId: seguimientoCierreValues[6],
       responsableVerificacionCierreId,
       verificacionSupervisorId: usuarioCierreId,
     });
