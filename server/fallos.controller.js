@@ -553,7 +553,7 @@ const fetchFalloById = async (client, id) => {
         ft.estado,
         ft.fecha_creacion,
         ft.fecha_actualizacion,
-        ft.responsable_verificacion_cierre_id,
+        ft.verificacion_cierre_id AS responsable_verificacion_cierre_id,
         seguimiento.novedad_detectada,
         COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
         COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre,
@@ -580,7 +580,7 @@ const fetchFalloById = async (client, id) => {
       LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
       LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
       LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = seguimiento.ultimo_usuario_edito_id
-      LEFT JOIN usuarios responsable_cierre ON responsable_cierre.id = ft.responsable_verificacion_cierre_id
+      LEFT JOIN usuarios responsable_cierre ON responsable_cierre.id = ft.verificacion_cierre_id
       WHERE ft.id = $1`,
     [id]
   );
@@ -770,14 +770,14 @@ export const getFallos = async (req, res) => {
         seguimiento_ultimo.novedad_detectada,
         seguimiento_ultimo.ultimo_usuario_edito_id,
         seguimiento_ultimo.ultimo_usuario_edito_nombre,
-        ft.responsable_verificacion_cierre_id,
+        ft.verificacion_cierre_id AS responsable_verificacion_cierre_id,
         COALESCE(responsable_cierre.nombre_completo, responsable_cierre.nombre_usuario) AS responsable_verificacion_cierre_nombre,
         dept.nombre AS departamento_responsable,
         ft.fecha_creacion,
         ft.fecha_actualizacion
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
-      LEFT JOIN usuarios responsable_cierre ON responsable_cierre.id = ft.responsable_verificacion_cierre_id
+      LEFT JOIN usuarios responsable_cierre ON responsable_cierre.id = ft.verificacion_cierre_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
       LEFT JOIN consolas consola ON consola.id = ft.consola_id
       LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
@@ -1361,7 +1361,7 @@ export const cerrarFalloTecnico = async (req, res) => {
           SET fecha_resolucion = $1,
               hora_resolucion = $2,
               departamento_id = $3,
-              responsable_verificacion_cierre_id = $4,
+              verificacion_cierre_id = $4,
               fecha_actualizacion = NOW()
         WHERE id = $5
           AND (estado IS NULL OR estado <> 'CERRADO')`,
@@ -2065,7 +2065,7 @@ export const actualizarFalloSupervisor = async (req, res) => {
              ip_speaker_id = $7,
              alarm_input_id = $8,
              reportado_al_cliente = $9,
-             responsable_verificacion_cierre_id = $10,
+             verificacion_cierre_id = $10,
              fecha_actualizacion = NOW()
        WHERE id = $11`,
       [
