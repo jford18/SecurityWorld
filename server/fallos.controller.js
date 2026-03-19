@@ -1370,17 +1370,10 @@ export const cerrarFalloTecnico = async (req, res) => {
           SET fecha_resolucion = $1,
               hora_resolucion = $2,
               departamento_id = $3,
-              verificacion_cierre_id = $4,
               fecha_actualizacion = NOW()
-        WHERE id = $5
+        WHERE id = $4
           AND (estado IS NULL OR estado <> 'CERRADO')`,
-      [
-        fechaResolucion,
-        horaResolucion,
-        departamentoIdValue,
-        toNullableUserId(responsableVerificacionCierreIdRaw),
-        id,
-      ]
+      [fechaResolucion, horaResolucion, departamentoIdValue, id]
     );
 
     if (!updateResult.rowCount) {
@@ -1430,7 +1423,7 @@ export const cerrarFalloTecnico = async (req, res) => {
       fechaInicio: fechaCierreSeguimiento,
       fechaHasta: fechaCierreSeguimiento,
       usuarioId: usuarioCierreId,
-      verificacionCierreId: usuarioCierreId,
+      verificacionCierreId: responsableVerificacionCierreId,
       responsableVerificacionCierreId,
       verificacionSupervisorId: usuarioCierreId,
     });
@@ -1441,7 +1434,7 @@ export const cerrarFalloTecnico = async (req, res) => {
       "[cerrarFalloTecnico] seguimiento_fallos insertado para fallo_id:",
       id,
       "con verificacion_cierre_id:",
-      usuarioCierreId,
+      responsableVerificacionCierreId,
       "y responsable_verificacion_cierre_id:",
       responsableVerificacionCierreId
     );
@@ -2074,9 +2067,8 @@ export const actualizarFalloSupervisor = async (req, res) => {
              ip_speaker_id = $7,
              alarm_input_id = $8,
              reportado_al_cliente = $9,
-             verificacion_cierre_id = $10,
              fecha_actualizacion = NOW()
-       WHERE id = $11`,
+       WHERE id = $10`,
       [
         fechaFalloValue,
         horaFalloValue,
@@ -2089,7 +2081,6 @@ export const actualizarFalloSupervisor = async (req, res) => {
         reportadoClientePayload.provided
           ? reportadoClientePayload.value
           : normalizeReportadoClienteStoredValue(existingFallo.reportado_al_cliente),
-        responsableVerificacionCierreId,
         id,
       ]
     );
@@ -2112,25 +2103,45 @@ export const actualizarFalloSupervisor = async (req, res) => {
     const seguimientoAbierto = await getSeguimientoAbierto(client, id);
 
     if (seguimientoAbierto?.id) {
+      const seguimientoAbiertoParams = [
+        verificacionAperturaId || null,
+        novedadDetectada || null,
+        usuarioAutenticadoId,
+        usuarioAutenticadoId,
+        seguimientoAbierto.id,
+      ];
+
+      const seguimientoAbiertoUpdate = fechaResolucionValue && horaResolucionValue
+        ? `UPDATE seguimiento_fallos
+             SET verificacion_apertura_id = COALESCE($1, verificacion_apertura_id),
+                 novedad_detectada = $2,
+                 ultimo_usuario_edito_id = $3,
+                 verificacion_supervisor_id = COALESCE($4, verificacion_supervisor_id),
+                 fecha_actualizacion = NOW()
+           WHERE id = $5`
+        : `UPDATE seguimiento_fallos
+             SET verificacion_apertura_id = COALESCE($1, verificacion_apertura_id),
+                 verificacion_cierre_id = COALESCE($2, verificacion_cierre_id),
+                 novedad_detectada = $3,
+                 ultimo_usuario_edito_id = $4,
+                 responsable_verificacion_cierre_id = COALESCE($5, responsable_verificacion_cierre_id),
+                 verificacion_supervisor_id = COALESCE($6, verificacion_supervisor_id),
+                 fecha_actualizacion = NOW()
+           WHERE id = $7`;
+
       await client.query(
-        `UPDATE seguimiento_fallos
-           SET verificacion_apertura_id = COALESCE($1, verificacion_apertura_id),
-               verificacion_cierre_id = COALESCE($2, verificacion_cierre_id),
-               novedad_detectada = $3,
-               ultimo_usuario_edito_id = $4,
-               responsable_verificacion_cierre_id = COALESCE($5, responsable_verificacion_cierre_id),
-               verificacion_supervisor_id = COALESCE($6, verificacion_supervisor_id),
-               fecha_actualizacion = NOW()
-         WHERE id = $7`,
-        [
-          verificacionAperturaId || null,
-          verificacionCierreId || null,
-          novedadDetectada || null,
-          usuarioAutenticadoId,
-          responsableVerificacionCierreId,
-          usuarioAutenticadoId,
-          seguimientoAbierto.id,
-        ]
+        seguimientoAbiertoUpdate,
+        fechaResolucionValue && horaResolucionValue
+          ? seguimientoAbiertoParams
+          : [
+              verificacionAperturaId || null,
+              verificacionCierreId || null,
+              novedadDetectada || null,
+              usuarioAutenticadoId,
+              responsableVerificacionCierreId,
+              usuarioAutenticadoId,
+              seguimientoAbierto.id,
+            ]
       );
       console.log(
         "[actualizarFalloSupervisor] seguimiento abierto actualizado para fallo_id:",
@@ -2175,7 +2186,8 @@ export const actualizarFalloSupervisor = async (req, res) => {
         novedadDetectada: novedadDetectada || null,
         usuarioId: usuarioAutenticadoId,
         verificacionAperturaId: verificacionAperturaId || null,
-        verificacionCierreId: verificacionCierreId || usuarioAutenticadoId || null,
+        verificacionCierreId:
+          responsableVerificacionCierreId || verificacionCierreId || null,
         responsableVerificacionCierreId,
         verificacionSupervisorId: usuarioAutenticadoId,
       });
