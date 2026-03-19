@@ -12,11 +12,24 @@ import {
 
 const formatDate = (value) => {
   if (!value) return null;
+
+  if (typeof value === "string") {
+    const trimmedValue = value.trim();
+    const matchedDate = trimmedValue.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (matchedDate) {
+      return matchedDate[1];
+    }
+  }
+
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
     return null;
   }
-  return date.toISOString().split("T")[0];
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
 const formatTimestampForFilename = (date = new Date()) => {
@@ -308,6 +321,25 @@ const buildDateTime = (dateValue, timeValue) => {
   const parsed = new Date(candidate);
 
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const buildDateTimeString = (dateValue, timeValue) => {
+  const datePart = formatDate(dateValue);
+  if (!datePart) {
+    return null;
+  }
+
+  if (!timeValue) {
+    return datePart;
+  }
+
+  const timePart = String(timeValue).trim().replace("Z", "").split(".")[0].slice(0, 8);
+  if (!timePart) {
+    return datePart;
+  }
+
+  const normalizedTime = timePart.length === 5 ? `${timePart}:00` : timePart;
+  return `${datePart}T${normalizedTime}`;
 };
 
 const validateResolutionDateNotFuture = (fechaResolucion, horaResolucion) => {
@@ -2138,6 +2170,10 @@ export const getHistorialFallo = async (req, res) => {
       hora: fallo.hora || null,
       fecha_resolucion: formatDate(fallo.fecha_resolucion) || null,
       hora_resolucion: fallo.hora_resolucion || null,
+      fecha_resolucion_ts: buildDateTimeString(
+        fallo.fecha_resolucion,
+        fallo.hora_resolucion
+      ),
       fecha_creacion: formatDate(fallo.fecha_creacion) || null,
       estado: fallo.estado || null,
       duracionTexto: duration?.duracionTexto || null,

@@ -103,13 +103,19 @@ const formatFechaHoraDisplay = (
     return '';
   }
 
-  if (!candidate.includes('T')) {
-    return candidate;
+  const normalizedCandidate = candidate.trim().replace('Z', '');
+  const matchedLocalDateTime = normalizedCandidate.match(
+    /^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?)?$/,
+  );
+
+  if (matchedLocalDateTime) {
+    const [, datePart, timePart] = matchedLocalDateTime;
+    return timePart ? `${datePart} ${timePart}` : datePart;
   }
 
-  const parsed = new Date(candidate);
+  const parsed = new Date(normalizedCandidate);
   if (Number.isNaN(parsed.getTime())) {
-    return candidate.replace('T', ' ').replace('Z', '');
+    return normalizedCandidate.replace('T', ' ');
   }
 
   const year = parsed.getFullYear();
@@ -753,7 +759,7 @@ const EditFailureModal: React.FC<{
               <div>
                 <span className="font-semibold">Fecha/Hora de resolución: </span>
                 {formatFechaHoraDisplay(
-                  history.fecha_resolucion ?? undefined,
+                  history.fecha_resolucion_ts ?? history.fecha_resolucion ?? undefined,
                   history.fecha_resolucion || editData.fechaResolucion,
                   history.hora_resolucion || editData.horaResolucion,
                 ) || 'Sin información'}
