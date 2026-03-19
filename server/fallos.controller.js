@@ -323,25 +323,6 @@ const buildDateTime = (dateValue, timeValue) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-const buildDateTimeString = (dateValue, timeValue) => {
-  const datePart = formatDate(dateValue);
-  if (!datePart) {
-    return null;
-  }
-
-  if (!timeValue) {
-    return datePart;
-  }
-
-  const timePart = String(timeValue).trim().replace("Z", "").split(".")[0].slice(0, 8);
-  if (!timePart) {
-    return datePart;
-  }
-
-  const normalizedTime = timePart.length === 5 ? `${timePart}:00` : timePart;
-  return `${datePart}T${normalizedTime}`;
-};
-
 const validateResolutionDateNotFuture = (fechaResolucion, horaResolucion) => {
   if (!fechaResolucion || !horaResolucion) {
     return null;
@@ -2121,6 +2102,18 @@ export const getHistorialFallo = async (req, res) => {
          ft.hora,
          ft.fecha_resolucion,
          ft.hora_resolucion,
+         CASE
+           WHEN ft.fecha_resolucion IS NOT NULL AND ft.hora_resolucion IS NOT NULL THEN
+             MAKE_TIMESTAMP(
+               EXTRACT(YEAR FROM ft.fecha_resolucion)::INTEGER,
+               EXTRACT(MONTH FROM ft.fecha_resolucion)::INTEGER,
+               EXTRACT(DAY FROM ft.fecha_resolucion)::INTEGER,
+               EXTRACT(HOUR FROM ft.hora_resolucion)::INTEGER,
+               EXTRACT(MINUTE FROM ft.hora_resolucion)::INTEGER,
+               EXTRACT(SECOND FROM ft.hora_resolucion)
+             )
+           ELSE NULL
+         END AS fecha_resolucion_ts,
          ft.estado,
          ft.fecha_creacion,
          dept.nombre AS departamento
@@ -2170,10 +2163,7 @@ export const getHistorialFallo = async (req, res) => {
       hora: fallo.hora || null,
       fecha_resolucion: formatDate(fallo.fecha_resolucion) || null,
       hora_resolucion: fallo.hora_resolucion || null,
-      fecha_resolucion_ts: buildDateTimeString(
-        fallo.fecha_resolucion,
-        fallo.hora_resolucion
-      ),
+      fecha_resolucion_ts: fallo.fecha_resolucion_ts,
       fecha_creacion: formatDate(fallo.fecha_creacion) || null,
       estado: fallo.estado || null,
       duracionTexto: duration?.duracionTexto || null,
