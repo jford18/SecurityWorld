@@ -553,10 +553,10 @@ const fetchFalloById = async (client, id) => {
         ft.estado,
         ft.fecha_creacion,
         ft.fecha_actualizacion,
-        ft.verificacion_cierre_id AS responsable_verificacion_cierre_id,
+        cierre.verificacion_cierre_id AS responsable_verificacion_cierre_id,
         seguimiento.novedad_detectada,
         COALESCE(apertura.nombre_completo, apertura.nombre_usuario) AS verificacion_apertura,
-        COALESCE(cierre.nombre_completo, cierre.nombre_usuario) AS verificacion_cierre,
+        COALESCE(cierre_usuario.nombre_completo, cierre_usuario.nombre_usuario) AS verificacion_cierre,
         seguimiento.ultimo_usuario_edito_id,
         COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario) AS ultimo_usuario_edito_nombre,
         COALESCE(responsable_cierre.nombre_completo, responsable_cierre.nombre_usuario) AS responsable_verificacion_cierre_nombre,
@@ -578,9 +578,17 @@ const fetchFalloById = async (client, id) => {
         LIMIT 1
       ) seguimiento ON TRUE
       LEFT JOIN usuarios apertura ON apertura.id = seguimiento.verificacion_apertura_id
-      LEFT JOIN usuarios cierre ON cierre.id = seguimiento.verificacion_cierre_id
+      LEFT JOIN usuarios cierre_usuario ON cierre_usuario.id = seguimiento.verificacion_cierre_id
       LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = seguimiento.ultimo_usuario_edito_id
-      LEFT JOIN usuarios responsable_cierre ON responsable_cierre.id = ft.verificacion_cierre_id
+      LEFT JOIN (
+        SELECT DISTINCT ON (sf.fallo_id)
+          sf.fallo_id,
+          sf.verificacion_cierre_id
+        FROM seguimiento_fallos sf
+        WHERE sf.paso = 'CIERRE'
+        ORDER BY sf.fallo_id, sf.fecha_creacion DESC
+      ) cierre ON cierre.fallo_id = ft.id
+      LEFT JOIN usuarios responsable_cierre ON responsable_cierre.id = cierre.verificacion_cierre_id
       WHERE ft.id = $1`,
     [id]
   );
@@ -770,14 +778,22 @@ export const getFallos = async (req, res) => {
         seguimiento_ultimo.novedad_detectada,
         seguimiento_ultimo.ultimo_usuario_edito_id,
         seguimiento_ultimo.ultimo_usuario_edito_nombre,
-        ft.verificacion_cierre_id AS responsable_verificacion_cierre_id,
+        cierre.verificacion_cierre_id AS responsable_verificacion_cierre_id,
         COALESCE(responsable_cierre.nombre_completo, responsable_cierre.nombre_usuario) AS responsable_verificacion_cierre_nombre,
         dept.nombre AS departamento_responsable,
         ft.fecha_creacion,
         ft.fecha_actualizacion
       FROM fallos_tecnicos ft
       LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
-      LEFT JOIN usuarios responsable_cierre ON responsable_cierre.id = ft.verificacion_cierre_id
+      LEFT JOIN (
+        SELECT DISTINCT ON (sf.fallo_id)
+          sf.fallo_id,
+          sf.verificacion_cierre_id
+        FROM seguimiento_fallos sf
+        WHERE sf.paso = 'CIERRE'
+        ORDER BY sf.fallo_id, sf.fecha_creacion DESC
+      ) cierre ON cierre.fallo_id = ft.id
+      LEFT JOIN usuarios responsable_cierre ON responsable_cierre.id = cierre.verificacion_cierre_id
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
       LEFT JOIN consolas consola ON consola.id = ft.consola_id
       LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
