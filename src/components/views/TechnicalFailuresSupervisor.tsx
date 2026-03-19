@@ -787,7 +787,9 @@ const EditFailureModal: React.FC<{
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {departmentTimeline.map((entry, index) => {
+                      {departmentTimeline
+                        .filter((entry) => entry.paso?.toUpperCase() !== 'CIERRE')
+                        .map((entry, index) => {
                         const fechaInicio = parseDbTimestampToLocal(entry.fecha_inicio);
                         const fechaHasta = parseDbTimestampToLocal(
                           entry.fecha_fin || entry.fecha_hasta || undefined,
