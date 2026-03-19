@@ -1317,10 +1317,6 @@ export const cerrarFalloTecnico = async (req, res) => {
     hora_resolucion: horaResolucion,
     departamento_id: departamentoResponsableId,
   } = body;
-  const responsable_verificacion_cierre_id =
-    body.responsable_verificacion_cierre_id ||
-    body.responsableVerificacionCierreId ||
-    null;
 
   console.log("[cerrarFalloTecnico] BODY COMPLETO:", body);
 
@@ -1389,26 +1385,11 @@ export const cerrarFalloTecnico = async (req, res) => {
     }
 
     const usuarioCierreId = getAuthenticatedUserId(req);
-    const responsableVerificacionCierreId = toNullableUserId(
-      responsable_verificacion_cierre_id
-    );
+    const responsableVerificacionCierreId = usuarioCierreId;
 
+    console.log("[CIERRE] usuarioCierreId:", usuarioCierreId);
     console.log(
-      "[CIERRE] responsable_verificacion_cierre_id:",
-      responsableVerificacionCierreId
-    );
-
-    if (!responsableVerificacionCierreId) {
-      console.warn("⚠️ verificacion_cierre_id viene NULL");
-    }
-
-    console.log("[cerrarFalloTecnico] usuarioCierreId:", usuarioCierreId);
-    console.log(
-      "[cerrarFalloTecnico] responsable_verificacion_cierre_id raw:",
-      responsable_verificacion_cierre_id
-    );
-    console.log(
-      "[cerrarFalloTecnico] responsableVerificacionCierreId (normalizado):",
+      "[cerrarFalloTecnico] responsableVerificacionCierreId:",
       responsableVerificacionCierreId
     );
 
