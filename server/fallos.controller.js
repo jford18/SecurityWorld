@@ -1308,14 +1308,18 @@ export const guardarCambiosFallo = async (req, res) => {
 
 export const cerrarFalloTecnico = async (req, res) => {
   const { id } = req.params;
+  const body = req.body || {};
   const {
     fecha_resolucion: fechaResolucion,
     hora_resolucion: horaResolucion,
     departamento_id: departamentoResponsableId,
-    responsable_verificacion_cierre_id: responsableVerificacionCierreIdRaw,
-  } = req.body || {};
+  } = body;
+  const responsableVerificacionCierreIdRaw =
+    body.responsable_verificacion_cierre_id ??
+    body.responsableVerificacionCierreId ??
+    null;
 
-  console.log("[cerrarFalloTecnico] BODY COMPLETO:", req.body);
+  console.log("[cerrarFalloTecnico] BODY COMPLETO:", body);
 
   if (!id) {
     return res
@@ -1385,6 +1389,15 @@ export const cerrarFalloTecnico = async (req, res) => {
     const responsableVerificacionCierreId = toNullableUserId(
       responsableVerificacionCierreIdRaw
     );
+
+    console.log(
+      "[CIERRE] responsable_verificacion_cierre_id:",
+      responsableVerificacionCierreId
+    );
+
+    if (!responsableVerificacionCierreId) {
+      console.warn("No se envió responsable_verificacion_cierre_id");
+    }
 
     console.log("[cerrarFalloTecnico] usuarioCierreId:", usuarioCierreId);
     console.log(
