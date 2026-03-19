@@ -53,6 +53,7 @@ export interface FailureHistory {
   hora: string | null;
   fecha_resolucion: string | null;
   hora_resolucion: string | null;
+  fecha_resolucion_ts?: string | null;
   fecha_creacion: string | null;
   estado: string | null;
   duracionTexto: string | null;
