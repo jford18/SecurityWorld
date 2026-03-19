@@ -76,6 +76,30 @@ export const formatLocalDateTime = (value?: string | Date | null): string => {
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 };
 
+export const getLocalDateTimestamp = (value?: string | Date | null): number | null => {
+  const parsed = parseDbTimestampToLocal(value);
+  if (!parsed) return null;
+
+  const timestamp = parsed.getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+};
+
+export const formatLocalDateTimeLocale = (
+  value?: string | Date | null,
+  locales?: Intl.LocalesArgument,
+  options?: Intl.DateTimeFormatOptions,
+): string => {
+  const parsed = parseDbTimestampToLocal(value);
+  if (!parsed) {
+    if (typeof value === 'string') {
+      return value.replace('T', ' ').replace('Z', '');
+    }
+    return '';
+  }
+
+  return parsed.toLocaleString(locales, options);
+};
+
 export const formatGridYYYYMMDDHHmm = (value?: string | Date | null): string => {
   if (!value) return '';
   const parsed = parseDbTimestampToLocal(value);

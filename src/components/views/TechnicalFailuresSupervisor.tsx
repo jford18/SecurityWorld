@@ -25,6 +25,7 @@ import TechnicalFailuresHistory from './TechnicalFailuresHistory';
 import { calcularEstado } from './TechnicalFailuresUtils';
 import { FailureDepartmentTimelineEntry, FailureHistory } from '../../types';
 import FallosFiltersHeader, { FallosHeaderFilters } from './FallosFiltersHeader';
+import { formatLocalDateTimeLocale, parseDbTimestampToLocal } from '../../utils/datetime';
 
 const emptyCatalogos: TechnicalFailureCatalogs = {
   departamentos: [],
@@ -109,21 +110,16 @@ const formatFechaHoraDisplay = (
   );
 
   if (matchedLocalDateTime) {
+    const parsedLocal = parseDbTimestampToLocal(normalizedCandidate);
+    if (parsedLocal) {
+      return parsedLocal.toLocaleString();
+    }
+
     const [, datePart, timePart] = matchedLocalDateTime;
     return timePart ? `${datePart} ${timePart}` : datePart;
   }
 
-  const parsed = new Date(normalizedCandidate);
-  if (Number.isNaN(parsed.getTime())) {
-    return normalizedCandidate.replace('T', ' ');
-  }
-
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.getDate()).padStart(2, '0');
-  const hours = String(parsed.getHours()).padStart(2, '0');
-  const minutes = String(parsed.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
+  return formatLocalDateTimeLocale(normalizedCandidate);
 };
 
 const formatDurationFromSeconds = (duration?: number | null) => {
@@ -800,7 +796,9 @@ const EditFailureModal: React.FC<{
                             {formatFechaHoraDisplay(entry.fecha_inicio || undefined) || '—'}
                           </td>
                           <td className="px-3 py-2 text-gray-700">
-                            {formatFechaHoraDisplay(entry.fecha_fin || undefined) || '—'}
+                            {formatFechaHoraDisplay(
+                              entry.fecha_fin || entry.fecha_hasta || undefined,
+                            ) || '—'}
                           </td>
                           <td className="px-3 py-2 text-gray-700">
                             {formatDurationFromSeconds(entry.duracion_seg)}
