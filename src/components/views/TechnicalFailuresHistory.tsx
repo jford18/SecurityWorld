@@ -14,103 +14,34 @@ type ExportColumn = {
   GET?: (record: ExportRecord) => string;
 };
 
-const getExportRecordValue = (record: ExportRecord, keys: string[]) => {
-  for (const key of keys) {
-    const value = record[key];
-    if (value === null || value === undefined) continue;
-    const text = String(value).trim();
-    if (text) return text;
-  }
-  return '';
-};
-
 const EXPORT_COLUMNS: ExportColumn[] = [
-  { HEADER: 'ID FALLO', KEY: 'id_fallo' },
-  { HEADER: 'N MODIFICACION', KEY: 'num_evento' },
-  { HEADER: 'FECHA Y HORA MODIFICACION', KEY: 'fecha_evento' },
-  { HEADER: 'DURACION ENTRE 2 MODIFICACIONES (SEG)', KEY: 'duracion_desde_ultima_modificacion_seg' },
-  { HEADER: 'DURACION TOTAL DEL FALLO (FECHA Y HORA RESOLUCION-FECHA Y HORA FALLO) (SEG)', KEY: 'duracion_total_fallo_seg' },
-  { HEADER: 'ID MODIFICACION', KEY: 'id_seguimiento' },
-  { HEADER: 'ID DE DEPARTAMENTO', KEY: 'departamento_id_evento' },
-  { HEADER: 'NOMBRE DEPARTAMENTO', KEY: 'departamento_nombre_evento' },
-  { HEADER: 'DETALLE NOVEDAD', KEY: 'novedad_detectada' },
-  { HEADER: 'ID USUARIOS QUE MODIFICARON', KEY: 'ultimo_usuario_edito_id' },
-  { HEADER: 'USUARIO DE PERSONA QUE MODIFICO', KEY: 'ultimo_usuario_edito_usuario' },
-  { HEADER: 'NOMBRE DE USUARIOS QUE EDITARON', KEY: 'ultimo_usuario_edito_nombre_completo' },
-  { HEADER: 'CODIGO USUARIO QUE CREO EL FALLO', KEY: 'verificacion_apertura_id' },
-  { HEADER: 'CODIGO USUARIO QUE CERRO EL FALLO', KEY: 'verificacion_cierre_id' },
-  { HEADER: 'CODIGO USUARIOS QUE MODIFICARON (INTERMEDIOS)', KEY: 'responsable_verificacion_cierre_id' },
-  { HEADER: 'FECHA FALLO', KEY: 'fecha' },
-  { HEADER: 'TIPO PROBLEMA', KEY: 'descripcion_fallo' },
-  { HEADER: 'ID DEPARTAMENTO CON EL QUE SE CERRÓ EL FALLO (FINAL)', KEY: 'departamento_id_actual' },
-  { HEADER: 'NOMBRE DEPARTAMENTO CON EL QUE SE CERRÓ EL FALLO (FINAL)', KEY: 'departamento_nombre_actual' },
-  { HEADER: 'ID TIPO PROBLEMA', KEY: 'tipo_problema_id' },
-  { HEADER: 'ID CONSOLA', KEY: 'consola_id' },
-  { HEADER: 'FECHA SOLUCION', KEY: 'fecha_resolucion' },
-  { HEADER: 'HORA SOLUCION', KEY: 'hora_resolucion' },
-  { HEADER: 'ESTADO', KEY: 'estado' },
-  { HEADER: 'FECHA Y HORA DE CREACION', KEY: 'fecha_creacion' },
-  { HEADER: 'FECHA Y HORA DE CIERRE', KEY: 'fecha_actualizacion' },
-  { HEADER: 'HORA DE FALLO', KEY: 'hora' },
-  { HEADER: 'TIPO AFECTACION', KEY: 'tipo_afectacion' },
-  { HEADER: 'DURACION POR CADA MODIFICACION (H)', KEY: 'duracion_desde_ultima_modificacion_hhmmss' },
+  { HEADER: 'PERIODO', KEY: 'periodo' },
+  { HEADER: 'PASO', KEY: 'paso' },
+  { HEADER: 'FECHA/HORA FALLO', KEY: 'fecha_hora_fallo' },
+  { HEADER: 'INICIO MOVIMIENTO', KEY: 'fecha_inicio_movimiento' },
+  { HEADER: 'FIN MOVIMIENTO', KEY: 'fecha_fin_movimiento' },
+  { HEADER: 'DURACION MOVIMIENTO (SEG)', KEY: 'duracion_movimiento_seg' },
+  { HEADER: 'DURACION MOVIMIENTO (H)', KEY: 'duracion_movimiento_hhmmss' },
+  { HEADER: 'DURACION TOTAL FALLO (SEG)', KEY: 'duracion_total_fallo_seg' },
   { HEADER: 'DURACION TOTAL FALLO (H)', KEY: 'duracion_total_fallo_hhmmss' },
+  { HEADER: 'ESTADO', KEY: 'estado' },
+  { HEADER: 'DEPARTAMENTO', KEY: 'departamento' },
+  { HEADER: 'DETALLE NOVEDAD', KEY: 'detalle_novedad' },
+  { HEADER: 'USUARIO EDITO MOVIMIENTO', KEY: 'usuario_edito_movimiento' },
+  { HEADER: 'RESPONSABLE INICIAL', KEY: 'responsable_inicial' },
+  { HEADER: 'RESPONSABLE CIERRE', KEY: 'responsable_cierre' },
+  { HEADER: 'TIPO AFECTACION', KEY: 'tipo_afectacion' },
+  { HEADER: 'TIPO EQUIPO', KEY: 'tipo_equipo' },
+  { HEADER: 'NOMBRE EQUIPO', KEY: 'nombre_equipo' },
+  { HEADER: 'TIPO PROBLEMA', KEY: 'tipo_problema' },
+  { HEADER: 'SITIO', KEY: 'sitio' },
+  { HEADER: 'NOMBRE CONSOLA', KEY: 'nombre_consola' },
+  { HEADER: 'CLIENTE', KEY: 'cliente' },
+  { HEADER: 'HACIENDA', KEY: 'hacienda' },
+  { HEADER: 'NODO', KEY: 'nodo' },
   { HEADER: 'REPORTADO AL CLIENTE', KEY: 'reportado_al_cliente' },
-  { HEADER: 'SITIO', KEY: 'sitio_nombre' },
-  {
-    HEADER: 'TIPO EQUIPO AFECTADO',
-    KEY: 'tipo_equipo_afectado_nombre',
-  },
-  {
-    HEADER: 'NOMBRE DE EQUIPO AFECTADO',
-    KEY: 'nombre_equipo',
-    GET: (record) => {
-      const tipoEquipo = (
-        record?.tipo_equipo_afectado_nombre
-        ?? record?.tipo_equipo_afectado
-        ?? ''
-      ).toString().trim().toUpperCase();
-      const nombreEquipo = (record?.nombre_equipo ?? '').toString().trim();
-
-      const tiposPermitidos = new Set([
-        'CÁMARAS',
-        'ALARM INPUT',
-        'GRABADOR',
-        'MEGÁFONO IP',
-        'MEGAFONO IP',
-      ]);
-
-      if (!tiposPermitidos.has(tipoEquipo)) {
-        return '';
-      }
-
-      return nombreEquipo;
-    },
-  },
-  {
-    HEADER: 'NOMBRE CONSOLA',
-    GET: (record) => getExportRecordValue(record, ['NOMBRE CONSOLA', 'nombre_consola', 'consola_nombre']),
-  },
-  {
-    HEADER: 'CLIENTE',
-    GET: (record) => getExportRecordValue(record, ['CLIENTE', 'cliente', 'cliente_nombre']),
-  },
-  {
-    HEADER: 'HACIENDA',
-    GET: (record) => getExportRecordValue(record, ['HACIENDA', 'hacienda', 'hacienda_nombre']),
-  },
-  { HEADER: 'NOMBRE COMPLETO USUARIO QUE CREÓ EL FALLO', KEY: 'verificacion_apertura_nombre_completo' },
-  { HEADER: 'NOMBRE COMPLETO USUARIO QUE CERRÓ EL FALLO', KEY: 'nombre_co' },
-  { HEADER: 'NOMBRE COMPLETO USUARIOS QUE MODIFICARON EL FALLO MIENTRAS ESTUVO ACTIVO', KEY: 'ultimo_usuario_edito_nombre_completo' },
-  {
-    HEADER: 'NODO',
-    GET: (record) => getExportRecordValue(record, ['NOMBRE DE NODO', 'nodo', 'nodo_nombre']),
-  },
-  {
-    HEADER: 'TIPO_EQUIPO_AFECTADO_NOMBRE',
-    KEY: 'tipo_equipo_afectado_nombre',
-  },
 ];
+
 
 const formatFechaHoraFallo = (failure: TechnicalFailure) => {
   if (failure.fechaHoraFallo) {

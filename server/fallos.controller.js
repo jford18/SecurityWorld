@@ -1,4 +1,3 @@
-import XLSX from "xlsx";
 import { pool } from "./db.js";
 import { logSql } from "./utils/sqlLogger.js";
 import {
@@ -32,15 +31,6 @@ const formatDate = (value) => {
   return `${year}-${month}-${day}`;
 };
 
-const formatTimestampForFilename = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-
-  return `${year}${month}${day}_${hours}${minutes}`;
-};
 
 const formatDurationSeconds = (value) => {
   if (value === null || value === undefined) return "";
@@ -905,7 +895,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
     const sitio = sanitizeText(sitioRaw);
     const departamento = sanitizeText(departamentoRaw);
 
-    const filtros = [];
+    const filtros = ["AND B.PASO IS NOT NULL"];
     const params = [];
 
     if (consolaId) {
@@ -915,68 +905,59 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
 
     if (clienteId) {
       params.push(clienteId);
-      filtros.push(`AND sitio.cliente_id = $${params.length}`);
+      filtros.push(`AND H.CLIENTE_ID = $${params.length}`);
     }
 
     if (haciendaId) {
       params.push(haciendaId);
-      filtros.push(`AND sitio.hacienda_id = $${params.length}`);
+      filtros.push(`AND H.HACIENDA_ID = $${params.length}`);
     }
 
     if (reportadoClienteValues !== null) {
       params.push(reportadoClienteValues);
-      filtros.push(`AND ${reportadoBooleanSqlExpression('A')} = $${params.length}`);
+      filtros.push(`AND ${reportadoBooleanSqlExpression("A")} = $${params.length}`);
     }
-
-    const reportadoRawExpression = reportadoBooleanSqlExpression('A');
-    const reportadoRawSelect = `${reportadoRawExpression} AS reportado_cliente_raw`;
-    const reportadoSelect = `CASE
-        WHEN ${reportadoRawExpression} THEN 'SI'
-        ELSE 'NO'
-      END AS reportado_al_cliente`;
 
     if (fechaDesde) {
       params.push(fechaDesde);
-      filtros.push(`AND COALESCE(A.FECHA, A.FECHA_CREACION::date) >= $${params.length}`);
+      filtros.push(`AND A.FECHA >= $${params.length}`);
     }
 
     if (fechaHasta) {
       params.push(fechaHasta);
-      filtros.push(`AND COALESCE(A.FECHA, A.FECHA_CREACION::date) <= $${params.length}`);
+      filtros.push(`AND A.FECHA <= $${params.length}`);
     }
 
     if (problema) {
       params.push(`%${problema}%`);
-      filtros.push(
-        `AND (TP.DESCRIPCION ILIKE $${params.length} OR A.DESCRIPCION_FALLO ILIKE $${params.length})`
-      );
+      filtros.push(`AND A.DESCRIPCION_FALLO ILIKE $${params.length}`);
     }
 
     if (tipoAfectacion) {
-      params.push(String(tipoAfectacion).toLowerCase());
+      params.push(String(tipoAfectacion).trim().toLowerCase());
       filtros.push(`AND LOWER(
         CASE
-          WHEN A.TIPO_AFECTACION = 'EQUIPO' THEN
+          WHEN UPPER(COALESCE(A.TIPO_AFECTACION, '')) = 'EQUIPO' THEN
             CASE
               WHEN A.CAMERA_ID IS NOT NULL THEN 'EQUIPO-CÁMARA'
               WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN 'EQUIPO-GRABADOR'
-              WHEN A.IP_SPEAKER_ID IS NOT NULL THEN 'EQUIPO-IP SPEAKER'
+              WHEN A.IP_SPEAKER_ID IS NOT NULL THEN 'EQUIPO-MEGÁFONO'
               WHEN A.ALARM_INPUT_ID IS NOT NULL THEN 'EQUIPO-ALARM INPUT'
               ELSE 'EQUIPO'
             END
-          ELSE COALESCE(A.TIPO_AFECTACION, 'SIN INFORMACIÓN')
+          ELSE COALESCE(UPPER(A.TIPO_AFECTACION), 'SIN INFORMACIÓN')
         END
       ) = $${params.length}`);
     }
 
     if (sitio) {
       params.push(`%${sitio}%`);
-      filtros.push(`AND sitio.nombre ILIKE $${params.length}`);
+      filtros.push(`AND H.NOMBRE ILIKE $${params.length}`);
     }
 
     if (departamento) {
       params.push(`%${departamento}%`);
-      filtros.push(`AND dept_actual.nombre ILIKE $${params.length}`);
+      filtros.push(`AND P.NOMBRE ILIKE $${params.length}`);
     }
 
     if (normalizedEstado === "resuelto") {
@@ -991,214 +972,85 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       );
     }
 
-    const whereFilters = filtros.length > 0 ? `WHERE 1 = 1 ${filtros.join(" ")}` : "WHERE 1 = 1";
+    const whereFilters = `WHERE 1 = 1 ${filtros.join(" ")}`;
 
     const query = `
-      WITH MOVS AS (
-          SELECT
-              A.ID AS FALLO_ID,
-              A.FECHA_CREACION AS FECHA_EVENTO,
-              NULL::UUID AS SEGUIMIENTO_ID,
-              A.DEPARTAMENTO_ID AS DEPARTAMENTO_ID,
-              NULL::TEXT AS NOVEDAD_DETECTADA,
-              A.RESPONSABLE_ID AS ULTIMO_USUARIO_EDITO_ID,
-              NULL::INTEGER AS VERIFICACION_APERTURA_ID,
-              NULL::INTEGER AS VERIFICACION_CIERRE_ID,
-              NULL::INTEGER AS RESPONSABLE_VERIFICACION_CIERRE_ID,
-              NULL::INTEGER AS VERIFICACION_SUPERVISOR_ID,
-              NULL::INTEGER AS VERIFICACION_CIERRE_ID_USUARIO,
-              NULL::TIMESTAMP AS FECHA_ACTUALIZACION_SEGUIMIENTO
-          FROM FALLOS_TECNICOS A
-
-          UNION ALL
-
-          SELECT
-              B.FALLO_ID AS FALLO_ID,
-              B.FECHA_CREACION AS FECHA_EVENTO,
-              B.ID AS SEGUIMIENTO_ID,
-              B.DEPARTAMENTO_ID AS DEPARTAMENTO_ID,
-              B.NOVEDAD_DETECTADA AS NOVEDAD_DETECTADA,
-              B.ULTIMO_USUARIO_EDITO_ID AS ULTIMO_USUARIO_EDITO_ID,
-              B.VERIFICACION_APERTURA_ID AS VERIFICACION_APERTURA_ID,
-              B.VERIFICACION_CIERRE_ID AS VERIFICACION_CIERRE_ID,
-              B.RESPONSABLE_VERIFICACION_CIERRE_ID AS RESPONSABLE_VERIFICACION_CIERRE_ID,
-              B.VERIFICACION_SUPERVISOR_ID AS VERIFICACION_SUPERVISOR_ID,
-              B.VERIFICACION_CIERRE_ID AS VERIFICACION_CIERRE_ID_USUARIO,
-              B.FECHA_ACTUALIZACION AS FECHA_ACTUALIZACION_SEGUIMIENTO
-          FROM SEGUIMIENTO_FALLOS B
-      ),
-      BASE AS (
-          SELECT
-              A.ID AS ID_FALLO,
-              ROW_NUMBER() OVER (
-                  PARTITION BY A.ID
-                  ORDER BY B.FECHA_EVENTO, CASE WHEN B.SEGUIMIENTO_ID IS NULL THEN 0 ELSE 1 END
-              ) - 1 AS NUM_EVENTO,
-              B.FECHA_EVENTO AS FECHA_EVENTO,
-              EXTRACT(EPOCH FROM (
-                  B.FECHA_EVENTO - COALESCE(
-                      LAG(B.FECHA_EVENTO) OVER (
-                          PARTITION BY A.ID
-                          ORDER BY B.FECHA_EVENTO, CASE WHEN B.SEGUIMIENTO_ID IS NULL THEN 0 ELSE 1 END
-                      ),
-                      A.FECHA_CREACION
-                  )
-              ))::INT AS DURACION_DESDE_ULTIMA_MODIFICACION_SEG,
-              EXTRACT(EPOCH FROM (
-                  COALESCE(
-                      CASE
-                          WHEN A.FECHA_RESOLUCION IS NOT NULL AND A.HORA_RESOLUCION IS NOT NULL THEN (A.FECHA_RESOLUCION::TIMESTAMP + A.HORA_RESOLUCION)
-                          WHEN A.FECHA_RESOLUCION IS NOT NULL THEN (A.FECHA_RESOLUCION::TIMESTAMP)
-                          ELSE NOW()::TIMESTAMP
-                      END,
-                      NOW()::TIMESTAMP
-                  ) - (A.FECHA_CREACION::TIMESTAMP)
-              ))::INT AS DURACION_TOTAL_FALLO_SEG,
-
-              -- CAMPOS DEL EVENTO / SEGUIMIENTO
-              B.SEGUIMIENTO_ID AS ID_SEGUIMIENTO,
-              B.DEPARTAMENTO_ID AS DEPARTAMENTO_ID_EVENTO,
-              C.NOMBRE AS DEPARTAMENTO_NOMBRE_EVENTO,
-              B.NOVEDAD_DETECTADA AS NOVEDAD_DETECTADA,
-              B.ULTIMO_USUARIO_EDITO_ID AS ULTIMO_USUARIO_EDITO_ID,
-              D.NOMBRE_USUARIO AS ULTIMO_USUARIO_EDITO_USUARIO,
-              D.NOMBRE_COMPLETO AS ULTIMO_USUARIO_EDITO_NOMBRE_COMPLETO,
-              B.VERIFICACION_APERTURA_ID AS VERIFICACION_APERTURA_ID,
-              B.VERIFICACION_CIERRE_ID AS VERIFICACION_CIERRE_ID,
-              B.RESPONSABLE_VERIFICACION_CIERRE_ID AS RESPONSABLE_VERIFICACION_CIERRE_ID,
-              B.VERIFICACION_SUPERVISOR_ID AS VERIFICACION_SUPERVISOR_ID,
-              B.VERIFICACION_CIERRE_ID_USUARIO AS VERIFICACION_CIERRE_ID_USUARIO,
-              B.FECHA_ACTUALIZACION_SEGUIMIENTO AS FECHA_ACTUALIZACION_SEGUIMIENTO,
-
-              -- TODOS LOS CAMPOS DE FALLOS_TECNICOS (repetidos por fila)
-              A.FECHA,
-              A.EQUIPO_AFECTADO,
-              A.DESCRIPCION_FALLO,
-              A.RESPONSABLE_ID,
-              A.DEPARTAMENTO_ID AS DEPARTAMENTO_ID_ACTUAL,
-              dept_actual.NOMBRE AS DEPARTAMENTO_NOMBRE_ACTUAL,
-              A.TIPO_PROBLEMA_ID,
-              A.CONSOLA_ID,
-              A.FECHA_RESOLUCION,
-              A.HORA_RESOLUCION,
-              A.ESTADO,
-              A.FECHA_CREACION,
-              A.FECHA_ACTUALIZACION,
-              A.SITIO_ID,
-              A.HORA,
-              A.TIPO_AFECTACION,
-              A.CAMERA_ID,
-              A.ENCODING_DEVICE_ID,
-              A.IP_SPEAKER_ID,
-              A.ALARM_INPUT_ID,
-              ${reportadoRawSelect},
-              sitio.nombre AS sitio_nombre,
-              consola.nombre AS nombre_consola,
-              cliente.nombre AS cliente_nombre,
-              hacienda.nombre AS hacienda_nombre,
-              COALESCE(nodo.nombre, CASE
-                WHEN UPPER(A.TIPO_AFECTACION) = 'NODO' THEN NULLIF(TRIM(A.EQUIPO_AFECTADO), '')
-                ELSE NULL
-              END) AS nodo_nombre,
-              COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS nombre_co,
-              CASE
-                WHEN UPPER(A.TIPO_AFECTACION) = 'EQUIPO' THEN
-                  CASE
-                    WHEN A.CAMERA_ID IS NOT NULL THEN 'Cámaras'
-                    WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN 'Grabador'
-                    WHEN A.IP_SPEAKER_ID IS NOT NULL THEN 'Megáfono IP'
-                    WHEN A.ALARM_INPUT_ID IS NOT NULL THEN 'Alarm Input'
-                    ELSE NULLIF(
-                      TRIM(
-                        REGEXP_REPLACE(
-                          SPLIT_PART(A.EQUIPO_AFECTADO, ' en ', 1),
-                          '\\s*\\(.*\\)$',
-                          ''
-                        )
-                      ),
-                      ''
-                    )
-                  END
-                ELSE NULL
-              END AS tipo_equipo_afectado_nombre,
-              CASE
-                WHEN UPPER(A.TIPO_AFECTACION) = 'EQUIPO' THEN COALESCE(
-                  NULLIF(TRIM(
-                    CASE
-                      WHEN A.CAMERA_ID IS NOT NULL THEN (camera.camera_name || ' - ' || camera.ip_address)
-                      WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN encoding_device.name
-                      WHEN A.IP_SPEAKER_ID IS NOT NULL THEN ip_speaker.name
-                      WHEN A.ALARM_INPUT_ID IS NOT NULL THEN alarm_input.name
-                      ELSE NULL
-                    END
-                  ), ''),
-                  NULLIF(TRIM(A.EQUIPO_AFECTADO), ''),
-                  '-'
-                )
-                ELSE COALESCE(NULLIF(TRIM(A.EQUIPO_AFECTADO), ''), '-')
-              END AS nombre_equipo,
-              ${reportadoSelect}
-
-          FROM FALLOS_TECNICOS A
-          JOIN MOVS B ON (B.FALLO_ID = A.ID)
-          LEFT JOIN DEPARTAMENTOS_RESPONSABLES C ON (C.ID = B.DEPARTAMENTO_ID)
-          LEFT JOIN USUARIOS D ON (D.ID = B.ULTIMO_USUARIO_EDITO_ID)
-          LEFT JOIN USUARIOS responsable ON (responsable.ID = A.RESPONSABLE_ID)
-          LEFT JOIN DEPARTAMENTOS_RESPONSABLES dept_actual ON (dept_actual.ID = A.DEPARTAMENTO_ID)
-          LEFT JOIN CATALOGO_TIPO_PROBLEMA TP ON (TP.ID = A.TIPO_PROBLEMA_ID)
-          LEFT JOIN CONSOLAS consola ON (consola.ID = A.CONSOLA_ID)
-          LEFT JOIN SITIOS sitio ON (sitio.ID = A.SITIO_ID)
-          LEFT JOIN CLIENTES cliente ON (cliente.ID = sitio.CLIENTE_ID)
-          LEFT JOIN HACIENDA hacienda ON (hacienda.ID = sitio.HACIENDA_ID)
-          LEFT JOIN LATERAL (
-            SELECT n.nombre
-            FROM nodos_sitios ns
-            JOIN nodos n ON n.id = ns.nodo_id
-            WHERE ns.sitio_id = sitio.id
-            ORDER BY ns.fecha_asignacion DESC NULLS LAST, ns.nodo_id DESC
-            LIMIT 1
-          ) nodo ON TRUE
-          LEFT JOIN hik_camera_resource_status camera ON camera.id = A.camera_id
-          LEFT JOIN hik_encoding_device_status encoding_device ON encoding_device.id = A.encoding_device_id
-          LEFT JOIN hik_ip_speaker_status ip_speaker ON ip_speaker.id = A.ip_speaker_id
-          LEFT JOIN hik_alarm_input_status alarm_input ON alarm_input.id = A.alarm_input_id
-          ${whereFilters}
-      )
-      SELECT *
-      FROM BASE
-      ORDER BY ID_FALLO, NUM_EVENTO;
+      SELECT
+        TO_CHAR(A.FECHA, 'YYYYMMDD')::INT AS periodo,
+        B.PASO AS paso,
+        (A.FECHA::TIMESTAMP + COALESCE(A.HORA, '00:00:00'::TIME)) AS fecha_hora_fallo,
+        B.FECHA_INICIO AS fecha_inicio_movimiento,
+        COALESCE(B.FECHA_HASTA, NOW()) AS fecha_fin_movimiento,
+        EXTRACT(EPOCH FROM (COALESCE(B.FECHA_HASTA, NOW()) - B.FECHA_INICIO))::BIGINT AS duracion_movimiento_seg,
+        EXTRACT(EPOCH FROM (
+          COALESCE(
+            CASE
+              WHEN A.FECHA_RESOLUCION IS NOT NULL THEN A.FECHA_RESOLUCION::TIMESTAMP + COALESCE(A.HORA_RESOLUCION, '00:00:00'::TIME)
+              ELSE NULL
+            END,
+            NOW()
+          ) - (A.FECHA::TIMESTAMP + COALESCE(A.HORA, '00:00:00'::TIME))
+        ))::BIGINT AS duracion_total_fallo_seg,
+        COALESCE(A.ESTADO, 'SIN INFORMACIÓN') AS estado,
+        C.NOMBRE AS departamento,
+        B.NOVEDAD_DETECTADA AS detalle_novedad,
+        COALESCE(D.NOMBRE_COMPLETO, D.NOMBRE_USUARIO) AS usuario_edito_movimiento,
+        COALESCE(E.NOMBRE_COMPLETO, E.NOMBRE_USUARIO) AS responsable_inicial,
+        COALESCE(F.NOMBRE_COMPLETO, F.NOMBRE_USUARIO) AS responsable_cierre,
+        COALESCE(A.TIPO_AFECTACION, 'SIN INFORMACIÓN') AS tipo_afectacion,
+        CASE
+          WHEN A.CAMERA_ID IS NOT NULL THEN 'CAMARA'
+          WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN 'GRABADOR'
+          WHEN A.IP_SPEAKER_ID IS NOT NULL THEN 'MEGAFONO'
+          WHEN A.ALARM_INPUT_ID IS NOT NULL THEN 'ALARM INPUT'
+          ELSE 'OTRO'
+        END AS tipo_equipo,
+        COALESCE(K.CAMERA_NAME, L.NAME, M.NAME, N.NAME, A.EQUIPO_AFECTADO) AS nombre_equipo,
+        A.DESCRIPCION_FALLO AS tipo_problema,
+        COALESCE(H.NOMBRE, 'Sin sitio asignado') AS sitio,
+        G.NOMBRE AS nombre_consola,
+        I.NOMBRE AS cliente,
+        J.NOMBRE AS hacienda,
+        O.NOMBRE AS nodo,
+        CASE
+          WHEN ${reportadoBooleanSqlExpression("A")} THEN 'SI'
+          ELSE 'NO'
+        END AS reportado_al_cliente
+      FROM FALLOS_TECNICOS A
+      JOIN SEGUIMIENTO_FALLOS B ON (B.FALLO_ID = A.ID)
+      LEFT JOIN DEPARTAMENTOS_RESPONSABLES C ON (C.ID = B.DEPARTAMENTO_ID)
+      LEFT JOIN USUARIOS D ON (D.ID = B.ULTIMO_USUARIO_EDITO_ID)
+      LEFT JOIN USUARIOS E ON (E.ID = A.RESPONSABLE_ID)
+      LEFT JOIN USUARIOS F ON (F.ID = B.VERIFICACION_CIERRE_ID)
+      LEFT JOIN CONSOLAS G ON (G.ID = A.CONSOLA_ID)
+      LEFT JOIN SITIOS H ON (H.ID = A.SITIO_ID)
+      LEFT JOIN CLIENTES I ON (I.ID = H.CLIENTE_ID)
+      LEFT JOIN HACIENDA J ON (J.ID = H.HACIENDA_ID)
+      LEFT JOIN HIK_CAMERA_RESOURCE_STATUS K ON (K.ID = A.CAMERA_ID)
+      LEFT JOIN HIK_ENCODING_DEVICE_STATUS L ON (L.ID = A.ENCODING_DEVICE_ID)
+      LEFT JOIN HIK_IP_SPEAKER_STATUS M ON (M.ID = A.IP_SPEAKER_ID)
+      LEFT JOIN HIK_ALARM_INPUT_STATUS N ON (N.ID = A.ALARM_INPUT_ID)
+      LEFT JOIN LATERAL (
+        SELECT R.NOMBRE
+        FROM NODOS_SITIOS Q
+        JOIN NODOS R ON (R.ID = Q.NODO_ID)
+        WHERE Q.SITIO_ID = H.ID
+        ORDER BY Q.FECHA_ASIGNACION DESC NULLS LAST, Q.NODO_ID DESC
+        LIMIT 1
+      ) O ON (TRUE)
+      LEFT JOIN DEPARTAMENTOS_RESPONSABLES P ON (P.ID = A.DEPARTAMENTO_ID)
+      ${whereFilters}
+      ORDER BY A.ID ASC, B.FECHA_INICIO ASC, B.ID ASC;
     `;
 
     logSql("FALLOS_CONSULTAS_EXPORT", query, params);
     const result = await client.query(query, params);
 
-    console.log('[EXPORT][DB rows length]', result.rows?.length);
-    console.log('[EXPORT][DB sample row]', result.rows?.[0]);
-    console.log('[EXPORT][SAMPLE tipo_equipo_afectado_nombre]', result.rows?.slice(0, 10).map(r => ({
-      id_fallo: r.id_fallo,
-      equipo_afectado: r.equipo_afectado,
-      tipo_afectacion: r.tipo_afectacion,
-      tipo_equipo_afectado_nombre: r.tipo_equipo_afectado_nombre
-    })));
-    console.log(
-      '[EXPORT][DB sample tipo_equipo_afectado_nombre]',
-      result.rows?.[0]?.tipo_equipo_afectado_nombre
-    );
-    console.log('[EXPORT][DB sample keys]', Object.keys(result.rows?.[0] || {}));
-
     const rowsToSend = result.rows.map((row) => ({
       ...row,
-      duracion_desde_ultima_modificacion_hhmmss: formatDurationSeconds(
-        row.duracion_desde_ultima_modificacion_seg
-      ),
+      duracion_movimiento_hhmmss: formatDurationSeconds(row.duracion_movimiento_seg),
       duracion_total_fallo_hhmmss: formatDurationSeconds(row.duracion_total_fallo_seg),
     }));
-
-    console.log('[EXPORT][RESPONSE sample row]', rowsToSend?.[0] || result.rows?.[0]);
-    console.log(
-      '[EXPORT][RESPONSE sample tipo_equipo_afectado_nombre]',
-      (rowsToSend?.[0] || result.rows?.[0])?.tipo_equipo_afectado_nombre
-    );
 
     return res.status(200).json(rowsToSend);
   } catch (error) {
