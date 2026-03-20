@@ -8,40 +8,6 @@ import { getLocalDateTimestamp, parseDbTimestampToLocal } from '../../utils/date
 
 type ExportRecord = Record<string, string | number | boolean | null | undefined>;
 
-type ExportColumn = {
-  HEADER: string;
-  KEY?: string;
-  GET?: (record: ExportRecord) => string;
-};
-
-const EXPORT_COLUMNS: ExportColumn[] = [
-  { HEADER: 'PERIODO', KEY: 'periodo' },
-  { HEADER: 'PASO', KEY: 'paso' },
-  { HEADER: 'FECHA/HORA FALLO', KEY: 'fecha_hora_fallo' },
-  { HEADER: 'INICIO MOVIMIENTO', KEY: 'fecha_inicio_movimiento' },
-  { HEADER: 'FIN MOVIMIENTO', KEY: 'fecha_fin_movimiento' },
-  { HEADER: 'DURACION MOVIMIENTO (SEG)', KEY: 'duracion_movimiento_seg' },
-  { HEADER: 'DURACION MOVIMIENTO (H)', KEY: 'duracion_movimiento_hhmmss' },
-  { HEADER: 'DURACION TOTAL FALLO (SEG)', KEY: 'duracion_total_fallo_seg' },
-  { HEADER: 'DURACION TOTAL FALLO (H)', KEY: 'duracion_total_fallo_hhmmss' },
-  { HEADER: 'ESTADO', KEY: 'estado' },
-  { HEADER: 'DEPARTAMENTO', KEY: 'departamento' },
-  { HEADER: 'DETALLE NOVEDAD', KEY: 'detalle_novedad' },
-  { HEADER: 'USUARIO EDITO MOVIMIENTO', KEY: 'usuario_edito_movimiento' },
-  { HEADER: 'RESPONSABLE INICIAL', KEY: 'responsable_inicial' },
-  { HEADER: 'RESPONSABLE CIERRE', KEY: 'responsable_cierre' },
-  { HEADER: 'TIPO AFECTACION', KEY: 'tipo_afectacion' },
-  { HEADER: 'TIPO EQUIPO', KEY: 'tipo_equipo' },
-  { HEADER: 'NOMBRE EQUIPO', KEY: 'nombre_equipo' },
-  { HEADER: 'TIPO PROBLEMA', KEY: 'tipo_problema' },
-  { HEADER: 'SITIO', KEY: 'sitio' },
-  { HEADER: 'NOMBRE CONSOLA', KEY: 'nombre_consola' },
-  { HEADER: 'CLIENTE', KEY: 'cliente' },
-  { HEADER: 'HACIENDA', KEY: 'hacienda' },
-  { HEADER: 'NODO', KEY: 'nodo' },
-  { HEADER: 'REPORTADO AL CLIENTE', KEY: 'reportado_al_cliente' },
-];
-
 
 const formatFechaHoraFallo = (failure: TechnicalFailure) => {
   if (failure.fechaHoraFallo) {
@@ -409,23 +375,12 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
       console.log('[FRONT EXPORT] rowsToExport length', rowsToExport.length);
       console.log('[FRONT EXPORT] sample row', rowsToExport[0]);
       console.log('[FRONT EXPORT] sample keys', Object.keys(rowsToExport[0] || {}));
-      console.log('[FRONT EXPORT] sample tipo_equipo_afectado_nombre', rowsToExport[0]?.tipo_equipo_afectado_nombre);
+      console.log('[FRONT EXPORT] sample PROBLEMA', rowsToExport[0]?.PROBLEMA);
 
-      const excelRows = rowsToExport.map((record: ExportRecord) => {
-        const row: Record<string, any> = {};
-
-        EXPORT_COLUMNS.forEach((col) => {
-          row[col.HEADER] =
-            typeof col.GET === 'function'
-              ? col.GET(record)
-              : (col.KEY ? record?.[col.KEY] ?? '' : '');
-        });
-
-        return row;
-      });
+      const excelRows = rowsToExport.map((record: ExportRecord) => ({ ...record }));
 
       console.log('[FRONT EXPORT] excelRows sample', excelRows[0]);
-      console.log('[FRONT EXPORT] excelRows sample TIPO_EQUIPO_AFECTADO_NOMBRE', excelRows[0]?.['TIPO_EQUIPO_AFECTADO_NOMBRE']);
+      console.log('[FRONT EXPORT] excelRows sample PROBLEMA', excelRows[0]?.PROBLEMA);
 
       const worksheet = XLSX.utils.json_to_sheet(excelRows, { skipHeader: false });
       const workbook = XLSX.utils.book_new();

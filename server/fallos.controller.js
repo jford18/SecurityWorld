@@ -957,7 +957,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
 
     if (departamento) {
       params.push(`%${departamento}%`);
-      filtros.push(`AND P.NOMBRE ILIKE $${params.length}`);
+      filtros.push(`AND C.NOMBRE ILIKE $${params.length}`);
     }
 
     if (normalizedEstado === "resuelto") {
@@ -974,13 +974,35 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
 
     const whereFilters = `WHERE 1 = 1 ${filtros.join(" ")}`;
 
+    const fallosTecnicosColumnsResult = await client.query(
+      `SELECT EXISTS (
+        SELECT 1
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = 'public'
+          AND TABLE_NAME = 'fallos_tecnicos'
+          AND COLUMN_NAME = 'usuario_creacion'
+      ) AS has_usuario_creacion`
+    );
+
+    const hasUsuarioCreacion = Boolean(
+      fallosTecnicosColumnsResult.rows?.[0]?.has_usuario_creacion
+    );
+
+    const usuarioCreacionSelect = hasUsuarioCreacion
+      ? "COALESCE(E.NOMBRE_COMPLETO, E.NOMBRE_USUARIO) AS usuario_creacion"
+      : "NULL::TEXT AS usuario_creacion";
+
+    const usuarioCreacionJoin = hasUsuarioCreacion
+      ? "LEFT JOIN USUARIOS E ON (E.ID = A.USUARIO_CREACION)"
+      : "";
+
     const query = `
       SELECT
         TO_CHAR(A.FECHA, 'YYYYMMDD')::INT AS periodo,
         B.PASO AS paso,
-        (A.FECHA::TIMESTAMP + COALESCE(A.HORA, '00:00:00'::TIME)) AS fecha_hora_fallo,
-        B.FECHA_INICIO AS fecha_inicio_movimiento,
-        COALESCE(B.FECHA_HASTA, NOW()) AS fecha_fin_movimiento,
+        TO_CHAR(A.FECHA::TIMESTAMP + COALESCE(A.HORA, '00:00:00'::TIME), 'YYYY-MM-DD HH24:MI:SS') AS fecha_hora_fallo,
+        TO_CHAR(B.FECHA_INICIO, 'YYYY-MM-DD HH24:MI:SS') AS fecha_inicio_movimiento,
+        TO_CHAR(COALESCE(B.FECHA_HASTA, NOW()), 'YYYY-MM-DD HH24:MI:SS') AS fecha_fin_movimiento,
         EXTRACT(EPOCH FROM (COALESCE(B.FECHA_HASTA, NOW()) - B.FECHA_INICIO))::BIGINT AS duracion_movimiento_seg,
         EXTRACT(EPOCH FROM (
           COALESCE(
@@ -995,8 +1017,8 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
         C.NOMBRE AS departamento,
         B.NOVEDAD_DETECTADA AS detalle_novedad,
         COALESCE(D.NOMBRE_COMPLETO, D.NOMBRE_USUARIO) AS usuario_edito_movimiento,
-        COALESCE(E.NOMBRE_COMPLETO, E.NOMBRE_USUARIO) AS responsable_inicial,
-        COALESCE(F.NOMBRE_COMPLETO, F.NOMBRE_USUARIO) AS responsable_cierre,
+        ${usuarioCreacionSelect},
+        COALESCE(F.NOMBRE_COMPLETO, F.NOMBRE_USUARIO) AS usuario_cierre,
         COALESCE(A.TIPO_AFECTACION, 'SIN INFORMACIÓN') AS tipo_afectacion,
         CASE
           WHEN A.CAMERA_ID IS NOT NULL THEN 'CAMARA'
@@ -1006,7 +1028,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
           ELSE 'OTRO'
         END AS tipo_equipo,
         COALESCE(K.CAMERA_NAME, L.NAME, M.NAME, N.NAME, A.EQUIPO_AFECTADO) AS nombre_equipo,
-        A.DESCRIPCION_FALLO AS tipo_problema,
+        A.DESCRIPCION_FALLO AS problema,
         COALESCE(H.NOMBRE, 'Sin sitio asignado') AS sitio,
         G.NOMBRE AS nombre_consola,
         I.NOMBRE AS cliente,
@@ -1020,7 +1042,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       JOIN SEGUIMIENTO_FALLOS B ON (B.FALLO_ID = A.ID)
       LEFT JOIN DEPARTAMENTOS_RESPONSABLES C ON (C.ID = B.DEPARTAMENTO_ID)
       LEFT JOIN USUARIOS D ON (D.ID = B.ULTIMO_USUARIO_EDITO_ID)
-      LEFT JOIN USUARIOS E ON (E.ID = A.RESPONSABLE_ID)
+      ${usuarioCreacionJoin}
       LEFT JOIN USUARIOS F ON (F.ID = B.VERIFICACION_CIERRE_ID)
       LEFT JOIN CONSOLAS G ON (G.ID = A.CONSOLA_ID)
       LEFT JOIN SITIOS H ON (H.ID = A.SITIO_ID)
@@ -1038,7 +1060,6 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
         ORDER BY Q.FECHA_ASIGNACION DESC NULLS LAST, Q.NODO_ID DESC
         LIMIT 1
       ) O ON (TRUE)
-      LEFT JOIN DEPARTAMENTOS_RESPONSABLES P ON (P.ID = A.DEPARTAMENTO_ID)
       ${whereFilters}
       ORDER BY A.ID ASC, B.FECHA_INICIO ASC, B.ID ASC;
     `;
@@ -1047,9 +1068,31 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
     const result = await client.query(query, params);
 
     const rowsToSend = result.rows.map((row) => ({
-      ...row,
-      duracion_movimiento_hhmmss: formatDurationSeconds(row.duracion_movimiento_seg),
-      duracion_total_fallo_hhmmss: formatDurationSeconds(row.duracion_total_fallo_seg),
+      PERIODO: row.periodo,
+      PASO: row.paso,
+      "FECHA/HORA FALLO": row.fecha_hora_fallo,
+      "INICIO MOVIMIENTO": row.fecha_inicio_movimiento,
+      "FIN MOVIMIENTO": row.fecha_fin_movimiento,
+      "DURACION MOVIMIENTO (SEG)": row.duracion_movimiento_seg,
+      "DURACION MOVIMIENTO (H)": formatDurationSeconds(row.duracion_movimiento_seg),
+      "DURACION TOTAL FALLO (SEG)": row.duracion_total_fallo_seg,
+      "DURACION TOTAL FALLO (H)": formatDurationSeconds(row.duracion_total_fallo_seg),
+      ESTADO: row.estado,
+      DEPARTAMENTO: row.departamento,
+      NOVEDAD: row.detalle_novedad,
+      "USUARIO EDICIÓN": row.usuario_edito_movimiento,
+      "USUARIO CREACIÓN": row.usuario_creacion,
+      "USUARIO CIERRE": row.usuario_cierre,
+      "TIPO AFECTACION": row.tipo_afectacion,
+      "TIPO EQUIPO": row.tipo_equipo,
+      "NOMBRE EQUIPO": row.nombre_equipo,
+      PROBLEMA: row.problema,
+      SITIO: row.sitio,
+      "NOMBRE CONSOLA": row.nombre_consola,
+      CLIENTE: row.cliente,
+      HACIENDA: row.hacienda,
+      NODO: row.nodo,
+      "REPORTADO AL CLIENTE": row.reportado_al_cliente,
     }));
 
     return res.status(200).json(rowsToSend);
