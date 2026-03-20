@@ -1,12 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { TechnicalFailure } from '../../types';
 import { calcularEstado } from './TechnicalFailuresUtils';
-import { FallosExportFilters } from '../../services/fallosService';
-import api from '../../services/api';
+import {
+  exportFallosTecnicosConsultasExcel,
+  FallosExportFilters,
+} from '../../services/fallosService';
 import { getLocalDateTimestamp, parseDbTimestampToLocal } from '../../utils/datetime';
-
-type ExportRecord = Record<string, string | number | boolean | null | undefined>;
 
 
 const formatFechaHoraFallo = (failure: TechnicalFailure) => {
@@ -369,37 +368,11 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
         departamento: filters.departamento,
       };
 
-      const resp = await api.get('/fallos-tecnicos-consultas/export-excel', { params });
-      const rowsToExport = Array.isArray(resp.data) ? resp.data : (resp.data?.data ?? []);
-
-      console.log('[FRONT EXPORT] rowsToExport length', rowsToExport.length);
-      console.log('[FRONT EXPORT] sample row', rowsToExport[0]);
-      console.log('[FRONT EXPORT] sample keys', Object.keys(rowsToExport[0] || {}));
-      console.log('[FRONT EXPORT] sample PROBLEMA', rowsToExport[0]?.PROBLEMA);
-
-      const excelRows = rowsToExport.map((record: ExportRecord) => ({ ...record }));
-
-      console.log('[FRONT EXPORT] excelRows sample', excelRows[0]);
-      console.log('[FRONT EXPORT] excelRows sample PROBLEMA', excelRows[0]?.PROBLEMA);
-
-      const worksheet = XLSX.utils.json_to_sheet(excelRows, { skipHeader: false });
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Fallos');
-
-      const excelArray = XLSX.write(workbook, {
-        type: 'array',
-        bookType: 'xlsx',
-      });
-
-      const blob = new Blob([excelArray], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
-
-      const fileName = `fallos_tecnicos_detallado_${Date.now()}.xlsx`;
+      const { blob, filename } = await exportFallosTecnicosConsultasExcel(params);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', fileName);
+      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       link.remove();

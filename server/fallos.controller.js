@@ -1,3 +1,4 @@
+import XLSX from "xlsx";
 import { pool } from "./db.js";
 import { logSql } from "./utils/sqlLogger.js";
 import {
@@ -32,20 +33,71 @@ const formatDate = (value) => {
 };
 
 
-const formatDurationSeconds = (value) => {
-  if (value === null || value === undefined) return "";
-  const totalSeconds = Number(value);
-  if (!Number.isFinite(totalSeconds)) return "";
+const formatExcelTimestamp = () => {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
 
-  const safeSeconds = Math.max(0, Math.trunc(totalSeconds));
-  const hours = Math.floor(safeSeconds / 3600);
-  const minutes = Math.floor((safeSeconds % 3600) / 60);
-  const seconds = safeSeconds % 60;
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(
+    now.getHours()
+  )}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+};
 
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
-    2,
-    "0"
-  )}:${String(seconds).padStart(2, "0")}`;
+const FALLAS_TECNICAS_EXPORT_HEADERS = [
+  "PERIODO",
+  "PASO",
+  "FECHA/HORA FALLO",
+  "INICIO MOVIMIENTO",
+  "FIN MOVIMIENTO",
+  "DURACION MOVIMIENTO (SEG)",
+  "DURACION MOVIMIENTO (H)",
+  "DURACION TOTAL FALLO (SEG)",
+  "DURACION TOTAL FALLO (H)",
+  "ESTADO",
+  "DEPARTAMENTO",
+  "NOVEDAD",
+  "USUARIO EDICIÓN",
+  "USUARIO CREACIÓN",
+  "USUARIO CIERRE",
+  "TIPO AFECTACION",
+  "TIPO EQUIPO",
+  "NOMBRE EQUIPO",
+  "PROBLEMA",
+  "SITIO",
+  "NOMBRE CONSOLA",
+  "CLIENTE",
+  "HACIENDA",
+  "NODO",
+  "REPORTADO AL CLIENTE",
+];
+
+const buildDurationSql = (secondsExpression) => `
+  (
+    LPAD(FLOOR(GREATEST(0, (${secondsExpression})) / 3600)::TEXT, 2, '0')
+    || ':' ||
+    LPAD(FLOOR(MOD(GREATEST(0, (${secondsExpression})), 3600) / 60)::TEXT, 2, '0')
+    || ':' ||
+    LPAD(MOD(GREATEST(0, (${secondsExpression}))::BIGINT, 60)::TEXT, 2, '0')
+  )
+`;
+
+const validateExactExportColumns = (resultFields = []) => {
+  const actualHeaders = resultFields.map((field) => field.name);
+
+  if (actualHeaders.length !== FALLAS_TECNICAS_EXPORT_HEADERS.length) {
+    throw new Error(
+      `Cantidad de columnas inválida. Esperadas: ${FALLAS_TECNICAS_EXPORT_HEADERS.length}. Obtenidas: ${actualHeaders.length}.`
+    );
+  }
+
+  const mismatchIndex = FALLAS_TECNICAS_EXPORT_HEADERS.findIndex(
+    (header, index) => actualHeaders[index] !== header
+  );
+
+  if (mismatchIndex !== -1) {
+    throw new Error(
+      `Orden o nombre de columna inválido en posición ${mismatchIndex + 1}. Esperada: "${FALLAS_TECNICAS_EXPORT_HEADERS[mismatchIndex]}". Obtenida: "${actualHeaders[mismatchIndex]}".`
+    );
+  }
 };
 
 const splitDateTimeValue = (value) => {
@@ -988,56 +1040,67 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       fallosTecnicosColumnsResult.rows?.[0]?.has_usuario_creacion
     );
 
-    const usuarioCreacionSelect = hasUsuarioCreacion
-      ? "COALESCE(E.NOMBRE_COMPLETO, E.NOMBRE_USUARIO) AS usuario_creacion"
-      : "NULL::TEXT AS usuario_creacion";
+    const usuarioCreacionExpression = hasUsuarioCreacion
+      ? "COALESCE(E.NOMBRE_COMPLETO, E.NOMBRE_USUARIO)"
+      : "NULL::TEXT";
 
     const usuarioCreacionJoin = hasUsuarioCreacion
       ? "LEFT JOIN USUARIOS E ON (E.ID = A.USUARIO_CREACION)"
       : "";
 
+    const duracionMovimientoSegExpression =
+      "EXTRACT(EPOCH FROM (COALESCE(B.FECHA_HASTA, NOW()) - B.FECHA_INICIO))::BIGINT";
+
+    const duracionTotalFalloSegExpression = `EXTRACT(EPOCH FROM (
+      COALESCE(
+        CASE
+          WHEN A.FECHA_RESOLUCION IS NOT NULL THEN A.FECHA_RESOLUCION::TIMESTAMP + COALESCE(A.HORA_RESOLUCION, '00:00:00'::TIME)
+          ELSE NULL
+        END,
+        NOW()
+      ) - (A.FECHA::TIMESTAMP + COALESCE(A.HORA, '00:00:00'::TIME))
+    ))::BIGINT`;
+
+    const selectColumns = [
+      `TO_CHAR(A.FECHA, 'YYYYMMDD')::INT AS "PERIODO"`,
+      `B.PASO AS "PASO"`,
+      `TO_CHAR(A.FECHA::TIMESTAMP + COALESCE(A.HORA, '00:00:00'::TIME), 'YYYY-MM-DD HH24:MI:SS') AS "FECHA/HORA FALLO"`,
+      `TO_CHAR(B.FECHA_INICIO, 'YYYY-MM-DD HH24:MI:SS') AS "INICIO MOVIMIENTO"`,
+      `TO_CHAR(COALESCE(B.FECHA_HASTA, NOW()), 'YYYY-MM-DD HH24:MI:SS') AS "FIN MOVIMIENTO"`,
+      `${duracionMovimientoSegExpression} AS "DURACION MOVIMIENTO (SEG)"`,
+      `${buildDurationSql(duracionMovimientoSegExpression)} AS "DURACION MOVIMIENTO (H)"`,
+      `${duracionTotalFalloSegExpression} AS "DURACION TOTAL FALLO (SEG)"`,
+      `${buildDurationSql(duracionTotalFalloSegExpression)} AS "DURACION TOTAL FALLO (H)"`,
+      `COALESCE(A.ESTADO, 'SIN INFORMACIÓN') AS "ESTADO"`,
+      `C.NOMBRE AS "DEPARTAMENTO"`,
+      `B.NOVEDAD_DETECTADA AS "NOVEDAD"`,
+      `COALESCE(D.NOMBRE_COMPLETO, D.NOMBRE_USUARIO) AS "USUARIO EDICIÓN"`,
+      `${usuarioCreacionExpression} AS "USUARIO CREACIÓN"`,
+      `COALESCE(F.NOMBRE_COMPLETO, F.NOMBRE_USUARIO) AS "USUARIO CIERRE"`,
+      `COALESCE(A.TIPO_AFECTACION, 'SIN INFORMACIÓN') AS "TIPO AFECTACION"`,
+      `CASE
+        WHEN A.CAMERA_ID IS NOT NULL THEN 'CAMARA'
+        WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN 'GRABADOR'
+        WHEN A.IP_SPEAKER_ID IS NOT NULL THEN 'MEGAFONO'
+        WHEN A.ALARM_INPUT_ID IS NOT NULL THEN 'ALARM INPUT'
+        ELSE 'OTRO'
+      END AS "TIPO EQUIPO"`,
+      `COALESCE(K.CAMERA_NAME, L.NAME, M.NAME, N.NAME, A.EQUIPO_AFECTADO) AS "NOMBRE EQUIPO"`,
+      `A.DESCRIPCION_FALLO AS "PROBLEMA"`,
+      `COALESCE(H.NOMBRE, 'Sin sitio asignado') AS "SITIO"`,
+      `G.NOMBRE AS "NOMBRE CONSOLA"`,
+      `I.NOMBRE AS "CLIENTE"`,
+      `J.NOMBRE AS "HACIENDA"`,
+      `O.NOMBRE AS "NODO"`,
+      `CASE
+        WHEN ${reportadoBooleanSqlExpression("A")} THEN 'SI'
+        ELSE 'NO'
+      END AS "REPORTADO AL CLIENTE"`,
+    ];
+
     const query = `
       SELECT
-        TO_CHAR(A.FECHA, 'YYYYMMDD')::INT AS periodo,
-        B.PASO AS paso,
-        TO_CHAR(A.FECHA::TIMESTAMP + COALESCE(A.HORA, '00:00:00'::TIME), 'YYYY-MM-DD HH24:MI:SS') AS fecha_hora_fallo,
-        TO_CHAR(B.FECHA_INICIO, 'YYYY-MM-DD HH24:MI:SS') AS fecha_inicio_movimiento,
-        TO_CHAR(COALESCE(B.FECHA_HASTA, NOW()), 'YYYY-MM-DD HH24:MI:SS') AS fecha_fin_movimiento,
-        EXTRACT(EPOCH FROM (COALESCE(B.FECHA_HASTA, NOW()) - B.FECHA_INICIO))::BIGINT AS duracion_movimiento_seg,
-        EXTRACT(EPOCH FROM (
-          COALESCE(
-            CASE
-              WHEN A.FECHA_RESOLUCION IS NOT NULL THEN A.FECHA_RESOLUCION::TIMESTAMP + COALESCE(A.HORA_RESOLUCION, '00:00:00'::TIME)
-              ELSE NULL
-            END,
-            NOW()
-          ) - (A.FECHA::TIMESTAMP + COALESCE(A.HORA, '00:00:00'::TIME))
-        ))::BIGINT AS duracion_total_fallo_seg,
-        COALESCE(A.ESTADO, 'SIN INFORMACIÓN') AS estado,
-        C.NOMBRE AS departamento,
-        B.NOVEDAD_DETECTADA AS detalle_novedad,
-        COALESCE(D.NOMBRE_COMPLETO, D.NOMBRE_USUARIO) AS usuario_edito_movimiento,
-        ${usuarioCreacionSelect},
-        COALESCE(F.NOMBRE_COMPLETO, F.NOMBRE_USUARIO) AS usuario_cierre,
-        COALESCE(A.TIPO_AFECTACION, 'SIN INFORMACIÓN') AS tipo_afectacion,
-        CASE
-          WHEN A.CAMERA_ID IS NOT NULL THEN 'CAMARA'
-          WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN 'GRABADOR'
-          WHEN A.IP_SPEAKER_ID IS NOT NULL THEN 'MEGAFONO'
-          WHEN A.ALARM_INPUT_ID IS NOT NULL THEN 'ALARM INPUT'
-          ELSE 'OTRO'
-        END AS tipo_equipo,
-        COALESCE(K.CAMERA_NAME, L.NAME, M.NAME, N.NAME, A.EQUIPO_AFECTADO) AS nombre_equipo,
-        A.DESCRIPCION_FALLO AS problema,
-        COALESCE(H.NOMBRE, 'Sin sitio asignado') AS sitio,
-        G.NOMBRE AS nombre_consola,
-        I.NOMBRE AS cliente,
-        J.NOMBRE AS hacienda,
-        O.NOMBRE AS nodo,
-        CASE
-          WHEN ${reportadoBooleanSqlExpression("A")} THEN 'SI'
-          ELSE 'NO'
-        END AS reportado_al_cliente
+        ${selectColumns.join(",\n        ")}
       FROM FALLOS_TECNICOS A
       JOIN SEGUIMIENTO_FALLOS B ON (B.FALLO_ID = A.ID)
       LEFT JOIN DEPARTAMENTOS_RESPONSABLES C ON (C.ID = B.DEPARTAMENTO_ID)
@@ -1066,36 +1129,32 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
 
     logSql("FALLOS_CONSULTAS_EXPORT", query, params);
     const result = await client.query(query, params);
+    validateExactExportColumns(result.fields);
 
-    const rowsToSend = result.rows.map((row) => ({
-      PERIODO: row.periodo,
-      PASO: row.paso,
-      "FECHA/HORA FALLO": row.fecha_hora_fallo,
-      "INICIO MOVIMIENTO": row.fecha_inicio_movimiento,
-      "FIN MOVIMIENTO": row.fecha_fin_movimiento,
-      "DURACION MOVIMIENTO (SEG)": row.duracion_movimiento_seg,
-      "DURACION MOVIMIENTO (H)": formatDurationSeconds(row.duracion_movimiento_seg),
-      "DURACION TOTAL FALLO (SEG)": row.duracion_total_fallo_seg,
-      "DURACION TOTAL FALLO (H)": formatDurationSeconds(row.duracion_total_fallo_seg),
-      ESTADO: row.estado,
-      DEPARTAMENTO: row.departamento,
-      NOVEDAD: row.detalle_novedad,
-      "USUARIO EDICIÓN": row.usuario_edito_movimiento,
-      "USUARIO CREACIÓN": row.usuario_creacion,
-      "USUARIO CIERRE": row.usuario_cierre,
-      "TIPO AFECTACION": row.tipo_afectacion,
-      "TIPO EQUIPO": row.tipo_equipo,
-      "NOMBRE EQUIPO": row.nombre_equipo,
-      PROBLEMA: row.problema,
-      SITIO: row.sitio,
-      "NOMBRE CONSOLA": row.nombre_consola,
-      CLIENTE: row.cliente,
-      HACIENDA: row.hacienda,
-      NODO: row.nodo,
-      "REPORTADO AL CLIENTE": row.reportado_al_cliente,
-    }));
+    const dataRows = result.rows.map((row) =>
+      FALLAS_TECNICAS_EXPORT_HEADERS.map((header) => row[header])
+    );
 
-    return res.status(200).json(rowsToSend);
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      FALLAS_TECNICAS_EXPORT_HEADERS,
+      ...dataRows,
+    ]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Fallos");
+
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+    const timestamp = formatExcelTimestamp();
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="FALLOS_TECNICOS_CONSULTAS_${timestamp}.xlsx"`
+    );
+
+    return res.status(200).send(buffer);
   } catch (error) {
     console.error("Error al exportar fallos técnicos:", error);
     return res.status(500).json({
