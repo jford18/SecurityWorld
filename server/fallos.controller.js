@@ -43,31 +43,35 @@ const formatExcelTimestamp = () => {
 };
 
 const FALLAS_TECNICAS_EXPORT_HEADERS = [
-  "PERIODO",
-  "PASO",
-  "FECHA/HORA FALLO",
-  "INICIO MOVIMIENTO",
-  "FIN MOVIMIENTO",
-  "DURACION MOVIMIENTO (SEG)",
-  "DURACION MOVIMIENTO (H)",
-  "DURACION TOTAL FALLO (SEG)",
-  "DURACION TOTAL FALLO (H)",
-  "ESTADO",
-  "DEPARTAMENTO",
-  "NOVEDAD",
-  "USUARIO EDICIÓN",
-  "USUARIO CREACIÓN",
-  "USUARIO CIERRE",
-  "TIPO AFECTACION",
-  "TIPO EQUIPO",
-  "NOMBRE EQUIPO",
-  "PROBLEMA",
-  "SITIO",
-  "NOMBRE CONSOLA",
+  "ID_FALLO",
   "CLIENTE",
-  "HACIENDA",
   "NODO",
-  "REPORTADO AL CLIENTE",
+  "HACIENDA",
+  "TIPO_PROBLEMA",
+  "TIPO_AFECTACION",
+  "SITIO",
+  "TIPO_EQUIPO_AFECTADO",
+  "NOMBRE_EQUIPO_AFECTADO",
+  "FECHA_FALLO",
+  "HORA_FALLO",
+  "FECHA_SOLUCION",
+  "HORA_SOLUCION",
+  "DURACION_TOTAL_FALLO",
+  "REPORTADO_AL_CLIENTE",
+  "ESTADO",
+  "NOMBRE_CONSOLA",
+  "N_MODIFICACIONES",
+  "FECHA_HORA_MODIFICACION",
+  "DURACION_ENTRE_MODIFICACIONES",
+  "DURACION_ENTRE_MODIFICACIONES_H",
+  "DEPARTAMENTO",
+  "DETALLE_NOVEDAD",
+  "USUARIO_MODIFICO",
+  "RESPONSABLE_INICIAL",
+  "USUARIO_CIERRE",
+  "DEPARTAMENTO_FINAL",
+  "FECHA_CREACION",
+  "FECHA_CIERRE",
 ];
 
 const buildDurationSql = (secondsExpression) => `
@@ -982,24 +986,12 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
 
     if (problema) {
       params.push(`%${problema}%`);
-      filtros.push(`AND A.DESCRIPCION_FALLO ILIKE $${params.length}`);
+      filtros.push(`AND COALESCE(P.DESCRIPCION, A.DESCRIPCION_FALLO, '') ILIKE $${params.length}`);
     }
 
     if (tipoAfectacion) {
       params.push(String(tipoAfectacion).trim().toLowerCase());
-      filtros.push(`AND LOWER(
-        CASE
-          WHEN UPPER(COALESCE(A.TIPO_AFECTACION, '')) = 'EQUIPO' THEN
-            CASE
-              WHEN A.CAMERA_ID IS NOT NULL THEN 'EQUIPO-CÁMARA'
-              WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN 'EQUIPO-GRABADOR'
-              WHEN A.IP_SPEAKER_ID IS NOT NULL THEN 'EQUIPO-MEGÁFONO'
-              WHEN A.ALARM_INPUT_ID IS NOT NULL THEN 'EQUIPO-ALARM INPUT'
-              ELSE 'EQUIPO'
-            END
-          ELSE COALESCE(UPPER(A.TIPO_AFECTACION), 'SIN INFORMACIÓN')
-        END
-      ) = $${params.length}`);
+      filtros.push(`AND LOWER(COALESCE(A.TIPO_AFECTACION, '')) = $${params.length}`);
     }
 
     if (sitio) {
@@ -1026,76 +1018,74 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
 
     const whereFilters = `WHERE 1 = 1 ${filtros.join(" ")}`;
 
-    const fallosTecnicosColumnsResult = await client.query(
-      `SELECT EXISTS (
-        SELECT 1
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = 'public'
-          AND TABLE_NAME = 'fallos_tecnicos'
-          AND COLUMN_NAME = 'usuario_creacion'
-      ) AS has_usuario_creacion`
-    );
-
-    const hasUsuarioCreacion = Boolean(
-      fallosTecnicosColumnsResult.rows?.[0]?.has_usuario_creacion
-    );
-
-    const usuarioCreacionExpression = hasUsuarioCreacion
-      ? "COALESCE(E.NOMBRE_COMPLETO, E.NOMBRE_USUARIO)"
-      : "NULL::TEXT";
-
-    const usuarioCreacionJoin = hasUsuarioCreacion
-      ? "LEFT JOIN USUARIOS E ON (E.ID = A.USUARIO_CREACION)"
-      : "";
-
-    const duracionMovimientoSegExpression =
+    const duracionEntreModificacionesSegExpression =
       "EXTRACT(EPOCH FROM (COALESCE(B.FECHA_HASTA, NOW()) - B.FECHA_INICIO))::BIGINT";
 
     const duracionTotalFalloSegExpression = `EXTRACT(EPOCH FROM (
       COALESCE(
         CASE
-          WHEN A.FECHA_RESOLUCION IS NOT NULL THEN A.FECHA_RESOLUCION::TIMESTAMP + COALESCE(A.HORA_RESOLUCION, '00:00:00'::TIME)
+          WHEN A.FECHA_RESOLUCION IS NOT NULL THEN
+            A.FECHA_RESOLUCION::TIMESTAMP + COALESCE(A.HORA_RESOLUCION, '00:00:00'::TIME)
           ELSE NULL
         END,
         NOW()
       ) - (A.FECHA::TIMESTAMP + COALESCE(A.HORA, '00:00:00'::TIME))
     ))::BIGINT`;
 
+    const fechaCierreExpression = `CASE
+      WHEN A.FECHA_RESOLUCION IS NOT NULL THEN
+        TO_CHAR(
+          A.FECHA_RESOLUCION::TIMESTAMP + COALESCE(A.HORA_RESOLUCION, '00:00:00'::TIME),
+          'YYYY-MM-DD HH24:MI:SS'
+        )
+      ELSE NULL
+    END`;
+
     const selectColumns = [
-      `TO_CHAR(A.FECHA, 'YYYYMMDD')::INT AS "PERIODO"`,
-      `B.PASO AS "PASO"`,
-      `TO_CHAR(A.FECHA::TIMESTAMP + COALESCE(A.HORA, '00:00:00'::TIME), 'YYYY-MM-DD HH24:MI:SS') AS "FECHA/HORA FALLO"`,
-      `TO_CHAR(B.FECHA_INICIO, 'YYYY-MM-DD HH24:MI:SS') AS "INICIO MOVIMIENTO"`,
-      `TO_CHAR(COALESCE(B.FECHA_HASTA, NOW()), 'YYYY-MM-DD HH24:MI:SS') AS "FIN MOVIMIENTO"`,
-      `${duracionMovimientoSegExpression} AS "DURACION MOVIMIENTO (SEG)"`,
-      `${buildDurationSql(duracionMovimientoSegExpression)} AS "DURACION MOVIMIENTO (H)"`,
-      `${duracionTotalFalloSegExpression} AS "DURACION TOTAL FALLO (SEG)"`,
-      `${buildDurationSql(duracionTotalFalloSegExpression)} AS "DURACION TOTAL FALLO (H)"`,
-      `COALESCE(A.ESTADO, 'SIN INFORMACIÓN') AS "ESTADO"`,
-      `C.NOMBRE AS "DEPARTAMENTO"`,
-      `B.NOVEDAD_DETECTADA AS "NOVEDAD"`,
-      `COALESCE(D.NOMBRE_COMPLETO, D.NOMBRE_USUARIO) AS "USUARIO EDICIÓN"`,
-      `${usuarioCreacionExpression} AS "USUARIO CREACIÓN"`,
-      `COALESCE(F.NOMBRE_COMPLETO, F.NOMBRE_USUARIO) AS "USUARIO CIERRE"`,
-      `COALESCE(A.TIPO_AFECTACION, 'SIN INFORMACIÓN') AS "TIPO AFECTACION"`,
+      `A.ID AS "ID_FALLO"`,
+      `I.NOMBRE AS "CLIENTE"`,
+      `O.NOMBRE AS "NODO"`,
+      `J.NOMBRE AS "HACIENDA"`,
+      `COALESCE(P.DESCRIPCION, A.DESCRIPCION_FALLO) AS "TIPO_PROBLEMA"`,
+      `A.TIPO_AFECTACION AS "TIPO_AFECTACION"`,
+      `COALESCE(H.NOMBRE, 'Sin sitio asignado') AS "SITIO"`,
       `CASE
         WHEN A.CAMERA_ID IS NOT NULL THEN 'CAMARA'
         WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN 'GRABADOR'
         WHEN A.IP_SPEAKER_ID IS NOT NULL THEN 'MEGAFONO'
         WHEN A.ALARM_INPUT_ID IS NOT NULL THEN 'ALARM INPUT'
         ELSE 'OTRO'
-      END AS "TIPO EQUIPO"`,
-      `COALESCE(K.CAMERA_NAME, L.NAME, M.NAME, N.NAME, A.EQUIPO_AFECTADO) AS "NOMBRE EQUIPO"`,
-      `A.DESCRIPCION_FALLO AS "PROBLEMA"`,
-      `COALESCE(H.NOMBRE, 'Sin sitio asignado') AS "SITIO"`,
-      `G.NOMBRE AS "NOMBRE CONSOLA"`,
-      `I.NOMBRE AS "CLIENTE"`,
-      `J.NOMBRE AS "HACIENDA"`,
-      `O.NOMBRE AS "NODO"`,
+      END AS "TIPO_EQUIPO_AFECTADO"`,
+      `COALESCE(K.CAMERA_NAME, L.NAME, M.NAME, N.NAME, A.EQUIPO_AFECTADO) AS "NOMBRE_EQUIPO_AFECTADO"`,
+      `TO_CHAR(
+        A.FECHA::TIMESTAMP + COALESCE(A.HORA, '00:00:00'::TIME),
+        'YYYY-MM-DD HH24:MI:SS'
+      ) AS "FECHA_FALLO"`,
+      `TO_CHAR(COALESCE(A.HORA, '00:00:00'::TIME), 'HH24:MI:SS') AS "HORA_FALLO"`,
+      `TO_CHAR(A.FECHA_RESOLUCION, 'YYYY-MM-DD') AS "FECHA_SOLUCION"`,
+      `TO_CHAR(A.HORA_RESOLUCION, 'HH24:MI:SS') AS "HORA_SOLUCION"`,
+      `${buildDurationSql(duracionTotalFalloSegExpression)} AS "DURACION_TOTAL_FALLO"`,
       `CASE
         WHEN ${reportadoBooleanSqlExpression("A")} THEN 'SI'
         ELSE 'NO'
-      END AS "REPORTADO AL CLIENTE"`,
+      END AS "REPORTADO_AL_CLIENTE"`,
+      `A.ESTADO AS "ESTADO"`,
+      `G.NOMBRE AS "NOMBRE_CONSOLA"`,
+      `COUNT(B.ID) OVER (PARTITION BY A.ID) AS "N_MODIFICACIONES"`,
+      `TO_CHAR(B.FECHA_INICIO, 'YYYY-MM-DD HH24:MI:SS') AS "FECHA_HORA_MODIFICACION"`,
+      `${duracionEntreModificacionesSegExpression} AS "DURACION_ENTRE_MODIFICACIONES"`,
+      `${buildDurationSql(duracionEntreModificacionesSegExpression)} AS "DURACION_ENTRE_MODIFICACIONES_H"`,
+      `B.DEPARTAMENTO_ID AS "DEPARTAMENTO"`,
+      `B.NOVEDAD_DETECTADA AS "DETALLE_NOVEDAD"`,
+      `B.ULTIMO_USUARIO_EDITO_ID AS "USUARIO_MODIFICO"`,
+      `A.USUARIO_CREACION AS "RESPONSABLE_INICIAL"`,
+      `CASE
+        WHEN B.PASO = 'CIERRE' THEN B.VERIFICACION_CIERRE_ID
+        ELSE NULL
+      END AS "USUARIO_CIERRE"`,
+      `A.DEPARTAMENTO_ID AS "DEPARTAMENTO_FINAL"`,
+      `TO_CHAR(A.FECHA_CREACION, 'YYYY-MM-DD HH24:MI:SS') AS "FECHA_CREACION"`,
+      `${fechaCierreExpression} AS "FECHA_CIERRE"`,
     ];
 
     const query = `
@@ -1104,9 +1094,6 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       FROM FALLOS_TECNICOS A
       JOIN SEGUIMIENTO_FALLOS B ON (B.FALLO_ID = A.ID)
       LEFT JOIN DEPARTAMENTOS_RESPONSABLES C ON (C.ID = B.DEPARTAMENTO_ID)
-      LEFT JOIN USUARIOS D ON (D.ID = B.ULTIMO_USUARIO_EDITO_ID)
-      ${usuarioCreacionJoin}
-      LEFT JOIN USUARIOS F ON (F.ID = B.VERIFICACION_CIERRE_ID)
       LEFT JOIN CONSOLAS G ON (G.ID = A.CONSOLA_ID)
       LEFT JOIN SITIOS H ON (H.ID = A.SITIO_ID)
       LEFT JOIN CLIENTES I ON (I.ID = H.CLIENTE_ID)
@@ -1115,6 +1102,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       LEFT JOIN HIK_ENCODING_DEVICE_STATUS L ON (L.ID = A.ENCODING_DEVICE_ID)
       LEFT JOIN HIK_IP_SPEAKER_STATUS M ON (M.ID = A.IP_SPEAKER_ID)
       LEFT JOIN HIK_ALARM_INPUT_STATUS N ON (N.ID = A.ALARM_INPUT_ID)
+      LEFT JOIN CATALOGO_TIPO_PROBLEMA P ON (P.ID = A.TIPO_PROBLEMA_ID)
       LEFT JOIN LATERAL (
         SELECT R.NOMBRE
         FROM NODOS_SITIOS Q
