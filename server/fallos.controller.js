@@ -1066,7 +1066,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       `TO_CHAR(B.FECHA_INICIO, 'YYYY-MM-DD HH24:MI:SS') AS "FECHA Y HORA DE MODIFICACION"`,
       `${duracionEntreModificacionesSegExpression} AS "DURACION ENTRE 2 MODIFICACIONES (SEG)"`,
       `${buildDurationSql(duracionEntreModificacionesSegExpression)} AS "DURACION ENTRE 2 MODIFICACIONES (H)"`,
-      `B.DEPARTAMENTO_ID AS "DEPARTAMENTO RESPONSABLE"`,
+      `COALESCE(C.NOMBRE, 'SIN INFORMACION') AS "DEPARTAMENTO RESPONSABLE"`,
       `B.NOVEDAD_DETECTADA AS "DETALLE DE NOVEDAD DETECTADA"`,
       `B.ULTIMO_USUARIO_EDITO_ID AS "USUARIO QUE EDITA EL FALLO"`,
       `A.RESPONSABLE_ID AS "RESPONSABLE INICIAL"`,
@@ -1079,6 +1079,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
         ${selectColumns.join(",\n        ")}
       FROM FALLOS_TECNICOS A
       JOIN SEGUIMIENTO_FALLOS B ON (B.FALLO_ID = A.ID)
+      LEFT JOIN DEPARTAMENTOS_RESPONSABLES C ON (C.ID = B.DEPARTAMENTO_ID)
       LEFT JOIN CONSOLAS G ON (G.ID = A.CONSOLA_ID)
       LEFT JOIN SITIOS H ON (H.ID = A.SITIO_ID)
       LEFT JOIN CLIENTES I ON (I.ID = H.CLIENTE_ID)
