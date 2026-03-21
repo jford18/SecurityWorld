@@ -1737,7 +1737,7 @@ export const createFallo = async (req, res) => {
         fechaFalloValue,
         horaFalloValue || null,
         equipo_afectado,
-        descripcion_fallo,
+        req.body.descripcion_fallo,
         responsableId,
         departamentoId,
         tipoProblemaId,

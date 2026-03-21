@@ -1059,13 +1059,23 @@ const TechnicalFailuresOperador: React.FC = () => {
     const equipoDesdeHC = formData.affectationType === 'Equipo' && equipoEsHC;
 
     let descripcion_fallo = 'N/A';
-    if (formData.affectationType === 'Nodo' || formData.affectationType === 'Punto') {
-      descripcion_fallo = formData.tipoProblema;
+
+    if (
+      formData.affectationType === 'Nodo' ||
+      formData.affectationType === 'Punto' ||
+      formData.affectationType === 'Masivo'
+    ) {
+      descripcion_fallo = formData.tipoProblema || 'N/A';
     } else if (formData.affectationType === 'Equipo') {
-      descripcion_fallo = equipoDesdeHC ? formData.tipoProblemaEquipo : formData.tipoProblema;
-    } else if (formData.affectationType === 'Masivo') {
-      descripcion_fallo = 'Fallo masivo reportado.';
+      descripcion_fallo = formData.tipoProblemaEquipo || 'N/A';
     }
+
+    console.log('DEBUG descripcion_fallo:', {
+      affectationType: formData.affectationType,
+      tipoProblema: formData.tipoProblema,
+      tipoProblemaEquipo: formData.tipoProblemaEquipo,
+      descripcion_fallo,
+    });
 
     let fechaFalloPayload = '';
     let horaFalloPayload: string | undefined;

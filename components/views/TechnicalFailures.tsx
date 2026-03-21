@@ -359,13 +359,23 @@ const TechnicalFailures: React.FC = () => {
 
 
        let descripcion_fallo = 'N/A';
-       if (formData.affectationType === 'Nodo' || formData.affectationType === 'Punto') {
-           descripcion_fallo = formData.tipoProblema;
+
+       if (
+         formData.affectationType === 'Nodo' ||
+         formData.affectationType === 'Punto' ||
+         formData.affectationType === 'Masivo'
+       ) {
+         descripcion_fallo = formData.tipoProblema || 'N/A';
        } else if (formData.affectationType === 'Equipo') {
-       descripcion_fallo = formData.tipoProblemaEquipo;
-      } else if (formData.affectationType === 'Masivo') {
-          descripcion_fallo = 'Fallo masivo reportado.';
-      }
+         descripcion_fallo = formData.tipoProblemaEquipo || 'N/A';
+       }
+
+       console.log('DEBUG descripcion_fallo:', {
+         affectationType: formData.affectationType,
+         tipoProblema: formData.tipoProblema,
+         tipoProblemaEquipo: formData.tipoProblemaEquipo,
+         descripcion_fallo
+       });
 
        const { date: fechaFallo, time: horaFallo } = splitDateTimeLocalValue(formData.fechaHoraFallo);
        const fechaHoraIso = toIsoString(formData.fechaHoraFallo);

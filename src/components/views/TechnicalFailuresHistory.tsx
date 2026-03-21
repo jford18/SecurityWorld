@@ -107,15 +107,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   const getSortableTextValue = (failure: TechnicalFailure, key: string) => {
     switch (key) {
       case 'problema':
-        return (
-          failure.problema
-            || failure.tipoProblemaNombre
-            || failure.tipoProblema
-            || failure.descripcion_fallo
-            || ''
-        )
-          .toString()
-          .toLowerCase();
+        return (failure.descripcion_fallo || '').toString().toLowerCase();
       case 'tipoAfectacion': {
         const tipoAfectacion =
           failure.tipo_afectacion_detalle
@@ -599,11 +591,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                     {formatFechaHoraFallo(fallo) || 'Sin información'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {fallo.problema
-                      || fallo.tipoProblemaNombre
-                      || fallo.tipoProblema
-                      || fallo.descripcion_fallo
-                      || 'Sin información'}
+                    {fallo.descripcion_fallo || 'Sin información'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {getTipoAfectacionLabel(fallo)}
