@@ -1000,7 +1000,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
 
     if (departamento) {
       params.push(`%${departamento}%`);
-      filtros.push(`AND C.NOMBRE ILIKE $${params.length}`);
+      filtros.push(`AND Q.NOMBRE ILIKE $${params.length}`);
     }
 
     if (normalizedEstado === "resuelto") {
@@ -1040,8 +1040,11 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       `A.TIPO_AFECTACION AS "TIPO DE AFECTACION"`,
       `COALESCE(H.NOMBRE, 'Sin sitio asignado') AS "SITIO"`,
       `CASE
-        WHEN UPPER(A.TIPO_AFECTACION) IN ('MASIVO', 'PUNTO', 'NODO') THEN NULL
-        ELSE COALESCE(C.NOMBRE, NULL)
+        WHEN A.EQUIPO_AFECTADO IS NULL THEN NULL
+        WHEN UPPER(A.EQUIPO_AFECTADO) = 'N/A' THEN NULL
+        WHEN POSITION(' en ' IN LOWER(A.EQUIPO_AFECTADO)) > 0
+          THEN TRIM(SPLIT_PART(A.EQUIPO_AFECTADO, ' en ', 1))
+        ELSE NULL
       END AS "TIPO DE EQUIPO AFECTADO"`,
       `CASE
         WHEN UPPER(A.TIPO_AFECTACION) IN ('MASIVO', 'PUNTO', 'NODO') THEN NULL
@@ -1083,7 +1086,6 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
         ${selectColumns.join(",\n        ")}
       FROM FALLOS_TECNICOS A
       JOIN SEGUIMIENTO_FALLOS B ON (B.FALLO_ID = A.ID)
-      LEFT JOIN CATALOGO_TIPO_EQUIPO_AFECTADO C ON (UPPER(C.NOMBRE) = UPPER(A.TIPO_AFECTACION))
       LEFT JOIN USUARIOS U1 ON (U1.ID = B.ULTIMO_USUARIO_EDITO_ID)
       LEFT JOIN USUARIOS D ON (D.ID = A.RESPONSABLE_ID)
       LEFT JOIN USUARIOS E ON (E.ID = B.VERIFICACION_CIERRE_ID)
