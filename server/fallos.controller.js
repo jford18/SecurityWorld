@@ -1040,6 +1040,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       `A.TIPO_AFECTACION AS "TIPO DE AFECTACION"`,
       `COALESCE(H.NOMBRE, 'Sin sitio asignado') AS "SITIO"`,
       `CASE
+        WHEN UPPER(A.TIPO_AFECTACION) IN ('MASIVO', 'PUNTO', 'NODO') THEN NULL
         WHEN A.CAMERA_ID IS NOT NULL THEN 'CAMARA'
         WHEN A.ENCODING_DEVICE_ID IS NOT NULL THEN 'GRABADOR'
         WHEN A.IP_SPEAKER_ID IS NOT NULL THEN 'MEGAFONO'
@@ -1047,7 +1048,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
         ELSE 'OTRO'
       END AS "TIPO DE EQUIPO AFECTADO"`,
       `CASE
-        WHEN UPPER(A.TIPO_AFECTACION) IN ('MASIVA', 'PUNTO', 'NODO') THEN NULL
+        WHEN UPPER(A.TIPO_AFECTACION) IN ('MASIVO', 'PUNTO', 'NODO') THEN NULL
         ELSE COALESCE(K.CAMERA_NAME, L.NAME, M.NAME, N.NAME, A.EQUIPO_AFECTADO)
       END AS "NOMBRE DEL EQUIPO"`,
       `TO_CHAR(
