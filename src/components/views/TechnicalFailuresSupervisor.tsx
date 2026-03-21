@@ -268,6 +268,10 @@ const EditFailureModal: React.FC<{
     setActiveTab('general');
   }, [failure, normalizeFailure]);
 
+  useEffect(() => {
+    console.log('DEBUG PROBLEMA DETALLE:', failure.descripcion_fallo);
+  }, [failure.descripcion_fallo]);
+
   const updateField = (name: keyof TechnicalFailure, value: string | undefined) => {
     if (isReadOnly) return;
     setEditData((prev) => ({ ...prev, [name]: value }));
@@ -514,7 +518,7 @@ const EditFailureModal: React.FC<{
             <label className="block text-sm font-medium text-gray-700 mb-1">Problema</label>
             <input
               type="text"
-              value={editData.descripcion_fallo || 'Sin información'}
+              value={failure.descripcion_fallo || 'Sin información'}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100"
               disabled
             />
