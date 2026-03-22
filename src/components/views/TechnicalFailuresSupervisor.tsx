@@ -137,8 +137,13 @@ const formatDurationFromSeconds = (duration?: number | null) => {
 
 const RESOLUTION_FUTURE_ERROR =
   'La fecha de resolución no puede ser mayor a la fecha actual';
+const RESOLUTION_BEFORE_FAILURE_ERROR =
+  'Debe ser mayor a la fecha/hora del fallo';
 
-const validateResolutionDateTime = (value?: string | null) => {
+const validateResolutionDateTime = (
+  value?: string | null,
+  failureDateTime?: string | null,
+) => {
   if (!value) {
     return undefined;
   }
@@ -148,9 +153,21 @@ const validateResolutionDateTime = (value?: string | null) => {
     return undefined;
   }
 
-  return selectedDate.getTime() > Date.now()
-    ? RESOLUTION_FUTURE_ERROR
-    : undefined;
+  if (failureDateTime) {
+    const failureDate = new Date(failureDateTime);
+    if (
+      !Number.isNaN(failureDate.getTime()) &&
+      selectedDate.getTime() <= failureDate.getTime()
+    ) {
+      return RESOLUTION_BEFORE_FAILURE_ERROR;
+    }
+  }
+
+  if (selectedDate.getTime() > Date.now()) {
+    return RESOLUTION_FUTURE_ERROR;
+  }
+
+  return undefined;
 };
 
 const EditFailureModal: React.FC<{
@@ -300,7 +317,10 @@ const EditFailureModal: React.FC<{
   ) => {
     if (isReadOnly) return;
     const updatedValue = value ?? '';
-    const resolutionError = validateResolutionDateTime(updatedValue);
+    const resolutionError = validateResolutionDateTime(
+      updatedValue,
+      editData.fechaHoraFallo,
+    );
 
     if (resolutionError) {
       setFormErrors((prev) => ({
@@ -418,7 +438,10 @@ const EditFailureModal: React.FC<{
     const tieneResolucion = Boolean(editData.fechaHoraResolucion);
     const departamentoId = toPositiveIntegerOrNull(editData.departamentoResponsableId);
     const novedad = editData.novedadDetectada?.trim() ?? '';
-    const resolutionError = validateResolutionDateTime(editData.fechaHoraResolucion);
+    const resolutionError = validateResolutionDateTime(
+      editData.fechaHoraResolucion,
+      editData.fechaHoraFallo,
+    );
 
     if (!tieneResolucion) {
       if (!departamentoId) {
@@ -1124,6 +1147,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
           (resolutionDate && resolutionTime
             ? `${resolutionDate}T${resolutionTime}`
             : undefined),
+        updatedFailure.fechaHoraFallo,
       );
 
       if (!resolutionDate || !resolutionTime) {
