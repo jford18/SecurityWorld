@@ -139,10 +139,29 @@ const RESOLUTION_FUTURE_ERROR =
   'La fecha de resolución no puede ser mayor a la fecha actual';
 const RESOLUTION_BEFORE_FAILURE_ERROR =
   'Debe ser mayor a la fecha/hora del fallo';
+const RESOLUTION_AFTER_UPDATE_ERROR =
+  'Debe ser menor a la última fecha de actualización';
+
+const getResolutionUpperBoundDateTime = (
+  failure?: Pick<TechnicalFailure, 'fecha_actualizacion'> | null,
+) => failure?.fecha_actualizacion ?? null;
+
+const getResolutionAlertMessage = (error?: string) => {
+  if (error === RESOLUTION_BEFORE_FAILURE_ERROR) {
+    return 'La fecha de resolución debe ser mayor a la del fallo.';
+  }
+
+  if (error === RESOLUTION_AFTER_UPDATE_ERROR) {
+    return 'La fecha de resolución debe ser menor a la última fecha de actualización.';
+  }
+
+  return error;
+};
 
 const validateResolutionDateTime = (
   value?: string | null,
   failureDateTime?: string | null,
+  resolutionUpperBound?: string | null,
 ) => {
   if (!value) {
     return undefined;
@@ -160,6 +179,16 @@ const validateResolutionDateTime = (
       selectedDate.getTime() <= failureDate.getTime()
     ) {
       return RESOLUTION_BEFORE_FAILURE_ERROR;
+    }
+  }
+
+  if (resolutionUpperBound) {
+    const upperBoundDate = new Date(resolutionUpperBound);
+    if (
+      !Number.isNaN(upperBoundDate.getTime()) &&
+      selectedDate.getTime() >= upperBoundDate.getTime()
+    ) {
+      return RESOLUTION_AFTER_UPDATE_ERROR;
     }
   }
 
@@ -320,6 +349,7 @@ const EditFailureModal: React.FC<{
     const resolutionError = validateResolutionDateTime(
       updatedValue,
       editData.fechaHoraFallo,
+      getResolutionUpperBoundDateTime(editData),
     );
 
     if (resolutionError) {
@@ -441,6 +471,7 @@ const EditFailureModal: React.FC<{
     const resolutionError = validateResolutionDateTime(
       editData.fechaHoraResolucion,
       editData.fechaHoraFallo,
+      getResolutionUpperBoundDateTime(editData),
     );
 
     if (!tieneResolucion) {
@@ -1148,6 +1179,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
             ? `${resolutionDate}T${resolutionTime}`
             : undefined),
         updatedFailure.fechaHoraFallo,
+        getResolutionUpperBoundDateTime(updatedFailure),
       );
 
       if (!resolutionDate || !resolutionTime) {
@@ -1156,7 +1188,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
       }
 
       if (resolutionError) {
-        alert(resolutionError);
+        alert(getResolutionAlertMessage(resolutionError));
         return;
       }
 
