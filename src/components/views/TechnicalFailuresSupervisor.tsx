@@ -143,8 +143,25 @@ const RESOLUTION_AFTER_UPDATE_ERROR =
   'Debe ser mayor a la última fecha de actualización';
 
 const getResolutionUpperBoundDateTime = (
-  failure?: Pick<TechnicalFailure, 'fecha_actualizacion'> | null,
-) => failure?.fecha_actualizacion ?? null;
+  failure?: (TechnicalFailure & { historial?: Array<{ hasta?: string | null } | null> }) | null,
+  departmentTimeline: FailureDepartmentTimelineEntry[] = [],
+) => {
+  const historialHasta = (failure?.historial ?? [])
+    .map((entry) => entry?.hasta ?? null)
+    .filter((hasta): hasta is string => typeof hasta === 'string' && hasta.trim() !== '');
+  const timelineHasta = departmentTimeline
+    .map((entry) => entry.fecha_hasta ?? null)
+    .filter((hasta): hasta is string => typeof hasta === 'string' && hasta.trim() !== '');
+  const fechasHasta = [...historialHasta, ...timelineHasta];
+
+  if (fechasHasta.length === 0) return null;
+
+  const latestHasta = fechasHasta
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+    .find((value) => !Number.isNaN(new Date(value).getTime()));
+
+  return latestHasta ?? null;
+};
 
 const getResolutionAlertMessage = (error?: string) => {
   if (error === RESOLUTION_BEFORE_FAILURE_ERROR) {
@@ -346,10 +363,19 @@ const EditFailureModal: React.FC<{
   ) => {
     if (isReadOnly) return;
     const updatedValue = value ?? '';
+    const resolutionUpperBound = getResolutionUpperBoundDateTime(
+      editData as TechnicalFailure & { historial?: Array<{ hasta?: string | null } | null> },
+      departmentTimeline,
+    );
+    console.log('DEBUG VALIDACION FECHAS', {
+      fechaFallo: editData.fechaHoraFallo,
+      fechaResolucion: updatedValue,
+      ultimaFechaHasta: resolutionUpperBound ? new Date(resolutionUpperBound) : null,
+    });
     const resolutionError = validateResolutionDateTime(
       updatedValue,
       editData.fechaHoraFallo,
-      getResolutionUpperBoundDateTime(editData),
+      resolutionUpperBound,
     );
 
     if (resolutionError) {
@@ -471,7 +497,10 @@ const EditFailureModal: React.FC<{
     const resolutionError = validateResolutionDateTime(
       editData.fechaHoraResolucion,
       editData.fechaHoraFallo,
-      getResolutionUpperBoundDateTime(editData),
+      getResolutionUpperBoundDateTime(
+        editData as TechnicalFailure & { historial?: Array<{ hasta?: string | null } | null> },
+        departmentTimeline,
+      ),
     );
 
     if (!tieneResolucion) {
@@ -1179,7 +1208,12 @@ const TechnicalFailuresSupervisor: React.FC = () => {
             ? `${resolutionDate}T${resolutionTime}`
             : undefined),
         updatedFailure.fechaHoraFallo,
-        getResolutionUpperBoundDateTime(updatedFailure),
+        getResolutionUpperBoundDateTime(
+          updatedFailure as TechnicalFailure & {
+            historial?: Array<{ hasta?: string | null } | null>;
+          },
+          departmentTimeline,
+        ),
       );
 
       if (!resolutionDate || !resolutionTime) {
@@ -1244,7 +1278,7 @@ const TechnicalFailuresSupervisor: React.FC = () => {
         setIsSubmitting(false);
       }
     },
-    [handleCloseModal, resolveResolutionDateTime, roleContext],
+    [departmentTimeline, handleCloseModal, resolveResolutionDateTime, roleContext],
   );
 
   const handleDeleteFailure = async (failureId: string) => {
