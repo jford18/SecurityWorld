@@ -140,7 +140,7 @@ const RESOLUTION_FUTURE_ERROR =
 const RESOLUTION_BEFORE_FAILURE_ERROR =
   'Debe ser mayor a la fecha/hora del fallo';
 const RESOLUTION_AFTER_UPDATE_ERROR =
-  'Debe ser menor a la última fecha de actualización';
+  'Debe ser mayor a la última fecha de actualización';
 
 const getResolutionUpperBoundDateTime = (
   failure?: Pick<TechnicalFailure, 'fecha_actualizacion'> | null,
@@ -152,7 +152,7 @@ const getResolutionAlertMessage = (error?: string) => {
   }
 
   if (error === RESOLUTION_AFTER_UPDATE_ERROR) {
-    return 'La fecha de resolución debe ser menor a la última fecha de actualización.';
+    return 'La fecha de resolución debe ser mayor a la última fecha de actualización.';
   }
 
   return error;
@@ -186,7 +186,7 @@ const validateResolutionDateTime = (
     const upperBoundDate = new Date(resolutionUpperBound);
     if (
       !Number.isNaN(upperBoundDate.getTime()) &&
-      selectedDate.getTime() >= upperBoundDate.getTime()
+      selectedDate.getTime() <= upperBoundDate.getTime()
     ) {
       return RESOLUTION_AFTER_UPDATE_ERROR;
     }
