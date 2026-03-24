@@ -1038,7 +1038,10 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       `J.NOMBRE AS "HACIENDA"`,
       `COALESCE(P.DESCRIPCION, A.DESCRIPCION_FALLO) AS "PROBLEMA"`,
       `A.TIPO_AFECTACION AS "TIPO DE AFECTACION"`,
-      `COALESCE(H.NOMBRE, 'Sin sitio asignado') AS "SITIO"`,
+      `CASE
+        WHEN UPPER(COALESCE(A.TIPO_AFECTACION, '')) = 'NODO' THEN A.EQUIPO_AFECTADO
+        ELSE COALESCE(H.NOMBRE, 'Sin sitio asignado')
+      END AS "SITIO"`,
       `CASE
         WHEN A.EQUIPO_AFECTADO IS NULL THEN NULL
         WHEN UPPER(A.EQUIPO_AFECTADO) = 'N/A' THEN NULL
