@@ -1069,7 +1069,7 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
       `A.ESTADO AS "ESTADO"`,
       `G.NOMBRE AS "NOMBRE DE CONSOLA"`,
       `${duracionTotalFalloSegExpression} AS "DURACION TOTAL DEL FALLO (SEG)"`,
-      `COUNT(B.ID) OVER (PARTITION BY A.ID) AS "N° DE MODIFICACIONES"`,
+      `ROW_NUMBER() OVER (PARTITION BY A.ID ORDER BY B.FECHA_INICIO, B.ID) AS "N° DE MODIFICACIONES"`,
       `TO_CHAR(B.FECHA_INICIO, 'YYYY-MM-DD HH24:MI:SS') AS "FECHA Y HORA DE MODIFICACION"`,
       `${duracionEntreModificacionesSegExpression} AS "DURACION ENTRE 2 MODIFICACIONES (SEG)"`,
       `${buildDurationSql(duracionEntreModificacionesSegExpression)} AS "DURACION ENTRE 2 MODIFICACIONES (H)"`,
