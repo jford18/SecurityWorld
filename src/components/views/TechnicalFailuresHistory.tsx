@@ -321,22 +321,53 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   const getDuracionTotalFalloHoras = (failure: TechnicalFailure) => {
     const row = failure as Record<string, unknown>;
 
-    console.log('ROW COMPLETO:', row);
+    try {
+      const fechaHoraFallo = (
+        row.fecha_hora_fallo
+        || row.fechaHoraFallo
+        || (row.fecha && `${row.fecha} ${row.hora || row.hora_fallo || '00:00:00'}`)
+        || ''
+      )
+        .toString()
+        .trim();
 
-    const segundos = Number(
-      row['DURACION TOTAL DEL FALLO (SEG)']
-      ?? row.duracion_total_seg
-      ?? 0
-    );
-    const horas = (segundos / 3600).toFixed(2);
+      const inicio = new Date(fechaHoraFallo.replace(' ', 'T'));
 
-    console.log({
-      raw: row['DURACION TOTAL DEL FALLO (SEG)'],
-      segundos,
-      horas,
-    });
+      if (Number.isNaN(inicio.getTime())) {
+        return '0.00 h';
+      }
 
-    return `${horas} h`;
+      const fechaResolucion = (row.fecha_resolucion || row.fechaResolucion || '').toString().trim();
+      const horaResolucion = (
+        row.hora_resolucion
+        || row.horaResolucion
+        || '00:00:00'
+      )
+        .toString()
+        .trim();
+
+      const fin = fechaResolucion
+        ? new Date(`${fechaResolucion}T${horaResolucion}`)
+        : new Date();
+
+      if (Number.isNaN(fin.getTime())) {
+        return '0.00 h';
+      }
+
+      const segundos = Math.floor((fin.getTime() - inicio.getTime()) / 1000);
+      const horas = (Math.max(segundos, 0) / 3600).toFixed(2);
+
+      console.log({
+        inicio: fechaHoraFallo,
+        fin: fechaResolucion || null,
+        calculado: horas,
+      });
+
+      return `${horas} h`;
+    } catch (error) {
+      console.error('Error calculando duración:', error);
+      return '0.00 h';
+    }
   };
 
   const formatFechaActualizacion = (failure: TechnicalFailure) => {
