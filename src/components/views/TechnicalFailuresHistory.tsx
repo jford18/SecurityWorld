@@ -42,7 +42,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const actionsEnabled = showActions && Boolean(handleEdit || renderActions);
   const stickyActions = actionsEnabled;
-  const columnsCount = actionsEnabled ? 12 : 11;
+  const columnsCount = actionsEnabled ? 11 : 10;
 
   const getFechaFalloTimestamp = (failure: TechnicalFailure) => {
     const horaFallo = failure.hora ?? failure.horaFallo;
@@ -458,9 +458,6 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                 Nombre del equipo
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Detalle de novedad detectada
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Responsable inicial
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -554,6 +551,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               <th className="px-6 py-2" />
               <th className="px-6 py-2" />
               <th className="px-6 py-2" />
+              <th className="px-6 py-2" />
               {actionsEnabled && <th className={`px-6 py-2 ${actionHeaderClasses}`} />}
             </tr>
           </thead>
@@ -616,9 +614,6 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {isTipoAfectacionEquipo(fallo) ? (getNombreEquipo(fallo) || '-') : '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {fallo.novedadDetectada || fallo.novedad_detectada || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {fallo.responsable || '-'}
