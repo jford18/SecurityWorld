@@ -442,14 +442,14 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               >
                 Sitio{renderSortIndicator('sitioNombre')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Duración total del fallo (H)
-              </th>
               <th
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                 onClick={() => handleSort('departamentoResponsable')}
               >
-                Departamento Responsable{renderSortIndicator('departamentoResponsable')}
+                DEPARTAMENTO RESPONSABLE{renderSortIndicator('departamentoResponsable')}
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                DURACION TOTAL DEL FALLO (H)
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Tipo de equipo afectado
@@ -517,6 +517,20 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                 />
               </th>
               <th className="px-6 py-2">
+                <select
+                  value={filters.departamento}
+                  onChange={(e) => handleFilterChange('departamento', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                >
+                  <option value="">Todos</option>
+                  {departamentoOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </th>
+              <th className="px-6 py-2">
                 <div className="flex flex-col gap-1 text-xs text-gray-700">
                   <input
                     type="date"
@@ -533,20 +547,6 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                     placeholder="Hasta"
                   />
                 </div>
-              </th>
-              <th className="px-6 py-2">
-                <select
-                  value={filters.departamento}
-                  onChange={(e) => handleFilterChange('departamento', e.target.value)}
-                  className="border rounded px-2 py-1 text-sm w-full"
-                >
-                  <option value="">Todos</option>
-                  {departamentoOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
               </th>
               <th className="px-6 py-2" />
               <th className="px-6 py-2" />
@@ -601,13 +601,13 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                     {fallo.sitio || fallo.sitioNombre || fallo.sitio_nombre || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {getDuracionTotalFalloHoras(fallo)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {fallo.departamento_responsable
                       || fallo.departamentoNombre
                       || fallo.deptResponsable
                       || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {getDuracionTotalFalloHoras(fallo)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {isTipoAfectacionEquipo(fallo) ? (getTipoEquipoAfectado(fallo) || '-') : '-'}
