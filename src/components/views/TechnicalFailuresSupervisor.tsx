@@ -122,6 +122,43 @@ const formatFechaHoraDisplay = (
   return formatLocalDateTimeLocale(normalizedCandidate);
 };
 
+
+const parseFecha = (fechaStr?: string | null): Date | null => {
+  if (!fechaStr) return null;
+
+  const raw = String(fechaStr).trim();
+  if (!raw) return null;
+
+  const isoParsed = parseDbTimestampToLocal(raw);
+  if (isoParsed && !Number.isNaN(isoParsed.getTime())) {
+    return isoParsed;
+  }
+
+  const matchedUsDateTime = raw.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i,
+  );
+
+  if (!matchedUsDateTime) {
+    return null;
+  }
+
+  const [, monthRaw, dayRaw, yearRaw, hourRaw, minuteRaw, secondRaw, modifierRaw] =
+    matchedUsDateTime;
+  const month = Number(monthRaw);
+  const day = Number(dayRaw);
+  const year = Number(yearRaw);
+  let hours = Number(hourRaw);
+  const minutes = Number(minuteRaw);
+  const seconds = Number(secondRaw ?? '0');
+  const modifier = modifierRaw.toUpperCase();
+
+  if (modifier === 'PM' && hours !== 12) hours += 12;
+  if (modifier === 'AM' && hours === 12) hours = 0;
+
+  const parsed = new Date(year, month - 1, day, hours, minutes, seconds, 0);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 const formatDurationFromSeconds = (duration?: number | null) => {
   if (!duration || duration <= 0) {
     return '00:00:00';
@@ -157,10 +194,11 @@ const getResolutionLowerBoundDateTime = (
   if (fechasDesde.length === 0) return null;
 
   const latestDesde = fechasDesde
-    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-    .find((value) => !Number.isNaN(new Date(value).getTime()));
+    .map((value) => ({ value, parsed: parseFecha(value) }))
+    .filter((entry): entry is { value: string; parsed: Date } => Boolean(entry.parsed))
+    .sort((a, b) => b.parsed.getTime() - a.parsed.getTime())[0];
 
-  return latestDesde ?? null;
+  return latestDesde?.value ?? null;
 };
 
 const getResolutionAlertMessage = (error?: string) => {
@@ -184,29 +222,19 @@ const validateResolutionDateTime = (
     return undefined;
   }
 
-  const selectedDate = new Date(value);
-  if (Number.isNaN(selectedDate.getTime())) {
+  const selectedDate = parseFecha(value);
+  if (!selectedDate) {
     return undefined;
   }
 
-  if (failureDateTime) {
-    const failureDate = new Date(failureDateTime);
-    if (
-      !Number.isNaN(failureDate.getTime()) &&
-      selectedDate.getTime() <= failureDate.getTime()
-    ) {
-      return RESOLUTION_BEFORE_FAILURE_ERROR;
-    }
+  const failureDate = parseFecha(failureDateTime);
+  if (failureDate && selectedDate.getTime() <= failureDate.getTime()) {
+    return RESOLUTION_BEFORE_FAILURE_ERROR;
   }
 
-  if (resolutionLowerBound) {
-    const upperBoundDate = new Date(resolutionLowerBound);
-    if (
-      !Number.isNaN(upperBoundDate.getTime()) &&
-      selectedDate.getTime() <= upperBoundDate.getTime()
-    ) {
-      return RESOLUTION_AFTER_UPDATE_ERROR;
-    }
+  const upperBoundDate = parseFecha(resolutionLowerBound);
+  if (upperBoundDate && selectedDate.getTime() <= upperBoundDate.getTime()) {
+    return RESOLUTION_AFTER_UPDATE_ERROR;
   }
 
   if (selectedDate.getTime() > Date.now()) {
@@ -367,10 +395,14 @@ const EditFailureModal: React.FC<{
       editData as TechnicalFailure & { historial?: Array<{ desde?: string | null } | null> },
       departmentTimeline,
     );
-    console.log('DEBUG FECHAS', {
-      fechaFallo: editData.fechaHoraFallo,
-      fechaResolucion: updatedValue,
-      ultimoDesde: resolutionLowerBound ? new Date(resolutionLowerBound) : null,
+    const fechaFallo = parseFecha(editData.fechaHoraFallo);
+    const fechaResolucion = parseFecha(updatedValue);
+    const ultimoDesde = parseFecha(resolutionLowerBound);
+
+    console.log('DEBUG FECHAS PARSEADAS', {
+      fechaFallo,
+      fechaResolucion,
+      ultimoDesde,
     });
     const resolutionError = validateResolutionDateTime(
       updatedValue,
@@ -386,7 +418,7 @@ const EditFailureModal: React.FC<{
       return;
     }
 
-    const parsedDateTime = helpers.dateValue ?? (updatedValue ? new Date(updatedValue) : null);
+    const parsedDateTime = helpers.dateValue ?? parseFecha(updatedValue);
     const normalizedValue =
       normalizeDateTimeLocalString(updatedValue) ||
       (parsedDateTime && !Number.isNaN(parsedDateTime.getTime())
