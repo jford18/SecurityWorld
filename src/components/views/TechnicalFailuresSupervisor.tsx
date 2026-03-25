@@ -178,6 +178,7 @@ const RESOLUTION_BEFORE_FAILURE_ERROR =
   'Debe ser mayor a la fecha/hora del fallo';
 const RESOLUTION_AFTER_UPDATE_ERROR =
   'Debe ser mayor a la última fecha de actualización';
+const RESOLUTION_NOW_MARGIN_MS = 60_000;
 
 const getResolutionLowerBoundDateTime = (
   failure?: (TechnicalFailure & { historial?: Array<{ desde?: string | null } | null> }) | null,
@@ -227,6 +228,10 @@ const validateResolutionDateTime = (
     return undefined;
   }
 
+  if (selectedDate.getTime() > Date.now() + RESOLUTION_NOW_MARGIN_MS) {
+    return RESOLUTION_FUTURE_ERROR;
+  }
+
   const failureDate = parseFecha(failureDateTime);
   if (failureDate && selectedDate.getTime() <= failureDate.getTime()) {
     return RESOLUTION_BEFORE_FAILURE_ERROR;
@@ -235,10 +240,6 @@ const validateResolutionDateTime = (
   const upperBoundDate = parseFecha(resolutionLowerBound);
   if (upperBoundDate && selectedDate.getTime() <= upperBoundDate.getTime()) {
     return RESOLUTION_AFTER_UPDATE_ERROR;
-  }
-
-  if (selectedDate.getTime() > Date.now()) {
-    return RESOLUTION_FUTURE_ERROR;
   }
 
   return undefined;
