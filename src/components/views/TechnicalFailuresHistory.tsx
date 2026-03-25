@@ -274,11 +274,27 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
 
   const getTipoEquipoAfectado = (failure: TechnicalFailure) => {
     const record = failure as TechnicalFailure & {
-      tipo_equipo_afectado?: string | null;
-      tipoEquipoAfectado?: string | null;
+      camera_id?: number | string | null;
+      cameraId?: number | string | null;
+      encoding_device_id?: number | string | null;
+      encodingDeviceId?: number | string | null;
+      ip_speaker_id?: number | string | null;
+      ipSpeakerId?: number | string | null;
+      alarm_input_id?: number | string | null;
+      alarmInputId?: number | string | null;
     };
 
-    return (record.tipo_equipo_afectado ?? record.tipoEquipoAfectado ?? '').toString().trim();
+    const tipoAfectacion = (failure.tipoAfectacion || failure.tipo_afectacion || '').toString().trim().toUpperCase();
+    if (tipoAfectacion === 'NODO') return 'NODO';
+
+    const hasValue = (value: unknown) => value !== null && value !== undefined && value !== '';
+
+    if (hasValue(record.camera_id) || hasValue(record.cameraId)) return 'CAMARA';
+    if (hasValue(record.encoding_device_id) || hasValue(record.encodingDeviceId)) return 'GRABADOR';
+    if (hasValue(record.ip_speaker_id) || hasValue(record.ipSpeakerId)) return 'MEGAFONO';
+    if (hasValue(record.alarm_input_id) || hasValue(record.alarmInputId)) return 'ALARM INPUT';
+
+    return 'OTRO';
   };
 
   const getNombreEquipo = (failure: TechnicalFailure) => {
@@ -623,7 +639,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                     {getDuracionTotalFalloHoras(fallo)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {isTipoAfectacionEquipo(fallo) ? (getTipoEquipoAfectado(fallo) || '-') : '-'}
+                    {getTipoEquipoAfectado(fallo)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {isTipoAfectacionEquipo(fallo) ? (getNombreEquipo(fallo) || '-') : '-'}
