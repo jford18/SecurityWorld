@@ -379,10 +379,10 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   };
 
   const actionHeaderClasses = stickyActions
-    ? 'sticky right-0 z-40 bg-white min-w-[110px] w-[110px] border-l shadow-[-6px_0_6px_rgba(0,0,0,0.06)]'
+    ? 'sticky right-0 z-10 bg-white min-w-[120px] w-[120px] max-w-[120px] border-l shadow-[-6px_0_6px_rgba(0,0,0,0.06)]'
     : '';
   const actionCellClasses = stickyActions
-    ? 'sticky right-0 z-30 bg-white min-w-[110px] w-[110px] border-l shadow-[-6px_0_6px_rgba(0,0,0,0.06)]'
+    ? 'sticky right-0 z-10 bg-white min-w-[120px] w-[120px] max-w-[120px] border-l shadow-[-6px_0_6px_rgba(0,0,0,0.06)]'
     : '';
 
   const content = (
@@ -415,7 +415,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
         </div>
       </div>
       <div className="overflow-x-auto relative max-w-full isolate">
-        <table className="min-w-max w-full border-separate border-spacing-0 divide-y divide-gray-200">
+        <table className="table-fixed w-full border-separate border-spacing-0 divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               <th
@@ -466,7 +466,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               {actionsEnabled && (
                 <th
                   scope="col"
-                  className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${actionHeaderClasses}`}
+                  className={`px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider ${actionHeaderClasses}`}
                 >
                   Acción
                 </th>
@@ -552,7 +552,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               <th className="px-6 py-2" />
               <th className="px-6 py-2" />
               <th className="px-6 py-2" />
-              {actionsEnabled && <th className={`px-6 py-2 ${actionHeaderClasses}`} />}
+              {actionsEnabled && <th className={`px-2 py-2 ${actionHeaderClasses}`} />}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -628,21 +628,23 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                       .join(' - ') || '-'}
                   </td>
                   {actionsEnabled && (
-                    <td className={`px-6 py-3 text-left whitespace-nowrap ${actionCellClasses}`}>
-                      {renderActions ? (
-                        renderActions(fallo)
-                      ) : (
-                        handleEdit && (
-                          !isFailureResolved(fallo) && (
-                            <button
-                              onClick={() => handleEdit(fallo)}
-                              className="text-blue-600 hover:underline text-sm font-semibold"
-                            >
-                              Editar
-                            </button>
+                    <td className={`px-2 py-2 text-center whitespace-nowrap ${actionCellClasses}`}>
+                      <div className="flex justify-center gap-2 whitespace-nowrap">
+                        {renderActions ? (
+                          renderActions(fallo)
+                        ) : (
+                          handleEdit && (
+                            !isFailureResolved(fallo) && (
+                              <button
+                                onClick={() => handleEdit(fallo)}
+                                className="text-blue-600 hover:underline text-sm font-semibold"
+                              >
+                                Editar
+                              </button>
+                            )
                           )
-                        )
-                      )}
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>
