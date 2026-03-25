@@ -320,49 +320,21 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
 
   const getDuracionTotalFalloHoras = (failure: TechnicalFailure) => {
     const record = failure as Record<string, unknown>;
-    const duracionSegKeys = [
-      'duracion_total_seg',
-      'duracion_total_fallo_seg',
-      'duracionTotalFalloSeg',
-      'duracion_total_segundos',
-      'duracionSegundos',
-    ];
+    const segundosRaw =
+      record['DURACION TOTAL DEL FALLO (SEG)']
+      ?? record.duracion_total_seg
+      ?? record.duracionTotalSeg
+      ?? 0;
 
-    console.log('duracion original:', record.duracion_total_seg);
+    const segundos = Number(segundosRaw || 0);
+    const horas = (segundos / 3600).toFixed(2);
 
-    for (const key of duracionSegKeys) {
-      const value = record[key];
-      if (value === null || value === undefined || value === '') continue;
-      const duracionOriginal = Number(value);
-      if (Number.isFinite(duracionOriginal) && duracionOriginal >= 0) {
-        let horasCalculadas = duracionOriginal / 3600; // Caso esperado: segundos
+    console.log({
+      segundos: record.duracion_total_seg ?? record['DURACION TOTAL DEL FALLO (SEG)'] ?? 0,
+      horas,
+    });
 
-        // Si llega muy grande, probablemente está en milisegundos.
-        if (duracionOriginal >= 1_000_000) {
-          horasCalculadas = duracionOriginal / 1000 / 3600;
-        } else if (duracionOriginal <= 720) {
-          // Valores muy pequeños en este campo suelen indicar que ya viene en horas.
-          horasCalculadas = duracionOriginal;
-        }
-
-        return `${horasCalculadas.toFixed(2)} h`;
-      }
-    }
-
-    const inicioBase = failure.fecha_hora_fallo || failure.fechaHoraFallo;
-    const inicio = inicioBase ? new Date(inicioBase) : null;
-    if (!inicio || Number.isNaN(inicio.getTime())) return '-';
-
-    const finBase =
-      failure.fechaHoraResolucion
-      || (record.fecha_hora_resolucion as string | undefined)
-      || failure.fecha_actualizacion
-      || null;
-    const fin = finBase ? new Date(finBase) : new Date();
-    if (Number.isNaN(fin.getTime())) return '-';
-
-    const segundosCalculados = Math.max(0, (fin.getTime() - inicio.getTime()) / 1000);
-    return `${(segundosCalculados / 3600).toFixed(2)} h`;
+    return `${horas} h`;
   };
 
   const formatFechaActualizacion = (failure: TechnicalFailure) => {
