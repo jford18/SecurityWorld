@@ -142,25 +142,25 @@ const RESOLUTION_BEFORE_FAILURE_ERROR =
 const RESOLUTION_AFTER_UPDATE_ERROR =
   'Debe ser mayor a la última fecha de actualización';
 
-const getResolutionUpperBoundDateTime = (
-  failure?: (TechnicalFailure & { historial?: Array<{ hasta?: string | null } | null> }) | null,
+const getResolutionLowerBoundDateTime = (
+  failure?: (TechnicalFailure & { historial?: Array<{ desde?: string | null } | null> }) | null,
   departmentTimeline: FailureDepartmentTimelineEntry[] = [],
 ) => {
-  const historialHasta = (failure?.historial ?? [])
-    .map((entry) => entry?.hasta ?? null)
-    .filter((hasta): hasta is string => typeof hasta === 'string' && hasta.trim() !== '');
-  const timelineHasta = departmentTimeline
-    .map((entry) => entry.fecha_hasta ?? null)
-    .filter((hasta): hasta is string => typeof hasta === 'string' && hasta.trim() !== '');
-  const fechasHasta = [...historialHasta, ...timelineHasta];
+  const historialDesde = (failure?.historial ?? [])
+    .map((entry) => entry?.desde ?? null)
+    .filter((desde): desde is string => typeof desde === 'string' && desde.trim() !== '');
+  const timelineDesde = departmentTimeline
+    .map((entry) => entry.fecha_inicio ?? null)
+    .filter((desde): desde is string => typeof desde === 'string' && desde.trim() !== '');
+  const fechasDesde = [...historialDesde, ...timelineDesde];
 
-  if (fechasHasta.length === 0) return null;
+  if (fechasDesde.length === 0) return null;
 
-  const latestHasta = fechasHasta
+  const latestDesde = fechasDesde
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
     .find((value) => !Number.isNaN(new Date(value).getTime()));
 
-  return latestHasta ?? null;
+  return latestDesde ?? null;
 };
 
 const getResolutionAlertMessage = (error?: string) => {
@@ -178,7 +178,7 @@ const getResolutionAlertMessage = (error?: string) => {
 const validateResolutionDateTime = (
   value?: string | null,
   failureDateTime?: string | null,
-  resolutionUpperBound?: string | null,
+  resolutionLowerBound?: string | null,
 ) => {
   if (!value) {
     return undefined;
@@ -199,8 +199,8 @@ const validateResolutionDateTime = (
     }
   }
 
-  if (resolutionUpperBound) {
-    const upperBoundDate = new Date(resolutionUpperBound);
+  if (resolutionLowerBound) {
+    const upperBoundDate = new Date(resolutionLowerBound);
     if (
       !Number.isNaN(upperBoundDate.getTime()) &&
       selectedDate.getTime() <= upperBoundDate.getTime()
@@ -363,19 +363,19 @@ const EditFailureModal: React.FC<{
   ) => {
     if (isReadOnly) return;
     const updatedValue = value ?? '';
-    const resolutionUpperBound = getResolutionUpperBoundDateTime(
-      editData as TechnicalFailure & { historial?: Array<{ hasta?: string | null } | null> },
+    const resolutionLowerBound = getResolutionLowerBoundDateTime(
+      editData as TechnicalFailure & { historial?: Array<{ desde?: string | null } | null> },
       departmentTimeline,
     );
-    console.log('DEBUG VALIDACION FECHAS', {
+    console.log('DEBUG FECHAS', {
       fechaFallo: editData.fechaHoraFallo,
       fechaResolucion: updatedValue,
-      ultimaFechaHasta: resolutionUpperBound ? new Date(resolutionUpperBound) : null,
+      ultimoDesde: resolutionLowerBound ? new Date(resolutionLowerBound) : null,
     });
     const resolutionError = validateResolutionDateTime(
       updatedValue,
       editData.fechaHoraFallo,
-      resolutionUpperBound,
+      resolutionLowerBound,
     );
 
     if (resolutionError) {
@@ -497,8 +497,8 @@ const EditFailureModal: React.FC<{
     const resolutionError = validateResolutionDateTime(
       editData.fechaHoraResolucion,
       editData.fechaHoraFallo,
-      getResolutionUpperBoundDateTime(
-        editData as TechnicalFailure & { historial?: Array<{ hasta?: string | null } | null> },
+      getResolutionLowerBoundDateTime(
+        editData as TechnicalFailure & { historial?: Array<{ desde?: string | null } | null> },
         departmentTimeline,
       ),
     );
@@ -1208,9 +1208,9 @@ const TechnicalFailuresSupervisor: React.FC = () => {
             ? `${resolutionDate}T${resolutionTime}`
             : undefined),
         updatedFailure.fechaHoraFallo,
-        getResolutionUpperBoundDateTime(
+        getResolutionLowerBoundDateTime(
           updatedFailure as TechnicalFailure & {
-            historial?: Array<{ hasta?: string | null } | null>;
+            historial?: Array<{ desde?: string | null } | null>;
           },
           departmentTimeline,
         ),
