@@ -7,44 +7,6 @@ import {
 } from '../../services/fallosService';
 import { getLocalDateTimestamp, parseDbTimestampToLocal } from '../../utils/datetime';
 
-
-const formatFechaHoraFallo = (failure: TechnicalFailure) => {
-  if (failure.fechaHoraFallo) {
-    const parsedFailureDateTime = parseDbTimestampToLocal(failure.fechaHoraFallo);
-    if (parsedFailureDateTime) {
-      return parsedFailureDateTime.toLocaleString();
-    }
-    return failure.fechaHoraFallo;
-  }
-
-  const horaFallo = failure.hora ?? failure.horaFallo;
-  if (failure.fecha && horaFallo) {
-    return `${failure.fecha} ${horaFallo.toString().substring(0, 5)}`;
-  }
-
-  if (failure.fecha) {
-    return failure.fecha;
-  }
-
-  const dateTimeCandidate = failure.fechaHoraFallo;
-
-  if (!dateTimeCandidate) {
-    return '';
-  }
-
-  if (!dateTimeCandidate.includes('T')) {
-    return dateTimeCandidate;
-  }
-
-  const parsed = parseDbTimestampToLocal(dateTimeCandidate);
-
-  if (!parsed || Number.isNaN(parsed.getTime())) {
-    return dateTimeCandidate.replace('T', ' ').replace('Z', '');
-  }
-
-  return parsed.toLocaleString();
-};
-
 interface TechnicalFailuresHistoryProps {
   failures: TechnicalFailure[];
   isLoading: boolean;
@@ -80,7 +42,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const actionsEnabled = showActions && Boolean(handleEdit || renderActions);
   const stickyActions = actionsEnabled;
-  const columnsCount = actionsEnabled ? 15 : 14;
+  const columnsCount = actionsEnabled ? 12 : 11;
 
   const getFechaFalloTimestamp = (failure: TechnicalFailure) => {
     const horaFallo = failure.hora ?? failure.horaFallo;
@@ -340,15 +302,46 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     return trimmed;
   };
 
-  const getExtraFieldValue = (failure: TechnicalFailure, keys: string[]) => {
+  const getDuracionTotalFalloHoras = (failure: TechnicalFailure) => {
     const record = failure as Record<string, unknown>;
-    for (const key of keys) {
+    const duracionSegKeys = [
+      'duracion_total_fallo_seg',
+      'duracionTotalFalloSeg',
+      'duracion_total_segundos',
+      'duracionSegundos',
+    ];
+
+    for (const key of duracionSegKeys) {
       const value = record[key];
-      if (value === null || value === undefined) continue;
-      const normalized = String(value).trim();
-      if (normalized) return normalized;
+      if (value === null || value === undefined || value === '') continue;
+      const segundos = Number(value);
+      if (Number.isFinite(segundos) && segundos >= 0) {
+        return (segundos / 3600).toFixed(2);
+      }
     }
-    return '';
+
+    const inicioBase = failure.fecha_hora_fallo || failure.fechaHoraFallo;
+    const inicio = inicioBase ? new Date(inicioBase) : null;
+    if (!inicio || Number.isNaN(inicio.getTime())) return '-';
+
+    const finBase =
+      failure.fechaHoraResolucion
+      || (record.fecha_hora_resolucion as string | undefined)
+      || failure.fecha_actualizacion
+      || null;
+    const fin = finBase ? new Date(finBase) : new Date();
+    if (Number.isNaN(fin.getTime())) return '-';
+
+    const segundosCalculados = Math.max(0, (fin.getTime() - inicio.getTime()) / 1000);
+    return (segundosCalculados / 3600).toFixed(2);
+  };
+
+  const formatFechaActualizacion = (failure: TechnicalFailure) => {
+    const value = failure.fecha_actualizacion;
+    if (!value) return '-';
+    const parsed = parseDbTimestampToLocal(value) || new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '-';
+    return parsed.toLocaleString();
   };
 
   const handleExportToExcel = async () => {
@@ -427,9 +420,15 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
             <tr>
               <th
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => handleSort('fechaFallo')}
+                onClick={() => handleSort('estado')}
               >
-                Fecha y Hora de Fallo{renderSortIndicator('fechaFallo')}
+                Estado{renderSortIndicator('estado')}
+              </th>
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => handleSort('tipoAfectacion')}
+              >
+                Tipo de Afectación{renderSortIndicator('tipoAfectacion')}
               </th>
               <th
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
@@ -439,27 +438,12 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               </th>
               <th
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => handleSort('tipoAfectacion')}
-              >
-                Tipo de Afectación{renderSortIndicator('tipoAfectacion')}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Tipo de equipo afectado
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Nombre del equipo
-              </th>
-              <th
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                 onClick={() => handleSort('sitioNombre')}
               >
                 Sitio{renderSortIndicator('sitioNombre')}
               </th>
-              <th
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => handleSort('estado')}
-              >
-                Estado{renderSortIndicator('estado')}
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Duración total del fallo (H)
               </th>
               <th
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
@@ -468,25 +452,19 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                 Departamento Responsable{renderSortIndicator('departamentoResponsable')}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Novedad
+                Tipo de equipo afectado
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Nombre del equipo
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Detalle de novedad detectada
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Responsable inicial
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Último usuario que editó
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Nombre consola
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Cliente
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Hacienda
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Nombre CO
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Nombre de nodo
               </th>
               {actionsEnabled && (
                 <th
@@ -498,6 +476,49 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               )}
             </tr>
             <tr>
+              <th className="px-6 py-2">
+                <select
+                  value={filters.estado}
+                  onChange={(e) => handleFilterChange('estado', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                >
+                  <option value="">Todos</option>
+                  <option value="resuelto">Resuelto</option>
+                  <option value="pendiente">Pendiente</option>
+                </select>
+              </th>
+              <th className="px-6 py-2">
+                <select
+                  value={filters.tipoAfectacion}
+                  onChange={(e) => handleFilterChange('tipoAfectacion', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                >
+                  <option value="">Todos</option>
+                  {tipoAfectacionOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </th>
+              <th className="px-6 py-2">
+                <input
+                  type="text"
+                  value={filters.problema}
+                  onChange={(e) => handleFilterChange('problema', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                  placeholder="Filtrar problema"
+                />
+              </th>
+              <th className="px-6 py-2">
+                <input
+                  type="text"
+                  value={filters.sitio}
+                  onChange={(e) => handleFilterChange('sitio', e.target.value)}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                  placeholder="Filtrar sitio"
+                />
+              </th>
               <th className="px-6 py-2">
                 <div className="flex flex-col gap-1 text-xs text-gray-700">
                   <input
@@ -517,51 +538,6 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                 </div>
               </th>
               <th className="px-6 py-2">
-                <input
-                  type="text"
-                  value={filters.problema}
-                  onChange={(e) => handleFilterChange('problema', e.target.value)}
-                  className="border rounded px-2 py-1 text-sm w-full"
-                  placeholder="Filtrar problema"
-                />
-              </th>
-              <th className="px-6 py-2">
-                <select
-                  value={filters.tipoAfectacion}
-                  onChange={(e) => handleFilterChange('tipoAfectacion', e.target.value)}
-                  className="border rounded px-2 py-1 text-sm w-full"
-                >
-                  <option value="">Todos</option>
-                  {tipoAfectacionOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
-              </th>
-              <th className="px-6 py-2" />
-              <th className="px-6 py-2" />
-              <th className="px-6 py-2">
-                <input
-                  type="text"
-                  value={filters.sitio}
-                  onChange={(e) => handleFilterChange('sitio', e.target.value)}
-                  className="border rounded px-2 py-1 text-sm w-full"
-                  placeholder="Filtrar sitio"
-                />
-              </th>
-              <th className="px-6 py-2">
-                <select
-                  value={filters.estado}
-                  onChange={(e) => handleFilterChange('estado', e.target.value)}
-                  className="border rounded px-2 py-1 text-sm w-full"
-                >
-                  <option value="">Todos</option>
-                  <option value="resuelto">Resuelto</option>
-                  <option value="pendiente">Pendiente</option>
-                </select>
-              </th>
-              <th className="px-6 py-2">
                 <select
                   value={filters.departamento}
                   onChange={(e) => handleFilterChange('departamento', e.target.value)}
@@ -578,10 +554,6 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
               <th className="px-6 py-2" />
               <th className="px-6 py-2" />
               <th className="px-6 py-2" />
-              <th className="px-6 py-2" />
-              <th className="px-6 py-2" />
-              <th className="px-6 py-2" />
-              <th className="px-6 py-2" />
               {actionsEnabled && <th className={`px-6 py-2 ${actionHeaderClasses}`} />}
             </tr>
           </thead>
@@ -595,31 +567,6 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
             ) : (
               sortedFailures.map((fallo) => (
                 <tr key={fallo.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatFechaHoraFallo(fallo) || 'Sin información'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {fallo.problema
-                      || fallo.tipoProblemaNombre
-                      || fallo.tipoProblema
-                      || fallo.descripcion_fallo
-                      || 'Sin información'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {getTipoAfectacionLabel(fallo)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {isTipoAfectacionEquipo(fallo) ? (getTipoEquipoAfectado(fallo) || 'Sin información') : ''}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {isTipoAfectacionEquipo(fallo) ? (getNombreEquipo(fallo) || 'Sin información') : ''}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {fallo.sitio
-                      || fallo.sitioNombre
-                      || fallo.sitio_nombre
-                      || 'Sin sitio asignado'}
-                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {(() => {
                       const estado = calcularEstado(fallo);
@@ -643,33 +590,47 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                     })()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {getTipoAfectacionLabel(fallo) || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {fallo.problema
+                      || fallo.tipoProblemaNombre
+                      || fallo.tipoProblema
+                      || fallo.descripcion_fallo
+                      || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {fallo.sitio || fallo.sitioNombre || fallo.sitio_nombre || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {getDuracionTotalFalloHoras(fallo)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {fallo.departamento_responsable
                       || fallo.departamentoNombre
                       || fallo.deptResponsable
-                      || 'Sin información'}
+                      || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {fallo.novedadDetectada || fallo.novedad_detectada || 'Sin información'}
+                    {isTipoAfectacionEquipo(fallo) ? (getTipoEquipoAfectado(fallo) || '-') : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {fallo.ultimo_usuario_edito_nombre
-                      ?? fallo.ultimo_usuario_edito_id
-                      ?? 'Sin información'}
+                    {isTipoAfectacionEquipo(fallo) ? (getNombreEquipo(fallo) || '-') : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {getExtraFieldValue(fallo, ['nombre_consola', 'nombreConsola']) || 'Sin información'}
+                    {fallo.novedadDetectada || fallo.novedad_detectada || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {getExtraFieldValue(fallo, ['cliente_nombre', 'clienteNombre']) || 'Sin información'}
+                    {fallo.responsable || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {getExtraFieldValue(fallo, ['hacienda_nombre', 'haciendaNombre']) || 'Sin información'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {getExtraFieldValue(fallo, ['nombre_co', 'nombreCo']) || 'Sin información'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {getExtraFieldValue(fallo, ['nodo_nombre', 'nodoNombre']) || 'Sin información'}
+                    {[
+                      formatFechaActualizacion(fallo),
+                      fallo.ultimo_usuario_edito_nombre
+                        ?? (fallo.ultimo_usuario_edito_id != null ? String(fallo.ultimo_usuario_edito_id) : '-'),
+                    ]
+                      .filter((part) => part && part !== '-')
+                      .join(' - ') || '-'}
                   </td>
                   {actionsEnabled && (
                     <td className={`px-6 py-3 text-left whitespace-nowrap ${actionCellClasses}`}>
