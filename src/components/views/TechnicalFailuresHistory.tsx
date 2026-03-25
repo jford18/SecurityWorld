@@ -319,18 +319,20 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   };
 
   const getDuracionTotalFalloHoras = (failure: TechnicalFailure) => {
-    const record = failure as Record<string, unknown>;
-    const segundosRaw =
-      record['DURACION TOTAL DEL FALLO (SEG)']
-      ?? record.duracion_total_seg
-      ?? record.duracionTotalSeg
-      ?? 0;
+    const row = failure as Record<string, unknown>;
 
-    const segundos = Number(segundosRaw || 0);
+    console.log('ROW COMPLETO:', row);
+
+    const segundos = Number(
+      row['DURACION TOTAL DEL FALLO (SEG)']
+      ?? row.duracion_total_seg
+      ?? 0
+    );
     const horas = (segundos / 3600).toFixed(2);
 
     console.log({
-      segundos: record.duracion_total_seg ?? record['DURACION TOTAL DEL FALLO (SEG)'] ?? 0,
+      raw: row['DURACION TOTAL DEL FALLO (SEG)'],
+      segundos,
       horas,
     });
 
