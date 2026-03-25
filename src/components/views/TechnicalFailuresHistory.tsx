@@ -305,18 +305,31 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   const getDuracionTotalFalloHoras = (failure: TechnicalFailure) => {
     const record = failure as Record<string, unknown>;
     const duracionSegKeys = [
+      'duracion_total_seg',
       'duracion_total_fallo_seg',
       'duracionTotalFalloSeg',
       'duracion_total_segundos',
       'duracionSegundos',
     ];
 
+    console.log('duracion original:', record.duracion_total_seg);
+
     for (const key of duracionSegKeys) {
       const value = record[key];
       if (value === null || value === undefined || value === '') continue;
-      const segundos = Number(value);
-      if (Number.isFinite(segundos) && segundos >= 0) {
-        return (segundos / 3600).toFixed(2);
+      const duracionOriginal = Number(value);
+      if (Number.isFinite(duracionOriginal) && duracionOriginal >= 0) {
+        let horasCalculadas = duracionOriginal / 3600; // Caso esperado: segundos
+
+        // Si llega muy grande, probablemente está en milisegundos.
+        if (duracionOriginal >= 1_000_000) {
+          horasCalculadas = duracionOriginal / 1000 / 3600;
+        } else if (duracionOriginal <= 720) {
+          // Valores muy pequeños en este campo suelen indicar que ya viene en horas.
+          horasCalculadas = duracionOriginal;
+        }
+
+        return `${horasCalculadas.toFixed(2)} h`;
       }
     }
 
@@ -333,7 +346,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     if (Number.isNaN(fin.getTime())) return '-';
 
     const segundosCalculados = Math.max(0, (fin.getTime() - inicio.getTime()) / 1000);
-    return (segundosCalculados / 3600).toFixed(2);
+    return `${(segundosCalculados / 3600).toFixed(2)} h`;
   };
 
   const formatFechaActualizacion = (failure: TechnicalFailure) => {
