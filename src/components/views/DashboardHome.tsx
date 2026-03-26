@@ -30,8 +30,12 @@ const KPI_LABELS = [
     label: 'Fallos reportados',
   },
   {
-    key: 't_prom_solucion_dias',
-    label: 'T.prom solución (días)',
+    key: 't_prom_resolucion_dias',
+    label: 'Tiempo promedio de resolución',
+  },
+  {
+    key: 't_prom_espera_dias',
+    label: 'Tiempo promedio en espera',
   },
   {
     key: 'pct_pendientes',
@@ -981,7 +985,8 @@ const DashboardHome: React.FC = () => {
 
   const kpis = dashboard?.kpis ?? {
     fallos_reportados: 0,
-    t_prom_solucion_dias: 0,
+    t_prom_resolucion_dias: 0,
+    t_prom_espera_dias: 0,
     pct_pendientes: 0,
     pct_resueltos: 0,
   };
@@ -1053,8 +1058,8 @@ const DashboardHome: React.FC = () => {
             displayValue = formatPercent(Number(value));
           }
 
-          if (kpi.key === 't_prom_solucion_dias') {
-            displayValue = formatDecimal(Number(value), 2);
+          if (kpi.key === 't_prom_resolucion_dias' || kpi.key === 't_prom_espera_dias') {
+            displayValue = `${formatDecimal(Number(value), 2)} días`;
           }
 
           return (

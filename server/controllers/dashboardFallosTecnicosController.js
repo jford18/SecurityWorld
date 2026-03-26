@@ -224,7 +224,20 @@ WITH BASE AS (
 KPI AS (
     SELECT
         COUNT(1) AS FALLOS_REPORTADOS,
-        AVG(CASE WHEN A.ES_RESUELTO = 1 THEN A.DIAS_SOLUCION ELSE NULL END) AS T_PROM_SOLUCION_DIAS,
+        AVG(
+            CASE
+                WHEN A.ES_RESUELTO = 1
+                THEN EXTRACT(EPOCH FROM (A.FECHA_RESOLUCION::TIMESTAMP - A.FECHA::TIMESTAMP)) / 86400.0
+                ELSE NULL
+            END
+        ) AS T_PROM_RESOLUCION_DIAS,
+        AVG(
+            CASE
+                WHEN A.ES_PENDIENTE = 1
+                THEN EXTRACT(EPOCH FROM (NOW() - A.FECHA::TIMESTAMP)) / 86400.0
+                ELSE NULL
+            END
+        ) AS T_PROM_ESPERA_DIAS,
         (COUNT(1) FILTER (WHERE A.ES_PENDIENTE = 1)::DECIMAL / NULLIF(COUNT(1), 0)) * 100 AS PCT_PENDIENTES,
         (COUNT(1) FILTER (WHERE A.ES_RESUELTO = 1)::DECIMAL / NULLIF(COUNT(1), 0)) * 100 AS PCT_RESUELTOS,
         COUNT(1) FILTER (WHERE A.ES_PENDIENTE = 1) AS TOTAL_PENDIENTES
@@ -334,7 +347,8 @@ SELECT
     JSON_BUILD_OBJECT(
         'kpis', (SELECT JSON_BUILD_OBJECT(
             'fallos_reportados', K.FALLOS_REPORTADOS,
-            't_prom_solucion_dias', COALESCE(K.T_PROM_SOLUCION_DIAS, 0),
+            't_prom_resolucion_dias', COALESCE(K.T_PROM_RESOLUCION_DIAS, 0),
+            't_prom_espera_dias', COALESCE(K.T_PROM_ESPERA_DIAS, 0),
             'pct_pendientes', COALESCE(K.PCT_PENDIENTES, 0),
             'pct_resueltos', COALESCE(K.PCT_RESUELTOS, 0)
         ) FROM KPI K),
