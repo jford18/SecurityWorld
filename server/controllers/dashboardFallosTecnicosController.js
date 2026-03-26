@@ -402,6 +402,20 @@ SELECT
             )
             FROM TABLA_DEPARTAMENTO_ARBOL TDA
         ),
+        'data_original', (
+            SELECT COALESCE(
+                JSON_AGG(
+                    JSON_BUILD_OBJECT(
+                        'departamento_responsable', B.DEPARTAMENTO,
+                        'fecha_hora_fallo', B.FECHA,
+                        'fecha_resolucion', B.FECHA_RESOLUCION
+                    )
+                    ORDER BY B.FECHA DESC, B.ID DESC
+                ),
+                '[]'::JSON
+            )
+            FROM BASE B
+        ),
         'tendencia_pendientes_mes', (
             SELECT COALESCE(
                 JSON_AGG(
