@@ -43,6 +43,10 @@ export interface TablaDepartamentosArbolRow {
   fallos_resueltos: number;
   sum_dias_solucion: number;
   count_resueltos: number;
+  estado?: string | null;
+  fecha_hora_fallo?: string | null;
+  fecha_resolucion?: string | null;
+  hora_resolucion?: string | null;
 }
 
 export interface TendenciaPendientesRow {

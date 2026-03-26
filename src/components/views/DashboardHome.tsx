@@ -210,6 +210,7 @@ type DepartamentosArbolNode = {
   resueltos: number;
   sumDiasSolucion: number;
   countResueltos: number;
+  rows: TablaDepartamentosArbolRow[];
   children: DepartamentosArbolNode[];
 };
 
@@ -226,6 +227,83 @@ type DepartamentosArbolRow = {
 };
 
 const INDENT_SIZE = 16;
+
+const calcularDuracionDias = (row: TablaDepartamentosArbolRow) => {
+  if (!row.fecha_hora_fallo || !row.fecha_resolucion) return null;
+
+  const inicio = new Date(row.fecha_hora_fallo);
+  const fin = new Date(`${row.fecha_resolucion} ${row.hora_resolucion || '00:00:00'}`);
+
+  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
+    return null;
+  }
+
+  const segundos = (fin.getTime() - inicio.getTime()) / 1000;
+  return segundos / 86400;
+};
+
+const calcularPromedioNodo = (nodo: DepartamentosArbolNode) => {
+  let totalDias = 0;
+  let totalResueltos = 0;
+
+  const recorrer = (item: DepartamentosArbolNode) => {
+    if (item.children && item.children.length > 0) {
+      item.children.forEach(recorrer);
+      return;
+    }
+
+    item.rows.forEach((row) => {
+      if (row.estado === 'RESUELTO') {
+        const dias = calcularDuracionDias(row);
+        if (dias !== null) {
+          totalDias += dias;
+          totalResueltos++;
+        }
+      }
+    });
+  };
+
+  recorrer(nodo);
+
+  if (totalResueltos === 0) {
+    if (nodo.countResueltos > 0) {
+      return nodo.sumDiasSolucion / nodo.countResueltos;
+    }
+    return null;
+  }
+
+  return totalDias / totalResueltos;
+};
+
+const calcularPromedioNodoConConteo = (nodo: DepartamentosArbolNode) => {
+  let totalDias = 0;
+  let totalResueltos = 0;
+
+  const recorrer = (item: DepartamentosArbolNode) => {
+    if (item.children && item.children.length > 0) {
+      item.children.forEach(recorrer);
+      return;
+    }
+
+    item.rows.forEach((row) => {
+      if (row.estado === 'RESUELTO') {
+        const dias = calcularDuracionDias(row);
+        if (dias !== null) {
+          totalDias += dias;
+          totalResueltos++;
+        }
+      }
+    });
+  };
+
+  recorrer(nodo);
+
+  if (totalResueltos === 0 && nodo.countResueltos > 0) {
+    return { totalDias: nodo.sumDiasSolucion, totalResueltos: nodo.countResueltos };
+  }
+
+  return { totalDias, totalResueltos };
+};
 
 const DonutChart = React.memo(({ data }: { data: DonutDatum[] }) => {
   if (!data.length) {
@@ -762,6 +840,7 @@ const DashboardHome: React.FC = () => {
           resueltos: 0,
           sumDiasSolucion: 0,
           countResueltos: 0,
+          rows: [],
           children: [],
         }),
         null,
@@ -783,6 +862,7 @@ const DashboardHome: React.FC = () => {
           resueltos: 0,
           sumDiasSolucion: 0,
           countResueltos: 0,
+          rows: [],
           children: [],
         }),
         departamentoNode,
@@ -804,6 +884,7 @@ const DashboardHome: React.FC = () => {
           resueltos: 0,
           sumDiasSolucion: 0,
           countResueltos: 0,
+          rows: [],
           children: [],
         }),
         clienteNode,
@@ -820,6 +901,7 @@ const DashboardHome: React.FC = () => {
           resueltos: 0,
           sumDiasSolucion: 0,
           countResueltos: 0,
+          rows: [],
           children: [],
         }),
         haciendaNode,
@@ -829,6 +911,7 @@ const DashboardHome: React.FC = () => {
       sitioNode.resueltos = Number(row.fallos_resueltos ?? 0);
       sitioNode.sumDiasSolucion = Number(row.sum_dias_solucion ?? 0);
       sitioNode.countResueltos = Number(row.count_resueltos ?? 0);
+      sitioNode.rows.push(row);
     });
 
     const aggregateNode = (node: DepartamentosArbolNode) => {
@@ -899,8 +982,7 @@ const DashboardHome: React.FC = () => {
     const walk = (node: DepartamentosArbolNode, level: number) => {
       const total = node.pendientes + node.resueltos;
       const pctResueltos = total > 0 ? (node.resueltos / total) * 100 : 0;
-      const tprom =
-        node.countResueltos > 0 ? node.sumDiasSolucion / node.countResueltos : null;
+      const tprom = calcularPromedioNodo(node);
       const hasChildren = node.children.length > 0;
 
       rows.push({
@@ -947,11 +1029,23 @@ const DashboardHome: React.FC = () => {
         100
       : 0;
 
-  const totalTpromArbol =
-    totalsTablaDepartamentosArbol.countResueltos > 0
-      ? totalsTablaDepartamentosArbol.sumDiasSolucion /
-        totalsTablaDepartamentosArbol.countResueltos
-      : null;
+  const totalTpromArbol = useMemo(() => {
+    let totalDias = 0;
+    let totalResueltos = 0;
+
+    departamentosArbol.forEach((nodo) => {
+      const { totalDias: diasNodo, totalResueltos: resueltosNodo } =
+        calcularPromedioNodoConConteo(nodo);
+      totalDias += diasNodo;
+      totalResueltos += resueltosNodo;
+    });
+
+    if (totalResueltos === 0) {
+      return null;
+    }
+
+    return totalDias / totalResueltos;
+  }, [departamentosArbol]);
 
   const isEmpty =
     !dashboard ||
