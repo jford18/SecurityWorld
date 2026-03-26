@@ -2,7 +2,8 @@ import api from './api';
 
 export interface DashboardFallosTecnicosKpis {
   fallos_reportados: number;
-  t_prom_solucion_dias: number;
+  t_prom_resolucion_dias: number;
+  t_prom_espera_dias: number;
   pct_pendientes: number;
   pct_resueltos: number;
 }
