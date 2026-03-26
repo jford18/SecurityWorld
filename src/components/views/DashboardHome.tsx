@@ -222,6 +222,7 @@ type DepartamentosArbolRow = {
   resueltos: number;
   pctResueltos: number;
   tprom: number | null;
+  tpromEspera: number | null;
   level: number;
   hasChildren: boolean;
 };
@@ -233,6 +234,20 @@ const calcularDuracionDias = (row: TablaDepartamentosArbolRow) => {
 
   const inicio = new Date(row.fecha_hora_fallo);
   const fin = new Date(`${row.fecha_resolucion} ${row.hora_resolucion || '00:00:00'}`);
+
+  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
+    return null;
+  }
+
+  const segundos = (fin.getTime() - inicio.getTime()) / 1000;
+  return segundos / 86400;
+};
+
+const calcularDiasEspera = (row: TablaDepartamentosArbolRow) => {
+  if (row.fecha_resolucion || !row.fecha_hora_fallo) return null;
+
+  const inicio = new Date(row.fecha_hora_fallo);
+  const fin = new Date();
 
   if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
     return null;
@@ -275,6 +290,36 @@ const calcularPromedioNodo = (nodo: DepartamentosArbolNode) => {
   return totalDias / totalResueltos;
 };
 
+const calcularPromedioEsperaNodo = (nodo: DepartamentosArbolNode) => {
+  let totalDias = 0;
+  let totalPendientes = 0;
+
+  const recorrer = (item: DepartamentosArbolNode) => {
+    if (item.children && item.children.length > 0) {
+      item.children.forEach(recorrer);
+      return;
+    }
+
+    item.rows.forEach((row) => {
+      if (!row.fecha_resolucion) {
+        const dias = calcularDiasEspera(row);
+        if (dias !== null) {
+          totalDias += dias;
+          totalPendientes++;
+        }
+      }
+    });
+  };
+
+  recorrer(nodo);
+
+  if (totalPendientes === 0) {
+    return null;
+  }
+
+  return totalDias / totalPendientes;
+};
+
 const calcularPromedioNodoConConteo = (nodo: DepartamentosArbolNode) => {
   let totalDias = 0;
   let totalResueltos = 0;
@@ -303,6 +348,32 @@ const calcularPromedioNodoConConteo = (nodo: DepartamentosArbolNode) => {
   }
 
   return { totalDias, totalResueltos };
+};
+
+const calcularPromedioEsperaNodoConConteo = (nodo: DepartamentosArbolNode) => {
+  let totalDias = 0;
+  let totalPendientes = 0;
+
+  const recorrer = (item: DepartamentosArbolNode) => {
+    if (item.children && item.children.length > 0) {
+      item.children.forEach(recorrer);
+      return;
+    }
+
+    item.rows.forEach((row) => {
+      if (!row.fecha_resolucion) {
+        const dias = calcularDiasEspera(row);
+        if (dias !== null) {
+          totalDias += dias;
+          totalPendientes++;
+        }
+      }
+    });
+  };
+
+  recorrer(nodo);
+
+  return { totalDias, totalPendientes };
 };
 
 const DonutChart = React.memo(({ data }: { data: DonutDatum[] }) => {
@@ -983,6 +1054,7 @@ const DashboardHome: React.FC = () => {
       const total = node.pendientes + node.resueltos;
       const pctResueltos = total > 0 ? (node.resueltos / total) * 100 : 0;
       const tprom = calcularPromedioNodo(node);
+      const tpromEspera = calcularPromedioEsperaNodo(node);
       const hasChildren = node.children.length > 0;
 
       rows.push({
@@ -993,6 +1065,7 @@ const DashboardHome: React.FC = () => {
         resueltos: node.resueltos,
         pctResueltos,
         tprom,
+        tpromEspera,
         level,
         hasChildren,
       });
@@ -1045,6 +1118,24 @@ const DashboardHome: React.FC = () => {
     }
 
     return totalDias / totalResueltos;
+  }, [departamentosArbol]);
+
+  const totalTpromEsperaArbol = useMemo(() => {
+    let totalDias = 0;
+    let totalPendientes = 0;
+
+    departamentosArbol.forEach((nodo) => {
+      const { totalDias: diasNodo, totalPendientes: pendientesNodo } =
+        calcularPromedioEsperaNodoConConteo(nodo);
+      totalDias += diasNodo;
+      totalPendientes += pendientesNodo;
+    });
+
+    if (totalPendientes === 0) {
+      return null;
+    }
+
+    return totalDias / totalPendientes;
   }, [departamentosArbol]);
 
   const isEmpty =
@@ -1198,6 +1289,7 @@ const DashboardHome: React.FC = () => {
                   <th className="px-3 py-2 text-right">Fallos resueltos</th>
                   <th className="px-3 py-2 text-right">% Fallos resueltos</th>
                   <th className="px-3 py-2 text-right">T.prom solución (días)</th>
+                  <th className="px-3 py-2 text-right">T. PROM ESPERA (DÍAS)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -1247,6 +1339,11 @@ const DashboardHome: React.FC = () => {
                           ? Number(row.tprom).toFixed(2)
                           : '-'}
                       </td>
+                      <td className="px-3 py-2 text-right">
+                        {row.tpromEspera !== null && row.tpromEspera !== undefined
+                          ? Number(row.tpromEspera).toFixed(2)
+                          : '-'}
+                      </td>
                     </tr>
                   );
                 })}
@@ -1265,6 +1362,9 @@ const DashboardHome: React.FC = () => {
                   </td>
                   <td className="px-3 py-2 text-right">
                     {totalTpromArbol !== null ? Number(totalTpromArbol).toFixed(2) : '-'}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {totalTpromEsperaArbol !== null ? Number(totalTpromEsperaArbol).toFixed(2) : '-'}
                   </td>
                 </tr>
               </tfoot>
