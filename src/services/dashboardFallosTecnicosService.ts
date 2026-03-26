@@ -74,6 +74,11 @@ export interface DashboardFallosTecnicosResponse {
   pendientes_por_problema_hacienda: PendientesPorProblemaHacienda[];
   tabla_departamentos: TablaDepartamentosRow[];
   tabla_departamentos_arbol: TablaDepartamentosArbolRow[];
+  data_original: {
+    departamento_responsable: string;
+    fecha_hora_fallo: string | null;
+    fecha_resolucion: string | null;
+  }[];
   tendencia_pendientes_mes: TendenciaPendientesRow[];
   filtros: DashboardFallosTecnicosFiltersData;
 }

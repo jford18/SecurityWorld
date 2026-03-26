@@ -243,18 +243,34 @@ const calcularDuracionDias = (row: TablaDepartamentosArbolRow) => {
   return segundos / 86400;
 };
 
-const calcularDiasEspera = (row: TablaDepartamentosArbolRow) => {
-  if (row.fecha_resolucion || !row.fecha_hora_fallo) return null;
+type FalloOriginal = {
+  departamento_responsable: string;
+  fecha_hora_fallo: string | null;
+  fecha_resolucion: string | null;
+};
 
-  const inicio = new Date(row.fecha_hora_fallo);
-  const fin = new Date();
+const calcularPromedioEspera = (fallosFiltrados: FalloOriginal[]) => {
+  let totalDias = 0;
+  let total = 0;
 
-  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
+  fallosFiltrados.forEach((fallo) => {
+    if (!fallo.fecha_resolucion && fallo.fecha_hora_fallo) {
+      const inicio = new Date(fallo.fecha_hora_fallo);
+      const fin = new Date();
+      const dias = (fin.getTime() - inicio.getTime()) / 1000 / 86400;
+
+      if (!Number.isNaN(dias)) {
+        totalDias += dias;
+        total++;
+      }
+    }
+  });
+
+  if (total === 0) {
     return null;
   }
 
-  const segundos = (fin.getTime() - inicio.getTime()) / 1000;
-  return segundos / 86400;
+  return totalDias / total;
 };
 
 const calcularPromedioNodo = (nodo: DepartamentosArbolNode) => {
@@ -290,35 +306,6 @@ const calcularPromedioNodo = (nodo: DepartamentosArbolNode) => {
   return totalDias / totalResueltos;
 };
 
-const calcularPromedioEsperaNodo = (nodo: DepartamentosArbolNode) => {
-  let totalDias = 0;
-  let totalPendientes = 0;
-
-  const recorrer = (item: DepartamentosArbolNode) => {
-    item.rows.forEach((row) => {
-      if (!row.fecha_resolucion) {
-        const dias = calcularDiasEspera(row);
-        if (dias !== null) {
-          totalDias += dias;
-          totalPendientes++;
-        }
-      }
-    });
-
-    if (item.children && item.children.length > 0) {
-      item.children.forEach(recorrer);
-    }
-  };
-
-  recorrer(nodo);
-
-  if (totalPendientes === 0) {
-    return null;
-  }
-
-  return totalDias / totalPendientes;
-};
-
 const calcularPromedioNodoConConteo = (nodo: DepartamentosArbolNode) => {
   let totalDias = 0;
   let totalResueltos = 0;
@@ -347,31 +334,6 @@ const calcularPromedioNodoConConteo = (nodo: DepartamentosArbolNode) => {
   }
 
   return { totalDias, totalResueltos };
-};
-
-const calcularPromedioEsperaNodoConConteo = (nodo: DepartamentosArbolNode) => {
-  let totalDias = 0;
-  let totalPendientes = 0;
-
-  const recorrer = (item: DepartamentosArbolNode) => {
-    item.rows.forEach((row) => {
-      if (!row.fecha_resolucion) {
-        const dias = calcularDiasEspera(row);
-        if (dias !== null) {
-          totalDias += dias;
-          totalPendientes++;
-        }
-      }
-    });
-
-    if (item.children && item.children.length > 0) {
-      item.children.forEach(recorrer);
-    }
-  };
-
-  recorrer(nodo);
-
-  return { totalDias, totalPendientes };
 };
 
 const DonutChart = React.memo(({ data }: { data: DonutDatum[] }) => {
@@ -1047,12 +1009,15 @@ const DashboardHome: React.FC = () => {
 
   const departamentosArbolRows = useMemo<DepartamentosArbolRow[]>(() => {
     const rows: DepartamentosArbolRow[] = [];
+    const fallos = dashboard?.data_original ?? [];
 
     const walk = (node: DepartamentosArbolNode, level: number) => {
       const total = node.pendientes + node.resueltos;
       const pctResueltos = total > 0 ? (node.resueltos / total) * 100 : 0;
       const tprom = calcularPromedioNodo(node);
-      const tpromEspera = calcularPromedioEsperaNodo(node);
+      const tpromEspera = calcularPromedioEspera(
+        fallos.filter((fallo) => fallo.departamento_responsable === node.nombre),
+      );
       const hasChildren = node.children.length > 0;
 
       rows.push({
@@ -1076,7 +1041,7 @@ const DashboardHome: React.FC = () => {
     departamentosArbol.forEach((node) => walk(node, 0));
 
     return rows;
-  }, [departamentosArbol, expandedNodes]);
+  }, [dashboard?.data_original, departamentosArbol, expandedNodes]);
 
   const totalsTablaDepartamentosArbol = useMemo(() => {
     return departamentosArbol.reduce(
@@ -1119,22 +1084,8 @@ const DashboardHome: React.FC = () => {
   }, [departamentosArbol]);
 
   const totalTpromEsperaArbol = useMemo(() => {
-    let totalDias = 0;
-    let totalPendientes = 0;
-
-    departamentosArbol.forEach((nodo) => {
-      const { totalDias: diasNodo, totalPendientes: pendientesNodo } =
-        calcularPromedioEsperaNodoConConteo(nodo);
-      totalDias += diasNodo;
-      totalPendientes += pendientesNodo;
-    });
-
-    if (totalPendientes === 0) {
-      return null;
-    }
-
-    return totalDias / totalPendientes;
-  }, [departamentosArbol]);
+    return calcularPromedioEspera(dashboard?.data_original ?? []);
+  }, [dashboard?.data_original]);
 
   const isEmpty =
     !dashboard ||
