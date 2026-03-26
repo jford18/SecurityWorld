@@ -167,12 +167,15 @@ const ScrollableLegend = ({
   }
 
   return (
-    <div className="mt-3 max-h-[288px] overflow-y-auto rounded border border-gray-200 p-2">
-      <ul className="grid grid-cols-2 gap-2 text-xs text-gray-600 md:grid-cols-3">
+    <div
+      className="mt-3 overflow-x-auto overflow-y-hidden rounded border border-gray-200 px-2 py-2 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300"
+      style={{ scrollBehavior: 'smooth' }}
+    >
+      <ul className="flex flex-nowrap items-center gap-4 text-xs text-gray-600">
         {items.map((item) => (
           <li
             key={item.id}
-            className="flex items-center gap-2"
+            className="flex shrink-0 items-center gap-2 whitespace-nowrap"
             onMouseEnter={() => onHighlight?.(item.id)}
             onMouseLeave={() => onHighlight?.(null)}
           >
@@ -312,97 +315,92 @@ const StackedBarChartCard = React.memo(
     }
 
     return (
-      <div className="flex gap-4">
-        <div className="flex-1 min-w-0">
-          <div style={{ height: VIEWPORT_HEIGHT, overflowY: 'auto' }}>
-            <div style={{ height: chartHeight, minWidth: 900 }}>
-              <ResponsiveContainer width="100%" height={chartHeight} debounce={250}>
-                <BarChart
-                  data={chartData}
-                  layout="vertical"
-                  margin={STACKED_CHART_MARGIN}
-                  barCategoryGap={12}
-                  barGap={0}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" tickFormatter={formatInteger} />
-                  <YAxis
-                    type="category"
-                    dataKey="problema_label"
-                    width={Y_AXIS_WIDTH}
-                    orientation="left"
-                    tick={<CustomYAxisTick labelPorProblema={labelPorProblema} />}
-                  />
-                  <Tooltip
-                    shared={false}
-                    content={({ active, payload, label }) => {
-                      if (!active || !payload || payload.length === 0) {
-                        return null;
-                      }
+      <div className="min-w-0">
+        <div style={{ height: VIEWPORT_HEIGHT, overflowY: 'auto' }}>
+          <div style={{ height: chartHeight, minWidth: 900 }}>
+            <ResponsiveContainer width="100%" height={chartHeight} debounce={250}>
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={STACKED_CHART_MARGIN}
+                barCategoryGap={12}
+                barGap={0}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" tickFormatter={formatInteger} />
+                <YAxis
+                  type="category"
+                  dataKey="problema_label"
+                  width={Y_AXIS_WIDTH}
+                  orientation="left"
+                  tick={<CustomYAxisTick labelPorProblema={labelPorProblema} />}
+                />
+                <Tooltip
+                  shared={false}
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload || payload.length === 0) {
+                      return null;
+                    }
 
-                      const item = payload[0];
-                      if (!item) {
-                        return null;
-                      }
-                      const dataKey = String(item.dataKey ?? '');
-                      if (!dataKey) {
-                        return null;
-                      }
-                      const value = Number(item.value ?? 0);
-                      const equiposMap = item.payload?.equipos;
-                      const equipos =
-                        typeof equiposMap === 'object' && equiposMap !== null
-                          ? String(equiposMap[dataKey] ?? '')
-                          : '';
-                      const equiposLabel = equipos.trim().length > 0 ? equipos : 'Sin información';
-                      const displayLabel = typeof label === 'string' ? label : String(label ?? '');
+                    const item = payload[0];
+                    if (!item) {
+                      return null;
+                    }
+                    const dataKey = String(item.dataKey ?? '');
+                    if (!dataKey) {
+                      return null;
+                    }
+                    const value = Number(item.value ?? 0);
+                    const equiposMap = item.payload?.equipos;
+                    const equipos =
+                      typeof equiposMap === 'object' && equiposMap !== null
+                        ? String(equiposMap[dataKey] ?? '')
+                        : '';
+                    const equiposLabel = equipos.trim().length > 0 ? equipos : 'Sin información';
+                    const displayLabel = typeof label === 'string' ? label : String(label ?? '');
 
-                      return (
-                        <div className="rounded border border-gray-200 bg-white p-2 text-xs shadow">
-                          <p className="font-semibold text-gray-700">{displayLabel}</p>
-                          <p className="text-gray-600">
-                            {dataKey}: {formatInteger(value)}
-                          </p>
-                          <p className="text-gray-600">Equipos: {equiposLabel}</p>
-                        </div>
-                      );
-                    }}
-                  />
-                  {safeHaciendaKeys.map((hacienda, index) => {
-                    const isLast = index === safeHaciendaKeys.length - 1;
-                    const isHighlighted =
-                      !highlightedHacienda || highlightedHacienda === hacienda;
                     return (
-                      <Bar
-                        key={hacienda}
-                        dataKey={hacienda}
-                        stackId="pendientes"
-                        fill={CHART_COLORS[index % CHART_COLORS.length]}
-                        name={hacienda}
-                        isAnimationActive={false}
-                        fillOpacity={isHighlighted ? 1 : 0.25}
-                        barSize={20}
-                      >
-                        {isLast && (
-                          <LabelList
-                            dataKey="total"
-                            position="right"
-                            formatter={(value: number) =>
-                              value ? formatInteger(Number(value)) : ''
-                            }
-                          />
-                        )}
-                      </Bar>
+                      <div className="rounded border border-gray-200 bg-white p-2 text-xs shadow">
+                        <p className="font-semibold text-gray-700">{displayLabel}</p>
+                        <p className="text-gray-600">
+                          {dataKey}: {formatInteger(value)}
+                        </p>
+                        <p className="text-gray-600">Equipos: {equiposLabel}</p>
+                      </div>
                     );
-                  })}
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+                  }}
+                />
+                {safeHaciendaKeys.map((hacienda, index) => {
+                  const isLast = index === safeHaciendaKeys.length - 1;
+                  const isHighlighted = !highlightedHacienda || highlightedHacienda === hacienda;
+                  return (
+                    <Bar
+                      key={hacienda}
+                      dataKey={hacienda}
+                      stackId="pendientes"
+                      fill={CHART_COLORS[index % CHART_COLORS.length]}
+                      name={hacienda}
+                      isAnimationActive={false}
+                      fillOpacity={isHighlighted ? 1 : 0.25}
+                      barSize={20}
+                    >
+                      {isLast && (
+                        <LabelList
+                          dataKey="total"
+                          position="right"
+                          formatter={(value: number) =>
+                            value ? formatInteger(Number(value)) : ''
+                          }
+                        />
+                      )}
+                    </Bar>
+                  );
+                })}
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
-        <div className="w-[260px] shrink-0">
-          <ScrollableLegend items={legendItems} onHighlight={setHighlightedHacienda} />
-        </div>
+        <ScrollableLegend items={legendItems} onHighlight={setHighlightedHacienda} />
       </div>
     );
   },
