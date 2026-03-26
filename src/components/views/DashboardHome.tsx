@@ -295,11 +295,6 @@ const calcularPromedioEsperaNodo = (nodo: DepartamentosArbolNode) => {
   let totalPendientes = 0;
 
   const recorrer = (item: DepartamentosArbolNode) => {
-    if (item.children && item.children.length > 0) {
-      item.children.forEach(recorrer);
-      return;
-    }
-
     item.rows.forEach((row) => {
       if (!row.fecha_resolucion) {
         const dias = calcularDiasEspera(row);
@@ -309,6 +304,10 @@ const calcularPromedioEsperaNodo = (nodo: DepartamentosArbolNode) => {
         }
       }
     });
+
+    if (item.children && item.children.length > 0) {
+      item.children.forEach(recorrer);
+    }
   };
 
   recorrer(nodo);
@@ -355,11 +354,6 @@ const calcularPromedioEsperaNodoConConteo = (nodo: DepartamentosArbolNode) => {
   let totalPendientes = 0;
 
   const recorrer = (item: DepartamentosArbolNode) => {
-    if (item.children && item.children.length > 0) {
-      item.children.forEach(recorrer);
-      return;
-    }
-
     item.rows.forEach((row) => {
       if (!row.fecha_resolucion) {
         const dias = calcularDiasEspera(row);
@@ -369,6 +363,10 @@ const calcularPromedioEsperaNodoConConteo = (nodo: DepartamentosArbolNode) => {
         }
       }
     });
+
+    if (item.children && item.children.length > 0) {
+      item.children.forEach(recorrer);
+    }
   };
 
   recorrer(nodo);
