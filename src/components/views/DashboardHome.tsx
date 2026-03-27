@@ -23,6 +23,7 @@ import {
   fetchDashboardFallosTecnicosResumen,
 } from '../../services/dashboardFallosTecnicosService';
 import DashboardFiltersHeader, { DashboardHeaderFilters } from './DashboardFiltersHeader';
+import { calcularPromedioGeneral, type DashboardFalloMetrica } from '@/utils/dashboardMetrics';
 
 const KPI_LABELS = [
   {
@@ -30,12 +31,8 @@ const KPI_LABELS = [
     label: 'Fallos reportados',
   },
   {
-    key: 't_prom_resolucion_dias',
-    label: 'Tiempo promedio de resolución',
-  },
-  {
-    key: 't_prom_espera_dias',
-    label: 'Tiempo promedio en espera',
+    key: 't_prom_dias',
+    label: 'Tiempo promedio (días)',
   },
   {
     key: 'pct_pendientes',
@@ -222,119 +219,11 @@ type DepartamentosArbolRow = {
   resueltos: number;
   pctResueltos: number;
   tprom: number | null;
-  tpromEspera: number | null;
   level: number;
   hasChildren: boolean;
 };
 
 const INDENT_SIZE = 16;
-
-const calcularDuracionDias = (row: TablaDepartamentosArbolRow) => {
-  if (!row.fecha_hora_fallo || !row.fecha_resolucion) return null;
-
-  const inicio = new Date(row.fecha_hora_fallo);
-  const fin = new Date(`${row.fecha_resolucion} ${row.hora_resolucion || '00:00:00'}`);
-
-  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
-    return null;
-  }
-
-  const segundos = (fin.getTime() - inicio.getTime()) / 1000;
-  return segundos / 86400;
-};
-
-type FalloOriginal = {
-  departamento_responsable: string;
-  fecha_hora_fallo: string | null;
-  fecha_resolucion: string | null;
-};
-
-const calcularPromedioEspera = (fallosFiltrados: FalloOriginal[]) => {
-  let totalDias = 0;
-  let total = 0;
-
-  fallosFiltrados.forEach((fallo) => {
-    if (!fallo.fecha_resolucion && fallo.fecha_hora_fallo) {
-      const inicio = new Date(fallo.fecha_hora_fallo);
-      const fin = new Date();
-      const dias = (fin.getTime() - inicio.getTime()) / 1000 / 86400;
-
-      if (!Number.isNaN(dias)) {
-        totalDias += dias;
-        total++;
-      }
-    }
-  });
-
-  if (total === 0) {
-    return null;
-  }
-
-  return totalDias / total;
-};
-
-const calcularPromedioNodo = (nodo: DepartamentosArbolNode) => {
-  let totalDias = 0;
-  let totalResueltos = 0;
-
-  const recorrer = (item: DepartamentosArbolNode) => {
-    if (item.children && item.children.length > 0) {
-      item.children.forEach(recorrer);
-      return;
-    }
-
-    item.rows.forEach((row) => {
-      if (row.estado === 'RESUELTO') {
-        const dias = calcularDuracionDias(row);
-        if (dias !== null) {
-          totalDias += dias;
-          totalResueltos++;
-        }
-      }
-    });
-  };
-
-  recorrer(nodo);
-
-  if (totalResueltos === 0) {
-    if (nodo.countResueltos > 0) {
-      return nodo.sumDiasSolucion / nodo.countResueltos;
-    }
-    return null;
-  }
-
-  return totalDias / totalResueltos;
-};
-
-const calcularPromedioNodoConConteo = (nodo: DepartamentosArbolNode) => {
-  let totalDias = 0;
-  let totalResueltos = 0;
-
-  const recorrer = (item: DepartamentosArbolNode) => {
-    if (item.children && item.children.length > 0) {
-      item.children.forEach(recorrer);
-      return;
-    }
-
-    item.rows.forEach((row) => {
-      if (row.estado === 'RESUELTO') {
-        const dias = calcularDuracionDias(row);
-        if (dias !== null) {
-          totalDias += dias;
-          totalResueltos++;
-        }
-      }
-    });
-  };
-
-  recorrer(nodo);
-
-  if (totalResueltos === 0 && nodo.countResueltos > 0) {
-    return { totalDias: nodo.sumDiasSolucion, totalResueltos: nodo.countResueltos };
-  }
-
-  return { totalDias, totalResueltos };
-};
 
 const DonutChart = React.memo(({ data }: { data: DonutDatum[] }) => {
   if (!data.length) {
@@ -560,7 +449,7 @@ const TendenciaChart = React.memo(({ data }: { data: TendenciaDatum[] }) => {
                     {formatInteger(Number(resueltos?.value ?? 0))}
                   </p>
                   <p>
-                    T. prom solución (días):{' '}
+                    T. prom (días):{' '}
                     {formatDecimal(Number(tprom?.value ?? 0))}
                   </p>
                 </div>
@@ -588,7 +477,7 @@ const TendenciaChart = React.memo(({ data }: { data: TendenciaDatum[] }) => {
             yAxisId="right"
             type="monotone"
             dataKey="t_prom_solucion_dias"
-            name="T. prom solución (días)"
+            name="T. prom (días)"
             stroke="#4C6FFF"
             strokeWidth={2}
             dot={{ r: 3 }}
@@ -805,11 +694,28 @@ const DashboardHome: React.FC = () => {
   }, [dashboard]);
 
   const tendenciaData = useMemo(
-    () =>
-      (dashboard?.tendencia_pendientes_mes ?? []).map((row) => ({
+    () => {
+      const fallosPorMes = new Map<string, DashboardFalloMetrica[]>();
+      (dashboard?.data_original ?? []).forEach((fallo) => {
+        if (!fallo.fecha_hora_fallo) {
+          return;
+        }
+        const fecha = new Date(fallo.fecha_hora_fallo);
+        if (Number.isNaN(fecha.getTime())) {
+          return;
+        }
+        const mes = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+        const lista = fallosPorMes.get(mes) ?? [];
+        lista.push(fallo);
+        fallosPorMes.set(mes, lista);
+      });
+
+      return (dashboard?.tendencia_pendientes_mes ?? []).map((row) => ({
         ...row,
+        t_prom_solucion_dias: calcularPromedioGeneral(fallosPorMes.get(row.mes) ?? []) ?? 0,
         mes_label: formatMonthLabel(row.mes),
-      })),
+      }));
+    },
     [dashboard],
   );
 
@@ -1010,14 +916,15 @@ const DashboardHome: React.FC = () => {
   const departamentosArbolRows = useMemo<DepartamentosArbolRow[]>(() => {
     const rows: DepartamentosArbolRow[] = [];
     const fallos = dashboard?.data_original ?? [];
+    const calcularPorNodo = (nombre: string) => {
+      const filtrados = fallos.filter((f) => f.departamento_responsable === nombre);
+      return calcularPromedioGeneral(filtrados);
+    };
 
     const walk = (node: DepartamentosArbolNode, level: number) => {
       const total = node.pendientes + node.resueltos;
       const pctResueltos = total > 0 ? (node.resueltos / total) * 100 : 0;
-      const tprom = calcularPromedioNodo(node);
-      const tpromEspera = calcularPromedioEspera(
-        fallos.filter((fallo) => fallo.departamento_responsable === node.nombre),
-      );
+      const tprom = calcularPorNodo(node.nombre);
       const hasChildren = node.children.length > 0;
 
       rows.push({
@@ -1028,7 +935,6 @@ const DashboardHome: React.FC = () => {
         resueltos: node.resueltos,
         pctResueltos,
         tprom,
-        tpromEspera,
         level,
         hasChildren,
       });
@@ -1066,25 +972,7 @@ const DashboardHome: React.FC = () => {
       : 0;
 
   const totalTpromArbol = useMemo(() => {
-    let totalDias = 0;
-    let totalResueltos = 0;
-
-    departamentosArbol.forEach((nodo) => {
-      const { totalDias: diasNodo, totalResueltos: resueltosNodo } =
-        calcularPromedioNodoConConteo(nodo);
-      totalDias += diasNodo;
-      totalResueltos += resueltosNodo;
-    });
-
-    if (totalResueltos === 0) {
-      return null;
-    }
-
-    return totalDias / totalResueltos;
-  }, [departamentosArbol]);
-
-  const totalTpromEsperaArbol = useMemo(() => {
-    return calcularPromedioEspera(dashboard?.data_original ?? []);
+    return calcularPromedioGeneral(dashboard?.data_original ?? []);
   }, [dashboard?.data_original]);
 
   const isEmpty =
@@ -1122,6 +1010,10 @@ const DashboardHome: React.FC = () => {
     pct_pendientes: 0,
     pct_resueltos: 0,
   };
+  const promedioGeneral = useMemo(
+    () => calcularPromedioGeneral(dashboard?.data_original ?? []),
+    [dashboard?.data_original],
+  );
 
   return (
     <div className="space-y-6">
@@ -1183,15 +1075,18 @@ const DashboardHome: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {KPI_LABELS.map((kpi) => {
-          const value = kpis[kpi.key as keyof typeof kpis] ?? 0;
+          const value =
+            kpi.key === 't_prom_dias'
+              ? promedioGeneral
+              : (kpis[kpi.key as keyof typeof kpis] ?? 0);
           let displayValue = formatCompactNumber(Number(value));
 
           if (kpi.key === 'pct_pendientes' || kpi.key === 'pct_resueltos') {
             displayValue = formatPercent(Number(value));
           }
 
-          if (kpi.key === 't_prom_resolucion_dias' || kpi.key === 't_prom_espera_dias') {
-            displayValue = `${formatDecimal(Number(value), 2)} días`;
+          if (kpi.key === 't_prom_dias') {
+            displayValue = `${value !== null ? Number(value).toFixed(2) : '0.00'} días`;
           }
 
           return (
@@ -1237,8 +1132,7 @@ const DashboardHome: React.FC = () => {
                   <th className="px-3 py-2 text-right">Fallos pendientes</th>
                   <th className="px-3 py-2 text-right">Fallos resueltos</th>
                   <th className="px-3 py-2 text-right">% Fallos resueltos</th>
-                  <th className="px-3 py-2 text-right">T.prom solución (días)</th>
-                  <th className="px-3 py-2 text-right">T. PROM ESPERA (DÍAS)</th>
+                  <th className="px-3 py-2 text-right">T. PROM (DÍAS)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -1286,12 +1180,7 @@ const DashboardHome: React.FC = () => {
                       <td className="px-3 py-2 text-right">
                         {row.tprom !== null && row.tprom !== undefined
                           ? Number(row.tprom).toFixed(2)
-                          : '-'}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {row.tpromEspera !== null && row.tpromEspera !== undefined
-                          ? Number(row.tpromEspera).toFixed(2)
-                          : '-'}
+                          : '0.00'}
                       </td>
                     </tr>
                   );
@@ -1310,10 +1199,7 @@ const DashboardHome: React.FC = () => {
                     {totalPctResueltos.toFixed(2)} %
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {totalTpromArbol !== null ? Number(totalTpromArbol).toFixed(2) : '-'}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    {totalTpromEsperaArbol !== null ? Number(totalTpromEsperaArbol).toFixed(2) : '-'}
+                    {totalTpromArbol !== null ? Number(totalTpromArbol).toFixed(2) : '0.00'}
                   </td>
                 </tr>
               </tfoot>
@@ -1323,7 +1209,7 @@ const DashboardHome: React.FC = () => {
 
         <div className="border border-gray-300 bg-white p-4" style={CHART_CARD_STYLE}>
           <h4 className="text-sm font-semibold text-gray-600">
-            T. prom solución (días) y fallos por mes
+            T. prom (días) y fallos por mes
           </h4>
           <TendenciaChart data={tendenciaData} />
         </div>
