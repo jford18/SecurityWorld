@@ -12,12 +12,16 @@ export interface UptimeDetalleRow {
   mes: number;
   id: string;
   camara?: string;
+  tipo_afectacion?: string;
+  site_name?: string;
   sitio_afectado_final: string;
   fecha_fallo: string;
   hora_fallo: string;
   fecha_recuperacion: string;
   hora_recuperacion: string;
+  tiempo_total_fallo_h?: number;
   tiempo_offline_h: number;
+  tiempo_offline_por_camara_h?: number;
   n_camaras: number;
   hacienda: string;
 }
