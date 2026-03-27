@@ -51,44 +51,20 @@ const getStableRowId = (row: any, idx: number) => {
   return `ROW-${idx}`;
 };
 
-const getCameraName = (row: UptimeDetalleRow) => {
-  const record = row as Record<string, unknown>;
-  const candidates = [
-    'camera_name',
-    'nombre_camara',
-    'cameraName',
-    'camara_nombre',
-    'nombre',
-    'name',
-    'camara',
-    'NOMBRE_CAMARA',
-    'NOMBRE',
-    'CAMARA',
-  ];
-
-  for (const key of candidates) {
-    const value = record[key];
-    if (typeof value === 'string' && value.trim()) {
-      return value.trim();
-    }
-    if (value != null && value !== '') {
-      return String(value);
-    }
-  }
-
-  return 'SIN NOMBRE';
-};
-
 type SortKey =
   | 'mes'
   | 'id'
-  | 'camara_nombre'
+  | 'tipo_afectacion'
+  | 'site_name'
   | 'sitio_afectado_final'
   | 'fecha_fallo'
   | 'hora_fallo'
   | 'fecha_recuperacion'
   | 'hora_recuperacion'
+  | 'tiempo_total_fallo_h'
   | 'tiempo_offline_h'
+  | 'tiempo_offline_por_camara_h'
+  | 'n_camaras'
   | 'hacienda';
 
 type SortDirection = 'asc' | 'desc';
@@ -222,7 +198,10 @@ const UptimeCamarasManual: React.FC = () => {
     return [...allRows].sort((a, b) => {
       switch (sortConfig.key) {
         case 'mes':
+        case 'n_camaras':
+        case 'tiempo_total_fallo_h':
         case 'tiempo_offline_h':
+        case 'tiempo_offline_por_camara_h':
           return compareValues(
             (() => {
               const value = (a as Record<string, unknown>)[sortConfig.key];
@@ -237,8 +216,6 @@ const UptimeCamarasManual: React.FC = () => {
               return Number.isNaN(parsed) ? null : parsed;
             })(),
           );
-        case 'camara_nombre':
-          return compareValues(getCameraName(a).toLowerCase(), getCameraName(b).toLowerCase());
         case 'fecha_fallo':
         case 'hora_fallo':
           return compareValues(
@@ -267,13 +244,17 @@ const UptimeCamarasManual: React.FC = () => {
     const rowsToExport = sortedRows.map((row) => ({
       MES: row.mes,
       ID: row.id,
-      CAMARA: getCameraName(row),
+      'TIPO AFECTACION': row.tipo_afectacion ?? '',
+      SITE_NAME: row.site_name ?? '',
       'SITIO AFECTADO': row.sitio_afectado_final,
       'FECHA FALLO': formatDateValue(row.fecha_fallo),
       'HORA FALLO': row.hora_fallo,
       'FECHA RECUPERACION': formatDateValue(row.fecha_recuperacion),
       'HORA RECUPERACION': row.hora_recuperacion,
+      'N CAMARAS': row.n_camaras,
+      'TIEMPO TOTAL DEL FALLO H': row.tiempo_total_fallo_h ?? 0,
       'TIEMPO OFFLINE H': row.tiempo_offline_h,
+      'TIEMPO OFFLINE POR CAMARA H': row.tiempo_offline_por_camara_h ?? 0,
       HACIENDA: row.hacienda,
     }));
 
@@ -410,13 +391,17 @@ const UptimeCamarasManual: React.FC = () => {
                   {[
                     ['mes', 'MES'],
                     ['id', 'ID'],
-                    ['camara_nombre', 'CAMARA'],
+                    ['tipo_afectacion', 'TIPO AFECTACIÓN'],
+                    ['site_name', 'SITE_NAME'],
                     ['sitio_afectado_final', 'SITIO AFECTADO'],
                     ['fecha_fallo', 'FECHA FALLO'],
                     ['hora_fallo', 'HORA FALLO'],
                     ['fecha_recuperacion', 'FECHA RECUPERACION'],
                     ['hora_recuperacion', 'HORA RECUPERACION'],
+                    ['n_camaras', 'N CAMARAS'],
+                    ['tiempo_total_fallo_h', 'TIEMPO TOTAL DEL FALLO H'],
                     ['tiempo_offline_h', 'TIEMPO OFFLINE H'],
+                    ['tiempo_offline_por_camara_h', 'TIEMPO OFFLINE POR CAMARA H'],
                     ['hacienda', 'HACIENDA'],
                   ].map(([key, label]) => (
                     <th
@@ -436,7 +421,7 @@ const UptimeCamarasManual: React.FC = () => {
               <tbody className="divide-y divide-gray-200 bg-white">
                 {sortedRows.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-4 py-6 text-center text-sm text-gray-500">
+                    <td colSpan={13} className="px-4 py-6 text-center text-sm text-gray-500">
                       {loading ? 'Cargando datos...' : 'No hay registros para mostrar'}
                     </td>
                   </tr>
@@ -445,13 +430,23 @@ const UptimeCamarasManual: React.FC = () => {
                   <tr key={row.ROW_ID} className="hover:bg-gray-50">
                     <td className="px-4 py-2 text-sm text-gray-700">{row.mes}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.id}</td>
-                    <td className="px-4 py-2 text-sm text-gray-700">{getCameraName(row)}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">
+                      {row.tipo_afectacion ?? ''}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{row.site_name ?? ''}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.sitio_afectado_final}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{formatDateValue(row.fecha_fallo)}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.hora_fallo}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{formatDateValue(row.fecha_recuperacion)}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.hora_recuperacion}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{formatNumber(row.n_camaras)}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">
+                      {formatNumber(row.tiempo_total_fallo_h ?? 0)}
+                    </td>
                     <td className="px-4 py-2 text-sm text-gray-700">{formatNumber(row.tiempo_offline_h)}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">
+                      {formatNumber(row.tiempo_offline_por_camara_h ?? 0)}
+                    </td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.hacienda}</td>
                   </tr>
                 ))}
