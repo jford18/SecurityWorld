@@ -9,22 +9,26 @@ export interface UptimeKpis {
 }
 
 export interface UptimeDetalleRow {
-  mes: number;
+  mes: number | string;
   id: string;
   tipo_problema_id?: number;
   camara?: string;
   tipo_afectacion?: string;
+  sitio?: string;
   site_name?: string;
-  sitio_afectado_final: string;
+  sitio_afectado_final?: string;
   fecha_fallo: string;
-  hora_fallo: string;
-  fecha_recuperacion: string;
-  hora_recuperacion: string;
+  hora_fallo?: string;
+  fecha_resolucion?: string | null;
+  hora_resolucion?: string | null;
+  duracion_total_fallo_h?: string;
+  fecha_recuperacion?: string;
+  hora_recuperacion?: string;
   tiempo_total_fallo_h?: number;
-  tiempo_offline_h: number;
+  tiempo_offline_h?: number;
   tiempo_offline_por_camara_h?: number;
-  n_camaras: number;
-  hacienda: string;
+  n_camaras?: number;
+  hacienda?: string;
 }
 
 export interface DashboardUptimeResponse {
