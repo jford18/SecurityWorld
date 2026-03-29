@@ -11,6 +11,7 @@ export interface UptimeKpis {
 export interface UptimeDetalleRow {
   mes: number;
   id: string;
+  tipo_problema_id?: number;
   camara?: string;
   tipo_afectacion?: string;
   site_name?: string;
