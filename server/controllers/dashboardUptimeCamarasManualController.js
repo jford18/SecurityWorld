@@ -27,6 +27,20 @@ const normalizeReportadoClienteFilter = (value) => {
 const reportadoBooleanSqlExpression = (alias) =>
   `COALESCE(${alias}.reportado_al_cliente, FALSE)`;
 
+const TIPO_PROBLEMA_OBJETIVO = "PÉRDIDA DE VISUAL";
+const DEBUG_DISTINCT_TIPO_PROBLEMA_QUERY = `
+SELECT DISTINCT
+    tipo_problema_id
+FROM fallos_tecnicos
+ORDER BY tipo_problema_id;
+`;
+
+const DEBUG_CATALOGO_QUERY = `
+SELECT id, descripcion
+FROM catalogo_tipo_problema
+ORDER BY id;
+`;
+
 
 const KPI_QUERY = (reportadoFilterSql = "") => `
 WITH PARAMS AS (
@@ -72,8 +86,9 @@ INCIDENTS AS (
     LEFT JOIN PUBLIC.HIK_CAMERA_RESOURCE_STATUS B ON (B.ID = A.CAMERA_ID)
     LEFT JOIN PUBLIC.SITIOS S ON (S.ID = A.SITIO_ID)
     LEFT JOIN PUBLIC.SITIOS S_FALLBACK ON (A.SITIO_ID IS NULL AND S_FALLBACK.NOMBRE = B.SITE_NAME)
+    LEFT JOIN PUBLIC.CATALOGO_TIPO_PROBLEMA C ON (C.ID = A.TIPO_PROBLEMA_ID)
     WHERE A.FECHA IS NOT NULL
-      AND A.TIPO_PROBLEMA_ID = 3
+      AND UPPER(TRIM(C.DESCRIPCION)) = UPPER(TRIM($5))
     ${reportadoFilterSql}
 ),
 DOWNTIME AS (
@@ -143,11 +158,15 @@ SELECT
     B.NOMBRE AS SITIO,
     A.FECHA AS FECHA_FALLO,
     A.FECHA_RESOLUCION,
-    A.HORA_RESOLUCION
+    A.HORA_RESOLUCION,
+    C.DESCRIPCION AS TIPO_PROBLEMA
 FROM PUBLIC.FALLOS_TECNICOS A
 LEFT JOIN PUBLIC.SITIOS B ON (B.ID = A.SITIO_ID)
+LEFT JOIN PUBLIC.CATALOGO_TIPO_PROBLEMA C ON (C.ID = A.TIPO_PROBLEMA_ID)
 JOIN PARAMS P ON (1 = 1)
-WHERE A.TIPO_PROBLEMA_ID = 3
+WHERE (
+    UPPER(TRIM(C.DESCRIPCION)) = UPPER(TRIM($5))
+  )
   AND A.FECHA IS NOT NULL
   AND A.FECHA::TIMESTAMP BETWEEN P.FROM_TS AND P.TO_TS
   AND (P.HACIENDA_ID IS NULL OR B.HACIENDA_ID = P.HACIENDA_ID)
@@ -192,17 +211,40 @@ export const getDashboardUptimeCamarasManual = async (req, res) => {
     const fromTs = `${from} 00:00:00`;
     const toTs = `${to} 23:59:59`;
 
-    const kpiParams = [fromTs, toTs, parsedHaciendaId, parsedClienteId];
-    const detalleParams = [fromTs, toTs, parsedHaciendaId, parsedClienteId];
+    const kpiParams = [
+      fromTs,
+      toTs,
+      parsedHaciendaId,
+      parsedClienteId,
+      TIPO_PROBLEMA_OBJETIVO,
+    ];
+    const detalleParams = [
+      fromTs,
+      toTs,
+      parsedHaciendaId,
+      parsedClienteId,
+      TIPO_PROBLEMA_OBJETIVO,
+    ];
     const reportadoFilterSql =
       reportadoClienteValues !== null
-        ? `AND ${reportadoBooleanSqlExpression('A')} = $5`
+        ? `AND ${reportadoBooleanSqlExpression('A')} = $6`
         : "";
 
     if (reportadoFilterSql) {
       kpiParams.push(reportadoClienteValues);
       detalleParams.push(reportadoClienteValues);
     }
+
+    console.log("QUERY UPTIME CAMARAS:");
+    console.log(DETAIL_QUERY(reportadoFilterSql));
+
+    console.log("[UPTIME-CAMARAS-MANUAL][DEBUG] SQL DISTINCT tipo_problema_id =>", DEBUG_DISTINCT_TIPO_PROBLEMA_QUERY);
+    const [distinctTipoProblemaResult, catalogoTipoProblemaResult] = await Promise.all([
+      pool.query(DEBUG_DISTINCT_TIPO_PROBLEMA_QUERY),
+      pool.query(DEBUG_CATALOGO_QUERY),
+    ]);
+    console.log("[UPTIME-CAMARAS-MANUAL][DEBUG] DISTINCT tipo_problema_id =>", distinctTipoProblemaResult.rows);
+    console.log("[UPTIME-CAMARAS-MANUAL][DEBUG] catalogo_tipo_problema =>", catalogoTipoProblemaResult.rows);
 
     console.log("[UPTIME-CAMARAS-MANUAL] SQL =>", KPI_QUERY(reportadoFilterSql));
     console.log("[UPTIME-CAMARAS-MANUAL] PARAMS =>", kpiParams);
