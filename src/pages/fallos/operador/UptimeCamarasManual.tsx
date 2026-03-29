@@ -119,10 +119,12 @@ const UptimeCamarasManual: React.FC = () => {
       setError(null);
       const data = await fetchDashboardUptimeCamarasManual(filters);
       setKpis(data.kpis);
-      const rowsWithKeys = (data.detalle ?? []).map((row, idx) => ({
-        ...row,
-        ROW_ID: getStableRowId(row, idx),
-      }));
+      const rowsWithKeys = (data.detalle ?? [])
+        .filter((row) => Number(row.tipo_problema_id) === 3)
+        .map((row, idx) => ({
+          ...row,
+          ROW_ID: getStableRowId(row, idx),
+        }));
       setAllRows(rowsWithKeys);
     } catch (err) {
       console.error('[UptimeCamarasManual] Error al cargar datos', err);
