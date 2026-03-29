@@ -19,6 +19,13 @@ const formatDateValue = (value?: string | null) => {
   return parsed.toISOString().slice(0, 10);
 };
 
+const formatDateTimeValue = (value?: string | null) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toLocaleString();
+};
+
 const formatTimestamp = (date = new Date()) => {
   const pad = (value: number) => String(value).padStart(2, '0');
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(
@@ -202,7 +209,7 @@ const UptimeCamarasManual: React.FC = () => {
       Mes: row.mes,
       'TIPO DE AFECTACION': row.tipo_afectacion,
       SITIO: row.sitio,
-      'FECHA DE FALLO': formatDateValue(row.fecha_fallo),
+      'FECHA DE FALLO': formatDateTimeValue(row.fecha_fallo),
       'HORA DE FALLO': getHoraFallo(row.fecha_fallo),
       'FECHA DE SOLUCION': formatDateValue(row.fecha_resolucion),
       'HORA DE SOLUCION': normalizeTime(row.hora_resolucion),
@@ -326,7 +333,7 @@ const UptimeCamarasManual: React.FC = () => {
                     <td className="px-4 py-2 text-sm text-gray-700">{row.mes}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.tipo_afectacion ?? ''}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.sitio ?? ''}</td>
-                    <td className="px-4 py-2 text-sm text-gray-700">{formatDateValue(row.fecha_fallo)}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{formatDateTimeValue(row.fecha_fallo)}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{getHoraFallo(row.fecha_fallo)}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{formatDateValue(row.fecha_resolucion)}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{normalizeTime(row.hora_resolucion)}</td>

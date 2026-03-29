@@ -14,5 +14,11 @@ pool.on("error", (err) => {
   console.error("Error inesperado en el pool de PostgreSQL", err);
 });
 
+pool.on("connect", (client) => {
+  client
+    .query("SET TIME ZONE 'America/Guayaquil'")
+    .catch((err) => console.error("No se pudo configurar la zona horaria de PostgreSQL", err));
+});
+
 export default pool;
 export { pool };
