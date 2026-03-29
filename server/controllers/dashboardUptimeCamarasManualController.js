@@ -129,130 +129,31 @@ WITH PARAMS AS (
         $2::TIMESTAMP AS TO_TS,
         $3::INT AS HACIENDA_ID,
         $4::INT AS CLIENTE_ID
-),
-SITE_CAMERAS AS (
-    SELECT
-        A.SITE_NAME,
-        COUNT(*)::INT AS N_CAMARAS
-    FROM PUBLIC.HIK_CAMERA_RESOURCE_STATUS A
-    WHERE A.SITE_NAME IS NOT NULL
-      AND TRIM(A.SITE_NAME) <> ''
-    GROUP BY A.SITE_NAME
-),
-INCIDENTS AS (
-    SELECT
-        A.ID,
-        A.CAMERA_ID,
-        A.SITIO_ID,
-        A.TIPO_PROBLEMA_ID,
-        COALESCE(A.TIPO_AFECTACION, 'SIN INFORMACION') AS TIPO_AFECTACION,
-        COALESCE(S.NOMBRE, S_FALLBACK.NOMBRE, B.SITE_NAME) AS SITE_NAME,
-        COALESCE(S.DESCRIPCION, S_FALLBACK.DESCRIPCION, B.SITE_NAME, 'SIN SITIO') AS SITIO_AFECTADO_FINAL,
-        COALESCE(H.NOMBRE, 'SIN HACIENDA') AS HACIENDA,
-        (A.FECHA::TIMESTAMP + COALESCE(A.HORA, '00:00:00'::TIME)) AS START_TS,
-        COALESCE(
-            (COALESCE(A.FECHA_RESOLUCION, NOW()::DATE)::TIMESTAMP + COALESCE(A.HORA_RESOLUCION, NOW()::TIME)),
-            NOW()::TIMESTAMP
-        ) AS END_TS
-    FROM PUBLIC.FALLOS_TECNICOS A
-    LEFT JOIN PUBLIC.HIK_CAMERA_RESOURCE_STATUS B ON (B.ID = A.CAMERA_ID)
-    LEFT JOIN PUBLIC.SITIOS S ON (S.ID = A.SITIO_ID)
-    LEFT JOIN PUBLIC.SITIOS S_FALLBACK ON (A.SITIO_ID IS NULL AND S_FALLBACK.NOMBRE = B.SITE_NAME)
-    LEFT JOIN PUBLIC.HACIENDA H ON (H.ID = COALESCE(S.HACIENDA_ID, S_FALLBACK.HACIENDA_ID))
-    WHERE A.FECHA IS NOT NULL
-      AND A.TIPO_PROBLEMA_ID = 3
-    ${reportadoFilterSql}
-),
-BASE AS (
-    SELECT
-        EXTRACT(MONTH FROM A.START_TS)::INT AS MES,
-        A.TIPO_PROBLEMA_ID,
-        A.TIPO_AFECTACION,
-        COALESCE(A.SITE_NAME, 'SIN SITIO') AS SITE_NAME,
-        A.SITIO_AFECTADO_FINAL,
-        A.HACIENDA,
-        A.START_TS,
-        A.END_TS,
-        ROUND(
-            GREATEST(
-                0,
-                EXTRACT(
-                    EPOCH FROM (
-                        LEAST(A.END_TS, P.TO_TS)
-                        - GREATEST(A.START_TS, P.FROM_TS)
-                    )
-                ) / 3600.0
-            )::NUMERIC,
-            2
-        ) AS TIEMPO_TOTAL_FALLO_H,
-        COALESCE(C.N_CAMARAS, 0)::INT AS N_CAMARAS,
-        ROUND(
-            (
-                GREATEST(
-                    0,
-                    EXTRACT(
-                        EPOCH FROM (
-                            LEAST(A.END_TS, P.TO_TS)
-                            - GREATEST(A.START_TS, P.FROM_TS)
-                        )
-                    ) / 3600.0
-                ) * COALESCE(C.N_CAMARAS, 0)
-            )::NUMERIC,
-            2
-        ) AS TIEMPO_OFFLINE_H
-    FROM INCIDENTS A
-    JOIN PARAMS P ON (1 = 1)
-    LEFT JOIN SITE_CAMERAS C ON (C.SITE_NAME = A.SITE_NAME)
-    LEFT JOIN PUBLIC.SITIOS S ON (S.NOMBRE = A.SITE_NAME)
-    WHERE A.END_TS > P.FROM_TS
-      AND A.START_TS < P.TO_TS
-      AND (P.HACIENDA_ID IS NULL OR S.HACIENDA_ID = P.HACIENDA_ID)
-      AND (P.CLIENTE_ID IS NULL OR S.CLIENTE_ID = P.CLIENTE_ID)
-),
-AGR AS (
-    SELECT
-        MES,
-        TIPO_PROBLEMA_ID,
-        TIPO_AFECTACION,
-        SITE_NAME,
-        MAX(SITIO_AFECTADO_FINAL) AS SITIO_AFECTADO_FINAL,
-        MAX(HACIENDA) AS HACIENDA,
-        MIN(START_TS) AS INICIO,
-        MAX(END_TS) AS FIN,
-        SUM(TIEMPO_TOTAL_FALLO_H)::NUMERIC(18,2) AS TIEMPO_TOTAL_FALLO_H,
-        SUM(TIEMPO_OFFLINE_H)::NUMERIC(18,2) AS TIEMPO_OFFLINE_H,
-        SUM(N_CAMARAS)::INT AS N_CAMARAS
-    FROM BASE
-    GROUP BY MES, TIPO_PROBLEMA_ID, TIPO_AFECTACION, SITE_NAME
 )
 SELECT
-    A.MES,
-    (
-        'MAN-'
-        || TO_CHAR(A.INICIO, 'YYYYMMDDHH24MI')
-        || '-'
-        || REGEXP_REPLACE(COALESCE(A.SITE_NAME, 'SIN-SITIO'), '\\s+', '', 'g')
-        || '-'
-        || REGEXP_REPLACE(COALESCE(A.TIPO_AFECTACION, 'SIN-INFO'), '\\s+', '', 'g')
-    ) AS ID,
-    A.TIPO_PROBLEMA_ID,
-    A.TIPO_AFECTACION,
-    A.SITIO_AFECTADO_FINAL,
-    A.SITE_NAME,
-    A.INICIO::DATE AS FECHA_FALLO,
-    A.INICIO::TIME AS HORA_FALLO,
-    A.FIN::DATE AS FECHA_RECUPERACION,
-    A.FIN::TIME AS HORA_RECUPERACION,
-    A.TIEMPO_TOTAL_FALLO_H,
-    A.TIEMPO_OFFLINE_H,
+    A.ID,
+    TO_CHAR(A.FECHA, 'YYYY-MM') AS MES,
     CASE
-        WHEN A.N_CAMARAS <= 0 THEN 0
-        ELSE ROUND((A.TIEMPO_OFFLINE_H / A.N_CAMARAS)::NUMERIC, 2)
-    END AS TIEMPO_OFFLINE_POR_CAMARA_H,
-    A.N_CAMARAS,
-    A.HACIENDA
-FROM AGR A
-ORDER BY A.INICIO DESC;
+        WHEN UPPER(A.TIPO_AFECTACION) = 'EQUIPO' THEN 'Equipo'
+        WHEN UPPER(A.TIPO_AFECTACION) = 'PUNTO' THEN 'Punto'
+        WHEN UPPER(A.TIPO_AFECTACION) = 'NODO' THEN 'Nodo'
+        WHEN UPPER(A.TIPO_AFECTACION) = 'MASIVO' THEN 'Masivo'
+        ELSE A.TIPO_AFECTACION
+    END AS TIPO_AFECTACION,
+    B.NOMBRE AS SITIO,
+    A.FECHA AS FECHA_FALLO,
+    A.FECHA_RESOLUCION,
+    A.HORA_RESOLUCION
+FROM PUBLIC.FALLOS_TECNICOS A
+LEFT JOIN PUBLIC.SITIOS B ON (B.ID = A.SITIO_ID)
+JOIN PARAMS P ON (1 = 1)
+WHERE A.TIPO_PROBLEMA_ID = 3
+  AND A.FECHA IS NOT NULL
+  AND A.FECHA::TIMESTAMP BETWEEN P.FROM_TS AND P.TO_TS
+  AND (P.HACIENDA_ID IS NULL OR B.HACIENDA_ID = P.HACIENDA_ID)
+  AND (P.CLIENTE_ID IS NULL OR B.CLIENTE_ID = P.CLIENTE_ID)
+  ${reportadoFilterSql}
+ORDER BY A.FECHA DESC;
 `;
 
 export const getDashboardUptimeCamarasManual = async (req, res) => {
@@ -313,10 +214,6 @@ export const getDashboardUptimeCamarasManual = async (req, res) => {
       pool.query(DETAIL_QUERY(reportadoFilterSql), detalleParams),
     ]);
 
-    for (const fallo of detalleResult.rows ?? []) {
-      console.log("FALLO:", fallo.id, "TIPO:", fallo.tipo_problema_id);
-    }
-
     const kpis = kpiResult.rows[0] ?? {
       dias: 0,
       camaras: 0,
@@ -325,9 +222,37 @@ export const getDashboardUptimeCamarasManual = async (req, res) => {
       uptime_pct: 0,
     };
 
+    const detalle = (detalleResult.rows ?? []).map((row) => {
+      const fechaFallo = row.fecha_fallo;
+      const falloDate = fechaFallo ? new Date(fechaFallo) : null;
+      const horaFallo =
+        falloDate && !Number.isNaN(falloDate.getTime()) ? falloDate.toLocaleTimeString() : "";
+
+      const fechaSolucion = row.fecha_resolucion || null;
+      const horaSolucion = row.hora_resolucion || null;
+
+      const inicio = falloDate && !Number.isNaN(falloDate.getTime()) ? falloDate : null;
+      const fin =
+        fechaSolucion && inicio
+          ? new Date(`${fechaSolucion} ${horaSolucion || "00:00:00"}`)
+          : new Date();
+
+      const duracion = inicio && !Number.isNaN(fin.getTime()) ? (fin - inicio) / (1000 * 60 * 60) : 0;
+      const duracionHoras = Number.isFinite(duracion) && duracion >= 0 ? duracion.toFixed(2) : "0.00";
+
+      return {
+        ...row,
+        fecha_fallo: fechaFallo,
+        hora_fallo: horaFallo,
+        fecha_resolucion: fechaSolucion,
+        hora_resolucion: horaSolucion,
+        duracion_total_fallo_h: duracionHoras,
+      };
+    });
+
     return res.json({
       kpis,
-      detalle: detalleResult.rows ?? [],
+      detalle,
     });
   } catch (error) {
     console.error("[API][ERROR] /api/dashboards/uptime-camaras-manual:", error);
