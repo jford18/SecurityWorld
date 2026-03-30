@@ -63,6 +63,7 @@ const getDuracionHoras = (row: UptimeDetalleRow) => {
 type SortKey =
   | 'mes'
   | 'tipo_afectacion'
+  | 'n_camaras'
   | 'sitio'
   | 'fecha_fallo'
   | 'hora_fallo'
@@ -208,6 +209,7 @@ const UptimeCamarasManual: React.FC = () => {
     const rowsToExport = sortedRows.map((row) => ({
       Mes: row.mes,
       'TIPO DE AFECTACION': row.tipo_afectacion,
+      'N CAMARAS': row.n_camaras ?? 0,
       SITIO: row.sitio,
       'FECHA DE FALLO': formatDateTimeValue(row.fecha_fallo),
       'HORA DE FALLO': getHoraFallo(row.fecha_fallo),
@@ -226,6 +228,7 @@ const UptimeCamarasManual: React.FC = () => {
   const columns: Array<{ key: SortKey; header: string; size: number }> = [
     { key: 'mes', header: 'Mes', size: 120 },
     { key: 'tipo_afectacion', header: 'TIPO DE AFECTACION', size: 120 },
+    { key: 'n_camaras', header: 'N CAMARAS', size: 120 },
     { key: 'sitio', header: 'SITIO', size: 120 },
     { key: 'fecha_fallo', header: 'FECHA DE FALLO', size: 120 },
     { key: 'hora_fallo', header: 'HORA DE FALLO', size: 120 },
@@ -332,6 +335,7 @@ const UptimeCamarasManual: React.FC = () => {
                   <tr key={`${row.id ?? row.fecha_fallo}-${index}`} className="hover:bg-gray-50">
                     <td className="px-4 py-2 text-sm text-gray-700">{row.mes}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.tipo_afectacion ?? ''}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{row.n_camaras ?? 0}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.sitio ?? ''}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{formatDateTimeValue(row.fecha_fallo)}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{getHoraFallo(row.fecha_fallo)}</td>
