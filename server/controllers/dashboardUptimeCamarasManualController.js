@@ -95,49 +95,20 @@ INCIDENTS AS (
       AND UPPER(TRIM(C.DESCRIPCION)) = UPPER(TRIM($5))
     ${reportadoFilterSql}
 ),
-DOWNTIME AS (
-    SELECT
-        SUM(
-            GREATEST(
-                0,
-                EXTRACT(
-                    EPOCH FROM (
-                        LEAST(A.END_TS, D.TO_TS)
-                        - GREATEST(A.START_TS, D.FROM_TS)
-                    )
-                ) / 3600.0
-            )
-            * COALESCE(C.N_CAMARAS, 0)
-        )::NUMERIC(18,2) AS T_CAIDO_H
-    FROM INCIDENTS A
-    LEFT JOIN PUBLIC.SITIOS S ON (S.NOMBRE = A.SITE_NAME)
-    LEFT JOIN PUBLIC.HACIENDA H ON (H.ID = S.HACIENDA_ID)
-    LEFT JOIN SITE_CAMERAS C ON (C.SITE_NAME = A.SITE_NAME)
-    JOIN PARAMS D ON (1 = 1)
-    WHERE A.END_TS > D.FROM_TS
-      AND A.START_TS < D.TO_TS
-      AND (D.HACIENDA_ID IS NULL OR H.ID = D.HACIENDA_ID)
-      AND (D.CLIENTE_ID IS NULL OR S.CLIENTE_ID = D.CLIENTE_ID)
-),
 KPI AS (
     SELECT
         A.CAMARAS,
         (DATE(D.TO_TS) - DATE(D.FROM_TS) + 1)::INT AS DIAS,
-        ((DATE(D.TO_TS) - DATE(D.FROM_TS) + 1)::INT * 24 * A.CAMARAS)::NUMERIC(18,2) AS T_DISPONIBLE_H,
-        COALESCE(B.T_CAIDO_H, 0)::NUMERIC(18,2) AS T_CAIDO_H
+        ((DATE(D.TO_TS) - DATE(D.FROM_TS) + 1)::INT * 24 * A.CAMARAS)::NUMERIC(18,2) AS T_DISPONIBLE_H
     FROM CAMERAS A
     JOIN PARAMS D ON (1 = 1)
-    LEFT JOIN DOWNTIME B ON (1 = 1)
 )
 SELECT
     A.DIAS,
     A.CAMARAS,
     A.T_DISPONIBLE_H,
-    A.T_CAIDO_H,
-    CASE
-        WHEN A.T_DISPONIBLE_H <= 0 THEN 0
-        ELSE ROUND((1 - (A.T_CAIDO_H / A.T_DISPONIBLE_H)) * 100, 2)
-    END AS UPTIME_PCT
+    0::NUMERIC(18,2) AS T_CAIDO_H,
+    0::NUMERIC(18,2) AS UPTIME_PCT
 FROM KPI A;
 `;
 
@@ -340,18 +311,24 @@ export const getDashboardUptimeCamarasManual = async (req, res) => {
       };
     });
 
-    const tiempoCaidoDetalle = detalle.reduce(
-      (acumulado, row) => acumulado + (Number(row.tiempo_offline_h) || 0),
-      0,
-    );
+    const tiempoCaido = detalle.reduce((acc, row) => {
+      return acc + Number(row.tiempo_offline_h || 0);
+    }, 0);
     const tDisponible = Number(kpisBase.t_disponible_h) || 0;
-    const uptimeManualPct =
-      tDisponible <= 0 ? 0 : Math.max(0, Number((((1 - tiempoCaidoDetalle / tDisponible) * 100).toFixed(2))));
+    const uptime = tDisponible > 0 ? (1 - tiempoCaido / tDisponible) * 100 : 0;
+
+    console.log("TIEMPO CAIDO GRID:", tiempoCaido);
+    console.log(
+      "FILAS:",
+      detalle.map((r) => r.tiempo_offline_h),
+    );
 
     const kpis = {
       ...kpisBase,
-      tiempo_caido_h: Number(tiempoCaidoDetalle.toFixed(2)),
-      uptime_manual_pct: uptimeManualPct,
+      t_caido_h: Number(tiempoCaido.toFixed(2)),
+      uptime_pct: Number(uptime.toFixed(2)),
+      tiempo_caido_h: Number(tiempoCaido.toFixed(2)),
+      uptime_manual_pct: Number(uptime.toFixed(2)),
     };
 
     return res.json({
