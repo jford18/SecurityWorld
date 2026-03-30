@@ -11,21 +11,6 @@ const formatDateInput = (date: Date) => date.toISOString().slice(0, 10);
 
 const formatNumber = (value: number) => numberFormatter.format(value || 0);
 
-const formatDateValue = (value?: string | null) => {
-  if (!value) return '';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return parsed.toISOString().slice(0, 10);
-};
-
-const formatDateTimeValue = (value?: string | null) => {
-  if (!value) return '';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return parsed.toLocaleString();
-};
-
 const formatTimestamp = (date = new Date()) => {
   const pad = (value: number) => String(value).padStart(2, '0');
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(
@@ -33,43 +18,30 @@ const formatTimestamp = (date = new Date()) => {
   )}`;
 };
 
-const normalizeTime = (value?: string | null) => {
-  if (!value) return '';
-  return value.length >= 8 ? value.slice(0, 8) : value;
-};
-
-const getHoraFallo = (value: string) => {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return parsed.toLocaleTimeString();
-};
-
 const getDuracionHoras = (row: UptimeDetalleRow) => {
-  const inicio = new Date(row.fecha_fallo);
-  if (Number.isNaN(inicio.getTime())) return '0.00';
+  if (!row.duracion_total_h) return 0;
+  const value = Number(row.duracion_total_h);
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return value;
+};
 
-  const fin = row.fecha_resolucion
-    ? new Date(`${row.fecha_resolucion} ${row.hora_resolucion ?? '00:00:00'}`)
-    : new Date();
+const getTiempoOfflineHoras = (row: UptimeDetalleRow) => {
+  if (!row.duracion_total_h) return 0;
+  if (!row.n_camaras) return 0;
 
-  if (Number.isNaN(fin.getTime())) return '0.00';
+  const tiempoOffline = Number(row.tiempo_offline_h);
+  if (Number.isFinite(tiempoOffline) && tiempoOffline >= 0) return tiempoOffline;
 
-  const duracionHoras = (fin.getTime() - inicio.getTime()) / (1000 * 60 * 60);
-  if (!Number.isFinite(duracionHoras) || duracionHoras < 0) return '0.00';
-
-  return duracionHoras.toFixed(2);
+  return getDuracionHoras(row) * Number(row.n_camaras);
 };
 
 type SortKey =
   | 'mes'
   | 'tipo_afectacion'
-  | 'n_camaras'
   | 'sitio'
-  | 'fecha_fallo'
-  | 'hora_fallo'
-  | 'fecha_resolucion'
-  | 'hora_resolucion'
-  | 'duracion_total_fallo_h';
+  | 'duracion_total_h'
+  | 'n_camaras'
+  | 'tiempo_offline_h';
 
 type SortDirection = 'asc' | 'desc';
 
@@ -95,7 +67,7 @@ const UptimeCamarasManual: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>({
-    key: 'fecha_fallo',
+    key: 'mes',
     direction: 'desc',
   });
 
@@ -180,19 +152,12 @@ const UptimeCamarasManual: React.FC = () => {
 
     return [...allRows].sort((a, b) => {
       switch (sortConfig.key) {
-        case 'fecha_fallo':
-          return compareValues(new Date(a.fecha_fallo).getTime(), new Date(b.fecha_fallo).getTime());
-        case 'hora_fallo':
-          return compareValues(getHoraFallo(a.fecha_fallo), getHoraFallo(b.fecha_fallo));
-        case 'fecha_resolucion':
-          return compareValues(
-            a.fecha_resolucion ? new Date(a.fecha_resolucion).getTime() : null,
-            b.fecha_resolucion ? new Date(b.fecha_resolucion).getTime() : null,
-          );
-        case 'hora_resolucion':
-          return compareValues(normalizeTime(a.hora_resolucion), normalizeTime(b.hora_resolucion));
-        case 'duracion_total_fallo_h':
-          return compareValues(Number(getDuracionHoras(a)), Number(getDuracionHoras(b)));
+        case 'duracion_total_h':
+          return compareValues(getDuracionHoras(a), getDuracionHoras(b));
+        case 'n_camaras':
+          return compareValues(Number(a.n_camaras ?? 0), Number(b.n_camaras ?? 0));
+        case 'tiempo_offline_h':
+          return compareValues(getTiempoOfflineHoras(a), getTiempoOfflineHoras(b));
         default:
           return compareValues(
             String((a as Record<string, unknown>)[sortConfig.key] ?? '').toLowerCase(),
@@ -209,13 +174,10 @@ const UptimeCamarasManual: React.FC = () => {
     const rowsToExport = sortedRows.map((row) => ({
       Mes: row.mes,
       'TIPO DE AFECTACION': row.tipo_afectacion,
-      'N CAMARAS': row.n_camaras ?? 0,
       SITIO: row.sitio,
-      'FECHA DE FALLO': formatDateTimeValue(row.fecha_fallo),
-      'HORA DE FALLO': getHoraFallo(row.fecha_fallo),
-      'FECHA DE SOLUCION': formatDateValue(row.fecha_resolucion),
-      'HORA DE SOLUCION': normalizeTime(row.hora_resolucion),
-      'DURACION TOTAL DEL FALLO (H)': `${getDuracionHoras(row)} h`,
+      'DURACION TOTAL DEL FALLO (H)': getDuracionHoras(row).toFixed(2),
+      'N CAMARAS': row.n_camaras ?? 0,
+      'TIEMPO OFFLINE POR CAMARA (H)': getTiempoOfflineHoras(row).toFixed(2),
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(rowsToExport);
@@ -227,14 +189,11 @@ const UptimeCamarasManual: React.FC = () => {
 
   const columns: Array<{ key: SortKey; header: string; size: number }> = [
     { key: 'mes', header: 'Mes', size: 120 },
-    { key: 'tipo_afectacion', header: 'TIPO DE AFECTACION', size: 120 },
+    { key: 'tipo_afectacion', header: 'TIPO DE AFECTACION', size: 160 },
+    { key: 'sitio', header: 'SITIO', size: 160 },
+    { key: 'duracion_total_h', header: 'DURACION TOTAL DEL FALLO (H)', size: 200 },
     { key: 'n_camaras', header: 'N CAMARAS', size: 120 },
-    { key: 'sitio', header: 'SITIO', size: 120 },
-    { key: 'fecha_fallo', header: 'FECHA DE FALLO', size: 120 },
-    { key: 'hora_fallo', header: 'HORA DE FALLO', size: 120 },
-    { key: 'fecha_resolucion', header: 'FECHA DE SOLUCION', size: 120 },
-    { key: 'hora_resolucion', header: 'HORA DE SOLUCION', size: 120 },
-    { key: 'duracion_total_fallo_h', header: 'DURACION TOTAL DEL FALLO (H)', size: 120 },
+    { key: 'tiempo_offline_h', header: 'TIEMPO OFFLINE POR CAMARA (H)', size: 220 },
   ];
 
   return (
@@ -335,13 +294,10 @@ const UptimeCamarasManual: React.FC = () => {
                   <tr key={`${row.id ?? row.fecha_fallo}-${index}`} className="hover:bg-gray-50">
                     <td className="px-4 py-2 text-sm text-gray-700">{row.mes}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.tipo_afectacion ?? ''}</td>
-                    <td className="px-4 py-2 text-sm text-gray-700">{row.n_camaras ?? 0}</td>
                     <td className="px-4 py-2 text-sm text-gray-700">{row.sitio ?? ''}</td>
-                    <td className="px-4 py-2 text-sm text-gray-700">{formatDateTimeValue(row.fecha_fallo)}</td>
-                    <td className="px-4 py-2 text-sm text-gray-700">{getHoraFallo(row.fecha_fallo)}</td>
-                    <td className="px-4 py-2 text-sm text-gray-700">{formatDateValue(row.fecha_resolucion)}</td>
-                    <td className="px-4 py-2 text-sm text-gray-700">{normalizeTime(row.hora_resolucion)}</td>
-                    <td className="px-4 py-2 text-sm text-gray-700">{getDuracionHoras(row)} h</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{getDuracionHoras(row).toFixed(2)}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{row.n_camaras ?? 0}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{getTiempoOfflineHoras(row).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>

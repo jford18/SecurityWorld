@@ -22,6 +22,7 @@ export interface UptimeDetalleRow {
   fecha_resolucion?: string | null;
   hora_resolucion?: string | null;
   duracion_total_fallo_h?: string;
+  duracion_total_h?: number;
   fecha_recuperacion?: string;
   hora_recuperacion?: string;
   tiempo_total_fallo_h?: number;

@@ -162,54 +162,71 @@ TOTAL_CAMERAS AS (
         COUNT(DISTINCT DEVICE_CODE) AS TOTAL
     FROM PUBLIC.HIK_CAMERA_RESOURCE_STATUS
     WHERE DEVICE_CODE IS NOT NULL
+),
+DETAIL_BASE AS (
+    SELECT
+        A.ID,
+        TO_CHAR(A.FECHA_CREACION, 'YYYY-MM') AS MES,
+        CASE
+            WHEN UPPER(A.TIPO_AFECTACION) = 'EQUIPO' THEN 'Equipo'
+            WHEN UPPER(A.TIPO_AFECTACION) = 'PUNTO' THEN 'Punto'
+            WHEN UPPER(A.TIPO_AFECTACION) = 'NODO' THEN 'Nodo'
+            WHEN UPPER(A.TIPO_AFECTACION) = 'MASIVO' THEN 'Masivo'
+            ELSE A.TIPO_AFECTACION
+        END AS TIPO_AFECTACION,
+        B.NOMBRE AS SITIO,
+        A.FECHA_CREACION AS FECHA_FALLO,
+        A.FECHA_RESOLUCION,
+        A.HORA_RESOLUCION,
+        C.DESCRIPCION AS TIPO_PROBLEMA,
+        EXTRACT(
+            EPOCH FROM (
+                (
+                    COALESCE(
+                        (A.FECHA_RESOLUCION::TIMESTAMP + A.HORA_RESOLUCION),
+                        NOW()
+                    )
+                    - A.FECHA_CREACION
+                )
+            )
+        ) / 3600.0 AS DURACION_TOTAL_H,
+        CASE
+            WHEN UPPER(A.TIPO_AFECTACION) = 'EQUIPO' THEN 1
+            WHEN UPPER(A.TIPO_AFECTACION) = 'PUNTO' THEN COALESCE(CS.N_CAMARAS, 0)
+            WHEN UPPER(A.TIPO_AFECTACION) = 'NODO' THEN COALESCE((
+                SELECT SUM(COALESCE(CS2.N_CAMARAS, 0))
+                FROM NODOS_SITIOS NS
+                JOIN SITIOS S2 ON (S2.ID = NS.SITIO_ID)
+                LEFT JOIN CAMERAS_BY_SITE CS2 ON (CS2.SITE_NAME = S2.NOMBRE)
+                WHERE NS.NODO_ID = (
+                    SELECT N.ID
+                    FROM NODOS N
+                    WHERE UPPER(TRIM(N.NOMBRE)) = UPPER(TRIM(A.EQUIPO_AFECTADO))
+                    LIMIT 1
+                )
+            ), 0)
+            WHEN UPPER(A.TIPO_AFECTACION) = 'MASIVO' THEN (SELECT TOTAL FROM TOTAL_CAMERAS)
+            ELSE 0
+        END AS N_CAMARAS
+    FROM PUBLIC.FALLOS_TECNICOS A
+    LEFT JOIN PUBLIC.SITIOS B ON (B.ID = A.SITIO_ID)
+    LEFT JOIN PUBLIC.CATALOGO_TIPO_PROBLEMA C ON (C.ID = A.TIPO_PROBLEMA_ID)
+    LEFT JOIN CAMERAS_BY_SITE CS ON (CS.SITE_NAME = B.NOMBRE)
+    JOIN PARAMS P ON (1 = 1)
+    WHERE (
+        UPPER(TRIM(C.DESCRIPCION)) = UPPER(TRIM($5))
+      )
+      AND A.FECHA_CREACION IS NOT NULL
+      AND A.FECHA_CREACION BETWEEN P.FROM_TS AND P.TO_TS
+      AND (P.HACIENDA_ID IS NULL OR B.HACIENDA_ID = P.HACIENDA_ID)
+      AND (P.CLIENTE_ID IS NULL OR B.CLIENTE_ID = P.CLIENTE_ID)
+      ${reportadoFilterSql}
 )
 SELECT
-    A.ID,
-    TO_CHAR(A.FECHA_CREACION, 'YYYY-MM') AS MES,
-    CASE
-        WHEN UPPER(A.TIPO_AFECTACION) = 'EQUIPO' THEN 'Equipo'
-        WHEN UPPER(A.TIPO_AFECTACION) = 'PUNTO' THEN 'Punto'
-        WHEN UPPER(A.TIPO_AFECTACION) = 'NODO' THEN 'Nodo'
-        WHEN UPPER(A.TIPO_AFECTACION) = 'MASIVO' THEN 'Masivo'
-        ELSE A.TIPO_AFECTACION
-    END AS TIPO_AFECTACION,
-    B.NOMBRE AS SITIO,
-    A.FECHA_CREACION AS FECHA_FALLO,
-    A.FECHA_RESOLUCION,
-    A.HORA_RESOLUCION,
-    C.DESCRIPCION AS TIPO_PROBLEMA,
-    CASE
-        WHEN UPPER(A.TIPO_AFECTACION) = 'EQUIPO' THEN 1
-        WHEN UPPER(A.TIPO_AFECTACION) = 'PUNTO' THEN COALESCE(CS.N_CAMARAS, 0)
-        WHEN UPPER(A.TIPO_AFECTACION) = 'NODO' THEN COALESCE((
-            SELECT SUM(COALESCE(CS2.N_CAMARAS, 0))
-            FROM NODOS_SITIOS NS
-            JOIN SITIOS S2 ON (S2.ID = NS.SITIO_ID)
-            LEFT JOIN CAMERAS_BY_SITE CS2 ON (CS2.SITE_NAME = S2.NOMBRE)
-            WHERE NS.NODO_ID = (
-                SELECT N.ID
-                FROM NODOS N
-                WHERE UPPER(TRIM(N.NOMBRE)) = UPPER(TRIM(A.EQUIPO_AFECTADO))
-                LIMIT 1
-            )
-        ), 0)
-        WHEN UPPER(A.TIPO_AFECTACION) = 'MASIVO' THEN (SELECT TOTAL FROM TOTAL_CAMERAS)
-        ELSE 0
-    END AS N_CAMARAS
-FROM PUBLIC.FALLOS_TECNICOS A
-LEFT JOIN PUBLIC.SITIOS B ON (B.ID = A.SITIO_ID)
-LEFT JOIN PUBLIC.CATALOGO_TIPO_PROBLEMA C ON (C.ID = A.TIPO_PROBLEMA_ID)
-LEFT JOIN CAMERAS_BY_SITE CS ON (CS.SITE_NAME = B.NOMBRE)
-JOIN PARAMS P ON (1 = 1)
-WHERE (
-    UPPER(TRIM(C.DESCRIPCION)) = UPPER(TRIM($5))
-  )
-  AND A.FECHA_CREACION IS NOT NULL
-  AND A.FECHA_CREACION BETWEEN P.FROM_TS AND P.TO_TS
-  AND (P.HACIENDA_ID IS NULL OR B.HACIENDA_ID = P.HACIENDA_ID)
-  AND (P.CLIENTE_ID IS NULL OR B.CLIENTE_ID = P.CLIENTE_ID)
-  ${reportadoFilterSql}
-ORDER BY A.FECHA_CREACION DESC;
+    DB.*,
+    (COALESCE(DB.DURACION_TOTAL_H, 0) * COALESCE(DB.N_CAMARAS, 0)) AS TIEMPO_OFFLINE_H
+FROM DETAIL_BASE DB
+ORDER BY DB.FECHA_FALLO DESC;
 `;
 
 export const getDashboardUptimeCamarasManual = async (req, res) => {
@@ -312,25 +329,14 @@ export const getDashboardUptimeCamarasManual = async (req, res) => {
       const horaFallo =
         falloDate && !Number.isNaN(falloDate.getTime()) ? falloDate.toLocaleTimeString() : "";
 
-      const fechaSolucion = row.fecha_resolucion || null;
-      const horaSolucion = row.hora_resolucion || null;
-
-      const inicio = falloDate && !Number.isNaN(falloDate.getTime()) ? falloDate : null;
-      const fin =
-        fechaSolucion && inicio
-          ? new Date(`${fechaSolucion} ${horaSolucion || "00:00:00"}`)
-          : new Date();
-
-      const duracion = inicio && !Number.isNaN(fin.getTime()) ? (fin - inicio) / (1000 * 60 * 60) : 0;
-      const duracionHoras = Number.isFinite(duracion) && duracion >= 0 ? duracion.toFixed(2) : "0.00";
-
       return {
         ...row,
         fecha_fallo: fechaFallo,
         hora_fallo: horaFallo,
-        fecha_resolucion: fechaSolucion,
-        hora_resolucion: horaSolucion,
-        duracion_total_fallo_h: duracionHoras,
+        fecha_resolucion: row.fecha_resolucion || null,
+        hora_resolucion: row.hora_resolucion || null,
+        duracion_total_h: Number(row.duracion_total_h) || 0,
+        tiempo_offline_h: Number(row.tiempo_offline_h) || 0,
       };
     });
 
