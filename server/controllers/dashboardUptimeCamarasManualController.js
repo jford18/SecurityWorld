@@ -315,7 +315,7 @@ export const getDashboardUptimeCamarasManual = async (req, res) => {
       console.log(r.tipo_afectacion, r.sitio, r.n_camaras);
     });
 
-    const kpis = kpiResult.rows[0] ?? {
+    const baseKpis = kpiResult.rows[0] ?? {
       dias: 0,
       camaras: 0,
       t_disponible_h: 0,
@@ -323,7 +323,7 @@ export const getDashboardUptimeCamarasManual = async (req, res) => {
       uptime_pct: 0,
     };
 
-    const detalle = (detalleResult.rows ?? []).map((row) => {
+    const rows = (detalleResult.rows ?? []).map((row) => {
       const fechaFallo = row.fecha_fallo;
       const falloDate = fechaFallo ? new Date(fechaFallo) : null;
       const horaFallo =
@@ -340,9 +340,24 @@ export const getDashboardUptimeCamarasManual = async (req, res) => {
       };
     });
 
+    const dias = Number(baseKpis.dias) || 0;
+    const totalCamaras = Number(baseKpis.camaras) || 0;
+    const tiempoDisponible = dias * 24 * totalCamaras;
+    const tiempoCaido = rows.reduce((acc, row) => {
+      return acc + Number(row.tiempo_offline_h || 0);
+    }, 0);
+    const uptime =
+      tiempoDisponible > 0
+        ? (1 - (tiempoCaido / tiempoDisponible)) * 100
+        : 0;
+
     return res.json({
-      kpis,
-      detalle,
+      kpis: {
+        tiempo_caido_h: Number(tiempoCaido.toFixed(2)),
+        uptime_pct: Number(uptime.toFixed(2)),
+      },
+      data: rows,
+      detalle: rows,
     });
   } catch (error) {
     console.error("[API][ERROR] /api/dashboards/uptime-camaras-manual:", error);

@@ -23,9 +23,15 @@ export const fetchDashboardUptimeCamarasManual = async (
 
   queryParams.all = 'true';
 
-  const { data } = await api.get<DashboardUptimeResponse>('/dashboards/uptime-camaras-manual', {
-    params: queryParams,
-  });
+  const { data } = await api.get<DashboardUptimeResponse & { data?: DashboardUptimeResponse['detalle'] }>(
+    '/dashboards/uptime-camaras-manual',
+    {
+      params: queryParams,
+    },
+  );
 
-  return data;
+  return {
+    ...data,
+    detalle: data.detalle ?? data.data ?? [],
+  };
 };

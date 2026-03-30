@@ -1,10 +1,11 @@
 import api from './api';
 
 export interface UptimeKpis {
-  dias: number;
-  camaras: number;
-  t_disponible_h: number;
-  t_caido_h: number;
+  dias?: number;
+  camaras?: number;
+  t_disponible_h?: number;
+  t_caido_h?: number;
+  tiempo_caido_h?: number;
   uptime_pct: number;
 }
 
