@@ -315,7 +315,7 @@ export const getDashboardUptimeCamarasManual = async (req, res) => {
       console.log(r.tipo_afectacion, r.sitio, r.n_camaras);
     });
 
-    const kpis = kpiResult.rows[0] ?? {
+    const kpisBase = kpiResult.rows[0] ?? {
       dias: 0,
       camaras: 0,
       t_disponible_h: 0,
@@ -340,9 +340,32 @@ export const getDashboardUptimeCamarasManual = async (req, res) => {
       };
     });
 
+    const tiempoCaidoDetalle = detalle.reduce(
+      (acumulado, row) => acumulado + (Number(row.tiempo_offline_h) || 0),
+      0,
+    );
+    const tDisponible = Number(kpisBase.t_disponible_h) || 0;
+    const uptimeManualPct =
+      tDisponible <= 0 ? 0 : Math.max(0, Number((((1 - tiempoCaidoDetalle / tDisponible) * 100).toFixed(2))));
+
+    const kpis = {
+      ...kpisBase,
+      tiempo_caido_h: Number(tiempoCaidoDetalle.toFixed(2)),
+      uptime_manual_pct: uptimeManualPct,
+    };
+
     return res.json({
-      kpis,
+      kpis: {
+        dias: kpis.dias,
+        camaras: kpis.camaras,
+        t_disponible_h: kpis.t_disponible_h,
+        t_caido_h: kpis.t_caido_h,
+        uptime_pct: kpis.uptime_pct,
+        tiempo_caido_h: kpis.tiempo_caido_h,
+        uptime_manual_pct: kpis.uptime_manual_pct,
+      },
       detalle,
+      data: detalle,
     });
   } catch (error) {
     console.error("[API][ERROR] /api/dashboards/uptime-camaras-manual:", error);

@@ -61,7 +61,15 @@ const UptimeCamarasManual: React.FC = () => {
   const [haciendas, setHaciendas] = useState<HaciendaResumen[]>([]);
   const [clientes, setClientes] = useState<ClienteResumen[]>([]);
 
-  const [kpis, setKpis] = useState<DashboardUptimeResponse['kpis']>({ dias: 0, camaras: 0, t_disponible_h: 0, t_caido_h: 0, uptime_pct: 0 });
+  const [kpis, setKpis] = useState<DashboardUptimeResponse['kpis']>({
+    dias: 0,
+    camaras: 0,
+    t_disponible_h: 0,
+    t_caido_h: 0,
+    uptime_pct: 0,
+    tiempo_caido_h: 0,
+    uptime_manual_pct: 0,
+  });
 
   const [allRows, setAllRows] = useState<UptimeDetalleRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -90,7 +98,15 @@ const UptimeCamarasManual: React.FC = () => {
       console.error('[UptimeCamarasManual] Error al cargar datos', err);
       const message = err instanceof Error && err.message ? err.message : 'No se pudo cargar la información de uptime de cámaras (manual)';
       setError(message);
-      setKpis({ dias: 0, camaras: 0, t_disponible_h: 0, t_caido_h: 0, uptime_pct: 0 });
+      setKpis({
+        dias: 0,
+        camaras: 0,
+        t_disponible_h: 0,
+        t_caido_h: 0,
+        uptime_pct: 0,
+        tiempo_caido_h: 0,
+        uptime_manual_pct: 0,
+      });
       setAllRows([]);
     } finally {
       setLoading(false);
@@ -169,6 +185,10 @@ const UptimeCamarasManual: React.FC = () => {
 
   const uptimeDisponible = formatNumber(kpis.t_disponible_h);
   const uptimeCaido = formatNumber(kpis.t_caido_h);
+
+  useEffect(() => {
+    console.log('KPIS COMPLETOS:', kpis);
+  }, [kpis]);
 
   const handleExport = () => {
     const rowsToExport = sortedRows.map((row) => ({
@@ -256,6 +276,18 @@ const UptimeCamarasManual: React.FC = () => {
         <div className="rounded-lg bg-white p-4 shadow"><p className="text-sm text-gray-500">T. disponible (horas)</p><p className="text-2xl font-bold text-[#1C2E4A]">{uptimeDisponible}</p></div>
         <div className="rounded-lg bg-white p-4 shadow"><p className="text-sm text-gray-500">T. caído (horas)</p><p className="text-2xl font-bold text-[#1C2E4A]">{uptimeCaido}</p></div>
         <div className="rounded-lg bg-white p-4 shadow"><p className="text-sm text-gray-500">% Uptime</p><p className="text-2xl font-bold text-[#1C2E4A]">{formatNumber(kpis.uptime_pct)}%</p></div>
+      </section>
+
+      <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="rounded-lg bg-white p-4 shadow">
+          <p className="text-sm text-gray-500">TIEMPO CAÍDO (H) - DETALLE</p>
+          <p className="text-2xl font-bold text-[#1C2E4A]">{formatNumber(kpis?.tiempo_caido_h ?? 0)}</p>
+        </div>
+
+        <div className="rounded-lg bg-white p-4 shadow">
+          <p className="text-sm text-gray-500">% UPTIME (DETALLE)</p>
+          <p className="text-2xl font-bold text-[#1C2E4A]">{formatNumber(kpis?.uptime_manual_pct ?? 0)}%</p>
+        </div>
       </section>
 
       <section className="bg-white rounded-lg shadow p-4">

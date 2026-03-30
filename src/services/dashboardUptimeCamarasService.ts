@@ -6,6 +6,8 @@ export interface UptimeKpis {
   t_disponible_h: number;
   t_caido_h: number;
   uptime_pct: number;
+  tiempo_caido_h?: number;
+  uptime_manual_pct?: number;
 }
 
 export interface UptimeDetalleRow {
@@ -35,6 +37,7 @@ export interface UptimeDetalleRow {
 export interface DashboardUptimeResponse {
   kpis: UptimeKpis;
   detalle: UptimeDetalleRow[];
+  data?: UptimeDetalleRow[];
 }
 
 export interface DashboardUptimeFilters {
