@@ -680,155 +680,109 @@ export const getFallos = async (req, res) => {
         .json({ message: "El parámetro reportado_cliente debe ser válido." });
     }
 
-    const filtros = [];
+    const filtros = ["AND B.PASO IS NOT NULL"];
     const params = [];
 
     if (consolaId) {
       params.push(consolaId);
-      filtros.push(`AND ft.consola_id = $${params.length}`);
+      filtros.push(`AND A.CONSOLA_ID = $${params.length}`);
     }
 
     if (clienteId) {
       params.push(clienteId);
-      filtros.push(`AND sitio.cliente_id = $${params.length}`);
+      filtros.push(`AND H.CLIENTE_ID = $${params.length}`);
     }
 
     if (haciendaId) {
       params.push(haciendaId);
-      filtros.push(`AND sitio.hacienda_id = $${params.length}`);
+      filtros.push(`AND H.HACIENDA_ID = $${params.length}`);
     }
 
     if (reportadoClienteValues !== null) {
       params.push(reportadoClienteValues);
-      filtros.push(`AND ${reportadoBooleanSqlExpression('ft')} = $${params.length}`);
+      filtros.push(`AND ${reportadoBooleanSqlExpression("A")} = $${params.length}`);
     }
 
-    const whereFilters = filtros.length > 0 ? `WHERE 1 = 1 ${filtros.join(" ")}` : "";
+    const whereFilters = `WHERE 1 = 1 ${filtros.join(" ")}`;
 
-    const reportadoSelect = `${reportadoBooleanSqlExpression('ft')} AS reportado_al_cliente`;
-
-    const sql = `SELECT
-        ft.id,
-        ft.fecha,
-        ft.hora,
-        COALESCE(
-          TO_CHAR(ft.fecha::timestamp + COALESCE(ft.hora, '00:00:00'::time), 'YYYY-MM-DD HH24:MI'),
-          TO_CHAR(ft.fecha_creacion, 'YYYY-MM-DD HH24:MI')
-        ) AS fecha_hora_fallo,
-        ft.equipo_afectado,
-        ft.descripcion_fallo,
-        ft.camera_id,
-        ft.encoding_device_id,
-        ft.ip_speaker_id,
-        ft.alarm_input_id,
-        COALESCE(responsable.nombre_completo, responsable.nombre_usuario) AS responsable,
-        dept.nombre AS departamento,
-        dept.id AS departamento_id,
-        consola.nombre AS consola,
-        ft.consola_id,
-        COALESCE(sitio.nombre, 'Sin sitio asignado') AS sitio,
-        sitio.nombre AS sitio_nombre,
-        sitio.cliente_id AS cliente_id,
-        cliente.nombre AS cliente_nombre,
-        sitio.hacienda_id AS hacienda_id,
-        hacienda.nombre AS hacienda_nombre,
-        ft.tipo_problema_id,
-        tp.descripcion AS tipo_problema_descripcion,
-        tp.descripcion AS problema,
-        ft.tipo_afectacion,
+    const sql = `
+      SELECT
+        A.ID AS "ID FALLO",
+        I.NOMBRE AS "CLIENTE",
+        O.NOMBRE AS "NODO",
+        J.NOMBRE AS "HACIENDA",
+        COALESCE(P.DESCRIPCION, A.DESCRIPCION_FALLO) AS "PROBLEMA",
+        A.TIPO_AFECTACION AS "TIPO DE AFECTACION",
         CASE
-          WHEN ft.tipo_afectacion = 'EQUIPO' THEN
-            CASE
-              WHEN ft.camera_id IS NOT NULL THEN 'EQUIPO-CÁMARA'
-              WHEN ft.encoding_device_id IS NOT NULL THEN 'EQUIPO-GRABADOR'
-              WHEN ft.ip_speaker_id IS NOT NULL THEN 'EQUIPO-IP SPEAKER'
-              WHEN ft.alarm_input_id IS NOT NULL THEN 'EQUIPO-ALARM INPUT'
-              ELSE 'EQUIPO'
-            END
-          ELSE COALESCE(ft.tipo_afectacion, 'SIN INFORMACIÓN')
-        END AS tipo_afectacion_detalle,
-        ft.equipo_afectado AS tipo_equipo_afectado,
+          WHEN UPPER(COALESCE(A.TIPO_AFECTACION, '')) = 'NODO' THEN A.EQUIPO_AFECTADO
+          ELSE COALESCE(H.NOMBRE, 'Sin sitio asignado')
+        END AS "SITIO",
+        A.EQUIPO_AFECTADO AS tipo_equipo_afectado,
         CASE
-          WHEN POSITION(' - ' IN ft.equipo_afectado) > 0
-            THEN TRIM(SPLIT_PART(ft.equipo_afectado, ' - ', 1))
+          WHEN POSITION(' - ' IN A.EQUIPO_AFECTADO) > 0
+            THEN TRIM(SPLIT_PART(A.EQUIPO_AFECTADO, ' - ', 1))
           ELSE NULL
         END AS tipo_equipo_afectado_nombre,
         CASE
-          WHEN POSITION(' - ' IN ft.equipo_afectado) > 0
-            THEN TRIM(SPLIT_PART(ft.equipo_afectado, ' - ', 2))
+          WHEN POSITION(' - ' IN A.EQUIPO_AFECTADO) > 0
+            THEN TRIM(SPLIT_PART(A.EQUIPO_AFECTADO, ' - ', 2))
           ELSE NULL
         END AS nombre_equipo,
+        A.FECHA::DATE AS "FECHA DE FALLO",
+        TO_CHAR(COALESCE(A.HORA, '00:00:00'::TIME), 'HH24:MI:SS') AS "HORA DE FALLO",
+        TO_CHAR(A.FECHA_RESOLUCION, 'YYYY-MM-DD') AS "FECHA DE SOLUCION",
+        TO_CHAR(A.HORA_RESOLUCION, 'HH24:MI:SS') AS "HORA DE SOLUCION",
         CASE
-          WHEN UPPER(ft.tipo_afectacion) = 'NODO' THEN NULLIF(ft.equipo_afectado, '')
-          ELSE NULL
-        END AS nodo_nombre,
-        ${reportadoSelect},
-        ft.fecha_resolucion,
-        ft.hora_resolucion,
-        ft.estado,
-        CASE
-          WHEN ft.fecha_resolucion IS NOT NULL THEN 'RESUELTO'
-          WHEN ft.fecha IS NOT NULL THEN CONCAT(
-            GREATEST(0, (CURRENT_DATE::date - ft.fecha)::int),
-            ' días pendiente'
-          )
-          ELSE '0 días pendiente'
-        END AS estado_texto,
-        seguimiento_ultimo.novedad_detectada AS novedad,
-        seguimiento_ultimo.novedad_detectada,
-        seguimiento_ultimo.ultimo_usuario_edito_id,
-        seguimiento_ultimo.ultimo_usuario_edito_nombre,
-        cierre.verificacion_cierre_id AS responsable_verificacion_cierre_id,
-        COALESCE(responsable_cierre.nombre_completo, responsable_cierre.nombre_usuario) AS responsable_verificacion_cierre_nombre,
-        dept.nombre AS departamento_responsable,
-        ft.fecha_creacion,
-        ft.fecha_actualizacion
-      FROM fallos_tecnicos ft
-      LEFT JOIN usuarios responsable ON responsable.id = ft.responsable_id
-      LEFT JOIN (
-        SELECT DISTINCT ON (sf.fallo_id)
-          sf.fallo_id,
-          sf.verificacion_cierre_id
-        FROM seguimiento_fallos sf
-        WHERE sf.paso = 'CIERRE'
-        ORDER BY sf.fallo_id, sf.fecha_creacion DESC
-      ) cierre ON cierre.fallo_id = ft.id
-      LEFT JOIN usuarios responsable_cierre ON responsable_cierre.id = cierre.verificacion_cierre_id
-      LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
-      LEFT JOIN consolas consola ON consola.id = ft.consola_id
-      LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
-      LEFT JOIN clientes cliente ON cliente.id = sitio.cliente_id
-      LEFT JOIN hacienda hacienda ON hacienda.id = sitio.hacienda_id
-      LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
-      LEFT JOIN hik_camera_resource_status camera ON camera.id = ft.camera_id
-      LEFT JOIN hik_encoding_device_status encoding_device ON encoding_device.id = ft.encoding_device_id
-      LEFT JOIN hik_ip_speaker_status ip_speaker ON ip_speaker.id = ft.ip_speaker_id
-      LEFT JOIN hik_alarm_input_status alarm_input ON alarm_input.id = ft.alarm_input_id
-      LEFT JOIN (
-        SELECT DISTINCT ON (sf.fallo_id)
-          sf.fallo_id,
-          sf.novedad_detectada,
-          sf.ultimo_usuario_edito_id,
-          COALESCE(ultimo_editor.nombre_completo, ultimo_editor.nombre_usuario) AS ultimo_usuario_edito_nombre
-        FROM seguimiento_fallos sf
-        LEFT JOIN usuarios ultimo_editor ON ultimo_editor.id = sf.ultimo_usuario_edito_id
-        ORDER BY sf.fallo_id, sf.fecha_creacion DESC
-      ) seguimiento_ultimo ON seguimiento_ultimo.fallo_id = ft.id
+          WHEN ${reportadoBooleanSqlExpression("A")} THEN 'SI'
+          ELSE 'NO'
+        END AS "REPORTADO AL CLIENTE",
+        A.ESTADO AS "ESTADO",
+        G.NOMBRE AS "NOMBRE DE CONSOLA",
+        ROW_NUMBER() OVER (PARTITION BY A.ID ORDER BY B.FECHA_INICIO, B.ID) AS "N° DE MODIFICACIONES",
+        TO_CHAR(B.FECHA_INICIO, 'YYYY-MM-DD HH24:MI:SS') AS "FECHA Y HORA DE MODIFICACION",
+        COALESCE(Q.NOMBRE, 'SIN INFORMACION') AS "DEPARTAMENTO RESPONSABLE",
+        B.NOVEDAD_DETECTADA AS "DETALLE DE NOVEDAD DETECTADA",
+        COALESCE(U1.NOMBRE_COMPLETO, U1.NOMBRE_USUARIO) AS "USUARIO QUE EDITA EL FALLO",
+        COALESCE(D.NOMBRE_COMPLETO, D.NOMBRE_USUARIO) AS "RESPONSABLE INICIAL",
+        COALESCE(U1.NOMBRE_COMPLETO, U1.NOMBRE_USUARIO) AS "ULTIMO USUARIO QUE EDITO",
+        COALESCE(R.NOMBRE, 'SIN INFORMACION') AS "DEPARTAMENTO RESPONSABLE (FINAL)"
+      FROM FALLOS_TECNICOS A
+      JOIN SEGUIMIENTO_FALLOS B ON (B.FALLO_ID = A.ID)
+      LEFT JOIN USUARIOS U1 ON (U1.ID = B.ULTIMO_USUARIO_EDITO_ID)
+      LEFT JOIN USUARIOS D ON (D.ID = A.RESPONSABLE_ID)
+      LEFT JOIN USUARIOS E ON (E.ID = B.VERIFICACION_CIERRE_ID)
+      LEFT JOIN DEPARTAMENTOS_RESPONSABLES Q ON (Q.ID = B.DEPARTAMENTO_ID)
+      LEFT JOIN DEPARTAMENTOS_RESPONSABLES R ON (R.ID = A.DEPARTAMENTO_ID)
+      LEFT JOIN CONSOLAS G ON (G.ID = A.CONSOLA_ID)
+      LEFT JOIN SITIOS H ON (H.ID = A.SITIO_ID)
+      LEFT JOIN CLIENTES I ON (I.ID = H.CLIENTE_ID)
+      LEFT JOIN HACIENDA J ON (J.ID = H.HACIENDA_ID)
+      LEFT JOIN HIK_CAMERA_RESOURCE_STATUS K ON (K.ID = A.CAMERA_ID)
+      LEFT JOIN HIK_ENCODING_DEVICE_STATUS L ON (L.ID = A.ENCODING_DEVICE_ID)
+      LEFT JOIN HIK_IP_SPEAKER_STATUS M ON (M.ID = A.IP_SPEAKER_ID)
+      LEFT JOIN HIK_ALARM_INPUT_STATUS N ON (N.ID = A.ALARM_INPUT_ID)
+      LEFT JOIN CATALOGO_TIPO_PROBLEMA P ON (P.ID = A.TIPO_PROBLEMA_ID)
+      LEFT JOIN LATERAL (
+        SELECT R.NOMBRE
+        FROM NODOS_SITIOS Q
+        JOIN NODOS R ON (R.ID = Q.NODO_ID)
+        WHERE Q.SITIO_ID = H.ID
+        ORDER BY Q.FECHA_ASIGNACION DESC NULLS LAST, Q.NODO_ID DESC
+        LIMIT 1
+      ) O ON (TRUE)
       ${whereFilters}
-      ORDER BY ft.fecha DESC, ft.id DESC`;
+      ORDER BY A.ID ASC, B.FECHA_INICIO ASC, B.ID ASC;
+    `;
 
     logSql("FALLOS_CONSULTAS_DATA", sql, params);
-    const result = await client.query(sql, params); // FIX: rewritten query uses LEFT JOINs only with existing lookup tables to avoid failing when optional relations are missing and to provide the consola name.
-
-    const fallos = result.rows.map(mapFalloRowToDto);
-
-    return res.json(fallos);
+    const result = await client.query(sql, params);
+    return res.json(result.rows);
   } catch (error) {
-    console.error("Error al obtener los fallos técnicos:", error); // FIX: keep logging to help troubleshoot database errors without crashing the server.
+    console.error("Error al obtener los fallos técnicos:", error);
     return res.status(500).json({
       message: "Error interno del servidor",
       error: error.message,
-    }); // FIX: respond with a consistent 500 payload that the frontend can handle gracefully.
+    });
   } finally {
     client.release();
   }
