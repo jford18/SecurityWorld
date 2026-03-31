@@ -268,33 +268,62 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
   };
 
   const isTipoAfectacionEquipo = (failure: TechnicalFailure) => {
-    const tipoAfectacion = (failure.tipoAfectacion || failure.tipo_afectacion || '').toString().trim().toUpperCase();
-    return tipoAfectacion === 'EQUIPO';
+    const tipoAfectacionDetalle = (
+      failure.tipo_afectacion_detalle
+      || failure.tipoAfectacionDetalle
+      || ''
+    )
+      .toString()
+      .trim()
+      .toUpperCase();
+
+    const tipoAfectacion = (failure.tipoAfectacion || failure.tipo_afectacion || '')
+      .toString()
+      .trim()
+      .toUpperCase();
+
+    const tipoEquipoBackend = (
+      failure.tipo_equipo_afectado_nombre
+      || failure.tipo_equipo_afectado
+      || failure.tipoEquipoAfectado
+      || ''
+    )
+      .toString()
+      .trim();
+
+    return tipoAfectacion === 'EQUIPO' || tipoAfectacionDetalle.startsWith('EQUIPO-') || tipoEquipoBackend !== '';
   };
 
   const getTipoEquipoAfectado = (failure: TechnicalFailure) => {
-    const record = failure as TechnicalFailure & {
-      camera_id?: number | string | null;
-      cameraId?: number | string | null;
-      encoding_device_id?: number | string | null;
-      encodingDeviceId?: number | string | null;
-      ip_speaker_id?: number | string | null;
-      ipSpeakerId?: number | string | null;
-      alarm_input_id?: number | string | null;
-      alarmInputId?: number | string | null;
-    };
+    const tipoEquipoBackend = (
+      failure.tipo_equipo_afectado_nombre
+      || failure.tipo_equipo_afectado
+      || failure.tipoEquipoAfectado
+      || ''
+    )
+      .toString()
+      .trim();
+
+    if (tipoEquipoBackend) {
+      return tipoEquipoBackend;
+    }
+
+    const tipoAfectacionDetalle = (
+      failure.tipo_afectacion_detalle
+      || failure.tipoAfectacionDetalle
+      || ''
+    )
+      .toString()
+      .trim();
+
+    if (tipoAfectacionDetalle.toUpperCase().startsWith('EQUIPO-')) {
+      return tipoAfectacionDetalle.slice('EQUIPO-'.length).trim() || '-';
+    }
 
     const tipoAfectacion = (failure.tipoAfectacion || failure.tipo_afectacion || '').toString().trim().toUpperCase();
     if (tipoAfectacion === 'NODO') return 'NODO';
 
-    const hasValue = (value: unknown) => value !== null && value !== undefined && value !== '';
-
-    if (hasValue(record.camera_id) || hasValue(record.cameraId)) return 'CAMARA';
-    if (hasValue(record.encoding_device_id) || hasValue(record.encodingDeviceId)) return 'GRABADOR';
-    if (hasValue(record.ip_speaker_id) || hasValue(record.ipSpeakerId)) return 'MEGAFONO';
-    if (hasValue(record.alarm_input_id) || hasValue(record.alarmInputId)) return 'ALARM INPUT';
-
-    return 'OTRO';
+    return '-';
   };
 
   const getNombreEquipo = (failure: TechnicalFailure) => {
