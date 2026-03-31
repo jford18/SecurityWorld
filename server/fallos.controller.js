@@ -550,13 +550,7 @@ const fetchFalloById = async (client, id) => {
         ft.tipo_problema_id,
         tp.descripcion AS tipo_problema_descripcion,
         ft.tipo_afectacion,
-        CASE
-          WHEN ft.equipo_afectado IS NULL THEN NULL
-          WHEN UPPER(ft.equipo_afectado) = 'N/A' THEN NULL
-          WHEN POSITION(' en ' IN LOWER(ft.equipo_afectado)) > 0
-            THEN TRIM(SPLIT_PART(ft.equipo_afectado, ' en ', 1))
-          ELSE NULL
-        END AS tipo_equipo_afectado,
+        ft.equipo_afectado AS tipo_equipo_afectado,
         CASE
           WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN
             CASE
@@ -574,14 +568,7 @@ const fetchFalloById = async (client, id) => {
             END
           ELSE NULL
         END AS tipo_equipo_afectado_nombre,
-        CASE
-          WHEN UPPER(ft.tipo_afectacion) IN ('MASIVO', 'PUNTO', 'NODO') THEN NULL
-          WHEN ft.camera_id IS NULL
-            AND ft.encoding_device_id IS NULL
-            AND ft.ip_speaker_id IS NULL
-            AND ft.alarm_input_id IS NULL THEN NULL
-          ELSE COALESCE(camera.camera_name, encoding_device.name, ip_speaker.name, alarm_input.name, ft.equipo_afectado)
-        END AS nombre_equipo,
+        COALESCE(camera.camera_name, encoding_device.name, ip_speaker.name, alarm_input.name, ft.equipo_afectado) AS nombre_equipo,
         CASE
           WHEN UPPER(ft.tipo_afectacion) = 'NODO' THEN NULLIF(ft.equipo_afectado, '')
           ELSE NULL
@@ -768,13 +755,7 @@ export const getFallos = async (req, res) => {
             END
           ELSE COALESCE(ft.tipo_afectacion, 'SIN INFORMACIÓN')
         END AS tipo_afectacion_detalle,
-        CASE
-          WHEN ft.equipo_afectado IS NULL THEN NULL
-          WHEN UPPER(ft.equipo_afectado) = 'N/A' THEN NULL
-          WHEN POSITION(' en ' IN LOWER(ft.equipo_afectado)) > 0
-            THEN TRIM(SPLIT_PART(ft.equipo_afectado, ' en ', 1))
-          ELSE NULL
-        END AS tipo_equipo_afectado,
+        ft.equipo_afectado AS tipo_equipo_afectado,
         CASE
           WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN
             CASE
@@ -792,14 +773,7 @@ export const getFallos = async (req, res) => {
             END
           ELSE NULL
         END AS tipo_equipo_afectado_nombre,
-        CASE
-          WHEN UPPER(ft.tipo_afectacion) IN ('MASIVO', 'PUNTO', 'NODO') THEN NULL
-          WHEN ft.camera_id IS NULL
-            AND ft.encoding_device_id IS NULL
-            AND ft.ip_speaker_id IS NULL
-            AND ft.alarm_input_id IS NULL THEN NULL
-          ELSE COALESCE(camera.camera_name, encoding_device.name, ip_speaker.name, alarm_input.name, ft.equipo_afectado)
-        END AS nombre_equipo,
+        COALESCE(camera.camera_name, encoding_device.name, ip_speaker.name, alarm_input.name, ft.equipo_afectado) AS nombre_equipo,
         CASE
           WHEN UPPER(ft.tipo_afectacion) = 'NODO' THEN NULLIF(ft.equipo_afectado, '')
           ELSE NULL
@@ -1046,21 +1020,8 @@ export const exportFallosTecnicosConsultasExcel = async (req, res) => {
         WHEN UPPER(COALESCE(A.TIPO_AFECTACION, '')) = 'NODO' THEN A.EQUIPO_AFECTADO
         ELSE COALESCE(H.NOMBRE, 'Sin sitio asignado')
       END AS "SITIO"`,
-      `CASE
-        WHEN A.EQUIPO_AFECTADO IS NULL THEN NULL
-        WHEN UPPER(A.EQUIPO_AFECTADO) = 'N/A' THEN NULL
-        WHEN POSITION(' en ' IN LOWER(A.EQUIPO_AFECTADO)) > 0
-          THEN TRIM(SPLIT_PART(A.EQUIPO_AFECTADO, ' en ', 1))
-        ELSE NULL
-      END AS "TIPO DE EQUIPO AFECTADO"`,
-      `CASE
-        WHEN UPPER(A.TIPO_AFECTACION) IN ('MASIVO', 'PUNTO', 'NODO') THEN NULL
-        WHEN A.CAMERA_ID IS NULL
-          AND A.ENCODING_DEVICE_ID IS NULL
-          AND A.IP_SPEAKER_ID IS NULL
-          AND A.ALARM_INPUT_ID IS NULL THEN NULL
-        ELSE COALESCE(K.CAMERA_NAME, L.NAME, M.NAME, N.NAME, A.EQUIPO_AFECTADO)
-      END AS "NOMBRE DEL EQUIPO"`,
+      `A.EQUIPO_AFECTADO AS "TIPO DE EQUIPO AFECTADO"`,
+      `COALESCE(K.CAMERA_NAME, L.NAME, M.NAME, N.NAME, A.EQUIPO_AFECTADO) AS "NOMBRE DEL EQUIPO"`,
       `A.FECHA::DATE AS "FECHA DE FALLO"`,
       `TO_CHAR(COALESCE(A.HORA, '00:00:00'::TIME), 'HH24:MI:SS') AS "HORA DE FALLO"`,
       `TO_CHAR(A.FECHA_RESOLUCION, 'YYYY-MM-DD') AS "FECHA DE SOLUCION"`,
