@@ -552,23 +552,15 @@ const fetchFalloById = async (client, id) => {
         ft.tipo_afectacion,
         ft.equipo_afectado AS tipo_equipo_afectado,
         CASE
-          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN
-            CASE
-              WHEN ft.camera_id IS NOT NULL THEN 'CÁMARA'
-              WHEN ft.encoding_device_id IS NOT NULL THEN 'GRABADOR'
-              WHEN ft.ip_speaker_id IS NOT NULL THEN 'IP SPEAKER'
-              WHEN ft.alarm_input_id IS NOT NULL THEN 'ALARM INPUT'
-              ELSE TRIM(
-                REGEXP_REPLACE(
-                  SPLIT_PART(ft.equipo_afectado, ' en ', 1),
-                  '\\s*\\(.*\\)$',
-                  ''
-                )
-              )
-            END
+          WHEN POSITION(' - ' IN ft.equipo_afectado) > 0
+            THEN TRIM(SPLIT_PART(ft.equipo_afectado, ' - ', 1))
           ELSE NULL
         END AS tipo_equipo_afectado_nombre,
-        COALESCE(camera.camera_name, encoding_device.name, ip_speaker.name, alarm_input.name, ft.equipo_afectado) AS nombre_equipo,
+        CASE
+          WHEN POSITION(' - ' IN ft.equipo_afectado) > 0
+            THEN TRIM(SPLIT_PART(ft.equipo_afectado, ' - ', 2))
+          ELSE NULL
+        END AS nombre_equipo,
         CASE
           WHEN UPPER(ft.tipo_afectacion) = 'NODO' THEN NULLIF(ft.equipo_afectado, '')
           ELSE NULL
@@ -757,23 +749,15 @@ export const getFallos = async (req, res) => {
         END AS tipo_afectacion_detalle,
         ft.equipo_afectado AS tipo_equipo_afectado,
         CASE
-          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN
-            CASE
-              WHEN ft.camera_id IS NOT NULL THEN 'CÁMARA'
-              WHEN ft.encoding_device_id IS NOT NULL THEN 'GRABADOR'
-              WHEN ft.ip_speaker_id IS NOT NULL THEN 'IP SPEAKER'
-              WHEN ft.alarm_input_id IS NOT NULL THEN 'ALARM INPUT'
-              ELSE TRIM(
-                REGEXP_REPLACE(
-                  SPLIT_PART(ft.equipo_afectado, ' en ', 1),
-                  '\\s*\\(.*\\)$',
-                  ''
-                )
-              )
-            END
+          WHEN POSITION(' - ' IN ft.equipo_afectado) > 0
+            THEN TRIM(SPLIT_PART(ft.equipo_afectado, ' - ', 1))
           ELSE NULL
         END AS tipo_equipo_afectado_nombre,
-        COALESCE(camera.camera_name, encoding_device.name, ip_speaker.name, alarm_input.name, ft.equipo_afectado) AS nombre_equipo,
+        CASE
+          WHEN POSITION(' - ' IN ft.equipo_afectado) > 0
+            THEN TRIM(SPLIT_PART(ft.equipo_afectado, ' - ', 2))
+          ELSE NULL
+        END AS nombre_equipo,
         CASE
           WHEN UPPER(ft.tipo_afectacion) = 'NODO' THEN NULLIF(ft.equipo_afectado, '')
           ELSE NULL
