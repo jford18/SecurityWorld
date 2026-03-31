@@ -267,84 +267,26 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
     return estadoNorm === 'RESUELTO' || estadoNorm.startsWith('RESUELT');
   };
 
-  const isTipoAfectacionEquipo = (failure: TechnicalFailure) => {
-    const tipoAfectacionDetalle = (
-      failure.tipo_afectacion_detalle
-      || failure.tipoAfectacionDetalle
-      || ''
-    )
-      .toString()
-      .trim()
-      .toUpperCase();
 
-    const tipoAfectacion = (failure.tipoAfectacion || failure.tipo_afectacion || '')
-      .toString()
-      .trim()
-      .toUpperCase();
-
-    const tipoEquipoBackend = (
-      failure.tipo_equipo_afectado_nombre
-      || failure.tipo_equipo_afectado
-      || failure.tipoEquipoAfectado
-      || ''
-    )
-      .toString()
-      .trim();
-
-    return tipoAfectacion === 'EQUIPO' || tipoAfectacionDetalle.startsWith('EQUIPO-') || tipoEquipoBackend !== '';
-  };
-
-  const getTipoEquipoAfectado = (failure: TechnicalFailure) => {
-    const tipoEquipoBackend = (
-      failure.tipo_equipo_afectado_nombre
-      || failure.tipo_equipo_afectado
-      || failure.tipoEquipoAfectado
-      || ''
-    )
-      .toString()
-      .trim();
-
-    if (tipoEquipoBackend) {
-      return tipoEquipoBackend;
-    }
-
-    const tipoAfectacionDetalle = (
-      failure.tipo_afectacion_detalle
-      || failure.tipoAfectacionDetalle
-      || ''
-    )
-      .toString()
-      .trim();
-
-    if (tipoAfectacionDetalle.toUpperCase().startsWith('EQUIPO-')) {
-      return tipoAfectacionDetalle.slice('EQUIPO-'.length).trim() || '-';
-    }
-
-    const tipoAfectacion = (failure.tipoAfectacion || failure.tipo_afectacion || '').toString().trim().toUpperCase();
-    if (tipoAfectacion === 'NODO') return 'NODO';
-
-    return '-';
-  };
+  const getTipoEquipoAfectado = (failure: TechnicalFailure) => (
+    failure.tipo_equipo_afectado || ''
+  );
 
   const getNombreEquipo = (failure: TechnicalFailure) => {
     const record = failure as TechnicalFailure & {
-      NOMBRE_EQUIPO?: string;
-      nombre_equipo?: string;
-      nombreEquipo?: string;
-      EQUIPO_AFECTADO?: string;
       equipo_afectado?: string;
       equipoAfectado?: string;
+      nombre_equipo?: string;
+      nombreEquipo?: string;
     };
-    const nombre =
-      record.NOMBRE_EQUIPO
-      ?? record.nombre_equipo
-      ?? record.nombreEquipo
-      ?? record.EQUIPO_AFECTADO
-      ?? record.equipo_afectado
-      ?? record.equipoAfectado
-      ?? '';
-    const trimmed = nombre.trim();
-    return trimmed;
+
+    return (
+      record.equipo_afectado
+      || record.equipoAfectado
+      || record.nombre_equipo
+      || record.nombreEquipo
+      || ''
+    );
   };
 
   const getDuracionTotalFalloHoras = (failure: TechnicalFailure) => {
@@ -676,7 +618,7 @@ const TechnicalFailuresHistory: React.FC<TechnicalFailuresHistoryProps> = ({
                     {getTipoEquipoAfectado(fallo)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {isTipoAfectacionEquipo(fallo) ? (getNombreEquipo(fallo) || '-') : '-'}
+                    {getNombreEquipo(fallo) || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {fallo.responsable || '-'}
