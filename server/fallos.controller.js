@@ -551,14 +551,10 @@ const fetchFalloById = async (client, id) => {
         tp.descripcion AS tipo_problema_descripcion,
         ft.tipo_afectacion,
         CASE
-          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN
-            TRIM(
-              REGEXP_REPLACE(
-                SPLIT_PART(ft.equipo_afectado, ' en ', 1),
-                '\\s*\\(.*\\)$',
-                ''
-              )
-            )
+          WHEN ft.equipo_afectado IS NULL THEN NULL
+          WHEN UPPER(ft.equipo_afectado) = 'N/A' THEN NULL
+          WHEN POSITION(' en ' IN LOWER(ft.equipo_afectado)) > 0
+            THEN TRIM(SPLIT_PART(ft.equipo_afectado, ' en ', 1))
           ELSE NULL
         END AS tipo_equipo_afectado,
         CASE
@@ -579,8 +575,12 @@ const fetchFalloById = async (client, id) => {
           ELSE NULL
         END AS tipo_equipo_afectado_nombre,
         CASE
-          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN ft.equipo_afectado
-          ELSE NULL
+          WHEN UPPER(ft.tipo_afectacion) IN ('MASIVO', 'PUNTO', 'NODO') THEN NULL
+          WHEN ft.camera_id IS NULL
+            AND ft.encoding_device_id IS NULL
+            AND ft.ip_speaker_id IS NULL
+            AND ft.alarm_input_id IS NULL THEN NULL
+          ELSE COALESCE(camera.camera_name, encoding_device.name, ip_speaker.name, alarm_input.name, ft.equipo_afectado)
         END AS nombre_equipo,
         CASE
           WHEN UPPER(ft.tipo_afectacion) = 'NODO' THEN NULLIF(ft.equipo_afectado, '')
@@ -604,6 +604,10 @@ const fetchFalloById = async (client, id) => {
       LEFT JOIN departamentos_responsables dept ON dept.id = ft.departamento_id
       LEFT JOIN sitios sitio ON sitio.id = ft.sitio_id
       LEFT JOIN catalogo_tipo_problema tp ON tp.id = ft.tipo_problema_id
+      LEFT JOIN hik_camera_resource_status camera ON camera.id = ft.camera_id
+      LEFT JOIN hik_encoding_device_status encoding_device ON encoding_device.id = ft.encoding_device_id
+      LEFT JOIN hik_ip_speaker_status ip_speaker ON ip_speaker.id = ft.ip_speaker_id
+      LEFT JOIN hik_alarm_input_status alarm_input ON alarm_input.id = ft.alarm_input_id
       LEFT JOIN LATERAL (
         SELECT
           sf.novedad_detectada,
@@ -765,14 +769,10 @@ export const getFallos = async (req, res) => {
           ELSE COALESCE(ft.tipo_afectacion, 'SIN INFORMACIÓN')
         END AS tipo_afectacion_detalle,
         CASE
-          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN
-            TRIM(
-              REGEXP_REPLACE(
-                SPLIT_PART(ft.equipo_afectado, ' en ', 1),
-                '\\s*\\(.*\\)$',
-                ''
-              )
-            )
+          WHEN ft.equipo_afectado IS NULL THEN NULL
+          WHEN UPPER(ft.equipo_afectado) = 'N/A' THEN NULL
+          WHEN POSITION(' en ' IN LOWER(ft.equipo_afectado)) > 0
+            THEN TRIM(SPLIT_PART(ft.equipo_afectado, ' en ', 1))
           ELSE NULL
         END AS tipo_equipo_afectado,
         CASE
@@ -793,8 +793,12 @@ export const getFallos = async (req, res) => {
           ELSE NULL
         END AS tipo_equipo_afectado_nombre,
         CASE
-          WHEN UPPER(ft.tipo_afectacion) = 'EQUIPO' THEN ft.equipo_afectado
-          ELSE NULL
+          WHEN UPPER(ft.tipo_afectacion) IN ('MASIVO', 'PUNTO', 'NODO') THEN NULL
+          WHEN ft.camera_id IS NULL
+            AND ft.encoding_device_id IS NULL
+            AND ft.ip_speaker_id IS NULL
+            AND ft.alarm_input_id IS NULL THEN NULL
+          ELSE COALESCE(camera.camera_name, encoding_device.name, ip_speaker.name, alarm_input.name, ft.equipo_afectado)
         END AS nombre_equipo,
         CASE
           WHEN UPPER(ft.tipo_afectacion) = 'NODO' THEN NULLIF(ft.equipo_afectado, '')
