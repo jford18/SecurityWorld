@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, Suspense } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type { MenuNode } from '../hooks/useMenus';
-import { findAncestorChainByRoute, flattenMenuRoutes } from '../hooks/useMenus';
+import { findAncestorChainByRoute } from '../hooks/useMenus';
 import { groupBy, sortBy } from 'lodash';
 import * as allIcons from 'lucide-react';
 
@@ -15,7 +15,6 @@ const DynamicIcon: React.FC<DynamicIconProps> = ({ name, ...props }) => {
   const IconComponent = iconMap[name];
 
   if (!IconComponent) {
-    // Fallback icon
     return <allIcons.HelpCircle {...props} />;
   }
 
@@ -30,10 +29,37 @@ interface SidebarMenuProps {
   menus: MenuNode[];
 }
 
-const linkClasses =
-  'flex items-center w-full px-4 py-2 rounded-lg transition-colors duration-200 text-sm';
+const linkClasses = 'flex items-center w-full px-4 py-2 rounded-lg transition-colors duration-200 text-sm';
 const activeClasses = 'bg-[#243b55] text-white';
 const inactiveClasses = 'text-gray-300 hover:bg-[#243b55] hover:text-white';
+
+const normalizeRoute = (route: string | null | undefined) => {
+  if (!route || route.trim() === '') return null;
+  const normalized = route.startsWith('/') ? route : `/${route}`;
+  return normalized.replace(/\/+$/, '') || '/';
+};
+
+const dedupeByRoute = (items: MenuNode[]): MenuNode[] => {
+  const seen = new Set<string>();
+
+  const walk = (nodes: MenuNode[]): MenuNode[] =>
+    nodes
+      .map((node) => {
+        const cleanChildren = walk(node.hijos || []);
+        const normalizedRoute = normalizeRoute(node.ruta);
+        const key = normalizedRoute ? `route:${normalizedRoute}` : `id:${node.id}`;
+
+        if (normalizedRoute && seen.has(key)) {
+          return null;
+        }
+
+        seen.add(key);
+        return { ...node, hijos: cleanChildren };
+      })
+      .filter((item): item is MenuNode => item !== null);
+
+  return walk(items);
+};
 
 const SidebarMenuItem: React.FC<{
   menu: MenuNode;
@@ -56,9 +82,7 @@ const SidebarMenuItem: React.FC<{
         {menu.icono && <DynamicIcon name={menu.icono} className="mr-3 h-5 w-5" />}
         <span>{menu.nombre}</span>
       </span>
-      {hasChildren && (
-        <span className="ml-2 text-xs text-gray-400">{isExpanded ? '−' : '+'}</span>
-      )}
+      {hasChildren && <span className="ml-2 text-xs text-gray-400">{isExpanded ? '−' : '+'}</span>}
     </div>
   );
 
@@ -108,11 +132,11 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ menus }) => {
   const location = useLocation();
   const currentPath = location.pathname.replace(/\/+$/, '') || '/';
 
-  const effectiveMenus = useMemo(() => (menus.length > 0 ? menus : []), [menus]);
+  const effectiveMenus = useMemo(() => dedupeByRoute(menus.length > 0 ? menus : []), [menus]);
 
   const activeAncestors = useMemo(
     () => findAncestorChainByRoute(effectiveMenus, currentPath),
-    [effectiveMenus, currentPath]
+    [effectiveMenus, currentPath],
   );
 
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set(activeAncestors));
@@ -137,54 +161,24 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ menus }) => {
     });
   };
 
-
-  const hasUptimeMenu = useMemo(() => {
-    const normalizedRoutes = flattenMenuRoutes(effectiveMenus);
-    return normalizedRoutes.includes('/dashboards/uptime-camaras');
-  }, [effectiveMenus]);
-
   const groupedAndSortedMenus = useMemo(() => {
     const topLevelMenus = effectiveMenus.filter(
-      (item) => !effectiveMenus.some((parent) => parent.hijos.some((child) => child.id === item.id))
+      (item) => !effectiveMenus.some((parent) => parent.hijos.some((child) => child.id === item.id)),
     );
     const grouped = groupBy(topLevelMenus, 'seccion');
     const sortedSections = Object.entries(grouped).map(([seccion, items]) => ({
       seccion,
       items: sortBy(items, 'orden'),
     }));
-    return sortBy(sortedSections, section => section.items[0]?.orden ?? 0);
+    return sortBy(sortedSections, (section) => section.items[0]?.orden ?? 0);
   }, [effectiveMenus]);
 
   if (!effectiveMenus.length) {
-    return (
-      <div className="px-4 py-2 text-sm text-gray-400">
-        Sin menús asignados.
-      </div>
-    );
+    return <div className="px-4 py-2 text-sm text-gray-400">Sin menús asignados.</div>;
   }
 
   return (
     <div>
-
-      {hasUptimeMenu && (
-        <div className="mb-4">
-          <h4 className="text-gray-400 text-sm mt-3">Dashboards</h4>
-          <ul className="space-y-1">
-            <li>
-              <Link
-                to="/dashboards/operatividad-cctv"
-                className={`${linkClasses} ${currentPath === '/dashboards/operatividad-cctv' ? activeClasses : inactiveClasses}`}
-                style={{ paddingLeft: 16 }}
-              >
-                <span className="flex items-center">
-                  <span>Indicadores Operatividad CCTV</span>
-                </span>
-              </Link>
-            </li>
-          </ul>
-        </div>
-      )}
-
       {groupedAndSortedMenus.map(({ seccion, items }) => (
         <div key={seccion} className="mb-4">
           <h4 className="text-gray-400 text-sm mt-3">{seccion}</h4>
