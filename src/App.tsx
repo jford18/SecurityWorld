@@ -16,6 +16,7 @@ import TechnicalFailures from './components/views/TechnicalFailures';
 import Intrusions from './components/views/Intrusions';
 import AlertsReportByShift from './components/views/AlertsReportByShift';
 import DashboardUptimeCamaras from './pages/dashboards/DashboardUptimeCamaras';
+import IndicadoresOperatividadCCTV from './pages/dashboards/IndicadoresOperatividadCCTV';
 import UptimeCamarasManual from './pages/fallos/operador/UptimeCamarasManual';
 import Sitios from './components/views/Sitios';
 import AsignacionNodosSitios from './components/views/AsignacionNodosSitios';
@@ -146,6 +147,7 @@ const routeConfig: RouteDefinition[] = [
   { path: '/intrusiones-administrador', element: <IntrusionsAdministrador /> },
   { path: '/reportes/alertas-turno', element: <AlertsReportByShift /> },
   { path: '/dashboards/uptime-camaras', element: <DashboardUptimeCamaras /> },
+  { path: '/dashboards/operatividad-cctv', element: <IndicadoresOperatividadCCTV /> },
   { path: '/reportes/informe-eventos', element: <InformeEventosScreen /> },
   { path: '/administracion/sitios', element: <Sitios /> },
   {

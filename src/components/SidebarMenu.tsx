@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, Suspense } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type { MenuNode } from '../hooks/useMenus';
-import { findAncestorChainByRoute } from '../hooks/useMenus';
+import { findAncestorChainByRoute, flattenMenuRoutes } from '../hooks/useMenus';
 import { groupBy, sortBy } from 'lodash';
 import * as allIcons from 'lucide-react';
 
@@ -137,6 +137,12 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ menus }) => {
     });
   };
 
+
+  const hasUptimeMenu = useMemo(() => {
+    const normalizedRoutes = flattenMenuRoutes(effectiveMenus);
+    return normalizedRoutes.includes('/dashboards/uptime-camaras');
+  }, [effectiveMenus]);
+
   const groupedAndSortedMenus = useMemo(() => {
     const topLevelMenus = effectiveMenus.filter(
       (item) => !effectiveMenus.some((parent) => parent.hijos.some((child) => child.id === item.id))
@@ -159,6 +165,26 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ menus }) => {
 
   return (
     <div>
+
+      {hasUptimeMenu && (
+        <div className="mb-4">
+          <h4 className="text-gray-400 text-sm mt-3">Dashboards</h4>
+          <ul className="space-y-1">
+            <li>
+              <Link
+                to="/dashboards/operatividad-cctv"
+                className={`${linkClasses} ${currentPath === '/dashboards/operatividad-cctv' ? activeClasses : inactiveClasses}`}
+                style={{ paddingLeft: 16 }}
+              >
+                <span className="flex items-center">
+                  <span>Indicadores Operatividad CCTV</span>
+                </span>
+              </Link>
+            </li>
+          </ul>
+        </div>
+      )}
+
       {groupedAndSortedMenus.map(({ seccion, items }) => (
         <div key={seccion} className="mb-4">
           <h4 className="text-gray-400 text-sm mt-3">{seccion}</h4>

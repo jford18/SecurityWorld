@@ -37,6 +37,7 @@ const ensureArray = (value: unknown): MenuNode[] => {
 const ROUTE_SYNONYM_GROUPS: string[][] = [
   ['/fallos/supervisor', '/fallos-supervisor'],
   ['/administracion/roles-menus', '/administracion/rol-menu', '/administracion/roles-menu'],
+  ['/dashboards/uptime-camaras', '/dashboards/operatividad-cctv'],
 ];
 
 const addRouteWithSynonyms = (route: string, bucket: Set<string>) => {
