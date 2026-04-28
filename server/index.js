@@ -44,6 +44,7 @@ import hikEncodingDevicesRoutes from "./routes/hikEncodingDevices.routes.js";
 import hikCamarasRoutes from "./routes/hikCamaras.routes.js";
 import dashboardUptimeCamarasRoutes from "./routes/dashboardUptimeCamaras.routes.js";
 import dashboardFallosTecnicosRoutes from "./routes/dashboardFallosTecnicos.routes.js";
+import indicadoresOperatividadCctvRoutes from "./routes/indicadoresOperatividadCctv.routes.js";
 
 dotenv.config();
 
@@ -164,6 +165,7 @@ app.use("/api/hik", hikEncodingDevicesRoutes);
 app.use("/api/hikcentral", hikCamarasRoutes);
 app.use("/api", dashboardUptimeCamarasRoutes);
 app.use("/api", dashboardFallosTecnicosRoutes);
+app.use("/api", indicadoresOperatividadCctvRoutes);
 
 const logRoutes = (stack) => {
   stack

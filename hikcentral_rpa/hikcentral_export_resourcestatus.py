@@ -251,22 +251,43 @@ def process_camera_resource_status(excel_path: str) -> None:
         print("[ERROR] No se encontró un archivo de cámara para procesar.")
         return
 
+    expected_columns = [
+        "Name",
+        "Channel Address",
+        "Device Address",
+        "Area",
+        "Device Model",
+        "Network Status",
+        "Video Signal",
+        "Recording Status",
+        "Auto-Check Time",
+    ]
+
+    critical_columns = [
+        "Name",
+        "Channel Address",
+        "Area",
+        "Network Status",
+    ]
+
     try:
         df = pd.read_excel(excel_file, sheet_name="Camera", header=7)
+
+        missing_columns = [column for column in expected_columns if column not in df.columns]
+        if missing_columns:
+            print(f"[WARN] Columnas no encontradas en Excel Camera: {missing_columns}")
+
+        missing_critical = [column for column in critical_columns if column not in df.columns]
+        if missing_critical:
+            print(f"[ERROR] Columnas críticas faltantes en Excel Camera: {missing_critical}")
+            return
+
+        for column in expected_columns:
+            if column not in df.columns:
+                df[column] = None
+
         df = df[df["Name"].notna()].copy()
-        df = df[
-            [
-                "Name",
-                "Channel Address",
-                "Device Address",
-                "Area",
-                "Device Model",
-                "Network Status",
-                "Video Signal",
-                "Recording Status",
-                "Auto-Check Time",
-            ]
-        ].copy()
+        df = df[expected_columns].copy()
 
         df.rename(
             columns={
@@ -278,7 +299,7 @@ def process_camera_resource_status(excel_path: str) -> None:
                 "Network Status": "online_status",
                 "Video Signal": "signal_status",
                 "Recording Status": "record_status",
-                "Auto-Check Time": "last_online_time",
+                "Auto-Check Time": "auto_check_time",
             },
             inplace=True,
         )
@@ -301,7 +322,7 @@ def process_camera_resource_status(excel_path: str) -> None:
                 return val
             return val
 
-        def parse_last_online(value):
+        def parse_timestamp(value):
             if value is None:
                 return None
             try:
@@ -322,25 +343,50 @@ def process_camera_resource_status(excel_path: str) -> None:
                 return None
             return parsed.to_pydatetime() if hasattr(parsed, "to_pydatetime") else parsed
 
+        def derive_cliente_hacienda(area_value: str) -> tuple[str, str]:
+            area = safe_str(area_value)
+            pattern = re.match(r"^\[([^\]]+)\]-(.+)$", area)
+            if not pattern:
+                return "SIN CLIENTE", area
+            return pattern.group(1).strip() or "SIN CLIENTE", pattern.group(2).strip() or area
+
         df["online_status"] = df["online_status"].apply(normalize_online_status)
 
         records: list[dict] = []
+        historical_records: list[dict] = []
+
         for _, row in df.iterrows():
             device_code = safe_str(row.get("device_code"))
             if not device_code:
                 continue
 
-            records.append(
+            camera_name = safe_str(row.get("camera_name"))
+            site_name = safe_str(row.get("site_name"))
+            auto_check_time = parse_timestamp(row.get("auto_check_time"))
+            cliente, hacienda_sitio = derive_cliente_hacienda(site_name)
+
+            row_payload = {
+                "camera_name": camera_name,
+                "device_code": device_code,
+                "site_name": site_name,
+                "device_type": safe_str(row.get("device_type")),
+                "online_status": row.get("online_status"),
+                "record_status": safe_str(row.get("record_status")),
+                "signal_status": safe_str(row.get("signal_status")),
+                "last_online_time": auto_check_time,
+                "ip_address": safe_str(row.get("ip_address")),
+            }
+            records.append(row_payload)
+
+            historical_records.append(
                 {
-                    "camera_name": safe_str(row.get("camera_name")),
-                    "device_code": device_code,
-                    "site_name": safe_str(row.get("site_name")),
-                    "device_type": safe_str(row.get("device_type")),
-                    "online_status": row.get("online_status"),
-                    "record_status": safe_str(row.get("record_status")),
-                    "signal_status": safe_str(row.get("signal_status")),
-                    "last_online_time": parse_last_online(row.get("last_online_time")),
-                    "ip_address": safe_str(row.get("ip_address")),
+                    **row_payload,
+                    "area": site_name,
+                    "cliente": cliente,
+                    "hacienda_sitio": hacienda_sitio,
+                    "auto_check_time": auto_check_time,
+                    "archivo_origen": excel_file.name,
+                    "camera_resource_status_id": None,
                 }
             )
 
@@ -348,11 +394,11 @@ def process_camera_resource_status(excel_path: str) -> None:
             print("[INFO] No hay registros de cámaras para insertar/actualizar.")
             return
 
-        sql = """
+        upsert_sql = """
             INSERT INTO PUBLIC.HIK_CAMERA_RESOURCE_STATUS (
                 CAMERA_NAME, DEVICE_CODE, SITE_NAME, DEVICE_TYPE, ONLINE_STATUS, RECORD_STATUS, SIGNAL_STATUS, LAST_ONLINE_TIME, IP_ADDRESS, CREATED_AT, UPDATED_AT
             )
-            SELECT
+            VALUES (
                 %(camera_name)s,
                 %(device_code)s,
                 %(site_name)s,
@@ -364,6 +410,7 @@ def process_camera_resource_status(excel_path: str) -> None:
                 %(ip_address)s,
                 NOW(),
                 NOW()
+            )
             ON CONFLICT (DEVICE_CODE) DO UPDATE SET
                 CAMERA_NAME      = EXCLUDED.CAMERA_NAME,
                 SITE_NAME        = EXCLUDED.SITE_NAME,
@@ -376,17 +423,76 @@ def process_camera_resource_status(excel_path: str) -> None:
                 UPDATED_AT       = NOW();
         """
 
+        map_current_status_sql = """
+            SELECT DEVICE_CODE, ID
+            FROM PUBLIC.HIK_CAMERA_RESOURCE_STATUS
+            WHERE DEVICE_CODE = ANY(%s);
+        """
+
+        history_insert_sql = """
+            INSERT INTO PUBLIC.HIK_CAMERA_RESOURCE_STATUS_HIST (
+                CAMERA_RESOURCE_STATUS_ID,
+                CAMERA_NAME,
+                DEVICE_CODE,
+                SITE_NAME,
+                DEVICE_TYPE,
+                ONLINE_STATUS,
+                RECORD_STATUS,
+                SIGNAL_STATUS,
+                LAST_ONLINE_TIME,
+                IP_ADDRESS,
+                CLIENTE,
+                HACIENDA_SITIO,
+                AREA,
+                AUTO_CHECK_TIME,
+                ARCHIVO_ORIGEN,
+                CREATED_AT,
+                UPDATED_AT
+            )
+            VALUES (
+                %(camera_resource_status_id)s,
+                %(camera_name)s,
+                %(device_code)s,
+                %(site_name)s,
+                %(device_type)s,
+                %(online_status)s,
+                %(record_status)s,
+                %(signal_status)s,
+                %(last_online_time)s,
+                %(ip_address)s,
+                %(cliente)s,
+                %(hacienda_sitio)s,
+                %(area)s,
+                %(auto_check_time)s,
+                %(archivo_origen)s,
+                NOW(),
+                NOW()
+            );
+        """
+
+        conn = None
         try:
             conn = get_pg_connection()
             with conn:
                 with conn.cursor() as cur:
-                    execute_batch(cur, sql, records, page_size=500)
+                    execute_batch(cur, upsert_sql, records, page_size=500)
+
+                    device_codes = list({record["device_code"] for record in records if record["device_code"]})
+                    cur.execute(map_current_status_sql, (device_codes,))
+                    id_by_device = {code: status_id for code, status_id in cur.fetchall()}
+
+                    for history_row in historical_records:
+                        history_row["camera_resource_status_id"] = id_by_device.get(history_row["device_code"])
+
+                    execute_batch(cur, history_insert_sql, historical_records, page_size=500)
+
             print(f"[INFO] Cámaras insertadas/actualizadas: {len(records)}")
+            print(f"[INFO] Snapshots históricos insertados: {len(historical_records)}")
         except Exception as db_error:
-            print(f"[ERROR] No se pudieron insertar/actualizar las cámaras: {db_error}")
+            print(f"[ERROR] No se pudieron persistir datos de cámara/histórico: {db_error}")
             traceback.print_exc()
         finally:
-            if 'conn' in locals() and conn:
+            if conn:
                 conn.close()
 
     except Exception as e:
