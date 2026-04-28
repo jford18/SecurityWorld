@@ -13,6 +13,19 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  CircleX,
+  Clock3,
+  Database,
+  FileSpreadsheet,
+  Info,
+  Server,
+  Workflow,
+  X,
+} from 'lucide-react';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import {
   exportOperatividadExcel,
@@ -588,47 +601,330 @@ const IndicadoresOperatividadCCTV: React.FC = () => {
       </section>
 
       {showInfoModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg bg-white p-5 shadow-xl">
-            <h2 className="mb-3 text-lg font-bold text-[#1C2E4A]">Extracción de información - Operatividad CCTV</h2>
-            <p className="mb-3 text-sm text-gray-700">
-              La información de este dashboard se obtiene desde HikCentral Professional mediante un proceso RPA desarrollado en
-              Python/Selenium.
-            </p>
-            <p className="mb-2 text-sm font-semibold text-gray-800">Flujo de extracción:</p>
-            <ol className="list-decimal space-y-1 pl-5 text-sm text-gray-700">
-              <li>El RPA ingresa al portal HikCentral Professional.</li>
-              <li>Navega a la opción Maintenance.</li>
-              <li>Ingresa a Resource Status.</li>
-              <li>Selecciona la opción Camera.</li>
-              <li>Descarga el archivo Excel generado por HikCentral.</li>
-              <li>El archivo contiene una hoja llamada Camera.</li>
-              <li>
-                El proceso lee la hoja Camera y toma campos como: Name, Channel Address, Device Address, Area, Device Model,
-                Network Status, Recording Status, Video Signal y Auto-Check Time.
-              </li>
-              <li>La información se guarda en PostgreSQL.</li>
-              <li>La tabla de estado actual es: PUBLIC.HIK_CAMERA_RESOURCE_STATUS.</li>
-              <li>La tabla histórica usada para calcular uptime es: PUBLIC.HIK_CAMERA_RESOURCE_STATUS_HIST.</li>
-              <li>
-                El dashboard consume endpoints Node/Express para calcular Total Hours Offline, Total Hours Online, % Up Time,
-                TIMES OFFLINE y Reincidencias.
-              </li>
-            </ol>
-            <p className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-gray-700">
-              Nota: Cliente y Hacienda-Sitio no siempre vienen como campos separados desde HikCentral. Cuando no existen
-              explícitamente, el sistema los deriva desde el campo Area. Si el formato del Area no permite identificar el
-              cliente, se clasifica como SIN CLIENTE.
-            </p>
-            <div className="mt-4 flex justify-end">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <header className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-200 bg-white px-6 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-[#1C2E4A]">Extracción de información - Operatividad CCTV</h2>
+                <p className="text-sm text-gray-600">Trazabilidad del dato desde HikCentral hasta el dashboard.</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowInfoModal(false)}
-                className="h-9 rounded-md bg-[#1C2E4A] px-4 text-sm font-semibold text-white"
+                className="rounded-md border border-gray-300 p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
+                aria-label="Cerrar modal"
               >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+
+            <div className="max-h-[85vh] overflow-hidden">
+              <div className="max-h-[70vh] space-y-4 overflow-y-auto px-6 py-5">
+                <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <Info className="h-4 w-4 text-[#1C2E4A]" />
+                    <h3 className="text-sm font-bold text-[#1C2E4A]">Resumen ejecutivo</h3>
+                    <span className="rounded-full bg-[#1C2E4A]/10 px-3 py-1 text-xs font-semibold text-[#1C2E4A]">
+                      Visión general
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    Este dashboard se alimenta con información descargada automáticamente desde HikCentral Professional. Un RPA
+                    desarrollado en Python/Selenium ingresa al portal, descarga el reporte de Resource Status / Camera, procesa
+                    el archivo Excel generado por HikCentral y guarda la información en PostgreSQL. Luego, el backend
+                    Node/Express consulta esa información para calcular horas online, horas offline, porcentaje de uptime y
+                    reincidencias.
+                  </p>
+                </section>
+
+                <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Workflow className="h-4 w-4 text-[#1C2E4A]" />
+                    <h3 className="text-sm font-bold text-[#1C2E4A]">Flujo visual de extracción</h3>
+                  </div>
+                  <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
+                    {[
+                      'HikCentral Professional',
+                      'RPA Python/Selenium',
+                      'Resource Status / Camera',
+                      'Excel Camera',
+                      'PostgreSQL',
+                      'API Node/Express',
+                      'Dashboard React',
+                    ].map((step, index, arr) => (
+                      <React.Fragment key={step}>
+                        <span className="rounded-full bg-[#1C2E4A]/10 px-3 py-1 text-[#1C2E4A]">{step}</span>
+                        {index < arr.length - 1 ? <ArrowRight className="h-3.5 w-3.5 text-gray-400" /> : null}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                  <div className="grid gap-2 text-sm text-gray-600 md:grid-cols-2">
+                    <p>
+                      <span className="font-semibold text-[#1C2E4A]">HikCentral Professional:</span> Sistema fuente donde se
+                      consulta el estado de cámaras.
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#1C2E4A]">RPA Python/Selenium:</span> Automatiza el ingreso,
+                      navegación y descarga del reporte.
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#1C2E4A]">Resource Status / Camera:</span> Opción del portal donde
+                      se obtiene el estado online/offline de cámaras.
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#1C2E4A]">Excel Camera:</span> Archivo descargado con la hoja
+                      Camera.
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#1C2E4A]">PostgreSQL:</span> Base donde se almacena el estado actual
+                      y el histórico.
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#1C2E4A]">API Node/Express:</span> Servicios que calculan y entregan
+                      los indicadores al frontend.
+                    </p>
+                    <p className="md:col-span-2">
+                      <span className="font-semibold text-[#1C2E4A]">Dashboard React:</span> Pantalla donde el usuario visualiza
+                      filtros, gráficos, tablas y exportación.
+                    </p>
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <FileSpreadsheet className="h-4 w-4 text-[#1C2E4A]" />
+                    <h3 className="text-sm font-bold text-[#1C2E4A]">Archivo origen descargado</h3>
+                  </div>
+                  <p className="mb-3 text-sm text-gray-600">
+                    El RPA descarga un archivo Excel generado por HikCentral para la opción Camera. El archivo contiene una hoja
+                    llamada Camera. La información útil inicia después del encabezado del reporte y se procesa tomando las
+                    columnas operativas de estado de cámaras.
+                  </p>
+                  <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                    <table className="w-full border-collapse text-xs">
+                      <thead className="bg-slate-100 text-slate-700">
+                        <tr>
+                          <th className="border-b border-gray-200 px-3 py-2 text-left">Elemento</th>
+                          <th className="border-b border-gray-200 px-3 py-2 text-left">Descripción</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-gray-700">
+                        {[
+                          ['Fuente', 'HikCentral Professional'],
+                          ['Ruta funcional', 'Maintenance → Resource Status → Camera'],
+                          ['Formato', 'Excel'],
+                          ['Hoja procesada', 'Camera'],
+                          ['Frecuencia', 'Según programación del RPA'],
+                          ['Uso principal', 'Estado online/offline, señal, grabación y fecha de revisión'],
+                        ].map(([elemento, descripcion]) => (
+                          <tr key={elemento}>
+                            <td className="border-b border-gray-200 px-3 py-2 font-semibold text-[#1C2E4A]">{elemento}</td>
+                            <td className="border-b border-gray-200 px-3 py-2">{descripcion}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <h3 className="mb-2 text-sm font-bold text-[#1C2E4A]">Campos principales utilizados</h3>
+                  <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                    <table className="w-full border-collapse text-xs">
+                      <thead className="bg-slate-100 text-slate-700">
+                        <tr>
+                          <th className="border-b border-gray-200 px-3 py-2 text-left">Campo HikCentral</th>
+                          <th className="border-b border-gray-200 px-3 py-2 text-left">Uso en el dashboard</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-gray-700">
+                        {[
+                          ['Name', 'Nombre de la cámara'],
+                          ['Channel Address', 'Código o identificador del canal/dispositivo'],
+                          ['Device Address', 'Dirección IP o dirección del dispositivo'],
+                          ['Area', 'Estructura usada para derivar Cliente y Hacienda-Sitio'],
+                          ['Device Model', 'Tipo/modelo del dispositivo'],
+                          ['Network Status', 'Estado Online / Offline'],
+                          ['Recording Status', 'Estado de grabación'],
+                          ['Video Signal', 'Estado de señal de video'],
+                          ['Auto-Check Time', 'Fecha/hora del snapshot usado para análisis histórico'],
+                        ].map(([campo, uso]) => (
+                          <tr key={campo}>
+                            <td className="border-b border-gray-200 px-3 py-2 font-semibold text-[#1C2E4A]">{campo}</td>
+                            <td className="border-b border-gray-200 px-3 py-2">{uso}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <Database className="h-4 w-4 text-[#1C2E4A]" />
+                    <h3 className="text-sm font-bold text-[#1C2E4A]">Tablas utilizadas</h3>
+                  </div>
+                  <p className="mb-3 text-sm text-gray-600">
+                    La carga del RPA mantiene una tabla de estado actual y una tabla histórica. La tabla histórica es la base
+                    para calcular disponibilidad por rango de fechas.
+                  </p>
+                  <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                    <table className="w-full border-collapse text-xs">
+                      <thead className="bg-slate-100 text-slate-700">
+                        <tr>
+                          <th className="border-b border-gray-200 px-3 py-2 text-left">Tabla</th>
+                          <th className="border-b border-gray-200 px-3 py-2 text-left">Uso</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-gray-700">
+                        <tr>
+                          <td className="border-b border-gray-200 px-3 py-2 font-semibold text-[#1C2E4A]">
+                            PUBLIC.HIK_CAMERA_RESOURCE_STATUS
+                          </td>
+                          <td className="border-b border-gray-200 px-3 py-2">
+                            Guarda el estado actual más reciente de cada cámara.
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="border-b border-gray-200 px-3 py-2 font-semibold text-[#1C2E4A]">
+                            PUBLIC.HIK_CAMERA_RESOURCE_STATUS_HIST
+                          </td>
+                          <td className="border-b border-gray-200 px-3 py-2">
+                            Guarda snapshots históricos para calcular horas online, horas offline, uptime y reincidencias.
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-3 text-sm text-gray-600">
+                    La tabla de estado actual permite ver la última condición conocida de la cámara. La tabla histórica permite
+                    reconstruir el comportamiento en el tiempo.
+                  </p>
+                </section>
+
+                <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <Server className="h-4 w-4 text-[#1C2E4A]" />
+                    <h3 className="text-sm font-bold text-[#1C2E4A]">Cómo se calculan los indicadores</h3>
+                  </div>
+                  <ul className="space-y-1 text-sm text-gray-600">
+                    <li>
+                      <span className="font-semibold text-[#1C2E4A]">Total cámaras:</span> Cantidad de cámaras distintas dentro
+                      del rango y filtros aplicados.
+                    </li>
+                    <li>
+                      <span className="font-semibold text-[#1C2E4A]">Total Hours Offline:</span> Suma de intervalos en los que
+                      una cámara permaneció con Network Status = Offline.
+                    </li>
+                    <li>
+                      <span className="font-semibold text-[#1C2E4A]">Total Hours Online:</span> Tiempo disponible menos Total
+                      Hours Offline.
+                    </li>
+                    <li>
+                      <span className="font-semibold text-[#1C2E4A]">% Up Time:</span> Porcentaje de disponibilidad calculado a
+                      partir del tiempo online sobre el tiempo total disponible.
+                    </li>
+                    <li>
+                      <span className="font-semibold text-[#1C2E4A]">TIMES OFFLINE:</span> Cantidad de registros o eventos donde
+                      la cámara aparece en estado Offline.
+                    </li>
+                    <li>
+                      <span className="font-semibold text-[#1C2E4A]">Reincidencia:</span> Cámaras o áreas que presentan
+                      múltiples eventos offline dentro de un periodo, por ejemplo últimos 7 días.
+                    </li>
+                  </ul>
+                  <div className="mt-3 rounded-lg border border-[#1C2E4A]/20 bg-white p-3 text-xs text-gray-700">
+                    <p className="font-semibold text-[#1C2E4A]">Fórmulas de referencia:</p>
+                    <p>Tiempo disponible = N° cámaras × horas del rango</p>
+                    <p>Total Hours Online = Tiempo disponible - Total Hours Offline</p>
+                    <p>% Up Time = (Total Hours Online / Tiempo disponible) × 100</p>
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <h3 className="mb-2 text-sm font-bold text-[#1C2E4A]">Datos derivados desde Area</h3>
+                  <p className="text-sm text-gray-600">
+                    HikCentral no siempre entrega Cliente y Hacienda-Sitio como columnas separadas. Cuando no existen
+                    explícitamente, el sistema los deriva desde el campo Area.
+                  </p>
+                  <div className="mt-3 grid gap-3 rounded-lg border border-gray-200 bg-white p-3 text-sm md:grid-cols-2">
+                    <div>
+                      <p className="font-semibold text-[#1C2E4A]">Ejemplo de origen</p>
+                      <p className="text-gray-700">Area = [RBP]-ZUL1-B.CTRA</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-[#1C2E4A]">Resultado derivado</p>
+                      <p className="text-gray-700">Cliente: RBP</p>
+                      <p className="text-gray-700">Hacienda-Sitio: ZUL1-B.CTRA</p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-sm text-gray-600">
+                    Si el campo Area no cumple el patrón esperado, el registro puede clasificarse como SIN CLIENTE o mantener el
+                    valor original como referencia.
+                  </p>
+                </section>
+
+                <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-700" />
+                    <h3 className="text-sm font-bold text-amber-800">Consideraciones importantes</h3>
+                  </div>
+                  <ul className="space-y-1 text-sm text-amber-900">
+                    <li className="flex items-start gap-2">
+                      <CircleX className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>El dashboard depende de la correcta ejecución del RPA.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CircleX className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>Si el RPA no descarga información nueva, los indicadores pueden quedar desactualizados.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CircleX className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>Los cálculos históricos requieren que existan snapshots en la tabla histórica.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CircleX className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Si una cámara no tiene registros suficientes en el rango, el cálculo puede depender del último estado
+                        conocido.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CircleX className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Cliente y Hacienda-Sitio pueden ser derivados desde Area cuando HikCentral no los entrega por separado.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CircleX className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>La precisión del uptime depende de la frecuencia con la que se ejecuta el RPA.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CircleX className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Los registros Offline sin un siguiente cambio de estado pueden cerrarse contra la fecha final del filtro
+                        o la hora actual, según la lógica del backend.
+                      </span>
+                    </li>
+                  </ul>
+                </section>
+              </div>
+            </div>
+
+            <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-white px-6 py-4">
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <Clock3 className="h-3.5 w-3.5" />
+                <span>Última actualización visible según los datos cargados por el RPA.</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInfoModal(false)}
+                className="inline-flex h-9 items-center gap-2 rounded-md bg-[#1C2E4A] px-4 text-sm font-semibold text-white"
+              >
+                <CheckCircle2 className="h-4 w-4" />
                 Cerrar
               </button>
-            </div>
+            </footer>
           </div>
         </div>
       ) : null}
