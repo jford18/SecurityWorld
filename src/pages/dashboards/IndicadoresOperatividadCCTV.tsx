@@ -428,27 +428,44 @@ const IndicadoresOperatividadCCTV: React.FC = () => {
         </article>
       </section>
 
-      <section className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+      <section className="grid grid-cols-1 gap-3 xl:grid-cols-[320px_1fr]">
         <article className="rounded-lg bg-white p-3 shadow-sm">
           <h3 className="mb-2 text-xs font-semibold uppercase text-[#1C2E4A]">Distribución por Hacienda-Sitio</h3>
-          <div className="h-[260px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={donutData} innerRadius={55} outerRadius={95} dataKey="value" nameKey="name" labelLine={false}>
-                  {donutData.map((entry, index) => (
-                    <Cell key={entry.name} fill={donutColors[index % donutColors.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => intFormatter.format(Number(value))} />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="flex h-[260px] gap-2">
+            <div className="min-w-0 flex-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={donutData} innerRadius={50} outerRadius={86} dataKey="value" nameKey="name" labelLine={false}>
+                    {donutData.map((entry, index) => (
+                      <Cell key={entry.name} fill={donutColors[index % donutColors.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => intFormatter.format(Number(value))} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="w-[122px] overflow-auto pr-1">
+              <ul className="space-y-1">
+                {donutData.map((entry, index) => (
+                  <li key={`legend-${entry.name}`} className="flex items-center gap-1.5 text-[10px] text-slate-700">
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                      style={{ backgroundColor: donutColors[index % donutColors.length] }}
+                    />
+                    <span className="truncate">{entry.name}</span>
+                    <span className="ml-auto shrink-0 font-semibold text-slate-900">{intFormatter.format(entry.value)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </article>
 
-        <article className="rounded-lg bg-white p-3 shadow-sm xl:col-span-2">
+        <article className="rounded-lg bg-white p-3 shadow-sm">
           <h3 className="mb-2 text-xs font-semibold uppercase text-[#1C2E4A]">Top Áreas/Cámaras por Offline</h3>
           <div className="h-[260px] overflow-auto">
-            <table className="min-w-full text-xs">
+            <table className="min-w-full text-[11px] leading-tight">
               <thead className="sticky top-0 bg-slate-700 text-white">
                 <tr>
                   <th className="px-2 py-1 text-left">CLIENTE</th>
