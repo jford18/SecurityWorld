@@ -48,7 +48,7 @@ base AS (
     COALESCE(NULLIF(TRIM(h.camera_name), ''), 'SIN NOMBRE') AS camera_name,
     COALESCE(NULLIF(TRIM(h.device_code), ''), 'SIN DEVICE_CODE') AS device_code,
     COALESCE(NULLIF(TRIM(h.online_status), ''), 'UNKNOWN') AS online_status,
-    LOWER(TRIM(COALESCE(h.online_status, ''))) AS online_status_norm,
+    UPPER(TRIM(COALESCE(h.online_status, ''))) AS online_status_norm,
     h.auto_check_time,
     h.last_online_time
   FROM PUBLIC.HIK_CAMERA_RESOURCE_STATUS_HIST h
@@ -127,40 +127,49 @@ FROM base;
 `;
 
 const RESUMEN_QUERY = `
-${BASE_FILTERS_CTE}
+${BASE_FILTERS_CTE},
+resumen_intervalos AS (
+  SELECT
+    ROUND(COALESCE(SUM(CASE WHEN A.online_status_norm = 'OFFLINE' THEN A.interval_hours ELSE 0 END), 0), 2) AS total_hours_offline,
+    COALESCE(SUM(CASE WHEN A.online_status_norm = 'OFFLINE' THEN 1 ELSE 0 END), 0)::int AS times_offline
+  FROM valid_intervals A
+),
+resumen_estado AS (
+  SELECT
+    COALESCE(SUM(CASE WHEN A.online_status_norm = 'ONLINE' THEN 1 ELSE 0 END), 0)::int AS camaras_online,
+    COALESCE(SUM(CASE WHEN A.online_status_norm = 'OFFLINE' THEN 1 ELSE 0 END), 0)::int AS camaras_offline
+  FROM latest_camera_status A
+)
 SELECT
-  COALESCE(cc.total_camaras, 0)::int AS total_camaras,
-  COALESCE(SUM(CASE WHEN lcs.online_status_norm = 'online' THEN 1 ELSE 0 END), 0)::int AS camaras_online,
-  COALESCE(SUM(CASE WHEN lcs.online_status_norm = 'offline' THEN 1 ELSE 0 END), 0)::int AS camaras_offline,
-  ROUND(COALESCE(rh.horas_rango, 0) * COALESCE(cc.total_camaras, 0), 2) AS tiempo_disponible_horas,
-  ROUND(COALESCE(SUM(CASE WHEN vi.online_status_norm = 'offline' THEN vi.interval_hours ELSE 0 END), 0), 2) AS total_hours_offline,
+  COALESCE(A.total_camaras, 0)::int AS total_camaras,
+  COALESCE(D.camaras_online, 0)::int AS camaras_online,
+  COALESCE(D.camaras_offline, 0)::int AS camaras_offline,
+  ROUND(COALESCE(B.horas_rango, 0) * COALESCE(A.total_camaras, 0), 2) AS tiempo_disponible_horas,
+  COALESCE(C.total_hours_offline, 0) AS total_hours_offline,
   ROUND(
     GREATEST(
       0,
-      (COALESCE(rh.horas_rango, 0) * COALESCE(cc.total_camaras, 0))
-      - COALESCE(SUM(CASE WHEN vi.online_status_norm = 'offline' THEN vi.interval_hours ELSE 0 END), 0)
+      (COALESCE(B.horas_rango, 0) * COALESCE(A.total_camaras, 0)) - COALESCE(C.total_hours_offline, 0)
     ),
     2
   ) AS total_hours_online,
-  COALESCE(SUM(CASE WHEN vi.online_status_norm = 'offline' THEN 1 ELSE 0 END), 0)::int AS times_offline,
+  COALESCE(C.times_offline, 0)::int AS times_offline,
   ROUND(
     CASE
-      WHEN (COALESCE(rh.horas_rango, 0) * COALESCE(cc.total_camaras, 0)) <= 0 THEN 0
+      WHEN (COALESCE(B.horas_rango, 0) * COALESCE(A.total_camaras, 0)) <= 0 THEN 0
       ELSE (
         GREATEST(
           0,
-          (COALESCE(rh.horas_rango, 0) * COALESCE(cc.total_camaras, 0))
-          - COALESCE(SUM(CASE WHEN vi.online_status_norm = 'offline' THEN vi.interval_hours ELSE 0 END), 0)
-        )
-        / (COALESCE(rh.horas_rango, 0) * COALESCE(cc.total_camaras, 0))
+          (COALESCE(B.horas_rango, 0) * COALESCE(A.total_camaras, 0)) - COALESCE(C.total_hours_offline, 0)
+        ) / (COALESCE(B.horas_rango, 0) * COALESCE(A.total_camaras, 0))
       ) * 100
     END,
     2
   ) AS uptime_pct
-FROM camera_count cc
-CROSS JOIN range_hours rh
-LEFT JOIN valid_intervals vi ON 1 = 1
-LEFT JOIN latest_camera_status lcs ON 1 = 1;
+FROM camera_count A
+CROSS JOIN range_hours B
+CROSS JOIN resumen_intervalos C
+CROSS JOIN resumen_estado D;
 `;
 
 const DETALLE_QUERY = `
@@ -172,8 +181,8 @@ camera_metrics AS (
     MAX(hacienda_sitio) AS hacienda_sitio,
     MAX(area) AS area,
     MAX(camera_name) AS camera_name,
-    ROUND(COALESCE(SUM(CASE WHEN online_status_norm = 'offline' THEN interval_hours ELSE 0 END), 0), 2) AS total_hours_offline,
-    COALESCE(SUM(CASE WHEN online_status_norm = 'offline' THEN 1 ELSE 0 END), 0)::int AS times_offline
+    ROUND(COALESCE(SUM(CASE WHEN online_status_norm = 'OFFLINE' THEN interval_hours ELSE 0 END), 0), 2) AS total_hours_offline,
+    COALESCE(SUM(CASE WHEN online_status_norm = 'OFFLINE' THEN 1 ELSE 0 END), 0)::int AS times_offline
   FROM valid_intervals
   GROUP BY camera_key
 )
@@ -206,8 +215,8 @@ cliente_base AS (
   SELECT
     cliente,
     COUNT(DISTINCT camera_key)::numeric AS total_camaras,
-    COALESCE(SUM(CASE WHEN online_status_norm = 'offline' THEN interval_hours ELSE 0 END), 0)::numeric AS total_hours_offline,
-    COALESCE(SUM(CASE WHEN online_status_norm = 'offline' THEN 1 ELSE 0 END), 0)::int AS times_offline
+    COALESCE(SUM(CASE WHEN online_status_norm = 'OFFLINE' THEN interval_hours ELSE 0 END), 0)::numeric AS total_hours_offline,
+    COALESCE(SUM(CASE WHEN online_status_norm = 'OFFLINE' THEN 1 ELSE 0 END), 0)::int AS times_offline
   FROM valid_intervals
   GROUP BY cliente
 )
@@ -253,7 +262,7 @@ offline_by_day AS (
     COALESCE(
       SUM(
         CASE
-          WHEN vi.online_status_norm = 'offline'
+          WHEN vi.online_status_norm = 'OFFLINE'
            AND vi.interval_end > d.day_start
            AND vi.interval_start < d.day_start + interval '1 day'
           THEN EXTRACT(
@@ -292,25 +301,25 @@ const REINCIDENCIA_QUERY = `
 ${BASE_FILTERS_CTE},
 reincidencia AS (
   SELECT
-    camera_name AS name,
-    cliente,
-    hacienda_sitio,
-    area,
-    COUNT(*) FILTER (WHERE online_status_norm = 'offline')::int AS times_offline_7d
-  FROM ordered
-  JOIN params p ON 1 = 1
-  WHERE auto_check_time >= (p.to_ts - interval '7 day')
-  GROUP BY camera_name, cliente, hacienda_sitio, area
+    A.camera_name AS name,
+    A.cliente,
+    A.hacienda_sitio,
+    A.area,
+    COUNT(*) FILTER (WHERE A.online_status_norm = 'OFFLINE')::int AS times_offline_7d
+  FROM ordered A
+  JOIN params B ON (1 = 1)
+  WHERE A.auto_check_time >= (B.to_ts - interval '7 day')
+  GROUP BY A.camera_name, A.cliente, A.hacienda_sitio, A.area
 )
 SELECT
-  name,
-  cliente,
-  hacienda_sitio,
-  area,
-  times_offline_7d
-FROM reincidencia
-WHERE times_offline_7d > 0
-ORDER BY times_offline_7d DESC, name
+  A.name,
+  A.cliente,
+  A.hacienda_sitio,
+  A.area,
+  A.times_offline_7d
+FROM reincidencia A
+WHERE A.times_offline_7d > 0
+ORDER BY A.times_offline_7d DESC, A.name
 LIMIT 20;
 `;
 
