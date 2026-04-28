@@ -1346,29 +1346,161 @@ def confirmar_vista_camera_activa(driver, wait):
 
 
 def abrir_opcion_resource_status(driver, wait, opcion: str):
-    confirmar_maintenance_activo(driver)
-    obtener_submenu_resource_status(driver, wait)
-    popup = None
+    opcion = (opcion or "Camera").strip()
+    maintenance_xpaths = [
+        "//div[@id='maintenanceApp' and contains(translate(@style,'ABCDEFGHIJKLMNOPQRSTUVWXYZ ','abcdefghijklmnopqrstuvwxyz'),'display:block')]",
+        "//div[@id='maintenanceApp' and not(contains(translate(@style,'ABCDEFGHIJKLMNOPQRSTUVWXYZ ','abcdefghijklmnopqrstuvwxyz'),'display:none'))]",
+    ]
+    resource_status_xpaths = [
+        "//span[@title='Resource Status']",
+        "//div[contains(@class,'el-submenu__title')][.//span[@title='Resource Status']]",
+        "//i[contains(@class,'icon-svg-nav_realtime_status_resources')]/ancestor::div[contains(@class,'el-submenu__title')]",
+    ]
+    opcion_literal = _xpath_literal(opcion)
+    opcion_xpaths = [
+        f"//li[contains(@class,'el-menu-item') and @title={opcion_literal}]",
+        f"//span[normalize-space()={opcion_literal}]/ancestor::li[contains(@class,'el-menu-item')]",
+        f"//li[@title={opcion_literal}]",
+    ]
+
+    def _guardar_evidencia(step_name: str):
+        try:
+            DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            screenshot_path = DOWNLOAD_DIR / f"debug_maintenance_{step_name}_{ts}.png"
+            html_path = DOWNLOAD_DIR / f"debug_maintenance_{step_name}_{ts}.html"
+            driver.save_screenshot(str(screenshot_path))
+            maintenance_html = driver.execute_script(
+                "const el = document.getElementById('maintenanceApp'); return el ? el.outerHTML : '';"
+            )
+            html_path.write_text(maintenance_html or "", encoding="utf-8")
+            print(f"[HIK][MAINTENANCE] Evidencia guardada: {screenshot_path}")
+            print(f"[HIK][MAINTENANCE] Evidencia guardada: {html_path}")
+        except Exception as ev_exc:
+            print(f"[HIK][MAINTENANCE] No se pudo guardar evidencia: {ev_exc}")
+
+    def _find_visible(xpath_list: list[str], timeout: int = 6):
+        end_time = time.time() + timeout
+        while time.time() < end_time:
+            for xp in xpath_list:
+                elems = driver.find_elements(By.XPATH, xp)
+                for el in elems:
+                    try:
+                        if el.is_displayed():
+                            return el
+                    except Exception:
+                        continue
+            time.sleep(0.15)
+        return None
+
+    def _click_seguro(elemento, descripcion: str):
+        try:
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", elemento)
+        except Exception:
+            pass
+        try:
+            ActionChains(driver).move_to_element(elemento).pause(0.1).click().perform()
+            print(f"[HIK][RESOURCE_STATUS] Click en {descripcion} por ActionChains")
+            time.sleep(0.25)
+            return
+        except Exception:
+            pass
+        try:
+            driver.execute_script("arguments[0].click();", elemento)
+            print(f"[HIK][RESOURCE_STATUS] Click en {descripcion} por JS")
+            time.sleep(0.25)
+            return
+        except Exception as exc:
+            raise Exception(f"No se pudo hacer click en {descripcion}: {exc}") from exc
+
+    try:
+        WebDriverWait(driver, 20).until(lambda _d: _find_visible(maintenance_xpaths, timeout=1) is not None)
+        print("[HIK][MAINTENANCE] Maintenance activo")
+    except TimeoutException as exc:
+        _guardar_evidencia("maintenance_inactivo")
+        raise Exception("[HIK][MAINTENANCE] maintenanceApp no está activo con display:block") from exc
+
+    nav_base = _find_visible(
+        [
+            "//div[@id='nav-base']",
+            "//div[@id='nav-base' and contains(@class,'isCollapse')]",
+            "//div[contains(@class,'nav-base') and contains(@class,'isCollapse')]",
+        ],
+        timeout=5,
+    )
+
+    if nav_base:
+        nav_classes = (nav_base.get_attribute("class") or "").lower()
+        nav_style = (nav_base.get_attribute("style") or "").lower()
+        esta_colapsado = ("iscollapse" in nav_classes) or ("width: 48px" in nav_style)
+        if esta_colapsado:
+            print("[HIK][MAINTENANCE] Menú lateral colapsado detectado")
+            print("[HIK][MAINTENANCE] Intentando expandir menú lateral")
+            expand_btn = _find_visible(
+                [
+                    "//div[@id='nav-base']//div[@title='Expand Menu']",
+                    "//div[@id='nav-base']//div[contains(@class,'nav-base-collapse-top')]",
+                    "//div[@id='nav-base']//i[contains(@class,'nav-base-collapse-left')]/ancestor::*[self::div or self::button][1]",
+                ],
+                timeout=4,
+            )
+            if expand_btn:
+                _click_seguro(expand_btn, "Expand Menu")
+                time.sleep(0.4)
+
     ultimo_error = None
     for intento in range(1, 6):
         try:
-            popup = abrir_popup_resource_status(driver, wait)
-            break
-        except StaleElementReferenceException as exc:
+            rs_menu = _find_visible(resource_status_xpaths, timeout=5)
+            if not rs_menu:
+                raise Exception("No se encontró el menú Resource Status")
+            _click_seguro(rs_menu, "Resource Status")
+            print("[HIK][RESOURCE_STATUS] Click en Resource Status")
+
+            opcion_menu = _find_visible(opcion_xpaths, timeout=6)
+            if not opcion_menu:
+                raise Exception(f"No apareció la opción {opcion} dentro de Resource Status")
+            _click_seguro(opcion_menu, f"opción {opcion}")
+            print(f"[HIK][RESOURCE_STATUS] Click en opción {opcion}")
+
+            opcion_activa_xpath = (
+                f"//li[contains(@class,'el-menu-item') and @title={opcion_literal} and contains(@class,'is-active')]"
+                f"| //div[contains(@class,'el-tabs__item') and contains(@class,'is-active') and normalize-space()={opcion_literal}]"
+                f"| //*[self::span or self::div or self::h1 or self::h2 or self::h3][normalize-space()={opcion_literal}]"
+            )
+            real_time_activa_xpath = (
+                "//div[contains(@class,'el-tabs__item') and contains(@class,'is-active') and normalize-space()='Real-Time Overview']"
+            )
+            export_btn_xpath = (
+                "//button[contains(@class,'el-button')][.//span[normalize-space()='Export'] or @title='Export']"
+            )
+
+            def _validar_apertura(_driver):
+                opcion_activa = _driver.find_elements(By.XPATH, opcion_activa_xpath)
+                real_time_activa = _driver.find_elements(By.XPATH, real_time_activa_xpath)
+                export_btn = _driver.find_elements(By.XPATH, export_btn_xpath)
+                if any(e.is_displayed() for e in opcion_activa):
+                    return True
+                if not any(e.is_displayed() for e in real_time_activa) and any(
+                    e.is_displayed() for e in export_btn
+                ):
+                    return True
+                return False
+
+            WebDriverWait(driver, 12).until(_validar_apertura)
+            print(f"[HIK][RESOURCE_STATUS] Opción {opcion} abierta correctamente")
+            wait_loading_end(driver)
+            return
+        except Exception as exc:
             ultimo_error = exc
             print(
-                f"[NAV][DEBUG] Stale al abrir Resource Status (intento {intento}/5). Reintentando..."
+                f"[HIK][RESOURCE_STATUS] Reintento {intento}/5 para abrir {opcion} "
+                f"desde Resource Status: {exc}"
             )
-            time.sleep(0.25)
-    if not popup:
-        raise Exception("[NAV][ERROR] No se pudo abrir popup Resource Status por referencias stale") from ultimo_error
+            time.sleep(0.5)
 
-    click_opcion_en_popup_resource_status(driver, wait, popup, opcion)
-    wait_loading_end(driver)
-
-    print(f"[NAV] Validando apertura inmediata de vista {opcion}")
-    confirmar_vista_resource_status_activa(driver, wait, opcion)
-    print(f"[NAV] Vista {opcion} confirmada")
+    _guardar_evidencia("resource_status_error")
+    raise Exception(f"[HIK][RESOURCE_STATUS] No se pudo abrir {opcion} tras múltiples intentos") from ultimo_error
 
 
 def _normalize_label(text: str) -> str:
